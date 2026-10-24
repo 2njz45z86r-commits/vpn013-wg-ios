@@ -70,6 +70,7 @@ class R013HomeActivity : AppCompatActivity() {
     private var pingJob: Job? = null
     private var batchJob: Job? = null
     private var connecting = false
+    private var pendingError: String? = null
     private var pendingTunnel: ObservableTunnel? = null
     private val pings = HashMap<String, Pair<String, Long?>>()
     private val fileResult = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) importFile(uri) }
@@ -138,7 +139,13 @@ class R013HomeActivity : AppCompatActivity() {
         }
         content.addView(footer, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(24) })
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) { try { renderCurrent(); renderRows(); if (ClientUpdates.applyPending()) renderRows() } catch (_: Exception) { summaryDetails.text = "Не удалось прочитать защищённые данные. Откройте настройки и повторите." }; delay(2000) }
+            while (true) {
+                try { renderCurrent(); renderRows() }
+                catch (_: Exception) { summaryDetails.text = "Не удалось прочитать защищённые данные. Откройте настройки и повторите." }
+                try { if (ClientUpdates.applyPending()) renderRows() }
+                catch (e: Exception) { if (pendingError != e.message) { pendingError = e.message; feedback(e.message ?: "Обновление конфигураций отложено") } }
+                delay(2000)
+            }
         } }
         handleSharedFile(intent)
         lifecycleScope.launch { ClientUpdates.checkDaily(this@R013HomeActivity) { message -> feedback(message) } }
@@ -210,6 +217,10 @@ class R013HomeActivity : AppCompatActivity() {
             row.addView(ping, LinearLayout.LayoutParams(-2, dp(48)).apply { marginStart = dp(8); marginEnd = dp(8) })
             val toggle = MaterialSwitch(this).apply {
                 isChecked = tunnel.state == Tunnel.State.UP; isEnabled = !connecting; minimumWidth = dp(48); minimumHeight = dp(48)
+                val states = arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf(android.R.attr.state_checked), intArrayOf())
+                thumbTintList = ColorStateList(states, intArrayOf(color(R.color.r013_switch_disabled), color(R.color.r013_background), color(R.color.r013_text)))
+                trackTintList = ColorStateList(states, intArrayOf(color(R.color.r013_separator), color(R.color.r013_accent), color(R.color.r013_selected)))
+                trackDecorationTintList = ColorStateList(states, intArrayOf(color(R.color.r013_separator), color(R.color.r013_accent), color(R.color.r013_secondary)))
                 contentDescription = "VPN ${tunnel.name}"; setOnCheckedChangeListener { _, checked -> connect(tunnel, checked) }
             }
             row.addView(toggle, LinearLayout.LayoutParams(-2, dp(48)))

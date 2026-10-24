@@ -104,6 +104,11 @@ class R013InstrumentedTest {
         val edited = registry.vault.read().toString()
         try { OfflineChanges.apply { ClientProtocol.apply(registry,changed) }; fail("Manual edits overwritten") } catch (_: IllegalStateException) { }
         assertEquals(edited,registry.vault.read().toString())
+        registry.vault.edit { it.getJSONObject("orders").getJSONObject("001122334455").put("pending",changed.getJSONObject("snapshot")) }
+        try { ClientUpdates.applyPending(); fail("Modified managed profile overwritten") } catch (_: IllegalStateException) { }
+        val diskAfterFailure = File(context.filesDir,"r013-vault.bin").readBytes()
+        assertFalse(ClientUpdates.applyPending())
+        assertArrayEquals("Rejected pending update was repeatedly rewritten",diskAfterFailure,File(context.filesDir,"r013-vault.bin").readBytes())
     }
     @Test fun cAutoSnapshotAndOrdering() = runBlocking {
         val items = (1..30).map { "Server$it" to ProfileRegistry.parse(config()) }
@@ -131,6 +136,13 @@ class R013InstrumentedTest {
         assertTrue(allViews().any { it.contentDescription == "Проверить пинг текущего сервера" && it.width >= 48 * context.resources.displayMetrics.density })
         assertTrue(allViews().any { it.contentDescription == "Добавить" || it.contentDescription == "Добавить профиль" })
         screenshot(InstrumentationRegistry.getArguments().getString("reviewLabel") ?: "phone-main")
+        val backend = Application.getBackend() as GoBackend
+        val revision = backend.connectionRevision
+        val batch = allViews().filterIsInstance<TextView>().first { it.text.toString() == "Проверить пинг" }
+        instrumentation.runOnMainSync { assertTrue(batch.performClick()) }
+        waitFor { allViews().filterIsInstance<TextView>().count { it.contentDescription?.startsWith("Пинг адреса ") == true && it.text.toString().matches(Regex("[0-9]+ мс")) } == 2 }
+        assertNull(backend.currentProfileName); assertEquals(revision,backend.connectionRevision)
+        screenshot("ping-"+(InstrumentationRegistry.getArguments().getString("reviewLabel") ?: "phone"))
         val settings = allViews().first { it.contentDescription == "Настройки и обновления" }
         instrumentation.runOnMainSync { settings.performClick() }
         waitFor { texts().contains("Обновить конфигурации") }
@@ -151,6 +163,12 @@ class R013InstrumentedTest {
         assertNotNull(EndpointPing.measure("10.13.99.1"))
         assertEquals(connected,backend.connectionRevision)
         assertEquals(before,registry.config(tunnel.name).toAwgQuickString())
+        waitFor { allViews().any { it.contentDescription == "Проверить пинг текущего сервера" && it.isEnabled } }
+        val pingButton = allViews().first { it.contentDescription == "Проверить пинг текущего сервера" }
+        instrumentation.runOnMainSync { assertTrue(pingButton.performClick()) }
+        waitFor { texts().any { it.contains("Пинг адреса:") || it.contains("Пинг адреса недоступен") } }
+        assertEquals(connected,backend.connectionRevision)
+        assertEquals("CI Manual",backend.currentProfileName)
         screenshot("manual-vpn")
     }
     @Test fun gRealAutoFailoverStopAndManualOverride() = runBlocking {

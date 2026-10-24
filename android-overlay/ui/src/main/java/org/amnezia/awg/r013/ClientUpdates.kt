@@ -29,6 +29,7 @@ object ClientUpdates {
     private var refreshing = false
     private var downloading = false
     private var applying = false
+    private val failedPending = HashMap<String, String>()
     suspend fun refreshOrders(): String {
         check(!refreshing) { "Обновление конфигураций уже выполняется" }
         refreshing = true
@@ -41,9 +42,22 @@ object ClientUpdates {
             val snapshot = withContext(Dispatchers.IO) {
                 ClientProtocol.request("/client/awg/$order/android", document.getString("capability")).also { ClientProtocol.snapshot(it, order) }
             }
-            withContext(Dispatchers.IO) { registry.vault.edit { it.getJSONObject("orders").getJSONObject(order).put("pending", snapshot) } }
+            withContext(Dispatchers.IO) {
+                registry.vault.edit { root ->
+                    val binding = root.getJSONObject("orders").getJSONObject(order)
+                    val current = binding.getJSONObject("document").getJSONObject("snapshot")
+                    val map = binding.getJSONObject("mapping")
+                    val profiles = root.getJSONObject("profiles")
+                    val complete = map.keys().asSequence().all { profiles.has(map.getJSONObject(it).getString("profileID")) }
+                    if (current.getString("revision") != snapshot.getString("revision") || current.getLong("expiry") != snapshot.getLong("expiry") || !complete)
+                        binding.put("pending",snapshot)
+                }
+            }
+            failedPending.remove(order)
         }
-        return if (applyPending()) "Конфигурации проверены и обновлены" else "Обновления загружены. Они применятся при открытом приложении после отключения VPN."
+        if (applyPending()) return "Конфигурации проверены и обновлены"
+        val pending = withContext(Dispatchers.IO) { registry.vault.read().getJSONObject("orders").let { current -> current.keys().asSequence().any { current.getJSONObject(it).has("pending") } } }
+        return if (pending) "Обновления загружены. Они применятся при открытом приложении после отключения VPN." else "Конфигурации проверены. Обновлений нет."
         } finally { refreshing = false }
     }
     suspend fun applyPending(): Boolean {
@@ -52,13 +66,23 @@ object ClientUpdates {
         try {
             if (withContext(Dispatchers.IO) { Application.getBackend().runningTunnelNames.isNotEmpty() }) return false
             val registry = ProfileRegistry.get(Application.get())
-            val orders = withContext(Dispatchers.IO) { registry.vault.read().getJSONObject("orders") }
+            val state = withContext(Dispatchers.IO) { registry.vault.read() }
+            val orders = state.getJSONObject("orders")
+            var complete = true
+            var applied = false
             for (order in orders.keys()) {
                 val binding = orders.getJSONObject(order); val pending = binding.optJSONObject("pending") ?: continue
+                val identity = ProfileRegistry.digest(pending.toString()+state.getJSONObject("profiles").toString())
+                if (failedPending[order] == identity) { complete = false; continue }
                 val document = JSONObject(binding.getJSONObject("document").toString()).put("snapshot", pending)
-                OfflineChanges.apply { ClientProtocol.apply(registry, document) }
+                try {
+                    OfflineChanges.apply { ClientProtocol.apply(registry, document) }
+                    failedPending.remove(order)
+                    applied = true
+                } catch (_: OfflineChanges.ActiveVPNException) { return false }
+                catch (e: Exception) { failedPending[order] = identity; throw e }
             }
-            return true
+            return applied && complete
         } finally { applying = false }
     }
     suspend fun checkDaily(activity: AppCompatActivity, notify: (String) -> Unit) {

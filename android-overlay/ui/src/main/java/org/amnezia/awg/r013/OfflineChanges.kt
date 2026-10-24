@@ -8,13 +8,14 @@ import kotlinx.coroutines.withContext
 import org.amnezia.awg.Application
 
 object OfflineChanges {
+    class ActiveVPNException : IllegalStateException("Сначала отключите VPN. Прежние профили сохранены.")
     val lock = Mutex()
     suspend fun <T> apply(block: () -> T): T = lock.withLock {
         val manager = Application.getTunnelManager()
         manager.getTunnels()
         val registry = ProfileRegistry.get(Application.get())
         val before = withContext(Dispatchers.IO) {
-            check(Application.getBackend().runningTunnelNames.isEmpty()) { "Сначала отключите VPN. Прежние профили сохранены." }
+            if (Application.getBackend().runningTunnelNames.isNotEmpty()) throw ActiveVPNException()
             registry.vault.read()
         }
         try {
