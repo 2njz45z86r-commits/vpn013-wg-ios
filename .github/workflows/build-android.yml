@@ -46,4 +46,4 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;26.1.10909125' 'cmake;3.22.1'
           cd android
           chmod +x gradlew
-          ./gradlew --no-daemon --console=plain :ui:compileDebugKotlin :ui:compileDebugJavaWithJavac
+          ./gradlew --no-daemon --console=plain :ui:compileDebugKotlin :ui:compileDebugJavaWithJavac :ui:compileDebugAndroidTestKotlin

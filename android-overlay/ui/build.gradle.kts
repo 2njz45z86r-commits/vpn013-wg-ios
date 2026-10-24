@@ -21,6 +21,7 @@ android {
     defaultConfig {
         applicationId = "com.vpn013.awg"
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = providers.gradleProperty("amneziawgVersionCode").get().toInt()
         versionName = providers.gradleProperty("amneziawgVersionName").get()
         buildConfigField("int", "MIN_SDK_VERSION", minSdk.toString())
@@ -64,6 +65,8 @@ android {
 
 dependencies {
     implementation(project(":tunnel"))
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.appcompat)

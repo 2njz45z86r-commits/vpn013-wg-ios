@@ -35,7 +35,7 @@ object EndpointPing {
                     if (Os.poll(arrayOf(poll), remaining) <= 0) break
                     val n = Os.read(fd, response, 0, response.size)
                     val offset = if (n > 20 && response[0].toInt().ushr(4) == 4) (response[0].toInt() and 15) * 4 else 0
-                    if (n >= offset + 24 && (response[offset].toInt() and 255) == if (v4) 0 else 129) {
+                    if (n >= offset + 24 && (response[offset].toInt() and 255) == (if (v4) 0 else 129)) {
                         if (response.copyOfRange(offset + 8, offset + 24).contentEquals(nonce))
                             return ((SystemClock.elapsedRealtimeNanos() - start) / 1_000_000L).coerceAtLeast(1)
                     }
