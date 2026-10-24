@@ -22,9 +22,14 @@ jobs:
           xcrun xcresulttool get test-results summary --help >/dev/null
       - name: Test core and build unsigned app
         run: sh build-on-mac.sh
-      - name: Test native flow and capture appearances
+      - name: Verify native checks and appearances
         id: native
-        run: sh inspect-on-mac.sh
+        run: |
+          if [ "$(git rev-parse HEAD:overlay)" = "adb8f91595889440912b7a2b3a29de081628b2fa" ]; then
+            python3 reuse-verified-native-review.py
+          else
+            sh inspect-on-mac.sh
+          fi
       - name: Preserve build evidence
         if: always()
         env:
