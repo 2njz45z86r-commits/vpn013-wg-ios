@@ -45,7 +45,7 @@ type nativeSession struct {
 
 //export R013RegisterUDPDriver
 func R013RegisterUDPDriver(callbacks C.r013_udp_driver) C.uint64_t {
-	if callbacks.open == nil || callbacks.write == nil || callbacks.cancel == nil {
+	if callbacks.open == nil || callbacks.write == nil || callbacks.cancel == nil || (callbacks.route != 1 && callbacks.route != 2) {
 		return 0
 	}
 	id := ids.Add(1)
@@ -71,6 +71,22 @@ func R013UnregisterUDPDriver(driver C.uint64_t) C.int32_t {
 }
 
 func (d *nativeDriver) OpenPhysical(peer netip.AddrPort, deliver func([]byte), failed func()) (awgprobe.PhysicalUDPSession, error) {
+	if d.callbacks.route != 1 {
+		return nil, awgprobe.ErrPhysicalTransport
+	}
+	return d.openConnected(peer, deliver, failed)
+}
+
+type nativeTunnelFactory struct{ driver *nativeDriver }
+
+func (f nativeTunnelFactory) OpenThroughTunnel(peer netip.AddrPort, deliver func([]byte), failed func()) (awgprobe.ConnectedUDPSession, error) {
+	if f.driver.callbacks.route != 2 {
+		return nil, awgprobe.ErrPhysicalTransport
+	}
+	return f.driver.openConnected(peer, deliver, failed)
+}
+
+func (d *nativeDriver) openConnected(peer netip.AddrPort, deliver func([]byte), failed func()) (awgprobe.ConnectedUDPSession, error) {
 	d.mu.Lock()
 	if d.removed || d.active != 0 {
 		d.mu.Unlock()
@@ -86,6 +102,12 @@ func (d *nativeDriver) OpenPhysical(peer netip.AddrPort, deliver func([]byte), f
 		// The callback contract guarantees that this failed create owns no
 		// platform session. No alternate/default socket is attempted.
 		s.didClose()
+		return nil, awgprobe.ErrPhysicalTransport
+	}
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	if closed {
 		return nil, awgprobe.ErrPhysicalTransport
 	}
 	return s, nil
@@ -208,7 +230,11 @@ func (s *nativeSession) didClose() {
 	sessions.Delete(s.id)
 	s.driver.mu.Lock()
 	s.driver.active--
+	idle := s.driver.active == 0
 	s.driver.mu.Unlock()
+	if idle {
+		C.r013_call_quiesced(s.driver.callbacks)
+	}
 	if pending != nil {
 		pending(net.ErrClosed)
 	}

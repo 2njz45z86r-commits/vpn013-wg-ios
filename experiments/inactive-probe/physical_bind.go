@@ -34,10 +34,14 @@ type PhysicalUDPFactory interface {
 // completes. Cancel's callback is stricter: the socket/session must actually be
 // closed and its callbacks quiescent. Merely requesting cancellation is not an
 // acknowledgement. A missing acknowledgement fails closed and blocks reopening.
-type PhysicalUDPSession interface {
+type ConnectedUDPSession interface {
 	Write(packet []byte, completed func(error))
 	Cancel(closed func())
 }
+
+// Kept as an alias for the physical factory contract. A current-tunnel factory
+// is a separate interface and cannot be substituted for a physical factory.
+type PhysicalUDPSession = ConnectedUDPSession
 
 // PhysicalBind implements an actual batch-one transport; it does not wrap
 // StdNetBind's platform-dependent 128-packet receive buffers. The fixed connected

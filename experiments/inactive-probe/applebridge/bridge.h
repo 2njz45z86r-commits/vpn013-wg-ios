@@ -13,12 +13,15 @@ typedef void (*r013_udp_write_fn)(uint64_t owner, uint64_t session,
                                   const void *packet, uint32_t length, uint64_t write_id);
 // Must eventually call DidClose AFTER actual socket cancellation/quiescence.
 typedef void (*r013_udp_cancel_fn)(uint64_t owner, uint64_t session);
+typedef void (*r013_udp_quiesced_fn)(uint64_t owner);
 
 typedef struct {
     uint64_t owner;
+    uint32_t route; // 1=physical candidate; 2=current virtual tunnel. No default.
     r013_udp_open_fn open;
     r013_udp_write_fn write;
     r013_udp_cancel_fn cancel;
+    r013_udp_quiesced_fn quiesced;
 } r013_udp_driver;
 
 uint64_t R013RegisterUDPDriver(r013_udp_driver callbacks);
@@ -29,6 +32,7 @@ void R013UDPFailed(uint64_t session);
 void R013UDPDidClose(uint64_t session);
 #ifdef R013_BRIDGE_TESTING
 int32_t R013BridgeExercise(uint64_t driver);
+int32_t R013BridgeDNSExercise(uint64_t driver);
 #endif
 
 static inline int32_t r013_call_open(r013_udp_driver cb, uint64_t session, const char *host, uint16_t port) {
@@ -39,6 +43,9 @@ static inline void r013_call_write(r013_udp_driver cb, uint64_t session, const v
 }
 static inline void r013_call_cancel(r013_udp_driver cb, uint64_t session) {
     cb.cancel(cb.owner, session);
+}
+static inline void r013_call_quiesced(r013_udp_driver cb) {
+    if (cb.quiesced) cb.quiesced(cb.owner);
 }
 static inline void r013_deliver_buffer(uint64_t session, const void *packet, uint32_t length) {
     R013UDPDeliver(session, (void *)packet, length);

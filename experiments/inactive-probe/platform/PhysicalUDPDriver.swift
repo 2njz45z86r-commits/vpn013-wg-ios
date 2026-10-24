@@ -7,8 +7,8 @@ private enum PhysicalDriverRegistry {
     static let lock = NSLock()
     static var next: UInt64 = 0
     // Retain until explicit invalidation and acknowledged socket closure.
-    static var drivers: [UInt64: R013PhysicalUDPDriver] = [:]
-    static func find(_ owner: UInt64) -> R013PhysicalUDPDriver? {
+    static var drivers: [UInt64: R013UDPDriver] = [:]
+    static func find(_ owner: UInt64) -> R013UDPDriver? {
         lock.lock(); defer { lock.unlock() }; return drivers[owner]
     }
 }
@@ -36,8 +36,12 @@ private func physicalCancel(_ owner: UInt64, _ token: UInt64) {
     }
     driver.cancel(token: token)
 }
+private func driverQuiesced(_ owner: UInt64) {
+    PhysicalDriverRegistry.find(owner)?.quiesced()
+}
 
-final class R013PhysicalUDPDriver {
+final class R013UDPDriver {
+    private enum Route: UInt32 { case physical = 1, throughTunnel = 2 }
     private final class Entry {
         let token: UInt64
         let session: NWUDPSession
@@ -51,7 +55,8 @@ final class R013PhysicalUDPDriver {
         init(_ token: UInt64, _ session: NWUDPSession) { self.token = token; self.session = session }
     }
     private weak var provider: NEPacketTunnelProvider?
-    private let queue = DispatchQueue(label: "com.vpn013.probe.physical", qos: .utility)
+    private let route: Route
+    private let queue = DispatchQueue(label: "com.vpn013.probe.udp", qos: .utility)
     private let queueKey = DispatchSpecificKey<Bool>()
     private var entries: [UInt64: Entry] = [:]
     private var stopping = false
@@ -60,8 +65,15 @@ final class R013PhysicalUDPDriver {
     private(set) var driverID: UInt64 = 0
     private var owner: UInt64 = 0
 
-    init?(provider: NEPacketTunnelProvider) {
+    static func physical(provider: NEPacketTunnelProvider) -> R013UDPDriver? {
+        return R013UDPDriver(provider: provider, route: .physical)
+    }
+    static func throughTunnel(provider: NEPacketTunnelProvider) -> R013UDPDriver? {
+        return R013UDPDriver(provider: provider, route: .throughTunnel)
+    }
+    private init?(provider: NEPacketTunnelProvider, route: Route) {
         self.provider = provider
+        self.route = route
         queue.setSpecific(key: queueKey, value: true)
         PhysicalDriverRegistry.lock.lock()
         guard PhysicalDriverRegistry.drivers.count < 2 else {
@@ -71,8 +83,9 @@ final class R013PhysicalUDPDriver {
         PhysicalDriverRegistry.drivers[owner] = self
         PhysicalDriverRegistry.lock.unlock()
         var callbacks = r013_udp_driver()
-        callbacks.owner = owner; callbacks.open = physicalOpen
+        callbacks.owner = owner; callbacks.route = route.rawValue; callbacks.open = physicalOpen
         callbacks.write = physicalWrite; callbacks.cancel = physicalCancel
+        callbacks.quiesced = driverQuiesced
         driverID = R013RegisterUDPDriver(callbacks)
         if driverID == 0 {
             PhysicalDriverRegistry.lock.lock(); PhysicalDriverRegistry.drivers.removeValue(forKey: owner)
@@ -84,9 +97,13 @@ final class R013PhysicalUDPDriver {
         let create: () -> Int32 = { [self] in
             guard !stopping, entries.isEmpty, let provider = provider else { return 1 }
             let endpoint = NWHostEndpoint(hostname: host, port: String(port))
-            // The physical factory is fixed: nil local endpoint, no fallback,
-            // no accidental use of createUDPSessionThroughTunnel.
-            guard let session = provider.createUDPSession(to: endpoint, from: nil) as NWUDPSession? else { return 1 }
+            // Fixed per registration; the Go bridge rejects cross-role reuse.
+            let created: NWUDPSession?
+            switch route {
+            case .physical: created = provider.createUDPSession(to: endpoint, from: nil) as NWUDPSession?
+            case .throughTunnel: created = provider.createUDPSessionThroughTunnel(to: endpoint, from: nil) as NWUDPSession?
+            }
+            guard let session = created else { return 1 }
             let entry = Entry(token, session); entries[token] = entry
             session.setReadHandler({ [weak self, weak entry] datagrams, error in
                 guard let self = self, let entry = entry else { return }
@@ -174,6 +191,12 @@ final class R013PhysicalUDPDriver {
             for entry in Array(entries.values) { cancelEntry(entry) }
             finishInvalidation()
         }
+    }
+    fileprivate func quiesced() {
+        // Handles the race where invalidation sees an in-flight Go Open but
+        // no Swift entry yet. A rejected Open later releases native bookkeeping
+        // and signals this callback; no polling or invented close ack is needed.
+        queue.async { [self] in finishInvalidation() }
     }
     private func finishInvalidation() {
         guard stopping, entries.isEmpty, R013UnregisterUDPDriver(driverID) == 0 else { return }

@@ -32,6 +32,8 @@ type Result struct {
 	Median  time.Duration
 	Samples int
 	Epoch   uint64
+	Method  string
+	Target  netip.AddrPort
 }
 
 var permit = make(chan struct{}, 1)
@@ -39,6 +41,17 @@ var permit = make(chan struct{}, 1)
 // Measure has one in-flight probe process-wide, one memory-only interface, no
 // filesystem, OS VPN, route or DNS changes. It uses existing keys only in memory.
 func Measure(parent context.Context, r Request) (Result, error) {
+	return measureCandidate(parent, r, func() (samplingTun, error) {
+		return newMemory(r.Source, r.Target), nil
+	}, "icmp-echo-v1", netip.AddrPortFrom(r.Target, 0))
+}
+
+type samplingTun interface {
+	tun.Device
+	sample(context.Context) (time.Duration, error)
+}
+
+func measureCandidate(parent context.Context, r Request, create func() (samplingTun, error), method string, target netip.AddrPort) (Result, error) {
 	var result Result
 	if r.Guard == nil {
 		return result, ErrUnknownActiveState
@@ -66,7 +79,10 @@ func Measure(parent context.Context, r Request) (Result, error) {
 	}
 	// Registered before creating a device; released AFTER dev.Close below.
 	defer lease.release()
-	memory := newMemory(r.Source, r.Target)
+	memory, err := create()
+	if err != nil {
+		return result, err
+	}
 	dev := device.NewDevice(memory, r.Bind, device.NewLogger(device.LogLevelSilent, ""))
 	defer dev.Close()
 	if err := dev.IpcSet(r.Config); err != nil {
@@ -78,28 +94,37 @@ func Measure(parent context.Context, r Request) (Result, error) {
 	if err := dev.Up(); err != nil {
 		return result, errors.New("probe transport unavailable")
 	}
-	// The first echo establishes a new authenticated session and is excluded
-	// from steady-state latency. A valid decrypted echo cannot be plain ICMP.
-	if _, err := memory.echo(ctx); err != nil {
-		return result, err
+	return collectSamples(ctx, memory.sample, lease.epoch, method, target, r.Guard)
+}
+
+// Both candidate and active-path DNS use this exact warmup/three-sample policy.
+func collectSamples(ctx context.Context, sample func(context.Context) (time.Duration, error), epoch uint64, method string, target netip.AddrPort, guard *ActiveGuard) (Result, error) {
+	if _, err := sample(ctx); err != nil {
+		return Result{}, err
 	}
 	values := make([]time.Duration, 0, 3)
 	for i := 0; i < 3; i++ {
-		value, err := memory.echo(ctx)
+		value, err := sample(ctx)
 		if err != nil {
-			return result, err
+			return Result{}, err
 		}
 		values = append(values, value)
 	}
 	sort.Slice(values, func(i, j int) bool { return values[i] < values[j] })
 	if err := ctx.Err(); err != nil {
-		return result, err
+		return Result{}, err
 	}
-	result = Result{Median: values[1], Samples: len(values), Epoch: lease.epoch}
-	if !r.Guard.Accept(result) {
+	result := Result{Median: values[1], Samples: len(values), Epoch: epoch, Method: method, Target: target}
+	if !guard.Accept(result) {
 		return Result{}, ErrStaleEpoch
 	}
 	return result, nil
+}
+
+// Comparable prevents ranking different methods, destinations or active epochs.
+func Comparable(a, b Result) bool {
+	return a.Method != "" && a.Method == b.Method && a.Target.IsValid() && a.Target == b.Target &&
+		a.Epoch != 0 && a.Epoch == b.Epoch && a.Samples == 3 && b.Samples == 3 && a.Median >= 0 && b.Median >= 0
 }
 
 type memoryTun struct {
@@ -205,6 +230,8 @@ func (m *memoryTun) echo(ctx context.Context) (time.Duration, error) {
 		}
 	}
 }
+
+func (m *memoryTun) sample(ctx context.Context) (time.Duration, error) { return m.echo(ctx) }
 func checksum(p []byte) uint16 {
 	var s uint32
 	for len(p) > 1 {

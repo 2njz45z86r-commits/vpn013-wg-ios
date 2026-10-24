@@ -11,8 +11,13 @@ import "C"
 
 import (
 	"bytes"
+	"context"
+	"crypto/ecdh"
+	"crypto/rand"
+	"encoding/hex"
 	"net/netip"
 	"time"
+	awgprobe "vpn013.local/awg-probe"
 
 	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
 )
@@ -56,6 +61,33 @@ func R013BridgeExercise(driver C.uint64_t) C.int32_t {
 	}
 	if b.Close() != nil {
 		return 6
+	}
+	return 0
+}
+
+//export R013BridgeDNSExercise
+func R013BridgeDNSExercise(driver C.uint64_t) C.int32_t {
+	value, ok := drivers.Load(uint64(driver))
+	if !ok {
+		return 1
+	}
+	client, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		return 2
+	}
+	server, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		return 2
+	}
+	// Synthetic identity only: no actual primary VPN is started by this test.
+	guard, err := awgprobe.NewActiveGuard(awgprobe.ActiveState{Known: true, Configuration: "private_key=" + hex.EncodeToString(client.Bytes()) + "\npublic_key=" + hex.EncodeToString(server.PublicKey().Bytes()) + "\n"})
+	if err != nil {
+		return 3
+	}
+	target := netip.MustParseAddrPort("127.0.0.1:12345")
+	result, err := awgprobe.MeasureCurrentDNS(context.Background(), awgprobe.CurrentDNSRequest{Target: target, Factory: nativeTunnelFactory{value.(*nativeDriver)}, Guard: guard})
+	if err != nil || result.Samples != 3 || result.Method != "dns-udp-challenge-v1" || result.Target != target || !guard.Accept(result) {
+		return 4
 	}
 	return 0
 }

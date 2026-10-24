@@ -26,6 +26,7 @@ type echoResponder struct {
 	*memoryTun
 	requests atomic.Uint64
 	delay    atomic.Int64
+	dns      atomic.Bool
 }
 
 func (e *echoResponder) Write(bufs [][]byte, offset int) (int, error) {
@@ -34,6 +35,23 @@ func (e *echoResponder) Write(bufs [][]byte, offset int) (int, error) {
 			continue
 		}
 		p := b[offset:]
+		if e.dns.Load() && len(p) >= 28 && p[9] == 17 {
+			if delay := time.Duration(e.delay.Load()); delay > 0 {
+				time.Sleep(delay)
+			}
+			query, ok := parseUDPPacket(p, e.target, e.source, binary.BigEndian.Uint16(p[20:22]), 53)
+			if !ok {
+				continue
+			}
+			reply := dnsResponseForTest(query)
+			packet := makeUDPPacket(e.source, e.target, 53, binary.BigEndian.Uint16(p[20:22]), reply)
+			e.requests.Add(1)
+			select {
+			case e.outbound <- packet:
+			case <-e.done:
+			}
+			continue
+		}
 		if len(p) != 44 || p[0] != 0x45 || p[9] != 1 || p[20] != 8 {
 			continue
 		}

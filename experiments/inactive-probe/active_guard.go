@@ -81,6 +81,23 @@ func (g *ActiveGuard) acquire(parent context.Context, configuration string) (con
 	return ctx, lease, nil
 }
 
+// Passive active-path measurements open no second AWG engine, but still need a
+// lease: a primary transition cancels them and waits for actual UDP closure.
+func (g *ActiveGuard) acquireBaseline(parent context.Context) (context.Context, *probeLease, error) {
+	if err := parent.Err(); err != nil {
+		return nil, nil, err
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if !g.known || g.blocked || !g.hasPeer {
+		return nil, nil, ErrUnknownActiveState
+	}
+	ctx, cancel := context.WithCancel(parent)
+	lease := &probeLease{guard: g, epoch: g.epoch, cancel: cancel, done: make(chan struct{})}
+	g.live[lease] = struct{}{}
+	return ctx, lease, nil
+}
+
 func (lease *probeLease) release() {
 	lease.once.Do(func() {
 		lease.cancel()
