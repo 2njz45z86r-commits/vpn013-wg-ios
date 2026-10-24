@@ -21,20 +21,32 @@ jobs:
       - name: Test core and build unsigned app
         run: sh build-on-mac.sh
       - name: Test native flow and capture appearances
+        id: native
         run: sh inspect-on-mac.sh
       - name: Preserve build evidence
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          test -f build/VPN013AWG-unsigned.ipa
+          mkdir -p build/review
           (cd build && zip -qr native-review.zip review -i '*.png' '*.json')
-          shasum -a 256 build/VPN013AWG-unsigned.ipa build/native-review.zip > build/SHA256SUMS.txt
-          gh release create "unsigned-${GITHUB_RUN_ID}" \
-            build/VPN013AWG-unsigned.ipa build/native-review.zip build/SHA256SUMS.txt \
-            --target "$GITHUB_SHA" --prerelease \
-            --title "VPN013 WG unsigned build ${GITHUB_RUN_NUMBER}" \
-            --notes 'Unsigned VPN013 WG development build. Requires owner signing. iPhone VPN traffic must be verified separately. No customer configurations or server credentials included.'
+          if [ '${{ steps.native.outcome }}' = 'success' ]; then
+            test -f build/VPN013AWG-unsigned.ipa
+            shasum -a 256 build/VPN013AWG-unsigned.ipa build/native-review.zip > build/SHA256SUMS.txt
+            gh release create "unsigned-${GITHUB_RUN_ID}" \
+              build/VPN013AWG-unsigned.ipa build/native-review.zip build/SHA256SUMS.txt \
+              --target "$GITHUB_SHA" --prerelease \
+              --title "VPN013 WG unsigned build ${GITHUB_RUN_NUMBER}" \
+              --notes 'Unsigned development build. Requires owner signing and physical iPhone VPN verification. No customer configurations or credentials included.'
+          else
+            shasum -a 256 build/native-review.zip > build/SHA256SUMS.txt
+            gh release create "inspection-${GITHUB_RUN_ID}" \
+              build/native-review.zip build/SHA256SUMS.txt \
+              --target "$GITHUB_SHA" --prerelease \
+              --title "VPN013 WG inspection ${GITHUB_RUN_NUMBER}" \
+              --notes 'Native simulator diagnostics only. Failed test run; no installable app published.'
+          fi
       - name: Export credential-free development files for verification
         if: always()
         run: python3 export-build-evidence.py
