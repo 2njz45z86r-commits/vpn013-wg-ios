@@ -51,7 +51,7 @@ VPN traffic, locked-phone behavior or the validity of the owner's ESign signatur
 
 ## Native interface update
 
-Version 1.3.0 (6) uses the owner-selected night palette, a native server list,
+Version 1.3.0 (7) uses the owner-selected night palette, a native server list,
 a compact connection summary and Dynamic Type. The developer footer links
 to https://t.me/R013_Support and identifies the VPN013 WG fork. Upstream
 AmneziaWG/WireGuard attribution remains in the bundled legal notices.

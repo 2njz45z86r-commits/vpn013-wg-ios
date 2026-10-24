@@ -440,8 +440,7 @@ class TunnelsListTableViewController: UIViewController {
         }
         switch tunnel.status {
         case .active:
-            summaryStatusLabel.text = "Подключено"
-            summaryStatusLabel.textColor = VPN013Theme.accent
+            updateRunningSummaryStatus(for: tunnel)
             summaryProofLabel.isHidden = false
             if tunnel.isVPN013Automatic {
                 summaryProofLabel.text = automaticSummaryPhase ?? "VPN запущен · трафик ещё не проверен"
@@ -484,6 +483,14 @@ class TunnelsListTableViewController: UIViewController {
         refreshAutomaticSummary()
     }
 
+    private func updateRunningSummaryStatus(for tunnel: TunnelContainer) {
+        let confirmed = tunnel.isVPN013Automatic
+            ? automaticSummaryPhase?.hasPrefix("Трафик проверен") == true
+            : tunnel.handshakeState == .confirmed
+        summaryStatusLabel.text = confirmed ? "Подключено" : "VPN запущен"
+        summaryStatusLabel.textColor = confirmed ? VPN013Theme.accent : VPN013Theme.secondaryText
+    }
+
     private func refreshAutomaticSummary() {
         guard viewIfLoaded?.window != nil, let tunnel = automaticSummaryTunnel, tunnel.isVPN013Automatic,
               tunnel.status == .active, !automaticSummaryRequestInFlight else { return }
@@ -501,6 +508,7 @@ class TunnelsListTableViewController: UIViewController {
             let lines = text?.components(separatedBy: "\n") ?? []
             self.automaticSummaryName = lines.first.flatMap { $0.isEmpty ? nil : $0 }
             self.automaticSummaryPhase = lines.count > 1 && !lines[1].isEmpty ? lines[1] : nil
+            self.updateRunningSummaryStatus(for: tunnel)
             self.summaryNameLabel.text = self.automaticSummaryName ?? tunnel.name
             self.summaryProofLabel.text = self.automaticSummaryPhase ?? "VPN запущен · трафик ещё не проверен"
             self.sizeSummaryHeader()
