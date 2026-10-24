@@ -1,0 +1,80 @@
+name: Build and verify Windows VPN013 WG
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: windows-1.4.0
+  cancel-in-progress: false
+jobs:
+  windows:
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios'
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fetch exact reviewed corresponding source
+        run: |
+          $archive=Join-Path $env:RUNNER_TEMP 'windows-source.zip'
+          curl.exe --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --output $archive 'https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/windows-source-1.4.0/VPN013WG-1.4.0-windows-source.zip'
+          if ($LASTEXITCODE -ne 0) {throw 'Source download failed'}
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower() -ne 'f7c4a928eecc6e40a1d7b0bcf37bf26d7b6de1b449a2ca26f7cf1ffc2bd83e35') {throw 'Source hash mismatch'}
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:GITHUB_WORKSPACE
+      - name: Prepare hash-pinned official dependencies
+        working-directory: vpn013-wg-windows
+        run: |
+          python scripts/bootstrap.py
+          if ($LASTEXITCODE -ne 0) {throw 'Toolchain preparation failed'}
+          ./scripts/bootstrap-driver.ps1
+          ./scripts/bootstrap-installer.ps1
+      - name: Build native application and MSI
+        working-directory: vpn013-wg-windows
+        run: |
+          ./scripts/build-r013.ps1
+          ./scripts/build-installer.ps1
+      - name: Test protocol, keys, recovery, policy and real ICMP
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./.deps/go/bin/go.exe test -mod=vendor -v ./r013 ./manager
+          if ($LASTEXITCODE -ne 0) {throw 'Core tests failed'}
+      - name: Test install, native AWG traffic, repair and uninstall
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./scripts/ci-installer.ps1
+      - name: Publish tested Windows build and source
+        working-directory: vpn013-wg-windows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.4.0-amd64.msi'
+          $source=Join-Path $env:RUNNER_TEMP 'windows-source.zip'
+          $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.4.0-windows-source.zip'
+          Copy-Item -LiteralPath $source -Destination $sourceNamed
+          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.4.0';build=1;sourceSHA256='f7c4a928eecc6e40a1d7b0bcf37bf26d7b6de1b449a2ca26f7cf1ffc2bd83e35';msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true}
+          $provenance | ConvertTo-Json | Set-Content -LiteralPath 'installer/dist/windows-build-provenance.json' -Encoding utf8
+          $notes=@'
+          VPN013 WG Windows x64 1.4.0.
+
+          Verified on a disposable Windows runner: native MSI install/repair/uninstall; preservation of existing and stock-app data; a real native Wintun tunnel with an obfuscated AmneziaWG handshake and in-tunnel ICMP response against an ephemeral memory-only peer. Protocol, scoped roster updates, key preservation, rollback, release signatures, Auto policy and IPv4/IPv6 ICMP tests passed.
+
+          Import, manual profiles, Auto (1–30 full-IPv4 profiles), visible endpoint Ping, purchase/free-hour links, developer contact, order-bound refresh and signed app updates are included. Hourly parallel comparison of inactive VPN paths is not implemented. Real customer networks and every Auto/service lifecycle scenario are not covered by this run.
+
+          Independent R013 client, not an official Amnezia/WireGuard release. Application/MSI publisher signature is absent; Wintun retains its original valid vendor signature. Corresponding source and original license texts are attached/included. No customer keys or configurations are present.
+          '@
+          $notes | Set-Content -LiteralPath 'installer/dist/release-notes.md' -Encoding utf8
+          gh release create windows-1.4.0 $msi $sourceNamed 'installer/dist/windows-build-provenance.json' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'VPN013 WG Windows 1.4.0' --notes-file 'installer/dist/release-notes.md'
+          if ($LASTEXITCODE -ne 0) {throw 'Release publication failed'}
+
