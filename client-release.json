@@ -2,9 +2,9 @@
   "schema": 1,
   "app": "vpn013-wg",
   "platform": "ios",
-  "version": "1.4.1",
-  "build": 10,
-  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40100372668/VPN013AWG-unsigned.ipa",
-  "sha256": "50c593a6be3214ba39924917a87eed4e3306d5eb86059f075c3b75fcfd167d3f",
-  "notes": "Авто всегда первым. В карточке текущего сервера: отдельная кнопка пинга адреса, трафик и время рукопожатия. Проверка не переключает VPN; старые результаты сбрасываются при смене сервера."
+  "version": "1.4.2",
+  "build": 11,
+  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40120469051/VPN013AWG-unsigned.ipa",
+  "sha256": "a83de084627ab7085750e0b84d881d1ed1fd5243f3f1e4ab595c63e61eceb8e9",
+  "notes": "Исправлен пинг подключённого обычного профиля при недоступной статистике VPN. Проверка использует сохранённый адрес и не переключает VPN. Отсутствующие данные трафика и рукопожатия не подменяются результатом пинга."
 }
