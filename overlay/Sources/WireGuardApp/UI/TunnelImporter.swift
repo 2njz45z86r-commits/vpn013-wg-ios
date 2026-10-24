@@ -9,6 +9,29 @@ class TunnelImporter {
             completionHandler?()
             return
         }
+        #if os(iOS)
+        // The bot's optional access document is authoritative for this ZIP only.
+        // Old stock archives without it continue through the unchanged importer.
+        do {
+            var document: ClientAccessDocument?
+            for url in urls where url.pathExtension.lowercased() == "zip" {
+                let entries = try ZipArchive.unarchive(url: url, requiredFileExtensions: ["json"]).filter { $0.fileBaseName == ClientUpdateProtocol.manifestName }
+                guard entries.count <= 1, document == nil || entries.isEmpty else { throw ClientUpdateError.invalidDocument }
+                if let entry = entries.first { document = try ClientAccessDocument.decode(entry.contents) }
+            }
+            if let document = document {
+                guard urls.count == 1 else { throw ClientUpdateError.invalidDocument }
+                ClientUpdateCoordinator.shared.importDocument(document, manager: tunnelsManager) { error in
+                    let message = error?.localizedDescription ?? "Заявка №\(document.snapshot.orderID) связана с приложением. Серверы и режим Авто будут обновляться при открытии приложения и по кнопке «Обновить»."
+                    errorPresenterType.showErrorAlert(title: error == nil ? "Заявка подключена" : "Обновление конфигураций", message: message, from: sourceVC, onPresented: completionHandler)
+                }
+                return
+            }
+        } catch {
+            errorPresenterType.showErrorAlert(title: "Документ заявки не принят", message: error.localizedDescription, from: sourceVC, onPresented: completionHandler)
+            return
+        }
+        #endif
         let dispatchGroup = DispatchGroup()
         var configs = [TunnelConfiguration?]()
         var lastFileImportErrorText: (title: String, message: String)?

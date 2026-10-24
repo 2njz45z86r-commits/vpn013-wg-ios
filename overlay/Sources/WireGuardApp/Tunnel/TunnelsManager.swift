@@ -51,6 +51,20 @@ class TunnelsManager {
     private var statusObservationToken: NotificationToken?
     private var waiteeObservationToken: NSKeyValueObservation?
     private var configurationsObservationToken: NotificationToken?
+    private var managedUpdateInProgress = false
+
+    func beginManagedUpdate() {
+        managedUpdateInProgress = true
+        configurationsObservationToken = nil
+    }
+
+    func endManagedUpdate() {
+        managedUpdateInProgress = false
+        startObservingTunnelConfigurations()
+        #if !targetEnvironment(simulator)
+        reload()
+        #endif
+    }
 
     init(tunnelProviders: [NETunnelProviderManager]) {
         tunnels = tunnelProviders.map { TunnelContainer(tunnel: $0) }.sorted {
@@ -312,6 +326,7 @@ class TunnelsManager {
         tunnel: TunnelContainer, tunnelConfiguration: TunnelConfiguration,
         onDemandOption: ActivateOnDemandOption,
         shouldEnsureOnDemandEnabled: Bool = false,
+        automaticProfile: AutoTunnelProfile? = nil,
         completionHandler: @escaping (TunnelsManagerError?) -> Void
     ) {
         let tunnelName = tunnelConfiguration.name ?? ""
@@ -321,6 +336,7 @@ class TunnelsManager {
         }
 
         let tunnelProviderManager = tunnel.tunnelProvider
+        let previousProtocol = tunnelProviderManager.protocolConfiguration?.copy() as? NEVPNProtocol
 
         let isIntroducingOnDemandRules =
             (tunnelProviderManager.onDemandRules ?? []).isEmpty && onDemandOption != .off
@@ -330,7 +346,7 @@ class TunnelsManager {
             tunnel.onDeactivated = { [weak self] in
                 self?.modify(
                     tunnel: tunnel, tunnelConfiguration: tunnelConfiguration,
-                    onDemandOption: onDemandOption, shouldEnsureOnDemandEnabled: true,
+                    onDemandOption: onDemandOption, shouldEnsureOnDemandEnabled: true, automaticProfile: automaticProfile,
                     completionHandler: completionHandler)
             }
             self.startDeactivation(of: tunnel)
@@ -359,6 +375,15 @@ class TunnelsManager {
         }
         tunnelProviderManager.isEnabled = true
 
+        if let profile = automaticProfile, let proto = tunnelProviderManager.protocolConfiguration as? NETunnelProviderProtocol {
+            do { try proto.setPrivateAutomatic(profile); isTunnelConfigurationChanged = true }
+            catch {
+                tunnelProviderManager.protocolConfiguration = previousProtocol
+                tunnel.name = oldName
+                completionHandler(.systemErrorOnModifyTunnel(systemError: error)); return
+            }
+        }
+
         let isActivatingOnDemand =
             !tunnelProviderManager.isOnDemandEnabled && shouldEnsureOnDemandEnabled
         onDemandOption.apply(on: tunnelProviderManager)
@@ -366,9 +391,10 @@ class TunnelsManager {
             tunnelProviderManager.isOnDemandEnabled = true
         }
 
-        tunnelProviderManager.saveToPreferences { [weak self] error in
+        let saveCompletion: (Error?) -> Void = { [weak self] error in
             if let error = error {
-                // TODO: the passwordReference for the old one has already been removed at this point and we can't easily roll back!
+                tunnelProviderManager.protocolConfiguration = previousProtocol
+                tunnel.name = oldName
                 wg_log(.error, message: "Modify: Saving configuration failed: \(error)")
                 completionHandler(TunnelsManagerError.systemErrorOnModifyTunnel(systemError: error))
                 return
@@ -415,29 +441,30 @@ class TunnelsManager {
                 completionHandler(nil)
             }
         }
+        #if targetEnvironment(simulator)
+        saveCompletion(nil)
+        #else
+        tunnelProviderManager.saveToPreferences(completionHandler: saveCompletion)
+        #endif
     }
 
     func remove(
         tunnel: TunnelContainer, completionHandler: @escaping (TunnelsManagerError?) -> Void
     ) {
         let tunnelProviderManager = tunnel.tunnelProvider
-        #if os(macOS)
-            if tunnel.isTunnelAvailableToUser {
-                (tunnelProviderManager.protocolConfiguration as? NETunnelProviderProtocol)?
-                    .destroyConfigurationReference()
-            }
-        #elseif os(iOS)
-            (tunnelProviderManager.protocolConfiguration as? NETunnelProviderProtocol)?
-                .destroyConfigurationReference()
-        #else
-            #error("Unimplemented")
-        #endif
-        tunnelProviderManager.removeFromPreferences { [weak self] error in
+        let removeCompletion: (Error?) -> Void = { [weak self] error in
             if let error = error {
                 wg_log(.error, message: "Remove: Saving configuration failed: \(error)")
                 completionHandler(TunnelsManagerError.systemErrorOnRemoveTunnel(systemError: error))
                 return
             }
+            #if os(macOS)
+            if tunnel.isTunnelAvailableToUser {
+                (tunnelProviderManager.protocolConfiguration as? NETunnelProviderProtocol)?.destroyConfigurationReference()
+            }
+            #elseif os(iOS)
+            (tunnelProviderManager.protocolConfiguration as? NETunnelProviderProtocol)?.destroyConfigurationReference()
+            #endif
             if let self = self, let index = self.tunnels.firstIndex(of: tunnel) {
                 self.tunnels.remove(at: index)
                 self.tunnelsListDelegate?.tunnelRemoved(at: index, tunnel: tunnel)
@@ -448,6 +475,11 @@ class TunnelsManager {
                 RecentTunnelsTracker.handleTunnelRemoved(tunnelName: tunnel.name)
             #endif
         }
+        #if targetEnvironment(simulator)
+        removeCompletion(nil)
+        #else
+        tunnelProviderManager.removeFromPreferences(completionHandler: removeCompletion)
+        #endif
     }
 
     func removeMultiple(
@@ -565,6 +597,7 @@ class TunnelsManager {
     }
 
     func startActivation(of tunnel: TunnelContainer) {
+        guard !managedUpdateInProgress else { return }
         guard tunnels.contains(tunnel) else { return }  // Ensure it's not deleted
         guard tunnel.status == .inactive else {
             activationDelegate?.tunnelActivationAttemptFailed(
@@ -814,6 +847,15 @@ class TunnelContainer: NSObject {
 
     var tunnelConfiguration: TunnelConfiguration? {
         return tunnelProvider.tunnelConfiguration
+    }
+
+    var persistentProfileIdentifier: String? {
+        (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope?.id
+    }
+
+    var automaticProfileForUpdates: AutoTunnelProfile? {
+        guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol else { return nil }
+        return try? AutoTunnelProfile.load(from: proto)
     }
 
     var isVPN013Automatic: Bool {

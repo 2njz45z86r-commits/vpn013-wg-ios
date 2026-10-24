@@ -170,7 +170,10 @@ class TunnelsListTableViewController: UIViewController {
             let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addButtonTapped(sender:)))
             addButton.accessibilityIdentifier = "vpn013.add-profile"
             addButton.accessibilityLabel = "Добавить конфигурацию"
-            navigationItem.rightBarButtonItem = addButton
+            let updates = UIBarButtonItem(image: UIImage(systemName: "arrow.clockwise"), style: .plain, target: self, action: #selector(clientUpdatesTapped))
+            updates.accessibilityIdentifier = "vpn013.updates"
+            updates.accessibilityLabel = "Обновления"
+            navigationItem.rightBarButtonItems = [addButton, updates]
             let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(settingsButtonTapped(sender:)))
             settings.accessibilityLabel = tr("tunnelsListSettingsButtonTitle")
             navigationItem.leftBarButtonItem = settings
@@ -499,7 +502,11 @@ class TunnelsListTableViewController: UIViewController {
 
     private func startAutomaticSummaryUpdates() {
         automaticSummaryTimer?.invalidate()
-        let timer = Timer(timeInterval: 3, repeats: true) { [weak self] _ in self?.refreshAutomaticSummary() }
+        let timer = Timer(timeInterval: 3, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.refreshAutomaticSummary()
+            ClientUpdateCoordinator.shared.tick(manager: self.tunnelsManager, presenter: self)
+        }
         automaticSummaryTimer = timer
         RunLoop.main.add(timer, forMode: .common)
         refreshAutomaticSummary()

@@ -26,7 +26,9 @@ extension TunnelsListTableViewController {
                     let config = TunnelConfiguration(name: "Авто · " + countLabel, interface: primary.interface, peers: primary.peers)
                     manager.add(tunnelConfiguration: config, automaticProfile: profile) { [weak self] result in
                         switch result {
-                        case .success(let tunnel): self?.showTunnelDetail(for: tunnel, animated: true)
+                        case .success(let tunnel):
+                            ClientUpdateCoordinator.shared.rememberAuto(tunnel, sources: manual)
+                            self?.showTunnelDetail(for: tunnel, animated: true)
                         case .failure(let error): self?.showAutomaticError(error)
                         }
                     }

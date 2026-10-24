@@ -39,6 +39,7 @@ jobs:
               --target "$GITHUB_SHA" --prerelease \
               --title "VPN013 WG unsigned build ${GITHUB_RUN_NUMBER}" \
               --notes 'Unsigned development build. Requires owner signing and physical iPhone VPN verification. No customer configurations or credentials included.'
+            python3 publish-client-release.py
           else
             shasum -a 256 build/native-review.zip > build/SHA256SUMS.txt
             gh release create "inspection-${GITHUB_RUN_ID}" \

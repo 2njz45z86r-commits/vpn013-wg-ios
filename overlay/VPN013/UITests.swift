@@ -234,4 +234,28 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.staticTexts["vpn013.ping-explanation"].label.contains("остановлена"))
         capture("16-ping-cancelled")
     }
+
+    func testUpdatesScreenAndOrderSynchronization() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]
+        app.launch()
+        let updates = app.buttons["vpn013.updates"]
+        XCTAssertTrue(updates.waitForExistence(timeout:20))
+        updates.tap()
+        XCTAssertTrue(app.staticTexts["Пока нет привязанных заявок"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["vpn013.update-check"].exists)
+        capture("17-updates-before-binding")
+        let fixture = app.buttons["vpn013.sync-fixture"]
+        for _ in 0..<5 { if fixture.isHittable { break }; app.tables.firstMatch.swipeUp() }
+        XCTAssertTrue(fixture.isHittable)
+        fixture.tap()
+        let passed = app.staticTexts["Проверено: добавление, удаление, ключи, сторонний профиль и Авто · 3 сервера"]
+        XCTAssertTrue(passed.waitForExistence(timeout:15))
+        capture("18-order-sync-invariants-passed-synthetic")
+        app.navigationBars["Обновления"].buttons["Готово"].tap()
+        XCTAssertTrue(app.tables.cells.staticTexts["Managed B"].waitForExistence(timeout:5))
+        XCTAssertFalse(app.tables.cells.staticTexts["Личный сервер 1"].exists)
+        XCTAssertTrue(app.tables.cells.staticTexts["Личный сервер 2"].exists)
+        capture("19-updated-order-and-foreign-profile-preserved-synthetic")
+    }
 }

@@ -79,3 +79,31 @@ Auto's existing in-tunnel HTTPS health measurements and failover are unchanged.
 No automatic ranking or hourly inactive-VPN traffic scan is claimed by this build.
 Actual loopback echo tests cover sockets and UI; physical iPhone behavior still
 requires the owner-signed build. No customer configurations are included.
+
+
+## Order-bound configuration updates in 1.4.0 (9)
+
+The visible Updates screen checks a fixed HTTPS bot-backend domain, using normal
+system TLS. On foreground/launch it checks at most daily after a successful check;
+manual refresh is also available. iOS offers the Telegram download screen for owner
+signing and installation. A closed app is not guaranteed a background daily launch.
+
+An optional VPN013-Access.json document in the existing ZIP contains a purpose-scoped
+per-order capability and an authenticated complete roster digest. The capability,
+cached configurations, pending updates and profile-ID associations are encrypted
+in this app's private sandbox using AES-GCM. They do not require an App Group.
+Old ZIPs and third-party configurations retain the ordinary import path.
+
+An update validates the entire roster (1-30 servers), parses every configuration,
+checks the same order and preserves existing key material. A partial, empty,
+unauthorized or expired response cannot remove profiles. Only explicitly bound
+profile IDs can be removed. Local edits stop automatic replacement. New/changed
+profiles are saved before obsolete bound profiles are removed, with durable progress
+and retry. Applying waits until VPN and on-demand activation are off. Managed Auto
+membership follows the refreshed sources; unrelated manual sources are retained.
+
+After successful device compilation and native simulator tests the workflow publishes
+client-release.json. The private bot consumes this public metadata, so its IPA link
+and client update checks advance together. No private bot source is published here.
+Android/Windows binaries and installers are not part of this iOS release.
+Physical iPhone signing, traffic, and real order delivery require separate validation.

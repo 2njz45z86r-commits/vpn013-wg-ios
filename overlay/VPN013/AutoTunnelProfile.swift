@@ -8,13 +8,13 @@ struct AutoTunnelProfile: Codable {
     let version: Int
     let candidates: [Candidate]
     init(configurations: [TunnelConfiguration]) throws {
-        guard !configurations.isEmpty else { throw AutoTunnelError.invalidGroup }
+        guard (1...30).contains(configurations.count) else { throw AutoTunnelError.invalidGroup }
         candidates = configurations.map { Candidate(name: $0.name ?? "", config: $0.asWgQuickConfig()) }
         version = 1
         _ = try validatedConfigurations()
     }
     func validatedConfigurations() throws -> [TunnelConfiguration] {
-        guard version == 1, !candidates.isEmpty,
+        guard version == 1, (1...30).contains(candidates.count),
               Set(candidates.map { $0.name }).count == candidates.count else { throw AutoTunnelError.invalidGroup }
         return try candidates.map { item in
             guard !item.name.isEmpty, item.name.count <= 128, item.config.utf8.count <= 65536 else { throw AutoTunnelError.invalidGroup }
