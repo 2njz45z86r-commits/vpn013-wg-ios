@@ -15,7 +15,7 @@ CORE = (
     "active_guard.go", "active_guard_test.go", "controller.go", "controller_test.go",
     "dns_probe.go", "dns_probe_test.go", "identity.go", "physical_bind.go",
     "physical_bind_test.go", "probe.go", "probe_test.go", "resource_limits.go",
-    "resource_limits_test.go", "scan.go", "scan_test.go",
+    "resource_limits_test.go", "scan.go", "scan_test.go", "real_current_test.go",
 )
 BRIDGE = {"main.go": "r013_transport.go", "controller.go": "r013_controller.go", "primary.go": "r013_primary.go", "exercise.go": "r013_exercise.go"}
 
