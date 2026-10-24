@@ -10,7 +10,12 @@ class MockTunnels {
     static let tunnelNames = ["Беларусь", "Германия", "Германия 2", "Грузия", "Испания", "Нидерланды", "Польша", "Польша 2", "США", "Турция", "Финляндия", "Финляндия 2", "Швеция"]
     static let address = "192.168.%d.%d/32"
     static let dnsServers = ["8.8.8.8", "8.8.4.4"]
-    static let endpoint = "192.0.2.1:4444"
+    static var endpoint: String {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-ping-loopback") { return "127.0.0.1:4444" }
+        #endif
+        return "192.0.2.1:4444"
+    }
     static let allowedIPs = "0.0.0.0/0"
 
     #if DEBUG

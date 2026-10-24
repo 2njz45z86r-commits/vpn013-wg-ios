@@ -64,3 +64,18 @@ fastest inactive peer are NOT implemented in this release. Independent AWG
 handshake probes need physical-device validation of memory use, uninterrupted
 traffic and endpoint roaming. A handshake delay would not itself prove working
 internet traffic. The existing Auto failover behavior remains unchanged.
+
+
+## Endpoint ping in 1.3.1 (8)
+
+The visible «Проверить пинг» action measures real ICMP echo replies from imported
+profiles' endpoint addresses without activating or switching VPN profiles. Results
+are in milliseconds; no reply, DNS failure, cancellation and unavailable sockets
+are explicit. IPv4/IPv6 replies must match a fresh per-probe nonce. Requests cannot
+be mistaken for replies. Three workers and a 45-second batch deadline bound work.
+The ping uses the current OS route, including the current VPN if routed that way.
+It is not an AWG handshake, UDP-port test, or proof of tunneled internet traffic.
+Auto's existing in-tunnel HTTPS health measurements and failover are unchanged.
+No automatic ranking or hourly inactive-VPN traffic scan is claimed by this build.
+Actual loopback echo tests cover sockets and UI; physical iPhone behavior still
+requires the owner-signed build. No customer configurations are included.

@@ -20,6 +20,8 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testDarkEmptyListKeepsDeveloperFooter \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testLargeTextKeepsSwitchAndDeveloperFooter \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnavailableLogStopsSpinnerAndShowsExplanation \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingButtonMeasuresActualLoopbackWithoutStartingVPN \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingCancellationIsAvailable \
  -derivedDataPath ../SimulatorDerivedData -resultBundlePath ../AutoTunnel.xcresult CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= \
  test > ../simulator-test.log 2>&1
 result=$?

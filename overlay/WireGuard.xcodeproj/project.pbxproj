@@ -225,6 +225,7 @@
 		9B5F58ECFF36F61BACAACA91 /* PrivateTunnelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5EAE9C739457FAB91B16BD0; };
 		89E5622BC10FBF68338CC739 /* PrivateTunnelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5EAE9C739457FAB91B16BD0; };
 		19047071C5CBD12008B8D804 /* PrivateTunnelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5EAE9C739457FAB91B16BD0; };
+		613013000000000000000082 /* EndpointPing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 613013000000000000000081; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -450,6 +451,7 @@
 		A1A2697A83D7B3F78C58C536 /* AutoTunnelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPN013/AutoTunnelController.swift; sourceTree = SOURCE_ROOT; };
 		68E92AA2027ED93A63943F60 /* AutoTunnelUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPN013/AutoTunnelUI.swift; sourceTree = SOURCE_ROOT; };
 		E5EAE9C739457FAB91B16BD0 /* PrivateTunnelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPN013/PrivateTunnelStore.swift; sourceTree = SOURCE_ROOT; };
+		613013000000000000000081 /* EndpointPing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPN013/EndpointPing.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1397,6 +1399,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9B5F58ECFF36F61BACAACA91 /* PrivateTunnelStore.swift in Sources */,
+				613013000000000000000082 /* EndpointPing.swift in Sources */,
 				B47708F94D16F2FA231D8BDE /* AutoTunnelController.swift in Sources */,
 				E3D6AA7389B9B6422CC0DCCE /* AutoTunnelProfile.swift in Sources */,
 				7A61590471721CA663530C04 /* AutoFailoverPolicy.swift in Sources */,

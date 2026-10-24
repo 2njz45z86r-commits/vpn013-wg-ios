@@ -55,6 +55,11 @@ class TunnelsListTableViewController: UIViewController {
     private let emptyStateStack = UIStackView()
     private let emptyStateContainer = UIView()
     private let checkAllButton = UIButton(type: .system)
+    private let pingExplanationLabel = TunnelsListTableViewController.makeLabel(style: .footnote, color: VPN013Theme.secondaryText)
+    private let pingCoordinator = EndpointPingCoordinator()
+    private var pingIsRunning = false
+    private var pingGeneration = UUID()
+    private var backgroundObserver: NSObjectProtocol?
     private let developerFooter = UIView()
     private var summaryObservations: [NSKeyValueObservation] = []
     private var automaticSummaryTimer: Timer?
@@ -65,7 +70,7 @@ class TunnelsListTableViewController: UIViewController {
     private var automaticSummaryPhase: String?
     private var connectionTestResults: [ObjectIdentifier: String] = [:]
 
-    /// Installed by the real test coordinator. With no coordinator, the action stays hidden.
+    /// The action is installed only when the endpoint-ping coordinator is ready.
     var onCheckAllServers: (() -> Void)? {
         didSet {
             guard isViewLoaded else { return }
@@ -139,6 +144,11 @@ class TunnelsListTableViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        onCheckAllServers = { [weak self] in self?.beginEndpointPing() }
+        updateEmptyState()
+        backgroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.cancelEndpointPing()
+        }
 
         tableState = .normal
         restorationIdentifier = "TunnelsListVC"
@@ -215,6 +225,8 @@ class TunnelsListTableViewController: UIViewController {
 
     deinit {
         automaticSummaryTimer?.invalidate()
+        pingCoordinator.cancel()
+        if let observer = backgroundObserver { NotificationCenter.default.removeObserver(observer) }
     }
 
     override func viewDidLayoutSubviews() {
@@ -260,7 +272,9 @@ class TunnelsListTableViewController: UIViewController {
             labels.trailingAnchor.constraint(equalTo: summary.layoutMarginsGuide.trailingAnchor)
         ])
         var configuration = UIButton.Configuration.filled()
-        configuration.title = "Проверить все"
+        configuration.title = "Проверить пинг"
+        configuration.image = UIImage(systemName: "waveform.path.ecg")
+        configuration.imagePadding = 8
         configuration.cornerStyle = .medium
         configuration.baseBackgroundColor = VPN013Theme.accent
         configuration.baseForegroundColor = VPN013Theme.background
@@ -270,7 +284,10 @@ class TunnelsListTableViewController: UIViewController {
         checkAllButton.titleLabel?.numberOfLines = 0
         checkAllButton.addTarget(self, action: #selector(checkAllServersTapped), for: .touchUpInside)
         checkAllButton.isHidden = onCheckAllServers == nil
-        checkAllButton.accessibilityHint = "Проверить соединение с каждым сервером"
+        checkAllButton.accessibilityIdentifier = "vpn013.check-ping"
+        checkAllButton.accessibilityHint = "Измерить пинг адресов серверов без переключения VPN"
+        pingExplanationLabel.text = "Пинг адресов по текущему сетевому маршруту. Без переключения VPN. Ответ не подтверждает работу VPN; сервер может блокировать пинг."
+        pingExplanationLabel.accessibilityIdentifier = "vpn013.ping-explanation"
         let minimumButtonHeight = checkAllButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 48)
         minimumButtonHeight.priority = .defaultHigh
         minimumButtonHeight.isActive = true
@@ -301,7 +318,10 @@ class TunnelsListTableViewController: UIViewController {
             centeredAddButton.button.trailingAnchor.constraint(lessThanOrEqualTo: centeredAddButton.trailingAnchor, constant: -16),
             centeredAddButton.heightAnchor.constraint(greaterThanOrEqualTo: centeredAddButton.button.heightAnchor, constant: 16)
         ])
-        let stack = UIStackView(arrangedSubviews: [summary, checkAllButton, emptyStateContainer])
+        let pingStack = UIStackView(arrangedSubviews: [checkAllButton, pingExplanationLabel])
+        pingStack.axis = .vertical
+        pingStack.spacing = 8
+        let stack = UIStackView(arrangedSubviews: [summary, pingStack, emptyStateContainer])
         stack.axis = .vertical
         stack.spacing = 16
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -402,6 +422,8 @@ class TunnelsListTableViewController: UIViewController {
         let hasTunnels = (tunnelsManager?.numberOfTunnels() ?? 0) > 0
         emptyStateContainer.isHidden = tunnelsManager == nil || hasTunnels
         checkAllButton.isEnabled = hasTunnels
+        checkAllButton.isHidden = !hasTunnels
+        pingExplanationLabel.isHidden = !hasTunnels
         sizeSummaryHeader()
     }
 
@@ -520,8 +542,9 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     func setConnectionTesting(isRunning: Bool, title: String? = nil) {
-        checkAllButton.isEnabled = !isRunning && (tunnelsManager?.numberOfTunnels() ?? 0) > 0
-        checkAllButton.configuration?.title = title ?? (isRunning ? "Проверяем серверы…" : "Проверить все")
+        pingIsRunning = isRunning
+        checkAllButton.isEnabled = (tunnelsManager?.numberOfTunnels() ?? 0) > 0
+        checkAllButton.configuration?.title = title ?? (isRunning ? "Остановить проверку" : "Проверить пинг")
         checkAllButton.configuration?.showsActivityIndicator = isRunning
         sizeSummaryHeader()
     }
@@ -531,6 +554,62 @@ class TunnelsListTableViewController: UIViewController {
         for case let cell as TunnelListCell in tableView.visibleCells where cell.tunnel === tunnel {
             cell.connectionTestText = text
         }
+    }
+
+    private func cancelEndpointPing() {
+        guard pingIsRunning else { return }
+        pingGeneration = UUID()
+        pingCoordinator.cancel()
+        for tunnel in tunnelsManager?.mapTunnels(transform: { $0 }) ?? [] {
+            if connectionTestResults[ObjectIdentifier(tunnel)] == "…" { setConnectionTestText(nil, for: tunnel) }
+        }
+        setConnectionTesting(isRunning: false)
+        pingExplanationLabel.text = "Проверка остановлена. Полученные ответы сохранены. VPN не переключался."
+    }
+
+    private func beginEndpointPing() {
+        if pingIsRunning { cancelEndpointPing(); return }
+        let tunnels = tunnelsManager?.mapTunnels(transform: { $0 }) ?? []
+        let profiles = tunnels.filter { !$0.isVPN013Automatic }
+        var hostsByProfile: [ObjectIdentifier: [String]] = [:]
+        for tunnel in profiles {
+            let hosts = tunnel.tunnelConfiguration?.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } } ?? []
+            hostsByProfile[ObjectIdentifier(tunnel)] = Array(Set(hosts))
+            setConnectionTestText(hosts.isEmpty ? "Нет адреса" : "…", for: tunnel)
+        }
+        let hosts = hostsByProfile.values.flatMap { $0 }
+        guard !hosts.isEmpty else {
+            pingExplanationLabel.text = "Нет адресов для проверки. Добавьте обычный профиль с адресом сервера. В Авто задержка действующего соединения видна в его статусе."
+            sizeSummaryHeader(); return
+        }
+        let stamp = UUID(); pingGeneration = stamp
+        var results: [String: EndpointPingResult] = [:]
+        let uniqueCount = Set(hosts).count
+        setConnectionTesting(isRunning: true)
+        pingExplanationLabel.text = "Проверяем пинг адресов: 0 из \(uniqueCount). Текущий VPN не переключается."
+        pingCoordinator.start(hosts: hosts, update: { [weak self] host, result in
+            guard let self = self, self.pingGeneration == stamp else { return }
+            results[host] = result
+            let currentProfiles = self.tunnelsManager?.mapTunnels(transform: { $0 }) ?? []
+            for tunnel in currentProfiles {
+                guard let targets = hostsByProfile[ObjectIdentifier(tunnel)], !targets.isEmpty,
+                      targets.allSatisfy({ results[$0] != nil }) else { continue }
+                let values = targets.compactMap { target -> Double? in
+                    if case .milliseconds(let value)? = results[target] { return value }; return nil
+                }
+                let text = values.min().map { EndpointPingResult.milliseconds($0).text }
+                    ?? targets.compactMap { results[$0] }.first?.text
+                self.setConnectionTestText(text, for: tunnel)
+            }
+            self.pingExplanationLabel.text = "Проверяем пинг адресов: \(results.count) из \(uniqueCount). Текущий VPN не переключается."
+            self.sizeSummaryHeader()
+        }, completion: { [weak self] in
+            guard let self = self, self.pingGeneration == stamp else { return }
+            let answered = results.values.filter { if case .milliseconds = $0 { return true }; return false }.count
+            self.setConnectionTesting(isRunning: false)
+            self.pingExplanationLabel.text = "Ответили \(answered) из \(uniqueCount) адресов · \(DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .short)). Это пинг по текущему маршруту, не проверка VPN. «Нет ответа» может означать блокировку пинга."
+            self.sizeSummaryHeader()
+        })
     }
 
     @objc func addButtonTapped(sender: AnyObject) {
@@ -843,6 +922,7 @@ extension TunnelsListTableViewController: TunnelsManagerListDelegate {
     }
 
     func tunnelModified(at index: Int) {
+        cancelEndpointPing()
         if let tunnel = tunnelsManager?.tunnel(at: index) {
             connectionTestResults[ObjectIdentifier(tunnel)] = nil
         }
@@ -855,6 +935,7 @@ extension TunnelsListTableViewController: TunnelsManagerListDelegate {
     }
 
     func tunnelRemoved(at index: Int, tunnel: TunnelContainer) {
+        cancelEndpointPing()
         tableView.deleteRows(at: [IndexPath(row: index, section: 0)], with: .automatic)
         connectionTestResults[ObjectIdentifier(tunnel)] = nil
         observeConnectionSummary()

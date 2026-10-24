@@ -203,4 +203,35 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertFalse(app.activityIndicators["vpn013.log-loading"].isHittable)
         capture("06-log-unavailable-no-infinite-spinner-simulated")
     }
+
+    func testPingButtonMeasuresActualLoopbackWithoutStartingVPN() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-ping-loopback"]
+        app.launch()
+        let button = app.buttons["vpn013.check-ping"]
+        XCTAssertTrue(button.waitForExistence(timeout:20))
+        XCTAssertTrue(button.isHittable)
+        button.tap()
+        let first = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
+        let measured = first.staticTexts.matching(NSPredicate(format:"label ENDSWITH %@", "мс")).firstMatch
+        XCTAssertTrue(measured.waitForExistence(timeout:10), "Actual localhost echo must populate the delay column")
+        XCTAssertEqual(first.switches.firstMatch.value as? String, "0", "Ping must not activate the VPN")
+        XCTAssertTrue(app.staticTexts["vpn013.ping-explanation"].label.contains("Это пинг"))
+        XCTAssertEqual(button.label, "Проверить пинг")
+        capture("15-real-loopback-ping-results-no-vpn-switch")
+    }
+
+    func testPingCancellationIsAvailable() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2"]
+        app.launch()
+        let button = app.buttons["vpn013.check-ping"]
+        XCTAssertTrue(button.waitForExistence(timeout:20))
+        button.tap()
+        XCTAssertTrue(app.buttons["Остановить проверку"].waitForExistence(timeout:2))
+        button.tap()
+        XCTAssertEqual(button.label, "Проверить пинг")
+        XCTAssertTrue(app.staticTexts["vpn013.ping-explanation"].label.contains("остановлена"))
+        capture("16-ping-cancelled")
+    }
 }
