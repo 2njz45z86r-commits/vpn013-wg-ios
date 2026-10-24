@@ -88,6 +88,7 @@ final class R013ProbeCoordinator {
     private var stopped = false
     private var nextIndex = 0
     private var autoActive = false
+    private var due: DispatchTime?
     var metrics: ((R013ProbeStatus) -> Void)? // Typed DNS values only; not ICMP.
 
     init?(physical: UInt64, throughTunnel: UInt64) {
@@ -98,12 +99,14 @@ final class R013ProbeCoordinator {
 
     func startHourly(input: @escaping CurrentInput, apply: @escaping Apply) {
         requireMain(); guard !stopped else { return }
-        cancelScheduledWork(); autoActive = true
+        cancelScheduledWork()
+        if !autoActive { due = .now() + 3600 }
+        autoActive = true
         self.currentInput = input; self.apply = apply
         scheduleHour()
     }
     func stopHourly() {
-        requireMain(); autoActive = false; currentInput = nil; apply = nil
+        requireMain(); autoActive = false; due = nil; currentInput = nil; apply = nil
         cancelScheduledWork()
     }
     private func cancelScheduledWork(cancelScan: Bool = true) {
@@ -118,7 +121,10 @@ final class R013ProbeCoordinator {
             guard let self = self, self.generation == stamp else { return }; self.run()
         }
         timer = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3600, execute: item)
+        // A path update/member change must not restart the entire hour. Keep
+        // the monotonic due time and run shortly after a late lifecycle resume.
+        let deadline = max(due ?? (.now() + 3600), .now() + 1)
+        DispatchQueue.main.asyncAfter(deadline: deadline, execute: item)
     }
     // Lifecycle mutation cannot begin until Go confirms all candidate/current
     // measurements have genuinely closed. No C wait blocks the main/UDP queue.
@@ -147,6 +153,7 @@ final class R013ProbeCoordinator {
 
     private func run() {
         requireMain()
+        due = .now() + 3600
         guard autoActive, !stopped, operation == 0, let input = currentInput?(), input.auto_active,
               !input.candidates.isEmpty, input.candidates.count <= 30 else { scheduleHour(); return }
         let rotated = R013ProbeInput(auto_active: true, resolver: input.resolver,
@@ -229,5 +236,6 @@ final class R013ProbeCoordinator {
     // Native test drives the same coordinator without sleeping an actual hour.
     // This entry point is excluded from normal builds and claims no iOS timing.
     func runNowForTesting() { requireMain(); timer?.cancel(); timer = nil; run() }
+    var nextHourForTesting: UInt64? { requireMain(); return due?.uptimeNanoseconds }
     #endif
 }

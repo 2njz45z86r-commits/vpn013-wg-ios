@@ -101,6 +101,7 @@ private func spin(until condition: () -> Bool) {
         lock.lock(); let beforeCancelOpens = currentOpens; lock.unlock()
         coordinator.runNowForTesting()
         spin { lock.lock(); defer { lock.unlock() }; return currentOpens > beforeCancelOpens }
+        let dueBeforeChange = coordinator.nextHourForTesting
         var change: R013PrimaryPermit?
         coordinator.beginPrimaryChange { change = $0 }
         spin { change != nil }
@@ -108,7 +109,10 @@ private func spin(until condition: () -> Bool) {
         lock.lock(); let drained = currentOpens == closes; lock.unlock()
         precondition(drained && measured == 1, "cancelled result leaked or primary changed before drain")
         precondition(change!.commit(.idle))
+        coordinator.resumeAfterPrimaryChange()
+        precondition(coordinator.nextHourForTesting == dueBeforeChange, "path/member change postponed the next hour")
         coordinator.stopHourly()
+        precondition(coordinator.nextHourForTesting == nil, "manual stop retained an hourly schedule")
         var released = false
         coordinator.shutdown { precondition($0); released = true }
         spin { released }
