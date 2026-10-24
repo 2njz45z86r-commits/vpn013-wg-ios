@@ -9,20 +9,7 @@ cd build/awg
 set +e
 xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug -sdk iphonesimulator \
  -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testTwoPersonalServers \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testThirtyPersonalServers \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testEmptyListDisablesAutomaticCreation \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCenteredAddShowsPurchaseAndFreeHour \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedZipImportsThirteenWithoutDuplicateError \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testRedesignedListKeepsNativeControls \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAddMenuKeepsAllActions \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testDeveloperFooterAvailable \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testDarkEmptyListKeepsDeveloperFooter \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testLargeTextKeepsSwitchAndDeveloperFooter \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnavailableLogStopsSpinnerAndShowsExplanation \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingButtonMeasuresActualLoopbackWithoutStartingVPN \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingCancellationIsAvailable \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUpdatesScreenAndOrderSynchronization \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutoPinnedFirstWithCurrentMemberAndPing \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentServerPingAndInfo \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithMissingRuntime \
@@ -68,3 +55,4 @@ if [ "$result" -eq 0 ]; then
  xcrun simctl io "$tablet" screenshot build/review/tablet.png
 fi
 test "$result" -eq 0
+

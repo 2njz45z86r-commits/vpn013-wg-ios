@@ -1,14 +1,6 @@
 name: Build and inspect VPN013 WG
 on:
   workflow_dispatch:
-    inputs:
-      runner:
-        description: Standard free macOS image
-        type: choice
-        default: macos-15
-        options:
-          - macos-15
-          - macos-14
 permissions:
   contents: write
 concurrency:
@@ -16,16 +8,18 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    runs-on: ${{ inputs.runner || 'macos-15' }}
-    timeout-minutes: 20
+    runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Check tools
+      - name: Check tools and evidence export compatibility
         run: |
           xcodebuild -version
           swift --version
+          xcrun xcresulttool export attachments --help >/dev/null
+          xcrun xcresulttool get test-results summary --help >/dev/null
       - name: Test core and build unsigned app
         run: sh build-on-mac.sh
       - name: Test native flow and capture appearances
@@ -54,9 +48,8 @@ jobs:
               build/native-review.zip build/SHA256SUMS.txt \
               --target "$GITHUB_SHA" --prerelease \
               --title "VPN013 WG inspection ${GITHUB_RUN_NUMBER}" \
-              --notes 'Native simulator diagnostics only. Failed test run; no installable app published.'
+              --notes 'Native simulator diagnostics only. Failed evidence export or test run; no installable app published.'
           fi
       - name: Export credential-free development files for verification
         if: always()
         run: python3 export-build-evidence.py
-
