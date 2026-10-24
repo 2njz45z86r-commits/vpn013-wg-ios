@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright � 2018-2023 WireGuard LLC. All Rights Reserved.
+// Copyright © 2018-2023 WireGuard LLC. All Rights Reserved.
 
 import UIKit
 import MobileCoreServices
@@ -159,7 +159,7 @@ class TunnelsListTableViewController: UIViewController {
             navigationItem.titleView = appTitleLabel
             let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addButtonTapped(sender:)))
             addButton.accessibilityIdentifier = "vpn013.add-profile"
-            addButton.accessibilityLabel = "�������� ������������"
+            addButton.accessibilityLabel = "Добавить конфигурацию"
             navigationItem.rightBarButtonItem = addButton
             let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(settingsButtonTapped(sender:)))
             settings.accessibilityLabel = tr("tunnelsListSettingsButtonTitle")
@@ -260,7 +260,7 @@ class TunnelsListTableViewController: UIViewController {
             labels.trailingAnchor.constraint(equalTo: summary.layoutMarginsGuide.trailingAnchor)
         ])
         var configuration = UIButton.Configuration.filled()
-        configuration.title = "��������� ���"
+        configuration.title = "Проверить все"
         configuration.cornerStyle = .medium
         configuration.baseBackgroundColor = VPN013Theme.accent
         configuration.baseForegroundColor = VPN013Theme.background
@@ -270,12 +270,12 @@ class TunnelsListTableViewController: UIViewController {
         checkAllButton.titleLabel?.numberOfLines = 0
         checkAllButton.addTarget(self, action: #selector(checkAllServersTapped), for: .touchUpInside)
         checkAllButton.isHidden = onCheckAllServers == nil
-        checkAllButton.accessibilityHint = "��������� ���������� � ������ ��������"
+        checkAllButton.accessibilityHint = "Проверить соединение с каждым сервером"
         let minimumButtonHeight = checkAllButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 48)
         minimumButtonHeight.priority = .defaultHigh
         minimumButtonHeight.isActive = true
         emptyStateLabel.textAlignment = .center
-        emptyStateLabel.text = "�������� ������������ �������, ����� ���������� VPN."
+        emptyStateLabel.text = "Добавьте конфигурацию сервера, чтобы подключить VPN."
         centeredAddButton.button.titleLabel?.numberOfLines = 0
         centeredAddButton.button.titleLabel?.textAlignment = .center
         emptyStateStack.axis = .vertical
@@ -323,7 +323,7 @@ class TunnelsListTableViewController: UIViewController {
 
     private func configureDeveloperFooter() {
         let credit = Self.makeLabel(style: .caption2, color: VPN013Theme.secondaryText)
-        credit.text = "����������� VPN013 WG"
+        credit.text = "Разработчик VPN013 WG"
         credit.textAlignment = .center
         let support = UIButton(type: .system)
         var configuration = UIButton.Configuration.plain()
@@ -343,8 +343,8 @@ class TunnelsListTableViewController: UIViewController {
         support.titleLabel?.numberOfLines = 0
         support.titleLabel?.textAlignment = .center
         support.accessibilityIdentifier = "vpn013.developer-support"
-        support.accessibilityLabel = "�������� ������������ VPN013 WG � Telegram, @R013_Support"
-        support.accessibilityHint = "������� �������� ���������"
+        support.accessibilityLabel = "Написать разработчику VPN013 WG в Telegram, @R013_Support"
+        support.accessibilityHint = "Открыть страницу поддержки"
         support.addTarget(self, action: #selector(developerSupportTapped), for: .touchUpInside)
         support.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         let stack = UIStackView(arrangedSubviews: [credit, support])
@@ -418,10 +418,10 @@ class TunnelsListTableViewController: UIViewController {
             automaticSummaryPhase = nil
             automaticSummaryRequestID = UUID()
             automaticSummaryRequestInFlight = false
-            summaryStatusLabel.text = tunnelsManager == nil ? "��������" : "�� ����������"
-            summaryNameLabel.text = tunnelsManager == nil ? "��������� ��������" : (tunnels.isEmpty ? "�������� ������ ������" : "�������� ������")
+            summaryStatusLabel.text = tunnelsManager == nil ? "Загрузка" : "Не подключено"
+            summaryNameLabel.text = tunnelsManager == nil ? "Загружаем серверы…" : (tunnels.isEmpty ? "Добавьте первый сервер" : "Выберите сервер")
             summaryModeLabel.isHidden = tunnels.isEmpty
-            summaryModeLabel.text = "�������� ������������� ����� � ��������."
+            summaryModeLabel.text = "Включите переключатель рядом с сервером."
             sizeSummaryHeader()
             return
         }
@@ -435,44 +435,44 @@ class TunnelsListTableViewController: UIViewController {
         summaryNameLabel.text = tunnel.isVPN013Automatic ? (automaticSummaryName ?? tunnel.name) : tunnel.name
         if tunnel.isVPN013Automatic {
             let count = tunnel.automaticServerCount
-            summaryModeLabel.text = "���� � \(count) \(serverCountWord(count))"
+            summaryModeLabel.text = "Авто · \(count) \(serverCountWord(count))"
             summaryModeLabel.isHidden = false
         }
         switch tunnel.status {
         case .active:
-            summaryStatusLabel.text = "����������"
+            summaryStatusLabel.text = "Подключено"
             summaryStatusLabel.textColor = VPN013Theme.accent
             summaryProofLabel.isHidden = false
             if tunnel.isVPN013Automatic {
-                summaryProofLabel.text = automaticSummaryPhase ?? "VPN ������� � ������ ��� �� ��������"
+                summaryProofLabel.text = automaticSummaryPhase ?? "VPN запущен · трафик ещё не проверен"
             } else if tunnel.handshakeState == .confirmed {
-                summaryProofLabel.text = "����������� ������������"
+                summaryProofLabel.text = "Рукопожатие подтверждено"
             } else {
-                summaryProofLabel.text = "VPN ������� � ����������� �� ������������"
+                summaryProofLabel.text = "VPN запущен · рукопожатие не подтверждено"
             }
         case .activating:
-            summaryStatusLabel.text = "�����������"
+            summaryStatusLabel.text = "Подключение…"
             summaryProofLabel.isHidden = false
-            summaryProofLabel.text = tunnel.handshakeState == .waiting ? "������� ����� �������" : "��������� VPN"
+            summaryProofLabel.text = tunnel.handshakeState == .waiting ? "Ожидаем ответ сервера" : "Запускаем VPN"
         case .deactivating:
-            summaryStatusLabel.text = "����������"
+            summaryStatusLabel.text = "Отключение…"
         case .waiting:
-            summaryStatusLabel.text = "�������� �����������"
+            summaryStatusLabel.text = "Ожидание подключения"
         case .restarting, .reasserting:
-            summaryStatusLabel.text = "�������������� ������������"
+            summaryStatusLabel.text = "Восстановление подключения…"
         case .inactive:
-            summaryStatusLabel.text = "�� ����������"
+            summaryStatusLabel.text = "Не подключено"
         }
         sizeSummaryHeader()
         refreshAutomaticSummary()
     }
 
     private func serverCountWord(_ count: Int) -> String {
-        if count % 100 >= 11 && count % 100 <= 14 { return "��������" }
+        if count % 100 >= 11 && count % 100 <= 14 { return "серверов" }
         switch count % 10 {
-        case 1: return "������"
-        case 2...4: return "�������"
-        default: return "��������"
+        case 1: return "сервер"
+        case 2...4: return "сервера"
+        default: return "серверов"
         }
     }
 
@@ -502,7 +502,7 @@ class TunnelsListTableViewController: UIViewController {
             self.automaticSummaryName = lines.first.flatMap { $0.isEmpty ? nil : $0 }
             self.automaticSummaryPhase = lines.count > 1 && !lines[1].isEmpty ? lines[1] : nil
             self.summaryNameLabel.text = self.automaticSummaryName ?? tunnel.name
-            self.summaryProofLabel.text = self.automaticSummaryPhase ?? "VPN ������� � ������ ��� �� ��������"
+            self.summaryProofLabel.text = self.automaticSummaryPhase ?? "VPN запущен · трафик ещё не проверен"
             self.sizeSummaryHeader()
         }
     }
@@ -513,7 +513,7 @@ class TunnelsListTableViewController: UIViewController {
 
     func setConnectionTesting(isRunning: Bool, title: String? = nil) {
         checkAllButton.isEnabled = !isRunning && (tunnelsManager?.numberOfTunnels() ?? 0) > 0
-        checkAllButton.configuration?.title = title ?? (isRunning ? "��������� ��������" : "��������� ���")
+        checkAllButton.configuration?.title = title ?? (isRunning ? "Проверяем серверы…" : "Проверить все")
         checkAllButton.configuration?.showsActivityIndicator = isRunning
         sizeSummaryHeader()
     }
@@ -529,10 +529,10 @@ class TunnelsListTableViewController: UIViewController {
         guard tunnelsManager != nil else { return }
 
         let alert = UIAlertController(title: "", message: tr("addTunnelMenuHeader"), preferredStyle: .actionSheet)
-        alert.addAction(UIAlertAction(title: "������ ������������", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Купить конфигурацию", style: .default) { [weak self] _ in
             self?.openConfigurationWebsite("https://t.me/vpn_access_orders_bot")
         })
-        alert.addAction(UIAlertAction(title: "1 ��� ���������", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "1 час бесплатно", style: .default) { [weak self] _ in
             self?.openConfigurationWebsite("https://vpn013.com/")
         })
         let importFileAction = UIAlertAction(title: tr("addTunnelMenuImportFile"), style: .default) { [weak self] _ in
@@ -540,7 +540,7 @@ class TunnelsListTableViewController: UIViewController {
         }
         alert.addAction(importFileAction)
 
-        let automaticAction = UIAlertAction(title: "������� ����� ����", style: .default) { [weak self] _ in self?.automaticTapped() }
+        let automaticAction = UIAlertAction(title: "Создать режим Авто", style: .default) { [weak self] _ in self?.automaticTapped() }
         automaticAction.isEnabled = tunnelsManager?.mapTunnels { $0 }.contains(where: { !$0.isVPN013Automatic }) ?? false
         alert.addAction(automaticAction)
 
@@ -573,9 +573,9 @@ class TunnelsListTableViewController: UIViewController {
         UIApplication.shared.open(url, options: [:]) { [weak self] opened in
             guard !opened else { return }
             DispatchQueue.main.async {
-                let alert = UIAlertController(title: "�� ������� ������� ������", message: "�������� � ��������: " + address, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "����������� ������", style: .default) { _ in UIPasteboard.general.string = address })
-                alert.addAction(UIAlertAction(title: "�������", style: .cancel))
+                let alert = UIAlertController(title: "Не удалось открыть ссылку", message: "Откройте в браузере: " + address, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "Скопировать ссылку", style: .default) { _ in UIPasteboard.general.string = address })
+                alert.addAction(UIAlertAction(title: "Закрыть", style: .cancel))
                 self?.present(alert, animated: true)
             }
         }
@@ -752,9 +752,9 @@ extension TunnelsListTableViewController: UITableViewDelegate {
         guard let count = tunnelsManager?.numberOfTunnels(), count > 0 else { return nil }
         let header = UITableViewHeaderFooterView(reuseIdentifier: nil)
         let title = Self.makeLabel(style: .subheadline, weight: .semibold, color: VPN013Theme.text)
-        title.text = "������� � \(count)"
+        title.text = "Профили · \(count)"
         let latency = Self.makeLabel(style: .caption1, color: VPN013Theme.secondaryText)
-        latency.text = "��������"
+        latency.text = "Задержка"
         latency.textAlignment = .right
         let row = UIStackView(arrangedSubviews: [title, latency])
         let accessibilitySize = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
