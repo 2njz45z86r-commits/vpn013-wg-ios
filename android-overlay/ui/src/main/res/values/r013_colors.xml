@@ -1,0 +1,8 @@
+<resources>
+    <color name="r013_background">#0c1929</color>
+    <color name="r013_selected">#19354a</color>
+    <color name="r013_text">#dceaf4</color>
+    <color name="r013_secondary">#9db2c5</color>
+    <color name="r013_accent">#e8b66c</color>
+    <color name="r013_separator">#26394b</color>
+</resources>

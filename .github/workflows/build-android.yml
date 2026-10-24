@@ -1,0 +1,49 @@
+name: Inspect R013 Android
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android-overlay/**'
+      - '.github/workflows/build-android.yml'
+permissions:
+  contents: read
+concurrency:
+  group: r013-android-inspection
+  cancel-in-progress: false
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Obtain pinned official source
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = '2njz45z86r-commits/vpn013-wg-ios'
+          git clone --filter=blob:none --no-checkout https://github.com/amnezia-vpn/amneziawg-android.git android
+          git -C android checkout ff15093bf3856fea0947923474870b86efb682f0
+          git -C android submodule update --init --recursive
+          test "$(git -C android/tunnel/tools/amneziawg-tools rev-parse HEAD)" = ee0f0a9aa34ff0a0da4b3433b9512781cfe02843
+          test "$(git -C android/tunnel/tools/elf-cleaner rev-parse HEAD)" = 7efc05090675ec6161b7def862728086a26c3b1f
+          cp -a android-overlay/. android/
+      - name: Pure policy and archive tests
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd android
+          mkdir -p output/core-tests
+          javac -encoding UTF-8 -d output/core-tests tunnel/src/main/java/org/amnezia/awg/r013/AutoPolicy.java ui/src/main/java/org/amnezia/awg/r013/ArchiveReader.java r013-tests/*.java
+          java -cp output/core-tests AutoPolicyTest
+          java -cp output/core-tests ArchiveReaderTest
+      - name: Compile native Android app sources
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;26.1.10909125' 'cmake;3.22.1'
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain :ui:compileDebugKotlin :ui:compileDebugJavaWithJavac
