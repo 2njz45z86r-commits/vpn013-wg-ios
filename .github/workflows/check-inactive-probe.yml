@@ -1,0 +1,43 @@
+name: Check experimental inactive probe
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'experiments/inactive-probe/**'
+      - '.github/workflows/check-inactive-probe.yml'
+permissions:
+  contents: read
+concurrency:
+  group: vpn013-experimental-probe
+  cancel-in-progress: false
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    env:
+      GOTOOLCHAIN: go1.25.14
+      CGO_ENABLED: '1'
+    defaults:
+      run:
+        working-directory: experiments/inactive-probe
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify pinned dependencies
+        run: |
+          go version
+          go mod verify
+      - name: Race-check disposable authenticated probes and transitions
+        run: go test -race -count=1 -timeout=90s -v ./...
+      - name: Static checks
+        run: go vet ./...
+      - name: Type-check physical and tunneled UDP APIs against iOS SDK
+        if: runner.os == 'macOS'
+        run: |
+          xcodebuild -version
+          xcrun swiftc -typecheck -swift-version 5 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target arm64-apple-ios14.0 platform/AppleUDPAPICheck.swift
