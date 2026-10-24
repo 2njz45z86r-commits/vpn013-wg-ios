@@ -125,8 +125,16 @@ class Application : android.app.Application() {
             return
         }
 
-        // Network changes are handled by the protected backend sockets and its
-        // service-owned Auto worker. Never resurrect an explicitly stopped tunnel.
+        coroutineScope.launch(Dispatchers.IO) {
+            try {
+                val backend = getBackend() as GoBackend
+                val snapshot = backend.connectionView()
+                kotlinx.coroutines.delay(500)
+                backend.reconnectIfCurrent(snapshot.profile(), snapshot.revision())
+            } catch (_: Exception) {
+                Log.w(TAG, "Network reconnection did not complete; user control is preserved")
+            }
+        }
     }
 
     companion object {

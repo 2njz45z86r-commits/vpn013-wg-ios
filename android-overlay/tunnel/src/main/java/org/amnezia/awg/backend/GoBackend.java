@@ -81,6 +81,7 @@ public final class GoBackend implements Backend {
             Thread thread = new Thread(task, "R013-Traffic-Probe"); thread.setDaemon(true); return thread;
         }, new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
     @Nullable private volatile java.util.concurrent.Future<Double> pendingProbe;
+    @Nullable private volatile VpnService activeService;
     private boolean replacing;
     private long connectionRevision;
     public synchronized long getConnectionRevision() { return connectionRevision; }
@@ -109,6 +110,25 @@ public final class GoBackend implements Backend {
         HttpURLConnection probe = healthConnection; if (probe != null) probe.disconnect();
         if (worker != null) worker.interrupt();
     }
+    /** An obsolete network callback may never restart a stopped or different profile. */
+    public synchronized void reconnectIfCurrent(@Nullable String expectedName, long expectedRevision) throws Exception {
+        if (currentTunnel == null || currentConfig == null || connectionRevision != expectedRevision ||
+                !currentTunnel.getName().equals(expectedName) || !physicalNetworkAvailable()) return;
+        Tunnel tunnel = currentTunnel;
+        Config config = currentConfig;
+        AutoMember member = activeMember;
+        replacing = true;
+        try {
+            setStateInternal(tunnel, null, State.DOWN);
+            setStateInternal(tunnel, config, State.UP);
+            activeMember = member;
+        } catch (Exception e) {
+            if (autoThread != null) { currentTunnel = tunnel; currentConfig = null; activeMember = null; }
+            else { stopVpnService(); tunnel.onStateChange(State.DOWN); }
+            throw e;
+        } finally { replacing = false; }
+    }
+
     private boolean physicalNetworkAvailable() {
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         for (Network network : cm.getAllNetworks()) {
@@ -166,6 +186,7 @@ public final class GoBackend implements Backend {
             try {
                 Thread.sleep(2500);
                 while (autoEpoch.get() == epoch && !Thread.currentThread().isInterrupted()) {
+                    final long probeRevision = getConnectionRevision();
                     boolean available = physicalNetworkAvailable();
                     Double latency = null;
                     if (available) {
@@ -181,7 +202,9 @@ public final class GoBackend implements Backend {
                     boolean healthy;
                     synchronized (this) {
                         if (autoEpoch.get() != epoch || currentTunnel != tunnel) break;
+                        if (connectionRevision != probeRevision) continue;
                         healthy = latency != null && getLastHandshake(tunnel) > 0;
+                        available = physicalNetworkAvailable();
                     }
                     AutoPolicy.Decision decision = policy.record(healthy, available, latency);
                     if (decision.action == AutoPolicy.Action.SWITCH) {
@@ -374,9 +397,15 @@ public final class GoBackend implements Backend {
     private void launchStatusJob() {
         stopStatusJob();
         Log.d(TAG, "Launch status job");
+        final long generation = connectionRevision;
+        final Tunnel statusTunnel = currentTunnel;
         statusThread = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
-                final long lastHandshake = getLastHandshake(currentTunnel);
+                final long lastHandshake;
+                synchronized (this) {
+                    if (generation != connectionRevision || statusTunnel != currentTunnel) break;
+                    lastHandshake = getLastHandshake(statusTunnel);
+                }
 
                 // Check if tunnel is no longer active (race condition protection)
                 if (lastHandshake == -3L) {
@@ -399,8 +428,9 @@ public final class GoBackend implements Backend {
                 // -1 may be returned if unable to parse output (doesn't mean no connection)
                 // -2 indicates command execution error (also doesn't mean no connection)
                 if (lastHandshake > 0L) {
-                    if (statusCallback != null) {
-                        statusCallback.onStatusChanged(true);
+                    synchronized (this) {
+                        if (generation == connectionRevision && statusTunnel == currentTunnel && statusCallback != null)
+                            statusCallback.onStatusChanged(true);
                     }
                     break;
                 }
@@ -413,7 +443,7 @@ public final class GoBackend implements Backend {
                     break;
                 }
             }
-            statusThread = null;
+            synchronized (this) { if (statusThread == Thread.currentThread()) statusThread = null; }
         }, "StatusJob");
         statusThread.start();
     }
@@ -513,6 +543,7 @@ public final class GoBackend implements Backend {
                 throw be;
             }
             service.setOwner(this);
+            activeService = service;
 
             if (currentTunnelHandle != -1) {
                 Log.w(TAG, "Tunnel already up");
@@ -682,21 +713,25 @@ public final class GoBackend implements Backend {
 
         @Override
         public void onDestroy() {
-            if (owner != null) {
-                owner.cancelAutomatic();
-                synchronized (owner) {
-                owner.stopStatusJob();
-                final Tunnel tunnel = owner.currentTunnel;
-                if (tunnel != null) {
-                    if (owner.currentTunnelHandle != -1)
-                        awgTurnOff(owner.currentTunnelHandle);
-                    owner.currentTunnel = null;
-                    owner.currentTunnelHandle = -1;
-                    owner.currentConfig = null;
-                    tunnel.onStateChange(State.DOWN);
-                }
-                owner.connectionRevision++;
-                }
+            final GoBackend backend = owner;
+            if (backend != null) {
+                // DNS/startup may still hold the backend lock. Never block Android's
+                // main service thread, and never close a newer service's tunnel.
+                new Thread(() -> {
+                    synchronized (backend) {
+                        if (backend.activeService != this) return;
+                        backend.cancelAutomatic();
+                        backend.stopStatusJob();
+                        final Tunnel tunnel = backend.currentTunnel;
+                        if (backend.currentTunnelHandle != -1) awgTurnOff(backend.currentTunnelHandle);
+                        backend.currentTunnel = null;
+                        backend.currentTunnelHandle = -1;
+                        backend.currentConfig = null;
+                        backend.activeService = null;
+                        backend.connectionRevision++;
+                        if (tunnel != null) tunnel.onStateChange(State.DOWN);
+                    }
+                }, "R013-VPN-Close").start();
             }
             try { if (vpnService.get(0, TimeUnit.NANOSECONDS) == this) vpnService = vpnService.newIncompleteFuture(); }
             catch (Exception ignored) { }
@@ -705,7 +740,7 @@ public final class GoBackend implements Backend {
 
         @Override
         public void onRevoke() {
-            if (owner != null) owner.cancelAutomatic();
+            if (owner != null && owner.activeService == this) owner.cancelAutomatic();
             stopSelf();
             super.onRevoke();
         }

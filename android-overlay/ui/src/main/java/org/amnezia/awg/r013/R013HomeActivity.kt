@@ -203,7 +203,9 @@ class R013HomeActivity : AppCompatActivity() {
             labels.setOnClickListener { details(tunnel) }; labels.setOnLongClickListener { profileMenu(tunnel); true }; labels.contentDescription = "${tunnel.name}, сведения и настройки"
             row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
             val config = tunnel.getConfigAsync(); val fingerprint = ProfileRegistry.digest(config.toAwgQuickString())
-            val measured = pings[tunnel.name]?.takeIf { it.first == fingerprint }
+            val measured = if (registry.isAuto(tunnel.name)) {
+                currentMeasurement?.takeIf { it.first == currentIdentity && (Application.getBackend() as GoBackend).currentProfileName == tunnel.name }
+            } else pings[tunnel.name]?.takeIf { it.first == fingerprint }
             val ping = text(if (measured == null) "—" else measured.second?.let { "$it мс" } ?: "н/д", 14).apply { gravity = Gravity.CENTER; minWidth = dp(56); setTextColor(color(R.color.r013_secondary)); contentDescription = "Пинг адреса ${tunnel.name}: $text" }
             row.addView(ping, LinearLayout.LayoutParams(-2, dp(48)).apply { marginStart = dp(8); marginEnd = dp(8) })
             val toggle = MaterialSwitch(this).apply {
@@ -251,7 +253,7 @@ class R013HomeActivity : AppCompatActivity() {
             val live = backend.connectionView()
             val profile = live.profile(); val config = live.config(); val member = live.member()
             val statistics = live.statistics()
-            val hs = statistics?.peers()?.mapNotNull { statistics.peer(it)?.latestHandshakeEpochMillis() }?.maxOrNull()?.takeIf { it > 0 }
+            val hs = statistics?.peers()?.mapNotNull { statistics.peer(it)?.latestHandshakeEpochMillis() }?.maxOrNull()?.takeIf { it > 0 && it <= System.currentTimeMillis() + 60_000 }
             val endpoints = config?.peers?.mapNotNull { it.endpoint.orElse(null)?.toString() }.orEmpty()
             val host = config?.peers?.firstOrNull()?.endpoint?.orElse(null)?.host
             Current(profile, member, endpoints, host, statistics?.takeIf { it.peers().isNotEmpty() }?.totalRx(), statistics?.takeIf { it.peers().isNotEmpty() }?.totalTx(), hs, live.revision())
@@ -262,7 +264,7 @@ class R013HomeActivity : AppCompatActivity() {
         currentPing.isEnabled = snapshot.host != null && pingJob?.isActive != true
         summaryDetails.text = if (snapshot.profile == null) "Выберите профиль ниже" else buildString {
             if (snapshot.member != null) append("${snapshot.profile} · ")
-            append(if (snapshot.handshake != null) "Рукопожатие подтверждено" else "VPN запущен · рукопожатие не подтверждено")
+            append(if (snapshot.host == null) "Подключение к серверу…" else if (snapshot.handshake != null) "Рукопожатие подтверждено" else "VPN запущен · рукопожатие не подтверждено")
             if (snapshot.endpoints.isNotEmpty()) append("\n" + snapshot.endpoints.joinToString(", "))
             if (snapshot.received != null && snapshot.sent != null) append("\n↓ ${bytes(snapshot.received)}  ↑ ${bytes(snapshot.sent)}")
             currentMeasurement?.takeIf { it.first == currentIdentity }?.let { append(it.second?.let { ms -> "\nПинг адреса: $ms мс" } ?: "\nПинг адреса недоступен") }
@@ -286,7 +288,7 @@ class R013HomeActivity : AppCompatActivity() {
         allPing.isEnabled = false; allPing.text = "Проверяем…"
         batchJob = lifecycleScope.launch {
             val limit = Semaphore(4)
-            try { Application.getTunnelManager().getTunnels().toList().map { tunnel -> async {
+            try { Application.getTunnelManager().getTunnels().toList().filter { !registry.isAuto(it.name) }.map { tunnel -> async {
                 val config = tunnel.getConfigAsync(); val fingerprint = ProfileRegistry.digest(config.toAwgQuickString())
                 val host = config.peers.firstOrNull()?.endpoint?.orElse(null)?.host
                 val result = limit.withPermit { withContext(Dispatchers.IO) { try { host?.let { EndpointPing.measure(it) } } catch (_: Exception) { null } } }

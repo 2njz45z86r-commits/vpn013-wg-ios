@@ -6,7 +6,8 @@ test "$RUNNER_ENVIRONMENT" = github-hosted
 test "$GITHUB_REPOSITORY" = '2njz45z86r-commits/vpn013-wg-ios'
 mkdir -p output/review
 SDK="$ANDROID_HOME/cmdline-tools/latest/bin"
-"$SDK/sdkmanager" 'emulator' 'system-images;android-35;google_apis;x86_64'
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+"$SDK/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
 echo no | "$SDK/avdmanager" create avd --force -n R013CI -k 'system-images;android-35;google_apis;x86_64' --device pixel_7
 sudo chmod 666 /dev/kvm
 "$ANDROID_HOME/emulator/emulator" -avd R013CI -no-window -no-snapshot -no-audio -gpu swiftshader_indirect -no-boot-anim -memory 3072 -cores 2 > "$RUNNER_TEMP/r013-emulator.log" 2>&1 &

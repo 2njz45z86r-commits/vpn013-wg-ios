@@ -63,14 +63,17 @@ class TunnelManager(private val configStore: ConfigStore) : BaseObservable() {
     suspend fun getTunnels(): ObservableSortedKeyedArrayList<String, ObservableTunnel> = tunnels.await()
 
     suspend fun create(name: String, config: Config?): ObservableTunnel = withContext(Dispatchers.Main.immediate) {
+        org.amnezia.awg.r013.OfflineChanges.lock.withLock {
         if (Tunnel.isNameInvalid(name))
             throw IllegalArgumentException(context.getString(R.string.tunnel_error_invalid_name))
         if (tunnelMap.containsKey(name))
             throw IllegalArgumentException(context.getString(R.string.tunnel_error_already_exists, name))
         addToList(name, withContext(Dispatchers.IO) { configStore.create(name, config!!) }, Tunnel.State.DOWN)
+        }
     }
 
     suspend fun delete(tunnel: ObservableTunnel) = withContext(Dispatchers.Main.immediate) {
+        org.amnezia.awg.r013.OfflineChanges.lock.withLock {
         val originalState = tunnel.state
         val wasLastUsed = tunnel == lastUsedTunnel
         // Make sure nothing touches the tunnel.
@@ -93,6 +96,7 @@ class TunnelManager(private val configStore: ConfigStore) : BaseObservable() {
             if (wasLastUsed)
                 lastUsedTunnel = tunnel
             throw e
+        }
         }
     }
 
@@ -193,13 +197,20 @@ class TunnelManager(private val configStore: ConfigStore) : BaseObservable() {
     }
 
     suspend fun setTunnelConfig(tunnel: ObservableTunnel, config: Config): Config = withContext(Dispatchers.Main.immediate) {
-        tunnel.onConfigChanged(withContext(Dispatchers.IO) {
-            getBackend().setState(tunnel, tunnel.state, config)
-            configStore.save(tunnel.name, config)
-        })!!
+        org.amnezia.awg.r013.OfflineChanges.lock.withLock {
+            check(!org.amnezia.awg.r013.ProfileRegistry.get(context).isAuto(tunnel.name)) { "Чтобы изменить состав Авто, создайте его заново" }
+            val previous = tunnel.getConfigAsync()
+            withContext(Dispatchers.IO) {
+                configStore.save(tunnel.name, config)
+                try { getBackend().setState(tunnel, tunnel.state, config) }
+                catch (e: Exception) { configStore.save(tunnel.name, previous); throw e }
+            }
+            tunnel.onConfigChanged(config)!!
+        }
     }
 
     suspend fun setTunnelName(tunnel: ObservableTunnel, name: String): String = withContext(Dispatchers.Main.immediate) {
+        org.amnezia.awg.r013.OfflineChanges.lock.withLock {
         if (Tunnel.isNameInvalid(name))
             throw IllegalArgumentException(context.getString(R.string.tunnel_error_invalid_name))
         if (tunnelMap.containsKey(name)) {
@@ -232,6 +243,7 @@ class TunnelManager(private val configStore: ConfigStore) : BaseObservable() {
         if (throwable != null)
             throw throwable
         newName!!
+        }
     }
 
     suspend fun setTunnelState(tunnel: ObservableTunnel, state: Tunnel.State): Tunnel.State = withContext(Dispatchers.Main.immediate) {

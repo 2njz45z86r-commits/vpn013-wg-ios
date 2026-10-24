@@ -26,11 +26,4 @@
         android:summaryOn="@string/multiple_tunnels_summary_on"
         android:title="@string/multiple_tunnels_title" />
 <org.amnezia.awg.preference.KernelModuleEnablerPreference android:key="kernel_module_enabler" />
-    <CheckBoxPreference
-        android:defaultValue="false"
-        android:key="allow_remote_control_intents"
-        android:singleLineTitle="false"
-        android:summaryOff="@string/allow_remote_control_intents_summary_off"
-        android:summaryOn="@string/allow_remote_control_intents_summary_on"
-        android:title="@string/allow_remote_control_intents_title" />
 </androidx.preference.PreferenceScreen>
