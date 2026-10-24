@@ -41,6 +41,14 @@ if [ -d build/AutoTunnel.xcresult ]; then
  xcrun xcresulttool export attachments --path build/AutoTunnel.xcresult --output-path build/review/flow
  xcrun xcresulttool get test-results summary --path build/AutoTunnel.xcresult > build/review/test-summary.json || true
 fi
+# Keep failure screenshots with a PNG extension; never publish UI hierarchy text.
+python3 - <<'PY'
+from pathlib import Path
+import shutil
+for path in Path('build/review/flow').glob('*'):
+ if path.is_file() and not path.suffix and path.read_bytes()[:8] == b'\x89PNG\r\n\x1a\n':
+  shutil.copy2(path,path.with_suffix('.png'))
+PY
 if [ "$result" -eq 0 ]; then
  xcrun simctl ui "$device" content_size accessibility-extra-extra-extra-large
  xcrun simctl launch --terminate-running-process "$device" com.vpn013.awg -AppleLanguages '(ru)' -AppleLocale ru_RU --vpn013-test-count 2 --vpn013-test-current-card --vpn013-test-start-current --vpn013-test-ping-loopback

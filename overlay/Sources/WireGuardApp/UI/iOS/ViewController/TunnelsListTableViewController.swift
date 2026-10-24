@@ -629,7 +629,7 @@ class TunnelsListTableViewController: UIViewController {
             }
             self.summaryTrafficLabel.text = "↓ " + bytes(snapshot.statistics.received) + "  ·  ↑ " + bytes(snapshot.statistics.sent)
             self.summaryTrafficLabel.accessibilityLabel = "Получено " + bytes(snapshot.statistics.received) + ", отправлено " + bytes(snapshot.statistics.sent)
-            self.summaryHandshakeLabel.isHidden = false
+            self.summaryHandshakeLabel.isHidden = snapshot.statistics.handshake == nil
             self.summaryHandshakeLabel.text = snapshot.statistics.handshake.map {
                 "Рукопожатие: " + DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .medium)
             } ?? "Рукопожатие пока не подтверждено"

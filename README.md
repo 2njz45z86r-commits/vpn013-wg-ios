@@ -68,7 +68,7 @@ internet traffic. The existing Auto failover behavior remains unchanged.
 
 ## Endpoint ping in 1.3.1 (8)
 
-The visible В«РџСЂРѕРІРµСЂРёС‚СЊ РїРёРЅРіВ» action measures real ICMP echo replies from imported
+The visible «Проверить пинг» action measures real ICMP echo replies from imported
 profiles' endpoint addresses without activating or switching VPN profiles. Results
 are in milliseconds; no reply, DNS failure, cancellation and unavailable sockets
 are explicit. IPv4/IPv6 replies must match a fresh per-probe nonce. Requests cannot

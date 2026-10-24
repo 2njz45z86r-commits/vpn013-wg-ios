@@ -242,9 +242,18 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.tables.cells.staticTexts["!Первый"].waitForExistence(timeout:20))
         app.buttons["vpn013.add-profile"].tap()
         app.buttons["Создать режим Авто"].tap()
+        XCTAssertTrue(app.alerts["Создать режим Авто"].waitForExistence(timeout:5))
         app.alerts.buttons["Создать Авто"].tap()
-        XCTAssertTrue(app.navigationBars["Авто · 3 сервера"].waitForExistence(timeout:6))
-        app.navigationBars["Авто · 3 сервера"].buttons.element(boundBy:0).tap()
+        capture("20a-after-auto-creation-synthetic")
+        let firstAuto = app.tables.cells.element(boundBy:0).staticTexts["Авто · 3 сервера"]
+        if !firstAuto.waitForExistence(timeout:2) {
+            let explanation = app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@", "В режиме Авто: 3 сервера")).firstMatch
+            guard explanation.waitForExistence(timeout:6) else {
+                capture("20b-auto-creation-unexpected-screen-synthetic")
+                XCTFail("Auto creation did not reach either its detail or its list row"); return
+            }
+            app.navigationBars.buttons.element(boundBy:0).tap()
+        }
         XCTAssertTrue(app.tables.cells.element(boundBy:0).staticTexts["Авто · 3 сервера"].waitForExistence(timeout:6), "Auto must precede ! and 0 names")
         let auto = app.tables.cells.element(boundBy:0)
         auto.switches.firstMatch.tap()
