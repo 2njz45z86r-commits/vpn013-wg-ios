@@ -106,10 +106,10 @@ final class R013ProbeCoordinator {
         requireMain(); autoActive = false; currentInput = nil; apply = nil
         cancelScheduledWork()
     }
-    private func cancelScheduledWork() {
+    private func cancelScheduledWork(cancelScan: Bool = true) {
         generation &+= 1; timer?.cancel(); timer = nil; polling?.cancel(); polling = nil
         let old = operation; operation = 0
-        if old != 0 { work.async { [self] in _ = R013ProbeCancelScan(controller, old) } }
+        if old != 0, cancelScan { work.async { [self] in _ = R013ProbeCancelScan(controller, old) } }
     }
     private func scheduleHour() {
         timer?.cancel(); guard autoActive, !stopped else { return }
@@ -124,7 +124,7 @@ final class R013ProbeCoordinator {
     // measurements have genuinely closed. No C wait blocks the main/UDP queue.
     func beginPrimaryChange(completed: @escaping (R013PrimaryPermit?) -> Void) {
         requireMain(); guard !stopped else { completed(nil); return }
-        cancelScheduledWork()
+        cancelScheduledWork(cancelScan: false) // BeginChange itself cancels/drains; no second10s wait.
         let stamp = generation
         work.async { [self] in
             let transition = R013ProbeBeginChange(controller)
@@ -145,7 +145,7 @@ final class R013ProbeCoordinator {
               !input.candidates.isEmpty, input.candidates.count <= 30 else { scheduleHour(); return }
         let rotated = R013ProbeInput(auto_active: true, resolver: input.resolver,
                                     start_index: nextIndex % input.candidates.count, candidates: input.candidates)
-        guard var data = try? JSONEncoder().encode(rotated), data.count <= 4 * 1024 * 1024 else { scheduleHour(); return }
+        guard let data = try? JSONEncoder().encode(rotated), data.count <= 4 * 1024 * 1024 else { scheduleHour(); return }
         let stamp = generation
         work.async { [self, data] in
             var owned = data
@@ -212,4 +212,9 @@ final class R013ProbeCoordinator {
             DispatchQueue.main.async { completed(released) }
         }
     }
+    #if R013_PROBE_TESTING
+    // Native test drives the same coordinator without sleeping an actual hour.
+    // This entry point is excluded from normal builds and claims no iOS timing.
+    func runNowForTesting() { requireMain(); timer?.cancel(); timer = nil; run() }
+    #endif
 }

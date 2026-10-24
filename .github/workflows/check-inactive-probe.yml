@@ -61,7 +61,7 @@ jobs:
       - name: Exercise production controller C ABI and typed Swift decoding
         if: runner.os == 'macOS'
         run: |
-          xcrun swiftc -parse-as-library -swift-version 5 -import-objc-header applebridge/bridge.h platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-probe.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-controller-check"
+          xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header applebridge/bridge.h platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-probe.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-controller-check"
           "$RUNNER_TEMP/r013-controller-check"
       - name: Merge into the official client single Go archive and recheck actual dependencies
         if: runner.os == 'macOS'
@@ -75,5 +75,5 @@ jobs:
           go test -mod=readonly -race -count=1 -timeout=90s -v ./r013probe
           go build -mod=readonly -tags=r013_bridge_test -buildmode=c-archive -o "$RUNNER_TEMP/r013-client-core.a" .
           cd "$GITHUB_WORKSPACE/experiments/inactive-probe"
-          xcrun swiftc -parse-as-library -swift-version 5 -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-merged-check"
+          xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-merged-check"
           "$RUNNER_TEMP/r013-merged-check"

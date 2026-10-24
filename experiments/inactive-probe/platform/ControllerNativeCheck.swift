@@ -17,7 +17,7 @@ private func write(_ owner: UInt64, _ session: UInt64, _ raw: UnsafeRawPointer?,
     var reply = Data(bytes: raw, count: Int(length)); reply[2] |= 0x80; reply[3] = (reply[3] & 0xf0) | 3
     lock.lock(); writes += 1; lock.unlock()
     let owned = reply
-    DispatchQueue.global().async {
+    DispatchQueue.global().asyncAfter(deadline: .now() + 0.005) {
         owned.withUnsafeBytes { r013_deliver_buffer(session, $0.baseAddress, UInt32($0.count)) }
         R013UDPWriteDone(session, number, 0)
     }
@@ -31,6 +31,11 @@ private func withBytes<T>(_ data: Data, _ call: (UnsafeMutableRawPointer?, UInt3
     var owned = data
     return owned.withUnsafeMutableBytes { call($0.baseAddress, UInt32($0.count)) }
 }
+private func spin(until condition: () -> Bool) {
+    let deadline = Date().addingTimeInterval(4)
+    while !condition() && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.005)) }
+    precondition(condition(), "main-queue coordinator did not complete")
+}
 
 @main struct ControllerNativeCheck {
     static func main() throws {
@@ -41,6 +46,9 @@ private func withBytes<T>(_ data: Data, _ call: (UnsafeMutableRawPointer?, UInt3
         let current = R013RegisterUDPDriver(driver); precondition(current != 0)
         precondition(R013ProbeCreate(current, physical) == 0, "swapped routes accepted")
         let controller = R013ProbeCreate(physical, current); precondition(controller != 0)
+        let extra = R013ProbeCreate(physical, current); precondition(extra != 0)
+        precondition(R013ProbeCreate(physical, current) == 0, "unbounded controller registry")
+        precondition(R013ProbeRelease(extra) == 0)
         let config = "private_key=" + String(repeating: "11", count: 32) + "\npublic_key=" + String(repeating: "22", count: 32) + "\nendpoint=127.0.0.1:12345\nallowed_ip=0.0.0.0/0\n"
         let transition = R013ProbeBeginChange(controller); precondition(transition != 0)
         precondition(withBytes(Data(config.utf8)) { R013ProbeCommitChange(controller, transition, 1, $0, $1) } == 0)
@@ -64,9 +72,37 @@ private func withBytes<T>(_ data: Data, _ call: (UnsafeMutableRawPointer?, UInt3
         precondition(R013ProbeCancelScan(controller, operation) == 0)
         precondition(R013ProbeRelease(controller) == 0)
         precondition(R013ProbeBeginChange(controller) == 0, "released handle reused")
-        precondition(R013UnregisterUDPDriver(physical) == 0 && R013UnregisterUDPDriver(current) == 0)
         lock.lock(); let counts = (physicalOpens,currentOpens,writes,closes); lock.unlock()
         precondition(counts.0 == 0 && counts.1 == 2 && counts.2 == 8 && counts.3 == 2)
+        #if R013_PROBE_TESTING
+        let coordinator = R013ProbeCoordinator(physical: physical, throughTunnel: current)!
+        var initial: R013PrimaryPermit?
+        coordinator.beginPrimaryChange { initial = $0 }
+        spin { initial != nil }
+        precondition(initial!.commit(.active(uapi: config)))
+        precondition(!initial!.commit(.idle), "permit committed twice")
+        var measured = 0
+        coordinator.metrics = { status in precondition(status.status == "complete"); measured += 1 }
+        coordinator.startHourly(input: { input }, apply: { _,_,_ in preconditionFailure("active peer must never be selected") })
+        coordinator.runNowForTesting()
+        spin { measured == 1 }
+        lock.lock(); let beforeCancelOpens = currentOpens; lock.unlock()
+        coordinator.runNowForTesting()
+        spin { lock.lock(); defer { lock.unlock() }; return currentOpens > beforeCancelOpens }
+        var change: R013PrimaryPermit?
+        coordinator.beginPrimaryChange { change = $0 }
+        spin { change != nil }
+        // Permit arrived only after actual delayed UDP cancellation acknowledgement.
+        lock.lock(); let drained = currentOpens == closes; lock.unlock()
+        precondition(drained && measured == 1, "cancelled result leaked or primary changed before drain")
+        precondition(change!.commit(.idle))
+        coordinator.stopHourly()
+        var released = false
+        coordinator.shutdown { precondition($0); released = true }
+        spin { released }
+        print("PASS Swift main-queue coordinator: fresh typed metrics, one-shot permit, cancellation before primary change, real close drain, stop and explicit release; test trigger replaces one-hour wait, no physical iOS claim")
+        #endif
+        precondition(R013UnregisterUDPDriver(physical) == 0 && R013UnregisterUDPDriver(current) == 0)
         print("PASS production C controller: fixed routes, actual-state commit, bounded async scan/poll, active exclusion before physical UDP, equal before/after DNS, cancellation, delayed closure and release; synthetic current path only")
     }
 }
