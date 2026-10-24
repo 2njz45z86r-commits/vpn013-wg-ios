@@ -2,9 +2,9 @@
   "schema": 1,
   "app": "vpn013-wg",
   "platform": "ios",
-  "version": "1.4.2",
-  "build": 11,
-  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40120469051/VPN013AWG-unsigned.ipa",
-  "sha256": "a83de084627ab7085750e0b84d881d1ed1fd5243f3f1e4ab595c63e61eceb8e9",
-  "notes": "Исправлен пинг подключённого обычного профиля при недоступной статистике VPN. Проверка использует сохранённый адрес и не переключает VPN. Отсутствующие данные трафика и рукопожатия не подменяются результатом пинга."
+  "version": "1.5.0",
+  "build": 12,
+  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40142438764/VPN013AWG-unsigned.ipa",
+  "sha256": "0b552981c9317bde485f054356a1e9c2910a0cf97eef038eb80b1c17fddef1c4",
+  "notes": "Авто сравнивает задержку DNS через другие VPN без отключения текущего: первая проверка через 30 секунд, затем раз в час. Выбор сверяет актуальный профиль и состояние подключения; две неудачные попытки и порог 1200 мс сохранены. Для iPhone скачайте IPA, подпишите в ESign и установите. Проверки сборки и симулятора не заменяют проверку на физическом iPhone."
 }
