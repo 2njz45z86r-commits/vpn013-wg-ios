@@ -19,6 +19,31 @@ object ClientProtocol {
             Regex("^[A-Za-z0-9_-]{43}$").matches(d.getString("capability"))) { "Документ заявки повреждён" }
         snapshot(d.getJSONObject("snapshot")); return d
     }
+    /** Bind the Android-preferred files by exact cryptographic/endpoint identity.
+     * A legacy iPhone manifest must never replace Android-specific routes or MTU.
+     */
+    fun androidAccess(original: JSONObject, files: List<Pair<String, org.amnezia.awg.config.Config>>): JSONObject {
+        val document = access(original.toString())
+        val snapshot = document.getJSONObject("snapshot"); val servers = snapshot.getJSONArray("servers")
+        val used = HashSet<Int>(); val revision = StringBuilder()
+        fun identity(c: org.amnezia.awg.config.Config): String {
+            require(c.peers.size == 1 && c.peers[0].endpoint.isPresent) { "Не удалось связать Android-файл с сервером заявки" }
+            val peer = c.peers[0]
+            return ProfileRegistry.digest(c.`interface`.keyPair.privateKey.toBase64() + "|" + peer.publicKey.toBase64() + "|" +
+                peer.preSharedKey.orElse(null)?.toBase64().orEmpty() + "|" + peer.endpoint.get().toString())
+        }
+        for (i in 0 until servers.length()) {
+            val server = servers.getJSONObject(i); val expected = identity(ProfileRegistry.parse(server.getString("config")))
+            val matches = files.indices.filter { identity(files[it].second) == expected }
+            require(matches.size == 1 && used.add(matches.single())) { "Состав Android-файлов не совпадает с заявкой. Прежние профили сохранены." }
+            val selected = files[matches.single()]
+            server.put("name",selected.first).put("config",selected.second.toAwgQuickString())
+            revision.append(server.getString("id")).append('\n').append(server.getString("name")).append('\n').append(server.getString("config")).append('\n')
+        }
+        require(used.size == files.size) { "В ZIP есть файлы вне заявки. Импортируйте дополнительные профили отдельно." }
+        snapshot.put("revision",ProfileRegistry.digest(revision.toString()))
+        return access(document.toString())
+    }
     fun snapshot(s: JSONObject, expected: String? = null) {
         val order = s.getString("orderID")
         require(s.getInt("schema") == 1 && s.getString("kind") == "vpn013-awg" && id.matches(order) &&
@@ -75,6 +100,8 @@ object ClientProtocol {
                 check(replacement.length() in 1..30) { "Обновлённый состав Авто должен содержать 1–30 серверов" }
                 check((0 until replacement.length()).all { registry.eligible(ProfileRegistry.parse(replacement.getJSONObject(it).getString("config"))) }) { "Обновлённый сервер не подходит для безопасного Авто. Прежние настройки сохранены." }
                 auto.put("members", replacement).put("config", replacement.getJSONObject(0).getString("config"))
+                if (auto.getString("name").matches(Regex("^Авто · [0-9]{1,2}( \\([0-9]+\\))?$")))
+                    auto.put("name",ProfileRegistry.uniqueName(profiles,"Авто · ${replacement.length()}",auto.getString("id")))
             }
             orders.put(order, JSONObject().put("document", checked).put("mapping", newMapping))
             servers.length()
@@ -82,7 +109,7 @@ object ClientProtocol {
     }
     /** Credentials are sent only to fixed HTTPS origins, never to redirects. */
     fun request(path: String, capability: String? = null): JSONObject {
-        require(path.matches(Regex("^/client/(releases/vpn013-wg/android|awg/[a-f0-9]{12})$")))
+        require(path.matches(Regex("^/client/(releases/vpn013-wg/android|awg/[a-f0-9]{12}/android)$")))
         if (capability != null) require(Regex("^[A-Za-z0-9_-]{43}$").matches(capability))
         var last: Exception? = null
         for (origin in origins) {

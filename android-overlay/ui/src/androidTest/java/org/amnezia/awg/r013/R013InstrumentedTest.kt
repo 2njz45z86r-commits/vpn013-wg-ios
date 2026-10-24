@@ -69,6 +69,17 @@ class R013InstrumentedTest {
         try { OfflineChanges.apply { registry.vault.edit { it.put("schema",2) } }; fail("Invalid schema accepted") } catch (_: IllegalStateException) { }
         assertEquals(before,registry.vault.read().toString())
     }
+    @Test fun bPlatformPreferredBinding() = runBlocking {
+        val base = config(); val iphone = base.replace("Address = 10.13.99.2/32", "Address = 10.13.99.2/32\nMTU = 1280")
+        val android = base.replace("Address = 10.13.99.2/32", "Address = 10.13.99.2/32\nMTU = 1420")
+        val old = document("001122334455",listOf("one" to iphone))
+        val converted = ClientProtocol.androidAccess(old,listOf("Android One" to ProfileRegistry.parse(android)))
+        OfflineChanges.apply { ClientProtocol.apply(registry,converted) }
+        assertEquals(1420,registry.config("Android One").`interface`.mtu.get().toInt())
+        assertEquals(ProfileRegistry.parse(android).`interface`.keyPair.privateKey,registry.config("Android One").`interface`.keyPair.privateKey)
+        try { ClientProtocol.androidAccess(old,listOf("Wrong" to ProfileRegistry.parse(config()))); fail("Foreign key adopted") } catch (_: IllegalArgumentException) { }
+        assertEquals(1,registry.names().size)
+    }
     @Test fun bScopedOrderRosterAndRollback() = runBlocking {
         OfflineChanges.apply { registry.create("Unrelated",ProfileRegistry.parse(config())) }
         val unrelated = registry.record("Unrelated").toString()

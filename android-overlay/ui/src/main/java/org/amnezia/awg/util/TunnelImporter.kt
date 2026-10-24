@@ -47,7 +47,7 @@ object TunnelImporter {
                 // Parse EVERY profile before changing anything; fail as a whole on malformed input.
                 val parsed = bundle.profiles().map { it.name() to org.amnezia.awg.r013.ProfileRegistry.parse(it.text()) }
                 val registry = org.amnezia.awg.r013.ProfileRegistry.get(Application.get())
-                val access = bundle.accessDocument()?.let { org.amnezia.awg.r013.ClientProtocol.access(it) }
+                val access = bundle.accessDocument()?.let { org.amnezia.awg.r013.ClientProtocol.androidAccess(org.amnezia.awg.r013.ClientProtocol.access(it), parsed) }
                 org.amnezia.awg.r013.OfflineChanges.apply {
                     if (access != null) org.amnezia.awg.r013.ClientProtocol.apply(registry, access)
                     else registry.importOrdinary(parsed)

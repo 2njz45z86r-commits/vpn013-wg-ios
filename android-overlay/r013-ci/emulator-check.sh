@@ -5,15 +5,30 @@ test "$GITHUB_ACTIONS" = true
 test "$RUNNER_ENVIRONMENT" = github-hosted
 test "$GITHUB_REPOSITORY" = '2njz45z86r-commits/vpn013-wg-ios'
 mkdir -p output/review
+# This is a disposable CI runner. These unused toolchains are not client sources.
+for unused in /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL; do
+  if [ -d "$unused" ]; then sudo rm -rf -- "$unused"; fi
+ done
+df -h . > output/review/disk-before-emulator.txt
 SDK="$ANDROID_HOME/cmdline-tools/latest/bin"
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 "$SDK/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
 echo no | "$SDK/avdmanager" create avd --force -n R013CI -k 'system-images;android-35;google_apis;x86_64' --device pixel_7
 sudo chmod 666 /dev/kvm
-"$ANDROID_HOME/emulator/emulator" -avd R013CI -no-window -no-snapshot -no-audio -gpu swiftshader_indirect -no-boot-anim -memory 3072 -cores 2 > "$RUNNER_TEMP/r013-emulator.log" 2>&1 &
+"$ANDROID_HOME/emulator/emulator" -accel-check > output/review/emulator-acceleration.txt 2>&1
+"$ANDROID_HOME/emulator/emulator" -avd R013CI -no-window -no-snapshot -no-audio -gpu swiftshader_indirect -no-boot-anim -memory 3072 -cores 2 -partition-size 1024 > "$RUNNER_TEMP/r013-emulator.log" 2>&1 &
 emulator_pid=$!
-trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
-adb wait-for-device
+peer_pid=""
+finish() {
+  timeout 15s adb pull /sdcard/Android/data/com.vpn013.awg.debug/files/review output/review/screenshots-partial >/dev/null 2>&1 || true
+  timeout 15s adb logcat -d -t 500 -s AndroidRuntime:E > output/review/runtime-errors.txt 2>/dev/null || true
+  cp "$RUNNER_TEMP/r013-emulator.log" output/review/emulator.log 2>/dev/null || true
+  cp "$RUNNER_TEMP/r013-peer.log" output/review/synthetic-peer-build.log 2>/dev/null || true
+  if [ -n "$peer_pid" ]; then kill "$peer_pid" 2>/dev/null || true; fi
+  kill "$emulator_pid" 2>/dev/null || true
+}
+trap finish EXIT
+timeout 180s adb wait-for-device
 for i in $(seq 1 90); do
   if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
   sleep 2
@@ -28,7 +43,7 @@ adb install -r -t ui/build/outputs/apk/androidTest/debug/ui-debug-androidTest.ap
 adb shell appops set com.vpn013.awg.debug ACTIVATE_VPN allow
 (cd tunnel/tools/libwg-go && go run ../../../r013-ci/peer.go) > "$RUNNER_TEMP/r013-peer.log" 2>&1 &
 peer_pid=$!
-trap 'kill "$peer_pid" "$emulator_pid" 2>/dev/null || true' EXIT
+# The EXIT trap preserves native failure evidence before emulator teardown.
 for i in $(seq 1 90); do test -s "$RUNNER_TEMP/r013-synthetic.conf" && break; sleep 2; done
 test -s "$RUNNER_TEMP/r013-synthetic.conf"
 fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic.conf")

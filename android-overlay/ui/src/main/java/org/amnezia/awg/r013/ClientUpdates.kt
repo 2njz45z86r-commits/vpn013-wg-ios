@@ -35,7 +35,7 @@ object ClientUpdates {
         for (order in orders.keys()) {
             val document = orders.getJSONObject(order).getJSONObject("document")
             val snapshot = withContext(Dispatchers.IO) {
-                ClientProtocol.request("/client/awg/$order", document.getString("capability")).also { ClientProtocol.snapshot(it, order) }
+                ClientProtocol.request("/client/awg/$order/android", document.getString("capability")).also { ClientProtocol.snapshot(it, order) }
             }
             withContext(Dispatchers.IO) { registry.vault.edit { it.getJSONObject("orders").getJSONObject(order).put("pending", snapshot) } }
         }

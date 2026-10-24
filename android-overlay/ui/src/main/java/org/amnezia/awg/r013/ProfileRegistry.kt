@@ -67,9 +67,9 @@ class ProfileRegistry private constructor(context: Context) {
             val record = JSONObject().put("id", id).put("name", name).put("config", config.toAwgQuickString())
             p.put(id, record); return record
         }
-        fun uniqueName(p: JSONObject, requested: String): String {
+        fun uniqueName(p: JSONObject, requested: String, excluding: String? = null): String {
             val base = requested.replace(Regex("[^\\p{L}\\p{N} _=+.()·-]"), "_").trim().take(54).ifEmpty { "Профиль" }
-            val names = p.keys().asSequence().map { p.getJSONObject(it).getString("name") }.toSet()
+            val names = p.keys().asSequence().filter { it != excluding }.map { p.getJSONObject(it).getString("name") }.toSet()
             if (base !in names) return base
             return (2..1000).map { "$base ($it)" }.first { it !in names }
         }
