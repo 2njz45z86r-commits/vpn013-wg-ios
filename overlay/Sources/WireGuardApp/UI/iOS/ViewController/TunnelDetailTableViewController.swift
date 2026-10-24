@@ -77,6 +77,8 @@ class TunnelDetailTableViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        navigationItem.largeTitleDisplayMode = .never
+        tableView.backgroundColor = VPN013Theme.background
         title = tunnelViewModel.interfaceData[.name]
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .edit, target: self, action: #selector(editTapped))
         if tunnel.isVPN013Automatic {

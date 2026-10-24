@@ -1,7 +1,7 @@
 # VPN013 WG for iPhone
 
 Standalone VPN client project, separate from the owner administration app and Telegram bot.
-Version 1.2.1 build 5 is prepared for a native build; it has not yet been validated on an iPhone.
+Version 1.3.0 build 5 is prepared for a native build; it has not yet been validated on an iPhone.
 
 ## Source layout
 
@@ -47,3 +47,20 @@ For a manual macOS build, run `sh build-on-mac.sh`, then `sh inspect-on-mac.sh`.
 The iPhone build needs signing with eligible Network Extension profiles before installation.
 Read `ESIGN-RU.md`. A successful build or Simulator test does not establish working
 VPN traffic, locked-phone behavior or the validity of the owner's ESign signature.
+
+
+## Native interface update
+
+Version 1.3.0 (6) uses the owner-selected night palette, a native server list,
+a compact connection summary and Dynamic Type. The developer footer links
+to https://t.me/R013_Support and identifies the VPN013 WG fork. Upstream
+AmneziaWG/WireGuard attribution remains in the bundled legal notices.
+Profile actions, private encrypted storage, import, manual connections and
+existing Auto health checks are preserved. No demonstration latency numbers
+are included in device builds.
+
+Hourly background testing of inactive VPN peers and automatic selection of the
+fastest inactive peer are NOT implemented in this release. Independent AWG
+handshake probes need physical-device validation of memory use, uninterrupted
+traffic and endpoint roaming. A handshake delay would not itself prove working
+internet traffic. The existing Auto failover behavior remains unchanged.

@@ -16,10 +16,13 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     let tableView: UITableView = {
-        let tableView = UITableView(frame: CGRect.zero, style: .plain)
-        tableView.estimatedRowHeight = 60
+        let tableView = UITableView(frame: CGRect.zero, style: .insetGrouped)
+        tableView.estimatedRowHeight = 64
         tableView.rowHeight = UITableView.automaticDimension
-        tableView.separatorStyle = .none
+        tableView.separatorStyle = .singleLine
+        tableView.backgroundColor = VPN013Theme.background
+        tableView.separatorColor = VPN013Theme.separator
+        tableView.indicatorStyle = .white
         tableView.register(TunnelListCell.self)
         return tableView
     }()
@@ -39,6 +42,50 @@ class TunnelsListTableViewController: UIViewController {
         return busyIndicator
     }()
 
+    private let summaryHeader = UIView()
+    private let summaryStatusLabel = TunnelsListTableViewController.makeLabel(style: .caption1)
+    private let summaryNameLabel = TunnelsListTableViewController.makeLabel(style: .title3, weight: .semibold)
+    private let summaryIdentityRow = UIStackView()
+    private let summaryModeLabel = TunnelsListTableViewController.makeLabel(style: .subheadline, color: VPN013Theme.secondaryText)
+    private let summaryProofLabel = TunnelsListTableViewController.makeLabel(style: .footnote, color: VPN013Theme.secondaryText)
+    private let emptyStateLabel = TunnelsListTableViewController.makeLabel(style: .body, color: VPN013Theme.secondaryText)
+    private let emptyStateStack = UIStackView()
+    private let emptyStateContainer = UIView()
+    private let checkAllButton = UIButton(type: .system)
+    private let developerFooter = UIView()
+    private var summaryObservations: [NSKeyValueObservation] = []
+    private var automaticSummaryTimer: Timer?
+    private var automaticSummaryRequestInFlight = false
+    private var automaticSummaryRequestID = UUID()
+    private var automaticSummaryTunnel: TunnelContainer?
+    private var automaticSummaryName: String?
+    private var automaticSummaryPhase: String?
+    private var connectionTestResults: [ObjectIdentifier: String] = [:]
+
+    /// Installed by the real test coordinator. With no coordinator, the action stays hidden.
+    var onCheckAllServers: (() -> Void)? {
+        didSet {
+            guard isViewLoaded else { return }
+            checkAllButton.isHidden = onCheckAllServers == nil
+            sizeSummaryHeader()
+        }
+    }
+
+    private static func makeLabel(style: UIFont.TextStyle, weight: UIFont.Weight? = nil, color: UIColor = VPN013Theme.text) -> UILabel {
+        let label = UILabel()
+        let font = UIFont.preferredFont(forTextStyle: style)
+        if let weight = weight {
+            let base = UIFont.preferredFont(forTextStyle: style, compatibleWith: UITraitCollection(preferredContentSizeCategory: .large))
+            label.font = UIFontMetrics(forTextStyle: style).scaledFont(for: .systemFont(ofSize: base.pointSize, weight: weight))
+        } else {
+            label.font = font
+        }
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
+        label.textColor = color
+        return label
+    }
+
     var detailDisplayedTunnel: TunnelContainer?
     var tableState: TableState = .normal {
         didSet {
@@ -48,7 +95,12 @@ class TunnelsListTableViewController: UIViewController {
 
     override func loadView() {
         view = UIView()
-        view.backgroundColor = .systemBackground
+        overrideUserInterfaceStyle = .dark
+        view.backgroundColor = VPN013Theme.background
+        view.tintColor = VPN013Theme.accent
+        busyIndicator.color = VPN013Theme.accent
+        centeredAddButton.button.tintColor = VPN013Theme.accent
+        centeredAddButton.layer.borderColor = VPN013Theme.accent.cgColor
 
         tableView.dataSource = self
         tableView.delegate = self
@@ -62,6 +114,9 @@ class TunnelsListTableViewController: UIViewController {
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
+        configureSummaryHeader()
+        configureDeveloperFooter()
+
         view.addSubview(busyIndicator)
         busyIndicator.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -69,19 +124,14 @@ class TunnelsListTableViewController: UIViewController {
             busyIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
 
-        view.addSubview(centeredAddButton)
-        centeredAddButton.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            centeredAddButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            centeredAddButton.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-        ])
-
         centeredAddButton.onTapped = { [weak self] in
             guard let self = self else { return }
             self.addButtonTapped(sender: self.centeredAddButton)
         }
 
-        busyIndicator.startAnimating()
+        if tunnelsManager == nil { busyIndicator.startAnimating() }
+        updateEmptyState()
+        updateConnectionSummary()
     }
 
     override func viewDidLoad() {
@@ -89,12 +139,21 @@ class TunnelsListTableViewController: UIViewController {
 
         tableState = .normal
         restorationIdentifier = "TunnelsListVC"
+        navigationItem.largeTitleDisplayMode = .always
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.standardAppearance = VPN013Theme.navigationAppearance()
+        navigationItem.scrollEdgeAppearance = VPN013Theme.navigationAppearance()
+        navigationItem.compactAppearance = VPN013Theme.navigationAppearance()
+        navigationController?.navigationBar.tintColor = VPN013Theme.accent
     }
 
     func handleTableStateChange() {
         switch tableState {
         case .normal:
-            navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addButtonTapped(sender:)))
+            let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addButtonTapped(sender:)))
+            addButton.accessibilityIdentifier = "vpn013.add-profile"
+            addButton.accessibilityLabel = "Добавить конфигурацию"
+            navigationItem.rightBarButtonItem = addButton
             navigationItem.leftBarButtonItem = UIBarButtonItem(title: tr("tunnelsListSettingsButtonTitle"), style: .plain, target: self, action: #selector(settingsButtonTapped(sender:)))
         case .rowSwiped:
             navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(doneButtonTapped))
@@ -111,7 +170,7 @@ class TunnelsListTableViewController: UIViewController {
         if case .multiSelect(let selectionCount) = tableState, selectionCount > 0 {
             navigationItem.title = tr(format: "tunnelsListSelectedTitle (%d)", selectionCount)
         } else {
-            navigationItem.title = tr("tunnelsListTitle")
+            navigationItem.title = "VPN013 WG"
         }
         if case .multiSelect = tableState {
             tableView.allowsMultipleSelectionDuringEditing = true
@@ -126,12 +185,334 @@ class TunnelsListTableViewController: UIViewController {
 
         busyIndicator.stopAnimating()
         tableView.reloadData()
-        centeredAddButton.isHidden = tunnelsManager.numberOfTunnels() > 0
+        observeConnectionSummary()
+        updateEmptyState()
     }
 
-    override func viewWillAppear(_: Bool) {
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
         if let selectedRowIndexPath = tableView.indexPathForSelectedRow {
             tableView.deselectRow(at: selectedRowIndexPath, animated: false)
+        }
+        updateConnectionSummary()
+        startAutomaticSummaryUpdates()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        automaticSummaryTimer?.invalidate()
+        automaticSummaryTimer = nil
+    }
+
+    deinit {
+        automaticSummaryTimer?.invalidate()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        sizeSummaryHeader()
+        sizeDeveloperFooter()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            updateSummaryIdentityLayout()
+            sizeSummaryHeader()
+            sizeDeveloperFooter()
+            tableView.beginUpdates()
+            tableView.endUpdates()
+        }
+    }
+
+    private func configureSummaryHeader() {
+        let summary = UIView()
+        summary.backgroundColor = VPN013Theme.background
+        summary.layer.cornerRadius = 14
+        summary.layer.cornerCurve = .continuous
+        summary.layer.borderWidth = 1
+        summary.layer.borderColor = VPN013Theme.separator.cgColor
+        summary.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
+        summaryIdentityRow.addArrangedSubview(summaryNameLabel)
+        summaryIdentityRow.addArrangedSubview(summaryStatusLabel)
+        summaryIdentityRow.spacing = 12
+        summaryNameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        summaryStatusLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        updateSummaryIdentityLayout()
+        let labels = UIStackView(arrangedSubviews: [summaryIdentityRow, summaryModeLabel, summaryProofLabel])
+        labels.axis = .vertical
+        labels.spacing = 5
+        labels.translatesAutoresizingMaskIntoConstraints = false
+        summary.addSubview(labels)
+        NSLayoutConstraint.activate([
+            labels.topAnchor.constraint(equalTo: summary.layoutMarginsGuide.topAnchor),
+            labels.bottomAnchor.constraint(equalTo: summary.layoutMarginsGuide.bottomAnchor),
+            labels.leadingAnchor.constraint(equalTo: summary.layoutMarginsGuide.leadingAnchor),
+            labels.trailingAnchor.constraint(equalTo: summary.layoutMarginsGuide.trailingAnchor)
+        ])
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "Проверить все"
+        configuration.cornerStyle = .medium
+        configuration.baseBackgroundColor = VPN013Theme.accent
+        configuration.baseForegroundColor = VPN013Theme.background
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 16, bottom: 13, trailing: 16)
+        checkAllButton.configuration = configuration
+        checkAllButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        checkAllButton.titleLabel?.numberOfLines = 0
+        checkAllButton.addTarget(self, action: #selector(checkAllServersTapped), for: .touchUpInside)
+        checkAllButton.isHidden = onCheckAllServers == nil
+        checkAllButton.accessibilityHint = "Проверить соединение с каждым сервером"
+        let minimumButtonHeight = checkAllButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 48)
+        minimumButtonHeight.priority = .defaultHigh
+        minimumButtonHeight.isActive = true
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.text = "Добавьте конфигурацию сервера, чтобы подключить VPN."
+        centeredAddButton.button.titleLabel?.numberOfLines = 0
+        centeredAddButton.button.titleLabel?.textAlignment = .center
+        emptyStateStack.axis = .vertical
+        emptyStateStack.alignment = .center
+        emptyStateStack.spacing = 24
+        emptyStateStack.addArrangedSubview(emptyStateLabel)
+        emptyStateStack.addArrangedSubview(centeredAddButton)
+        centeredAddButton.isHidden = false
+        emptyStateStack.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateContainer.addSubview(emptyStateStack)
+        emptyStateContainer.isHidden = true
+        emptyStateContainer.clipsToBounds = true
+        let emptyBottom = emptyStateStack.bottomAnchor.constraint(equalTo: emptyStateContainer.bottomAnchor)
+        emptyBottom.priority = UILayoutPriority(999)
+        NSLayoutConstraint.activate([
+            emptyStateStack.leadingAnchor.constraint(equalTo: emptyStateContainer.leadingAnchor),
+            emptyStateStack.trailingAnchor.constraint(equalTo: emptyStateContainer.trailingAnchor),
+            emptyStateStack.topAnchor.constraint(equalTo: emptyStateContainer.topAnchor),
+            emptyBottom,
+            emptyStateLabel.widthAnchor.constraint(equalTo: emptyStateStack.widthAnchor),
+            centeredAddButton.widthAnchor.constraint(lessThanOrEqualTo: emptyStateStack.widthAnchor),
+            centeredAddButton.button.leadingAnchor.constraint(greaterThanOrEqualTo: centeredAddButton.leadingAnchor, constant: 16),
+            centeredAddButton.button.trailingAnchor.constraint(lessThanOrEqualTo: centeredAddButton.trailingAnchor, constant: -16),
+            centeredAddButton.heightAnchor.constraint(greaterThanOrEqualTo: centeredAddButton.button.heightAnchor, constant: 16)
+        ])
+        let stack = UIStackView(arrangedSubviews: [summary, checkAllButton, emptyStateContainer])
+        stack.axis = .vertical
+        stack.spacing = 16
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        summaryHeader.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: summaryHeader.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: summaryHeader.trailingAnchor, constant: -20),
+            stack.topAnchor.constraint(equalTo: summaryHeader.topAnchor, constant: 8),
+            stack.bottomAnchor.constraint(equalTo: summaryHeader.bottomAnchor, constant: -8)
+        ])
+        tableView.tableHeaderView = summaryHeader
+    }
+
+    private func updateSummaryIdentityLayout() {
+        let accessibilitySize = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        summaryIdentityRow.axis = accessibilitySize ? .vertical : .horizontal
+        summaryIdentityRow.alignment = accessibilitySize ? .leading : .firstBaseline
+    }
+
+    private func configureDeveloperFooter() {
+        let credit = Self.makeLabel(style: .caption2, color: VPN013Theme.secondaryText)
+        credit.text = "Разработчик VPN013 WG"
+        credit.textAlignment = .center
+        let support = UIButton(type: .system)
+        var configuration = UIButton.Configuration.plain()
+        configuration.title = "@R013_Support"
+        configuration.image = UIImage(systemName: "paperplane.fill")
+        configuration.imagePadding = 7
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .caption1)
+        configuration.baseForegroundColor = VPN013Theme.accent
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14)
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var result = attributes
+            result.font = UIFont.preferredFont(forTextStyle: .caption1)
+            return result
+        }
+        support.configuration = configuration
+        support.titleLabel?.adjustsFontForContentSizeCategory = true
+        support.titleLabel?.numberOfLines = 0
+        support.titleLabel?.textAlignment = .center
+        support.accessibilityIdentifier = "vpn013.developer-support"
+        support.accessibilityLabel = "Написать разработчику VPN013 WG в Telegram, @R013_Support"
+        support.accessibilityHint = "Открыть страницу поддержки"
+        support.addTarget(self, action: #selector(developerSupportTapped), for: .touchUpInside)
+        support.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        let stack = UIStackView(arrangedSubviews: [credit, support])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 0
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        developerFooter.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: developerFooter.topAnchor, constant: 20),
+            stack.bottomAnchor.constraint(equalTo: developerFooter.bottomAnchor, constant: -20),
+            stack.leadingAnchor.constraint(equalTo: developerFooter.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: developerFooter.trailingAnchor, constant: -20),
+            credit.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
+            support.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor)
+        ])
+        tableView.tableFooterView = developerFooter
+    }
+
+    private func sizeDeveloperFooter() {
+        let width = tableView.bounds.width
+        guard width > 0 else { return }
+        let size = developerFooter.systemLayoutSizeFitting(CGSize(width: width, height: UIView.layoutFittingCompressedSize.height), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        if abs(developerFooter.frame.height - size.height) > 0.5 || developerFooter.frame.width != width {
+            developerFooter.frame = CGRect(x: 0, y: 0, width: width, height: size.height)
+            tableView.tableFooterView = developerFooter
+        }
+    }
+
+    @objc private func developerSupportTapped() {
+        openConfigurationWebsite("https://t.me/R013_Support")
+    }
+
+    private func sizeSummaryHeader() {
+        let width = tableView.bounds.width
+        guard width > 0 else { return }
+        let size = summaryHeader.systemLayoutSizeFitting(CGSize(width: width, height: UIView.layoutFittingCompressedSize.height), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        if abs(summaryHeader.frame.height - size.height) > 0.5 || summaryHeader.frame.width != width {
+            summaryHeader.frame = CGRect(x: 0, y: 0, width: width, height: size.height)
+            tableView.tableHeaderView = summaryHeader
+        }
+    }
+
+    private func observeConnectionSummary() {
+        summaryObservations.removeAll()
+        for tunnel in tunnelsManager?.mapTunnels(transform: { $0 }) ?? [] {
+            summaryObservations.append(tunnel.observe(\.status) { [weak self] _, _ in self?.updateConnectionSummary() })
+            summaryObservations.append(tunnel.observe(\.name) { [weak self] _, _ in self?.updateConnectionSummary() })
+            summaryObservations.append(tunnel.observe(\.handshakeState) { [weak self] _, _ in self?.updateConnectionSummary() })
+        }
+        updateConnectionSummary()
+    }
+
+    private func updateEmptyState() {
+        let hasTunnels = (tunnelsManager?.numberOfTunnels() ?? 0) > 0
+        emptyStateContainer.isHidden = tunnelsManager == nil || hasTunnels
+        checkAllButton.isEnabled = hasTunnels
+        sizeSummaryHeader()
+    }
+
+    private func updateConnectionSummary() {
+        guard isViewLoaded else { return }
+        let tunnels = tunnelsManager?.mapTunnels { $0 } ?? []
+        let current = tunnels.first { $0.status == .active } ?? tunnels.first { $0.status != .inactive }
+        summaryModeLabel.isHidden = true
+        summaryProofLabel.isHidden = true
+        summaryStatusLabel.textColor = VPN013Theme.secondaryText
+        guard let tunnel = current else {
+            automaticSummaryTunnel = nil
+            automaticSummaryName = nil
+            automaticSummaryPhase = nil
+            automaticSummaryRequestID = UUID()
+            automaticSummaryRequestInFlight = false
+            summaryStatusLabel.text = tunnelsManager == nil ? "Загрузка" : "Не подключено"
+            summaryNameLabel.text = tunnelsManager == nil ? "Загружаем серверы…" : (tunnels.isEmpty ? "Добавьте первый сервер" : "Выберите сервер")
+            summaryModeLabel.isHidden = tunnels.isEmpty
+            summaryModeLabel.text = "Включите переключатель рядом с сервером."
+            sizeSummaryHeader()
+            return
+        }
+        if automaticSummaryTunnel !== tunnel {
+            automaticSummaryTunnel = tunnel
+            automaticSummaryName = nil
+            automaticSummaryPhase = nil
+            automaticSummaryRequestID = UUID()
+            automaticSummaryRequestInFlight = false
+        }
+        summaryNameLabel.text = tunnel.isVPN013Automatic ? (automaticSummaryName ?? tunnel.name) : tunnel.name
+        if tunnel.isVPN013Automatic {
+            let count = tunnel.automaticServerCount
+            summaryModeLabel.text = "Авто · \(count) \(serverCountWord(count))"
+            summaryModeLabel.isHidden = false
+        }
+        switch tunnel.status {
+        case .active:
+            summaryStatusLabel.text = "Подключено"
+            summaryStatusLabel.textColor = VPN013Theme.accent
+            summaryProofLabel.isHidden = false
+            if tunnel.isVPN013Automatic {
+                summaryProofLabel.text = automaticSummaryPhase ?? "VPN запущен · трафик ещё не проверен"
+            } else if tunnel.handshakeState == .confirmed {
+                summaryProofLabel.text = "Рукопожатие подтверждено"
+            } else {
+                summaryProofLabel.text = "VPN запущен · рукопожатие не подтверждено"
+            }
+        case .activating:
+            summaryStatusLabel.text = "Подключение…"
+            summaryProofLabel.isHidden = false
+            summaryProofLabel.text = tunnel.handshakeState == .waiting ? "Ожидаем ответ сервера" : "Запускаем VPN"
+        case .deactivating:
+            summaryStatusLabel.text = "Отключение…"
+        case .waiting:
+            summaryStatusLabel.text = "Ожидание подключения"
+        case .restarting, .reasserting:
+            summaryStatusLabel.text = "Восстановление подключения…"
+        case .inactive:
+            summaryStatusLabel.text = "Не подключено"
+        }
+        sizeSummaryHeader()
+        refreshAutomaticSummary()
+    }
+
+    private func serverCountWord(_ count: Int) -> String {
+        if count % 100 >= 11 && count % 100 <= 14 { return "серверов" }
+        switch count % 10 {
+        case 1: return "сервер"
+        case 2...4: return "сервера"
+        default: return "серверов"
+        }
+    }
+
+    private func startAutomaticSummaryUpdates() {
+        automaticSummaryTimer?.invalidate()
+        let timer = Timer(timeInterval: 3, repeats: true) { [weak self] _ in self?.refreshAutomaticSummary() }
+        automaticSummaryTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+        refreshAutomaticSummary()
+    }
+
+    private func refreshAutomaticSummary() {
+        guard viewIfLoaded?.window != nil, let tunnel = automaticSummaryTunnel, tunnel.isVPN013Automatic,
+              tunnel.status == .active, !automaticSummaryRequestInFlight else { return }
+        automaticSummaryRequestInFlight = true
+        let requestID = UUID()
+        automaticSummaryRequestID = requestID
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self = self, self.automaticSummaryRequestID == requestID else { return }
+            self.automaticSummaryRequestInFlight = false
+        }
+        tunnel.getAutomaticStatus { [weak self, weak tunnel] text in
+            guard let self = self, let tunnel = tunnel, self.automaticSummaryTunnel === tunnel,
+                  self.automaticSummaryRequestID == requestID, tunnel.status == .active else { return }
+            self.automaticSummaryRequestInFlight = false
+            let lines = text?.components(separatedBy: "\n") ?? []
+            self.automaticSummaryName = lines.first.flatMap { $0.isEmpty ? nil : $0 }
+            self.automaticSummaryPhase = lines.count > 1 && !lines[1].isEmpty ? lines[1] : nil
+            self.summaryNameLabel.text = self.automaticSummaryName ?? tunnel.name
+            self.summaryProofLabel.text = self.automaticSummaryPhase ?? "VPN запущен · трафик ещё не проверен"
+            self.sizeSummaryHeader()
+        }
+    }
+
+    @objc private func checkAllServersTapped() {
+        onCheckAllServers?()
+    }
+
+    func setConnectionTesting(isRunning: Bool, title: String? = nil) {
+        checkAllButton.isEnabled = !isRunning && (tunnelsManager?.numberOfTunnels() ?? 0) > 0
+        checkAllButton.configuration?.title = title ?? (isRunning ? "Проверяем серверы…" : "Проверить все")
+        checkAllButton.configuration?.showsActivityIndicator = isRunning
+        sizeSummaryHeader()
+    }
+
+    func setConnectionTestText(_ text: String?, for tunnel: TunnelContainer) {
+        connectionTestResults[ObjectIdentifier(tunnel)] = text
+        for case let cell as TunnelListCell in tableView.visibleCells where cell.tunnel === tunnel {
+            cell.connectionTestText = text
         }
     }
 
@@ -322,6 +703,11 @@ extension TunnelsListTableViewController: UITableViewDataSource {
         return 1
     }
 
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        guard let count = tunnelsManager?.numberOfTunnels(), count > 0 else { return nil }
+        return "Профили · \(count)"
+    }
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return (tunnelsManager?.numberOfTunnels() ?? 0)
     }
@@ -331,6 +717,7 @@ extension TunnelsListTableViewController: UITableViewDataSource {
         if let tunnelsManager = tunnelsManager {
             let tunnel = tunnelsManager.tunnel(at: indexPath.row)
             cell.tunnel = tunnel
+            cell.connectionTestText = connectionTestResults[ObjectIdentifier(tunnel)]
             cell.onSwitchToggled = { [weak self] isOn in
                 guard let self = self, let tunnelsManager = self.tunnelsManager else { return }
                 if tunnel.hasOnDemandRules {
@@ -353,6 +740,11 @@ extension TunnelsListTableViewController: UITableViewDataSource {
 }
 
 extension TunnelsListTableViewController: UITableViewDelegate {
+    func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
+        guard let header = view as? UITableViewHeaderFooterView else { return }
+        header.textLabel?.textColor = VPN013Theme.secondaryText
+    }
+
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         guard !tableView.isEditing else {
             tableState = .multiSelect(selectionCount: tableView.indexPathsForSelectedRows?.count ?? 0)
@@ -403,11 +795,16 @@ extension TunnelsListTableViewController: UITableViewDelegate {
 extension TunnelsListTableViewController: TunnelsManagerListDelegate {
     func tunnelAdded(at index: Int) {
         tableView.insertRows(at: [IndexPath(row: index, section: 0)], with: .automatic)
-        centeredAddButton.isHidden = (tunnelsManager?.numberOfTunnels() ?? 0 > 0)
+        observeConnectionSummary()
+        updateEmptyState()
     }
 
     func tunnelModified(at index: Int) {
+        if let tunnel = tunnelsManager?.tunnel(at: index) {
+            connectionTestResults[ObjectIdentifier(tunnel)] = nil
+        }
         tableView.reloadRows(at: [IndexPath(row: index, section: 0)], with: .automatic)
+        observeConnectionSummary()
     }
 
     func tunnelMoved(from oldIndex: Int, to newIndex: Int) {
@@ -416,7 +813,9 @@ extension TunnelsListTableViewController: TunnelsManagerListDelegate {
 
     func tunnelRemoved(at index: Int, tunnel: TunnelContainer) {
         tableView.deleteRows(at: [IndexPath(row: index, section: 0)], with: .automatic)
-        centeredAddButton.isHidden = tunnelsManager?.numberOfTunnels() ?? 0 > 0
+        connectionTestResults[ObjectIdentifier(tunnel)] = nil
+        observeConnectionSummary()
+        updateEmptyState()
         if detailDisplayedTunnel == tunnel, let splitViewController = splitViewController {
             if splitViewController.isCollapsed != false {
                 (splitViewController.viewControllers[0] as? UINavigationController)?.popToRootViewController(animated: false)

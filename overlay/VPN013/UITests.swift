@@ -5,7 +5,7 @@ final class AutoTunnelUITests:XCTestCase {
         let app=XCUIApplication();app.launchArguments=["-AppleLanguages","(ru)","-AppleLocale","ru_RU"];app.launch()
         XCTAssertTrue(app.staticTexts["Беларусь"].waitForExistence(timeout:20))
         capture("01-thirteen-servers-simulator-fixture")
-        app.navigationBars.buttons.element(boundBy:1).tap()
+        app.buttons["vpn013.add-profile"].tap()
         XCTAssertTrue(app.buttons["Создать режим Авто"].waitForExistence(timeout:4))
         app.buttons["Создать режим Авто"].tap()
         XCTAssertTrue(app.alerts["Создать режим Авто"].waitForExistence(timeout:4))
@@ -22,10 +22,10 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.staticTexts["Швеция"].waitForExistence(timeout:20))
         XCTAssertEqual(app.alerts.count,0)
         for name in ["Беларусь","Германия","Германия 2","Грузия","Испания","Нидерланды","Польша","Польша 2","США","Турция","Финляндия","Финляндия 2","Швеция"] {
-            XCTAssertEqual(app.staticTexts.matching(identifier:name).count,1)
+            XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:name).count,1)
         }
         capture("04-shared-zip-26-files-13-imported")
-        app.navigationBars.buttons.element(boundBy:1).tap()
+        app.buttons["vpn013.add-profile"].tap()
         app.buttons["Создать режим Авто"].tap()
         XCTAssertTrue(app.alerts["Создать режим Авто"].waitForExistence(timeout:5))
         app.alerts.buttons["Создать Авто"].tap()
@@ -37,7 +37,7 @@ final class AutoTunnelUITests:XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", String(count)]
         app.launch()
         XCTAssertTrue(app.staticTexts["Личный сервер 1"].waitForExistence(timeout:20))
-        app.navigationBars.buttons.element(boundBy:1).tap()
+        app.buttons["vpn013.add-profile"].tap()
         let action = app.buttons["Создать режим Авто"]
         XCTAssertTrue(action.waitForExistence(timeout:5)); XCTAssertTrue(action.isEnabled)
         action.tap()
@@ -61,8 +61,8 @@ final class AutoTunnelUITests:XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "0"]
         app.launch()
-        XCTAssertTrue(app.navigationBars.buttons.element(boundBy:1).waitForExistence(timeout:20))
-        app.navigationBars.buttons.element(boundBy:1).tap()
+        XCTAssertTrue(app.buttons["vpn013.add-profile"].waitForExistence(timeout:20))
+        app.buttons["vpn013.add-profile"].tap()
         XCTAssertTrue(app.buttons["Купить конфигурацию"].isEnabled)
         XCTAssertTrue(app.buttons["1 час бесплатно"].isEnabled)
         let action = app.buttons["Создать режим Авто"]
@@ -81,6 +81,84 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.buttons["Купить конфигурацию"].isEnabled)
         XCTAssertTrue(app.buttons["1 час бесплатно"].isEnabled)
         capture("empty-list-centered-add-purchase-menu")
+    }
+
+    func testRedesignedListKeepsNativeControls() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["VPN013 WG"].waitForExistence(timeout:20))
+        let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
+        XCTAssertTrue(profile.waitForExistence(timeout:5))
+        let toggle = profile.switches.firstMatch
+        XCTAssertTrue(toggle.exists)
+        XCTAssertTrue(toggle.isEnabled)
+        XCTAssertTrue(toggle.isHittable)
+        XCTAssertTrue(app.buttons["Настройки"].isHittable)
+        XCTAssertTrue(app.buttons["vpn013.add-profile"].isHittable)
+        capture("07-dark-native-list-two-personal-servers")
+        profile.staticTexts["Личный сервер 1"].tap()
+        XCTAssertTrue(app.navigationBars["Личный сервер 1"].waitForExistence(timeout:5))
+        capture("08-dark-list-opens-profile-detail")
+    }
+
+    func testAddMenuKeepsAllActions() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2"]
+        app.launch()
+        let add = app.buttons["vpn013.add-profile"]
+        XCTAssertTrue(add.waitForExistence(timeout:20))
+        add.tap()
+        XCTAssertTrue(app.buttons["Купить конфигурацию"].waitForExistence(timeout:5))
+        for title in ["Купить конфигурацию", "1 час бесплатно", "Создать из файла или архива", "Создать режим Авто", "Создать из QR-кода", "Создать с нуля"] {
+            let action = app.buttons[title]
+            XCTAssertTrue(action.exists, "Missing add-menu action: " + title)
+            XCTAssertTrue(action.isEnabled, "Disabled add-menu action: " + title)
+        }
+        capture("09-dark-list-complete-add-menu")
+        app.buttons["Создать с нуля"].tap()
+        XCTAssertTrue(app.navigationBars["Новая конфигурация"].waitForExistence(timeout:5))
+        app.buttons["Отмена"].tap()
+        XCTAssertTrue(app.navigationBars["VPN013 WG"].waitForExistence(timeout:5))
+    }
+
+    func testDeveloperFooterAvailable() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "-AppleInterfaceStyle", "Dark"]
+        app.launch()
+        XCTAssertTrue(app.tables.cells.staticTexts["Беларусь"].waitForExistence(timeout:20))
+        capture("10-dark-thirteen-profile-list-top-simulator-fixture")
+        let support = app.buttons["vpn013.developer-support"]
+        for _ in 0..<8 {
+            if support.exists && support.isHittable { break }
+            app.tables.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(support.exists)
+        XCTAssertTrue(support.isHittable)
+        XCTAssertTrue(support.isEnabled)
+        XCTAssertTrue(support.label.contains("@R013_Support"))
+        XCTAssertTrue(app.staticTexts["Разработчик VPN013 WG"].exists)
+        capture("11-dark-thirteen-profile-list-developer-footer-simulator-fixture")
+    }
+
+    func testDarkEmptyListKeepsDeveloperFooter() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "-AppleInterfaceStyle", "Dark", "--vpn013-test-count", "0"]
+        app.launch()
+        let add = app.buttons["addEmptyStateButton"]
+        XCTAssertTrue(add.waitForExistence(timeout:20))
+        XCTAssertTrue(add.isHittable)
+        let support = app.buttons["vpn013.developer-support"]
+        for _ in 0..<4 {
+            if support.exists && support.isHittable { break }
+            app.tables.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(support.exists)
+        XCTAssertTrue(support.isHittable)
+        XCTAssertTrue(support.label.contains("@R013_Support"))
+        XCTAssertTrue(app.staticTexts["Разработчик VPN013 WG"].exists)
+        XCTAssertTrue(add.isHittable)
+        capture("12-dark-empty-list-developer-footer-simulator-fixture")
     }
 
     func testUnavailableLogStopsSpinnerAndShowsExplanation() {

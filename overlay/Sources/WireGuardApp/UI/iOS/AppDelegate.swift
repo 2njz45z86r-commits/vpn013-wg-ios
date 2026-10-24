@@ -21,6 +21,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
 
         let window = UIWindow(frame: UIScreen.main.bounds)
+        // The owner selected the night palette; keep system sheets and details
+        // in the same appearance while preserving native navigation and controls.
+        window.overrideUserInterfaceStyle = .dark
+        window.tintColor = VPN013Theme.accent
+        let navigation = VPN013Theme.navigationAppearance()
+        UINavigationBar.appearance().standardAppearance = navigation
+        UINavigationBar.appearance().scrollEdgeAppearance = navigation
+        UINavigationBar.appearance().compactAppearance = navigation
+        UINavigationBar.appearance().tintColor = VPN013Theme.accent
+        UITableView.appearance().backgroundColor = VPN013Theme.background
+        UITableView.appearance().separatorColor = VPN013Theme.separator
+        UITableViewCell.appearance().backgroundColor = VPN013Theme.background
         self.window = window
 
         let mainVC = MainViewController()
