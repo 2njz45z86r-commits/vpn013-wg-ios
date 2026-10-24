@@ -3,7 +3,10 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hoste
   throw 'Installation tests are restricted to the authorized disposable GitHub-hosted runner'
 }
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$msi=Join-Path $projectRoot 'installer\dist\VPN013WG-1.4.0-amd64.msi'
+$versionSource=Get-Content -LiteralPath (Join-Path $projectRoot 'version/version.go') -Raw
+if ($versionSource -notmatch 'Number\s*=\s*"([\d.]+)"') {throw 'Missing application version'}
+$releaseVersion=$Matches[1]
+$msi=Join-Path $projectRoot ("installer\dist\VPN013WG-$releaseVersion-amd64.msi")
 $installRoot=Join-Path $env:ProgramFiles 'VPN013 WG'
 $stockSentinel=Join-Path $env:ProgramFiles 'AmneziaWG\vpn013-ci-preserve.txt'
 New-Item -ItemType Directory -Path (Split-Path $stockSentinel) -Force | Out-Null
@@ -33,4 +36,3 @@ if ([System.IO.File]::ReadAllText($dataSentinel) -ne 'owned data sentinel') {thr
 if ([System.IO.File]::ReadAllText($stockSentinel) -ne 'stock app sentinel') {throw 'Installer changed stock app data'}
 if (Get-Service -Name 'VPN013WGTunnel$R013CISmoke' -ErrorAction SilentlyContinue) {throw 'Synthetic tunnel service was not removed'}
 Write-Output 'PASS: install, native VPN test, repair, uninstall, and data/stock preservation'
-

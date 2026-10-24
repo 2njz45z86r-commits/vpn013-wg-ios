@@ -1,10 +1,15 @@
 name: Build and verify Windows VPN013 WG
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - "windows/overlay/**"
+      - "windows/prepare-ci-source.py"
+      - ".github/workflows/build-windows.yml"
 permissions:
   contents: write
 concurrency:
-  group: windows-1.4.0
+  group: windows-1.4.1
   cancel-in-progress: false
 jobs:
   windows:
@@ -48,6 +53,14 @@ jobs:
           $env:CC='x86_64-w64-mingw32-gcc'
           ./.deps/go/bin/go.exe test -mod=vendor -v ./r013 ./manager
           if ($LASTEXITCODE -ne 0) {throw 'Core tests failed'}
+      - name: Test native current-card scenarios without customer VPN
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./scripts/ci-ui.ps1
       - name: Test install, native AWG traffic, repair and uninstall
         working-directory: vpn013-wg-windows
         run: |
@@ -61,20 +74,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.4.0-amd64.msi'
-          $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.4.0-windows-source.zip'
-          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.4.0';build=1;sourceSHA256=(Get-FileHash -LiteralPath $sourceNamed -Algorithm SHA256).Hash.ToLower();msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true}
+          $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.4.1-amd64.msi'
+          $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.4.1-windows-source.zip'
+          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.4.1';build=2;sourceSHA256=(Get-FileHash -LiteralPath $sourceNamed -Algorithm SHA256).Hash.ToLower();msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true;nativeCurrentCardScenarios=3;autoPinnedFirst=$true;currentPing=$true;hourlyInactiveVPNComparison=$false}
           $provenance | ConvertTo-Json | Set-Content -LiteralPath 'installer/dist/windows-build-provenance.json' -Encoding utf8
           $notes=@'
-          VPN013 WG Windows x64 1.4.0.
+          VPN013 WG Windows x64 1.4.1.
 
           Verified on a disposable Windows runner: native MSI install/repair/uninstall; preservation of existing and stock-app data; a real native Wintun tunnel with an obfuscated AmneziaWG handshake and in-tunnel ICMP response against an ephemeral memory-only peer. Protocol, scoped roster updates, key preservation, rollback, release signatures, Auto policy and IPv4/IPv6 ICMP tests passed.
+
+          Auto is pinned first. A separate current-connection card follows the active session independently of row selection, measures its endpoint, uses manual stored-endpoint fallback when runtime statistics are unavailable, refuses an unknown Auto seed and clears stale results. Three native UI fixtures verify these cases with real loopback ICMP; no customer VPN is started by the UI fixtures.
 
           Import, manual profiles, Auto (1–30 full-IPv4 profiles), visible endpoint Ping, purchase/free-hour links, developer contact, order-bound refresh and signed app updates are included. Hourly parallel comparison of inactive VPN paths is not implemented. Real customer networks and every Auto/service lifecycle scenario are not covered by this run.
 
           Independent R013 client, not an official Amnezia/WireGuard release. Application/MSI publisher signature is absent; Wintun retains its original valid vendor signature. Corresponding source and original license texts are attached/included. No customer keys or configurations are present.
           '@
           $notes | Set-Content -LiteralPath 'installer/dist/release-notes.md' -Encoding utf8
-          gh release create windows-1.4.0 $msi $sourceNamed 'installer/dist/windows-build-provenance.json' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'VPN013 WG Windows 1.4.0' --notes-file 'installer/dist/release-notes.md'
+          gh release create windows-1.4.1 $msi $sourceNamed 'installer/dist/windows-build-provenance.json' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'VPN013 WG Windows 1.4.1' --notes-file 'installer/dist/release-notes.md'
           if ($LASTEXITCODE -ne 0) {throw 'Release publication failed'}
-
