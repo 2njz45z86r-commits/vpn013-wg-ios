@@ -53,8 +53,8 @@ class TunnelListCell: UITableViewCell {
     /// Set only from a completed connection test; nil means no measured result.
     var connectionTestText: String? {
         didSet {
-            connectionTestLabel.text = connectionTestText
-            connectionTestLabel.isHidden = connectionTestText == nil
+            connectionTestLabel.text = connectionTestText ?? "—"
+            connectionTestLabel.accessibilityLabel = connectionTestText.map { "Задержка: " + $0 } ?? "Задержка ещё не измерена"
         }
     }
 
@@ -93,7 +93,9 @@ class TunnelListCell: UITableViewCell {
         label.textColor = VPN013Theme.secondaryText
         label.numberOfLines = 0
         label.textAlignment = .right
-        label.isHidden = true
+        label.text = "—"
+        label.accessibilityIdentifier = "vpn013.latency"
+        label.accessibilityLabel = "Задержка ещё не измерена"
         return label
     }()
 
@@ -103,6 +105,7 @@ class TunnelListCell: UITableViewCell {
     private var hasOnDemandRulesObservationToken: NSKeyValueObservation?
     private var handshakeObservationToken: NSKeyValueObservation?
     private let rowStack = UIStackView()
+    private var latencyWidthConstraint: NSLayoutConstraint?
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -118,8 +121,6 @@ class TunnelListCell: UITableViewCell {
         busyIndicator.color = VPN013Theme.accent
         tintColor = VPN013Theme.accent
         statusSwitch.onTintColor = VPN013Theme.accent
-        statusSwitch.backgroundColor = VPN013Theme.switchTrack
-        statusSwitch.layer.cornerRadius = 16
         accessoryType = .none
         contentView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
         let labels = UIStackView(arrangedSubviews: [nameLabel, onDemandLabel])
@@ -141,6 +142,11 @@ class TunnelListCell: UITableViewCell {
         statusSwitch.setContentHuggingPriority(.required, for: .horizontal)
         statusSwitch.setContentCompressionResistancePriority(.required, for: .horizontal)
         connectionTestLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        // Reserve the measured-result column even before a result exists.
+        // The switch keeps UIKit's own size instead of filling the trailing space.
+        latencyWidthConstraint = connectionTestLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: UIFontMetrics(forTextStyle: .subheadline).scaledValue(for: 56))
+        latencyWidthConstraint?.isActive = true
+        statusSwitch.widthAnchor.constraint(equalToConstant: statusSwitch.intrinsicContentSize.width).isActive = true
         NSLayoutConstraint.activate([
             rowStack.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor),
             rowStack.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor),
@@ -169,6 +175,7 @@ class TunnelListCell: UITableViewCell {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            latencyWidthConstraint?.constant = UIFontMetrics(forTextStyle: .subheadline).scaledValue(for: 56)
             updateRowLayout()
         }
     }

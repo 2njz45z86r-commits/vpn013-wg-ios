@@ -94,6 +94,10 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(toggle.exists)
         XCTAssertTrue(toggle.isEnabled)
         XCTAssertTrue(toggle.isHittable)
+        XCTAssertLessThanOrEqual(toggle.frame.width, 80, "The native switch must not stretch across the row")
+        let latency = profile.staticTexts["vpn013.latency"]
+        XCTAssertTrue(latency.exists)
+        XCTAssertLessThan(latency.frame.maxX, toggle.frame.minX)
         XCTAssertTrue(app.buttons["Настройки"].isHittable)
         XCTAssertTrue(app.buttons["vpn013.add-profile"].isHittable)
         capture("07-dark-native-list-two-personal-servers")

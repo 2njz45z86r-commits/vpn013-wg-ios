@@ -19,6 +19,8 @@ class TunnelsListTableViewController: UIViewController {
         let tableView = UITableView(frame: CGRect.zero, style: .insetGrouped)
         tableView.estimatedRowHeight = 64
         tableView.rowHeight = UITableView.automaticDimension
+        tableView.sectionHeaderHeight = UITableView.automaticDimension
+        tableView.estimatedSectionHeaderHeight = 40
         tableView.separatorStyle = .singleLine
         tableView.backgroundColor = VPN013Theme.background
         tableView.separatorColor = VPN013Theme.separator
@@ -43,6 +45,7 @@ class TunnelsListTableViewController: UIViewController {
     }()
 
     private let summaryHeader = UIView()
+    private let appTitleLabel = TunnelsListTableViewController.makeLabel(style: .title2, weight: .semibold)
     private let summaryStatusLabel = TunnelsListTableViewController.makeLabel(style: .caption1)
     private let summaryNameLabel = TunnelsListTableViewController.makeLabel(style: .title3, weight: .semibold)
     private let summaryIdentityRow = UIStackView()
@@ -139,8 +142,8 @@ class TunnelsListTableViewController: UIViewController {
 
         tableState = .normal
         restorationIdentifier = "TunnelsListVC"
-        navigationItem.largeTitleDisplayMode = .always
-        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.largeTitleDisplayMode = .never
+        navigationController?.navigationBar.prefersLargeTitles = false
         navigationItem.standardAppearance = VPN013Theme.navigationAppearance()
         navigationItem.scrollEdgeAppearance = VPN013Theme.navigationAppearance()
         navigationItem.compactAppearance = VPN013Theme.navigationAppearance()
@@ -148,13 +151,19 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     func handleTableStateChange() {
+        navigationItem.titleView = nil
         switch tableState {
         case .normal:
+            appTitleLabel.text = "VPN013 WG"
+            appTitleLabel.numberOfLines = 1
+            navigationItem.titleView = appTitleLabel
             let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addButtonTapped(sender:)))
             addButton.accessibilityIdentifier = "vpn013.add-profile"
             addButton.accessibilityLabel = "Добавить конфигурацию"
             navigationItem.rightBarButtonItem = addButton
-            navigationItem.leftBarButtonItem = UIBarButtonItem(title: tr("tunnelsListSettingsButtonTitle"), style: .plain, target: self, action: #selector(settingsButtonTapped(sender:)))
+            let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(settingsButtonTapped(sender:)))
+            settings.accessibilityLabel = tr("tunnelsListSettingsButtonTitle")
+            navigationItem.leftBarButtonItem = settings
         case .rowSwiped:
             navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(doneButtonTapped))
             navigationItem.leftBarButtonItem = UIBarButtonItem(title: tr("tunnelsListSelectButtonTitle"), style: .plain, target: self, action: #selector(selectButtonTapped))
@@ -740,6 +749,31 @@ extension TunnelsListTableViewController: UITableViewDataSource {
 }
 
 extension TunnelsListTableViewController: UITableViewDelegate {
+    func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        guard let count = tunnelsManager?.numberOfTunnels(), count > 0 else { return nil }
+        let header = UITableViewHeaderFooterView(reuseIdentifier: nil)
+        let title = Self.makeLabel(style: .subheadline, weight: .semibold, color: VPN013Theme.text)
+        title.text = "Профили · \(count)"
+        let latency = Self.makeLabel(style: .caption1, color: VPN013Theme.secondaryText)
+        latency.text = "Задержка"
+        latency.textAlignment = .right
+        let row = UIStackView(arrangedSubviews: [title, latency])
+        let switchColumn = UISwitch().intrinsicContentSize.width + 10
+        row.alignment = .center
+        row.spacing = 12
+        row.translatesAutoresizingMaskIntoConstraints = false
+        header.contentView.addSubview(row)
+        title.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        latency.setContentHuggingPriority(.required, for: .horizontal)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: header.contentView.layoutMarginsGuide.leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: header.contentView.layoutMarginsGuide.trailingAnchor, constant: -switchColumn),
+            row.topAnchor.constraint(equalTo: header.contentView.topAnchor, constant: 10),
+            row.bottomAnchor.constraint(equalTo: header.contentView.bottomAnchor, constant: -10)
+        ])
+        return header
+    }
+
     func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         guard let header = view as? UITableViewHeaderFooterView else { return }
         header.textLabel?.textColor = VPN013Theme.secondaryText
