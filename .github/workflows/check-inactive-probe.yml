@@ -45,3 +45,16 @@ jobs:
         run: |
           xcodebuild -version
           xcrun swiftc -typecheck -swift-version 5 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target arm64-apple-ios14.0 platform/AppleUDPAPICheck.swift
+      - name: Build experimental native callback archive
+        if: runner.os == 'macOS'
+        run: |
+          go build -tags=r013_bridge_test -buildmode=c-archive -o "$RUNNER_TEMP/r013-probe.a" ./applebridge
+      - name: Check physical driver against the iOS SDK
+        if: runner.os == 'macOS'
+        run: |
+          xcrun swiftc -typecheck -swift-version 5 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target arm64-apple-ios14.0 -import-objc-header applebridge/bridge.h platform/PhysicalUDPDriver.swift
+      - name: Exercise Swift C Go callback ownership and close acknowledgement
+        if: runner.os == 'macOS'
+        run: |
+          xcrun swiftc -parse-as-library -swift-version 5 -import-objc-header applebridge/bridge.h -Xcc -DR013_BRIDGE_TESTING platform/PhysicalUDPDriver.swift platform/BridgeNativeCheck.swift "$RUNNER_TEMP/r013-probe.a" -framework NetworkExtension -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-bridge-check"
+          "$RUNNER_TEMP/r013-bridge-check"
