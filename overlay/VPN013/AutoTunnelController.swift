@@ -18,6 +18,8 @@ final class AutoTunnelController {
     private var applying = false
     private(set) var phase = "Проверка соединения"
     var activeName: String { candidates[installedIndex].name ?? "Сервер" }
+    var currentConfiguration: TunnelConfiguration? { applying ? nil : candidates[installedIndex] }
+    var connectionRevision: Int { epoch }
     init(provider: NEPacketTunnelProvider, adapter: WireGuardAdapter, candidates: [TunnelConfiguration], initialIndex: Int) {
         self.provider = provider; self.adapter = adapter; self.candidates = candidates
         policy = AutoFailoverPolicy(count: candidates.count, initialIndex: initialIndex)

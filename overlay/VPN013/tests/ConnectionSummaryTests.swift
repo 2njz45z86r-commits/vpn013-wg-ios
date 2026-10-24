@@ -1,0 +1,57 @@
+import Foundation
+
+@main struct ConnectionSummaryTests {
+    static func main() throws {
+        var checks = 0
+        func expect(_ condition: @autoclosure () -> Bool, _ reason: String) {
+            checks += 1; precondition(condition(), reason)
+        }
+        typealias Row = (name: String, automatic: Bool)
+        func before(_ a: Row, _ b: Row) -> Bool {
+            VPN013ProfileOrdering.isBefore(name: a.name, automatic: a.automatic, name: b.name, automatic: b.automatic)
+        }
+        let ordinary: [Row] = [("!First", false), ("0 Server", false), ("Авто · обычный профиль", false),
+                               ("Дом", false), ("Finland10", false), ("Finland2", false)]
+        for count in 1...30 {
+            var rows = ordinary + (0..<count).map { ("Server \($0)", false) }
+            rows.append(("ZZZ renamed Auto", true))
+            for _ in 0..<100 {
+                let sorted = rows.shuffled().sorted(by: before)
+                expect(sorted.first?.automatic == true, "Auto must precede ASCII, Cyrillic and numeric names")
+                expect(sorted.dropFirst().allSatisfy { !$0.automatic }, "Only real metadata pins Auto")
+                expect(sorted.filter { $0.name == "Авто · обычный профиль" }.first?.automatic == false, "Names cannot grant Auto identity")
+                expect(sorted.dropFirst().map(\.name) == rows.filter { !$0.automatic }.sorted(by: before).map(\.name), "Ordinary natural order is preserved")
+            }
+        }
+        expect(!before(("Auto", true), ("Auto", true)), "Ordering is irreflexive")
+        expect(before(("Zulu", true), ("A", false)), "Renamed Auto stays first")
+        expect(before(("Finland2", false), ("Finland10", false)), "Numeric ordering survives")
+
+        let raw = "private_key=never-export-this\npublic_key=a\nrx_bytes=0\ntx_bytes=1024\nlast_handshake_time_sec=1000\npublic_key=b\nrx_bytes=2048\ntx_bytes=4096\nlast_handshake_time_sec=2000\n"
+        let stats = VPN013ConnectionSnapshot.Statistics.parse(raw)
+        expect(stats.received == 2048 && stats.sent == 5120, "All current peers contribute")
+        expect(stats.handshake == Date(timeIntervalSince1970: 2000), "Newest real handshake wins")
+        expect(VPN013ConnectionSnapshot.Statistics.parse(nil).received == nil, "Missing stats are not zero")
+        expect(VPN013ConnectionSnapshot.Statistics.parse("public_key=a\nrx_bytes=0\ntx_bytes=0\n").received == 0, "Measured zero is retained")
+        for bad in ["public_key=a\nrx_bytes=-1", "public_key=a\nrx_bytes=abc", "public_key=a\nrx_bytes=", "rx_bytes=10", "public_key=a\npublic_key=b\nrx_bytes=10", "public_key=a\nrx_bytes=10\nrx_bytes=20", "public_key=a\nrx_bytes=18446744073709551615\npublic_key=b\nrx_bytes=1"] {
+            expect(VPN013ConnectionSnapshot.Statistics.parse(bad).received == nil, "Reject incomplete, malformed or overflowing counter")
+        }
+        for bad in ["NaN", "inf", "-1", "0", String(Date().timeIntervalSince1970 + 86400)] {
+            expect(VPN013ConnectionSnapshot.Statistics.parse("public_key=a\nlast_handshake_time_sec=" + bad).handshake == nil, "Invalid/future handshake must not confirm anything")
+        }
+        let snapshot = VPN013ConnectionSnapshot(name: "Home", endpoints: ["example.com:443"], hosts: ["example.com"], phase: nil, revision: 4, statistics: stats)
+        expect(snapshot.isValid, "Bounded snapshot accepted")
+        let encoded = try JSONEncoder().encode(snapshot)
+        expect(!String(decoding: encoded, as: UTF8.self).contains("never-export-this"), "No raw runtime keys cross boundary")
+        let decoded = try JSONDecoder().decode(VPN013ConnectionSnapshot.self, from: encoded)
+        expect(decoded == snapshot, "Snapshot roundtrip")
+        let changed = VPN013ConnectionSnapshot(name: "Home", endpoints: ["new.example:443"], hosts: ["new.example"], phase: nil, revision: 5, statistics: stats)
+        expect(changed.targetIdentity != snapshot.targetIdentity, "Auto change invalidates stale Ping")
+        let duplicateStats = VPN013ConnectionSnapshot(name: "Home", endpoints: snapshot.endpoints, hosts: snapshot.hosts, phase: "Checking", revision: 4, statistics: .init())
+        expect(duplicateStats.targetIdentity == snapshot.targetIdentity, "Statistics refresh does not cancel Ping")
+        var invalid = snapshot; invalid.schema = 2
+        expect(!invalid.isValid, "Unknown schema rejected")
+        expect(VPN013ConnectionSnapshot.Statistics.parse(String(repeating: "x", count: 262145)).sent == nil, "Bounded runtime parser")
+        print("Connection card and Auto-first core checks passed: \(checks)")
+    }
+}

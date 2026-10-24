@@ -23,6 +23,8 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingButtonMeasuresActualLoopbackWithoutStartingVPN \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingCancellationIsAvailable \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUpdatesScreenAndOrderSynchronization \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutoPinnedFirstWithCurrentMemberAndPing \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentServerPingAndInfo \
  -derivedDataPath ../SimulatorDerivedData -resultBundlePath ../AutoTunnel.xcresult CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= \
  test > ../simulator-test.log 2>&1
 result=$?
@@ -41,7 +43,7 @@ if [ -d build/AutoTunnel.xcresult ]; then
 fi
 if [ "$result" -eq 0 ]; then
  xcrun simctl ui "$device" content_size accessibility-extra-extra-extra-large
- xcrun simctl launch --terminate-running-process "$device" com.vpn013.awg -AppleLanguages '(ru)' -AppleLocale ru_RU --vpn013-test-count 2
+ xcrun simctl launch --terminate-running-process "$device" com.vpn013.awg -AppleLanguages '(ru)' -AppleLocale ru_RU --vpn013-test-count 2 --vpn013-test-current-card --vpn013-test-start-current --vpn013-test-ping-loopback
  sleep 3
  xcrun simctl io "$device" screenshot build/review/phone-large-type.png
  xcrun simctl ui "$device" content_size large
@@ -50,7 +52,7 @@ if [ "$result" -eq 0 ]; then
  xcrun simctl bootstatus "$tablet" -b
  xcrun simctl ui "$tablet" appearance dark
  xcrun simctl install "$tablet" build/SimulatorDerivedData/Build/Products/Debug-iphonesimulator/AmneziaWG.app
- xcrun simctl launch "$tablet" com.vpn013.awg -AppleLanguages '(ru)' -AppleLocale ru_RU --vpn013-test-count 2
+ xcrun simctl launch "$tablet" com.vpn013.awg -AppleLanguages '(ru)' -AppleLocale ru_RU --vpn013-test-count 2 --vpn013-test-current-card --vpn013-test-start-current --vpn013-test-ping-loopback
  sleep 3
  xcrun simctl io "$tablet" screenshot build/review/tablet.png
 fi

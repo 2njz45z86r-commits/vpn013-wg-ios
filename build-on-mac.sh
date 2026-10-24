@@ -26,7 +26,7 @@ python3 - <<'PY'
 from pathlib import Path
 source=Path('../../overlay')
 files=[p for p in source.rglob('*') if p.is_file()]
-assert len(files)==46, 'Unexpected source overlay'
+assert len(files)==48, 'Unexpected source overlay'
 for p in files:
  assert not p.is_symlink(), 'Source overlay must not contain symbolic links'
  target=Path(p.relative_to(source)); target.parent.mkdir(parents=True,exist_ok=True)
@@ -42,6 +42,8 @@ swiftc VPN013/EndpointPing.swift VPN013/tests/EndpointPingTests.swift -o ../../b
 ../../build/test-endpoint-ping | tee ../../build/review/endpoint-ping-tests.txt
 swiftc VPN013/PrivateTunnelStore.swift VPN013/ClientUpdateProtocol.swift VPN013/ClientSubscriptions.swift VPN013/tests/ClientUpdateTests.swift -o ../../build/test-client-updates
 ../../build/test-client-updates | tee ../../build/review/client-update-tests.txt
+swiftc VPN013/ConnectionSummary.swift VPN013/tests/ConnectionSummaryTests.swift -o ../../build/test-connection-summary
+../../build/test-connection-summary | tee ../../build/review/connection-summary-tests.txt
 xcodebuild -project WireGuard.xcodeproj -target WireGuardiOS -configuration Release -sdk iphoneos -arch arm64 \
  CONFIGURATION_BUILD_DIR="$PWD/../device" CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= \
  > ../device-build.log 2>&1 || { grep -n 'error:' ../device-build.log | head -80; tail -20 ../device-build.log; exit 1; }

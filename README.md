@@ -68,7 +68,7 @@ internet traffic. The existing Auto failover behavior remains unchanged.
 
 ## Endpoint ping in 1.3.1 (8)
 
-The visible «Проверить пинг» action measures real ICMP echo replies from imported
+The visible В«РџСЂРѕРІРµСЂРёС‚СЊ РїРёРЅРіВ» action measures real ICMP echo replies from imported
 profiles' endpoint addresses without activating or switching VPN profiles. Results
 are in milliseconds; no reply, DNS failure, cancellation and unavailable sockets
 are explicit. IPv4/IPv6 replies must match a fresh per-probe nonce. Requests cannot
@@ -107,3 +107,24 @@ client-release.json. The private bot consumes this public metadata, so its IPA l
 and client update checks advance together. No private bot source is published here.
 Android/Windows binaries and installers are not part of this iOS release.
 Physical iPhone signing, traffic, and real order delivery require separate validation.
+
+
+## Current connection card, iOS 1.4.1 (10)
+
+Managed Auto profiles precede ordinary profiles at load, import and rename. Auto
+identity comes from saved metadata, not a name prefix; natural name ordering of
+ordinary profiles is retained. No keys or routing settings are rewritten.
+
+The native connection card asks the Packet Tunnel for its installed Auto member
+and bounded, presentation-only runtime statistics. It displays the current endpoint,
+received/sent counters when available, and the last real handshake time. It does
+not serialize private keys or whole configuration text. Lifecycle/revision guards
+discard data collected during a backend switch. Missing statistics stay unmeasured.
+
+The card has its own compact Ping action (at least 44pt), independent of the full
+list scan. It performs an authenticated ICMP endpoint echo over the current OS
+route and never activates or switches a VPN. It is not a second VPN handshake or
+proof of VPN throughput. Changing the current member clears the previous result;
+turning off the VPN hides the action. Hourly inactive-VPN comparison remains outside
+this release. Simulator snapshots and loopback echoes are distinct from real-device
+VPN traffic. Physical iPhone/ESign acceptance still requires device verification.

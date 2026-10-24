@@ -180,6 +180,31 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             };return
         }
 
+        if messageData == Data([3]) {
+            DispatchQueue.main.async {
+                let revision = self.automatic?.connectionRevision ?? 0
+                let lifecycle = self.automaticEpoch
+                let configuration = self.automatic != nil ? self.automatic?.currentConfiguration
+                    : (self.protocolConfiguration as? NETunnelProviderProtocol)?.asTunnelConfiguration()
+                guard let configuration = configuration else { completionHandler(nil); return }
+                self.adapter.getRuntimeConfiguration { runtime in
+                    DispatchQueue.main.async {
+                        guard lifecycle == self.automaticEpoch,
+                              revision == (self.automatic?.connectionRevision ?? 0),
+                              self.automatic == nil || self.automatic?.currentConfiguration != nil else {
+                            completionHandler(nil); return
+                        }
+                        let value = VPN013ConnectionSnapshot(name: configuration.name ?? "Сервер",
+                            endpoints: configuration.peers.compactMap { $0.endpoint?.stringRepresentation },
+                            hosts: configuration.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } },
+                            phase: self.automatic?.phase, revision: revision,
+                            statistics: .parse(runtime))
+                        completionHandler(try? JSONEncoder().encode(value))
+                    }
+                }
+            }; return
+        }
+
         wg_log(.debug, message: "handleAppMessage: received \(messageData.count) bytes")
         if messageData.count == 1 && messageData[0] == 0 {
             wg_log(.debug, message: "handleAppMessage: runtime configuration requested")

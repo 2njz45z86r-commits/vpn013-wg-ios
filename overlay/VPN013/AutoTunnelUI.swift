@@ -16,7 +16,7 @@ extension TunnelsListTableViewController {
         let names = configs.compactMap { $0.name }.joined(separator: ", ")
         let countLabel = AutoTunnelProfile.serverCountLabel(configs.count)
         let explanation = configs.count == 1 ? "Сейчас доступен один сервер. Для переключения на резерв добавьте ещё серверы и создайте Авто заново." : "При потере трафика приложение проверит остальные серверы по очереди."
-        let alert = UIAlertController(title: "Создать режим Авто", message: "В режиме Авто: " + countLabel + ".\n\n" + names + "\n\n" + explanation + " Ключи сохраняются. Ручное выключение останавливает переключение. Авто хранит отдельную копию подключений: после добавления, изменения или удаления исходных серверов создайте его заново.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Создать режим Авто", message: "В режиме Авто: " + countLabel + ".\n\n" + names + "\n\n" + explanation + " Ключи сохраняются. Ручное выключение останавливает переключение. Авто закрепляется первым в списке и хранит отдельную копию подключений. Серверы привязанной заявки обновляются вместе с ней. После ручного изменения или добавления других серверов создайте Авто заново.", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Создать Авто", style: .default) { [weak self] _ in
             guard let self = self else { return }
             let create = {

@@ -68,8 +68,13 @@ class TunnelsManager {
 
     init(tunnelProviders: [NETunnelProviderManager]) {
         tunnels = tunnelProviders.map { TunnelContainer(tunnel: $0) }.sorted {
-            TunnelsManager.tunnelNameIsLessThan($0.name, $1.name)
+            TunnelsManager.tunnelIsBefore($0, $1)
         }
+        #if targetEnvironment(simulator) && DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-start-current") {
+            tunnels.first?.status = .active
+        }
+        #endif
         startObservingTunnelStatuses()
         startObservingTunnelConfigurations()
     }
@@ -181,7 +186,7 @@ class TunnelsManager {
                     }
                     let tunnel = TunnelContainer(tunnel: loadedTunnelProvider)
                     self.tunnels.append(tunnel)
-                    self.tunnels.sort { TunnelsManager.tunnelNameIsLessThan($0.name, $1.name) }
+                    self.tunnels.sort { TunnelsManager.tunnelIsBefore($0, $1) }
                     self.tunnelsListDelegate?.tunnelAdded(at: self.tunnels.firstIndex(of: tunnel)!)
                 }
             }
@@ -234,7 +239,7 @@ class TunnelsManager {
 
         #if targetEnvironment(simulator)
         let simulated = TunnelContainer(tunnel: tunnelProviderManager)
-        tunnels.append(simulated); tunnels.sort { TunnelsManager.tunnelNameIsLessThan($0.name,$1.name) }
+        tunnels.append(simulated); tunnels.sort { TunnelsManager.tunnelIsBefore($0, $1) }
         tunnelsListDelegate?.tunnelAdded(at:tunnels.firstIndex(of:simulated)!)
         completionHandler(.success(simulated)); return
         #endif
@@ -266,7 +271,7 @@ class TunnelsManager {
 
             let tunnel = TunnelContainer(tunnel: tunnelProviderManager)
             self.tunnels.append(tunnel)
-            self.tunnels.sort { TunnelsManager.tunnelNameIsLessThan($0.name, $1.name) }
+            self.tunnels.sort { TunnelsManager.tunnelIsBefore($0, $1) }
             self.tunnelsListDelegate?.tunnelAdded(at: self.tunnels.firstIndex(of: tunnel)!)
             completionHandler(.success(tunnel))
         }
@@ -402,7 +407,7 @@ class TunnelsManager {
             guard let self = self else { return }
             if isNameChanged {
                 let oldIndex = self.tunnels.firstIndex(of: tunnel)!
-                self.tunnels.sort { TunnelsManager.tunnelNameIsLessThan($0.name, $1.name) }
+                self.tunnels.sort { TunnelsManager.tunnelIsBefore($0, $1) }
                 let newIndex = self.tunnels.firstIndex(of: tunnel)!
                 self.tunnelsListDelegate?.tunnelMoved(from: oldIndex, to: newIndex)
                 #if os(iOS)
@@ -752,6 +757,11 @@ class TunnelsManager {
         }
     }
 
+    static func tunnelIsBefore(_ lhs: TunnelContainer, _ rhs: TunnelContainer) -> Bool {
+        VPN013ProfileOrdering.isBefore(name: lhs.name, automatic: lhs.isVPN013Automatic,
+                                      name: rhs.name, automatic: rhs.isVPN013Automatic)
+    }
+
     static func tunnelNameIsLessThan(_ lhs: String, _ rhs: String) -> Bool {
         return lhs.compare(
             rhs, options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive, .numeric])
@@ -873,6 +883,33 @@ class TunnelContainer: NSObject {
         do { try session.sendProviderMessage(Data([2])) { data in
             DispatchQueue.main.async { completion(data.flatMap { String(data:$0,encoding:.utf8) }) }
         } } catch { completion(nil) }
+    }
+
+    func getConnectionSnapshot(completion: @escaping (VPN013ConnectionSnapshot?) -> Void) {
+        guard status == .active else { completion(nil); return }
+        #if targetEnvironment(simulator) && DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card") {
+            let config = automaticProfileForUpdates.flatMap { try? $0.validatedConfigurations().last } ?? tunnelConfiguration
+            guard let config = config else { completion(nil); return }
+            completion(VPN013ConnectionSnapshot(name: config.name ?? name,
+                endpoints: config.peers.compactMap { $0.endpoint?.stringRepresentation },
+                hosts: config.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } },
+                phase: "Симулятор · данные примера", revision: 0,
+                statistics: .init(received: 2048, sent: 1024, handshake: nil)))
+            return
+        }
+        #endif
+        guard let session = tunnelProvider.connection as? NETunnelProviderSession else { completion(nil); return }
+        do {
+            try session.sendProviderMessage(Data([3])) { data in
+                DispatchQueue.main.async {
+                    guard self.status == .active, let data = data, data.count <= 32_768,
+                          let value = try? JSONDecoder().decode(VPN013ConnectionSnapshot.self, from: data),
+                          value.isValid else { completion(nil); return }
+                    completion(value)
+                }
+            }
+        } catch { completion(nil) }
     }
 
     var onDemandOption: ActivateOnDemandOption {

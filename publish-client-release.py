@@ -15,7 +15,7 @@ assert info['CFBundleShortVersionString'] == verification['version']
 value = dict(schema=1,app='vpn013-wg',platform='ios',version=verification['version'],build=int(info['CFBundleVersion']),
     downloadURL=f'https://github.com/{repository}/releases/download/unsigned-{run}/VPN013AWG-unsigned.ipa',
     sha256=hashlib.sha256(ipa.read_bytes()).hexdigest(),
-    notes='Проверка новых версий и обновление серверов по заявке из ZIP. Применение после отключения VPN; сторонние профили и ключи сохраняются.')
+    notes='РџСЂРѕРІРµСЂРєР° РЅРѕРІС‹С… РІРµСЂСЃРёР№ Рё РѕР±РЅРѕРІР»РµРЅРёРµ СЃРµСЂРІРµСЂРѕРІ РїРѕ Р·Р°СЏРІРєРµ РёР· ZIP. РџСЂРёРјРµРЅРµРЅРёРµ РїРѕСЃР»Рµ РѕС‚РєР»СЋС‡РµРЅРёСЏ VPN; СЃС‚РѕСЂРѕРЅРЅРёРµ РїСЂРѕС„РёР»Рё Рё РєР»СЋС‡Рё СЃРѕС…СЂР°РЅСЏСЋС‚СЃСЏ.')
 manifest = json.dumps(value,ensure_ascii=False,indent=2)+'\n'
 Path('build/client-release.json').write_text(manifest,encoding='utf-8')
 path=f'repos/{repository}/contents/client-release.json'

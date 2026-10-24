@@ -235,6 +235,59 @@ final class AutoTunnelUITests:XCTestCase {
         capture("16-ping-cancelled")
     }
 
+    func testAutoPinnedFirstWithCurrentMemberAndPing() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-ordering", "--vpn013-test-current-card", "--vpn013-test-ping-loopback"]
+        app.launch()
+        XCTAssertTrue(app.tables.cells.staticTexts["!Первый"].waitForExistence(timeout:20))
+        app.buttons["vpn013.add-profile"].tap()
+        app.buttons["Создать режим Авто"].tap()
+        app.alerts.buttons["Создать Авто"].tap()
+        XCTAssertTrue(app.navigationBars["Авто · 3 сервера"].waitForExistence(timeout:6))
+        app.navigationBars["Авто · 3 сервера"].buttons.element(boundBy:0).tap()
+        XCTAssertTrue(app.tables.cells.element(boundBy:0).staticTexts["Авто · 3 сервера"].waitForExistence(timeout:6), "Auto must precede ! and 0 names")
+        let auto = app.tables.cells.element(boundBy:0)
+        auto.switches.firstMatch.tap()
+        let ping = app.buttons["vpn013.current-ping"]
+        XCTAssertTrue(ping.waitForExistence(timeout:8))
+        XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].waitForExistence(timeout:8))
+        XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Дом", "Card must show actual Auto member, not its seed")
+        XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].label.contains("127.0.0.1:4444"))
+        XCTAssertTrue(app.staticTexts["vpn013.current-traffic"].exists)
+        XCTAssertTrue(ping.isEnabled && ping.isHittable)
+        XCTAssertGreaterThanOrEqual(ping.frame.height, 44)
+        ping.tap()
+        let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout:10), "Current-server button must show a real loopback echo result")
+        XCTAssertEqual(auto.switches.firstMatch.value as? String, "1", "Current-server Ping cannot switch off Auto")
+        capture("20-auto-first-current-member-real-loopback-ping-synthetic-vpn")
+        auto.switches.firstMatch.tap()
+        XCTAssertFalse(ping.isHittable, "No current-server action after VPN is off")
+    }
+
+    func testManualCurrentServerPingAndInfo() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-current-card", "--vpn013-test-ping-loopback"]
+        app.launch()
+        let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
+        XCTAssertTrue(profile.waitForExistence(timeout:20))
+        profile.switches.firstMatch.tap()
+        let ping = app.buttons["vpn013.current-ping"]
+        XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].waitForExistence(timeout:8))
+        XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Личный сервер 1")
+        XCTAssertTrue(ping.isHittable && ping.isEnabled)
+        ping.tap()
+        let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout:10))
+        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1")
+        capture("21-current-manual-server-real-loopback-ping-synthetic-vpn")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        capture("22-current-manual-server-landscape-synthetic-vpn")
+        XCUIDevice.shared.orientation = .portrait
+        profile.switches.firstMatch.tap()
+        XCTAssertFalse(ping.isHittable)
+    }
+
     func testUpdatesScreenAndOrderSynchronization() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]
