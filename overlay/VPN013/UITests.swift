@@ -118,7 +118,8 @@ final class AutoTunnelUITests:XCTestCase {
         capture("09-dark-list-complete-add-menu")
         app.buttons["Создать с нуля"].tap()
         XCTAssertTrue(app.navigationBars["Новая конфигурация"].waitForExistence(timeout:5))
-        app.buttons["Отмена"].tap()
+        capture("09b-native-new-config-form")
+        app.navigationBars["Новая конфигурация"].buttons["Отменить"].tap()
         XCTAssertTrue(app.navigationBars["VPN013 WG"].waitForExistence(timeout:5))
     }
 
@@ -159,6 +160,25 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.staticTexts["Разработчик VPN013 WG"].exists)
         XCTAssertTrue(add.isHittable)
         capture("12-dark-empty-list-developer-footer-simulator-fixture")
+    }
+
+    func testLargeTextKeepsSwitchAndDeveloperFooter() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU",
+                               "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                               "--vpn013-test-count", "2"]
+        app.launch()
+        let first = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout:20))
+        XCTAssertTrue(first.switches.firstMatch.isHittable)
+        capture("13-large-type-list-simulator-fixture")
+        let support = app.buttons["vpn013.developer-support"]
+        for _ in 0..<8 {
+            if support.exists && support.isHittable { break }
+            app.tables.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(support.isHittable)
+        capture("14-large-type-developer-footer-simulator-fixture")
     }
 
     func testUnavailableLogStopsSpinnerAndShowsExplanation() {

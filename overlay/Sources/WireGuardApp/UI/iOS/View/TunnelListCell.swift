@@ -136,6 +136,9 @@ class TunnelListCell: UITableViewCell {
         contentView.addSubview(rowStack)
         updateRowLayout()
         labels.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        controls.setContentHuggingPriority(.required, for: .horizontal)
+        statusSwitch.setContentHuggingPriority(.required, for: .horizontal)
         statusSwitch.setContentCompressionResistancePriority(.required, for: .horizontal)
         connectionTestLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         NSLayoutConstraint.activate([
