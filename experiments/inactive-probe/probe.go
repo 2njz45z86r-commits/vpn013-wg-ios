@@ -46,6 +46,9 @@ func Measure(parent context.Context, r Request) (Result, error) {
 	if r.Bind == nil || r.Config == "" || !r.Source.Is4() || !r.Target.Is4() {
 		return result, errors.New("explicit bind, IPv4 source/target and configuration required")
 	}
+	if err := validateProbeResources(r.Config); err != nil {
+		return result, err
+	}
 	ctx, cancel := context.WithTimeout(parent, 12*time.Second)
 	defer cancel()
 	select {
