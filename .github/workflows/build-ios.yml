@@ -1,6 +1,14 @@
 name: Build and inspect VPN013 WG
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Standard free macOS image
+        type: choice
+        default: macos-15
+        options:
+          - macos-15
+          - macos-14
 permissions:
   contents: write
 concurrency:
@@ -8,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: ${{ inputs.runner || 'macos-15' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -51,3 +59,4 @@ jobs:
       - name: Export credential-free development files for verification
         if: always()
         run: python3 export-build-evidence.py
+
