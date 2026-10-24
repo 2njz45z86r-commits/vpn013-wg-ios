@@ -297,6 +297,67 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertFalse(ping.isHittable)
     }
 
+    private func checkManualPingWithoutRuntime(_ fixture: String, captureName: String) {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", fixture, "--vpn013-test-ping-loopback"]
+        app.launch()
+        let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
+        XCTAssertTrue(profile.waitForExistence(timeout:20))
+        profile.switches.firstMatch.tap()
+        let ping = app.buttons["vpn013.current-ping"]
+        XCTAssertTrue(ping.waitForExistence(timeout:8))
+        XCTAssertTrue(ping.isEnabled && ping.isHittable, "Saved ordinary address must remain usable without extension statistics")
+        XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].label.contains("127.0.0.1"))
+        XCTAssertEqual(app.staticTexts["vpn013.current-traffic"].label, "Статистика VPN пока недоступна")
+        XCTAssertFalse(app.staticTexts["vpn013.current-handshake"].exists)
+        ping.tap()
+        let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout:10), "Button must perform a real loopback ICMP echo")
+        let measured = result.label
+        // Two real three-second app refreshes reproduce both nil and timeout regressions.
+        let refreshes = expectation(description:"Two runtime refresh cycles")
+        DispatchQueue.main.asyncAfter(deadline:.now() + 7) { refreshes.fulfill() }
+        wait(for:[refreshes], timeout:9)
+        XCTAssertTrue(ping.isEnabled)
+        XCTAssertEqual(app.staticTexts["vpn013.current-ping-result"].label, measured, "Missing runtime must not erase the measured Ping")
+        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1", "Ping and refresh must not replace the running VPN")
+        capture(captureName)
+        profile.switches.firstMatch.tap()
+        XCTAssertFalse(ping.isHittable, "Unavailable or late runtime cannot resurrect the disconnected card")
+    }
+
+    func testManualCurrentPingWithMissingRuntime() {
+        checkManualPingWithoutRuntime("--vpn013-test-current-card-missing", captureName:"23-manual-ping-without-runtime-real-loopback-synthetic-vpn")
+    }
+
+    func testManualCurrentPingWithRuntimeTimeout() {
+        checkManualPingWithoutRuntime("--vpn013-test-current-card-timeout", captureName:"24-manual-ping-runtime-timeout-real-loopback-synthetic-vpn")
+    }
+
+    func testAutoMissingRuntimeDoesNotPingSeed() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-current-card-missing", "--vpn013-test-ping-loopback"]
+        app.launch()
+        XCTAssertTrue(app.tables.cells.staticTexts["Личный сервер 1"].waitForExistence(timeout:20))
+        app.buttons["vpn013.add-profile"].tap()
+        app.buttons["Создать режим Авто"].tap()
+        XCTAssertTrue(app.alerts["Создать режим Авто"].waitForExistence(timeout:5))
+        app.alerts.buttons["Создать Авто"].tap()
+        if !app.tables.cells.element(boundBy:0).staticTexts["Авто · 2 сервера"].waitForExistence(timeout:2) {
+            XCTAssertTrue(app.navigationBars["Авто · 2 сервера"].waitForExistence(timeout:6))
+            app.navigationBars.buttons.element(boundBy:0).tap()
+        }
+        let auto = app.tables.cells.element(boundBy:0)
+        XCTAssertTrue(auto.staticTexts["Авто · 2 сервера"].waitForExistence(timeout:6))
+        auto.switches.firstMatch.tap()
+        let ping = app.buttons["vpn013.current-ping"]
+        XCTAssertTrue(ping.waitForExistence(timeout:8))
+        XCTAssertFalse(ping.isEnabled, "Unknown Auto member cannot be replaced by its saved seed")
+        XCTAssertEqual(app.staticTexts["vpn013.current-endpoint"].label, "Текущий сервер пока недоступен")
+        capture("25-auto-unknown-member-no-seed-ping-synthetic-vpn")
+        auto.switches.firstMatch.tap()
+    }
+
     func testUpdatesScreenAndOrderSynchronization() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]

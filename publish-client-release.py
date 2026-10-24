@@ -15,7 +15,7 @@ assert info['CFBundleShortVersionString'] == verification['version']
 value = dict(schema=1,app='vpn013-wg',platform='ios',version=verification['version'],build=int(info['CFBundleVersion']),
     downloadURL=f'https://github.com/{repository}/releases/download/unsigned-{run}/VPN013AWG-unsigned.ipa',
     sha256=hashlib.sha256(ipa.read_bytes()).hexdigest(),
-    notes='Авто всегда первым. В карточке текущего сервера: отдельная кнопка пинга адреса, трафик и время рукопожатия. Проверка не переключает VPN; старые результаты сбрасываются при смене сервера.')
+    notes='Исправлен пинг подключённого обычного профиля при недоступной статистике VPN. Проверка использует сохранённый адрес и не переключает VPN. Отсутствующие данные трафика и рукопожатия не подменяются результатом пинга.')
 manifest = json.dumps(value,ensure_ascii=False,indent=2)+'\n'
 Path('build/client-release.json').write_text(manifest,encoding='utf-8')
 path=f'repos/{repository}/contents/client-release.json'

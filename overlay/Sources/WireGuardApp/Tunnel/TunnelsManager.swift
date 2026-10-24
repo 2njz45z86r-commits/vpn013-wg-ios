@@ -888,6 +888,8 @@ class TunnelContainer: NSObject {
     func getConnectionSnapshot(completion: @escaping (VPN013ConnectionSnapshot?) -> Void) {
         guard status == .active else { completion(nil); return }
         #if targetEnvironment(simulator) && DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") { return }
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-missing") { completion(nil); return }
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card") {
             let config = automaticProfileForUpdates.flatMap { try? $0.validatedConfigurations().last } ?? tunnelConfiguration
             guard let config = config else { completion(nil); return }

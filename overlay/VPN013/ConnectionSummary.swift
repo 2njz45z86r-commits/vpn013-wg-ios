@@ -52,6 +52,25 @@ struct VPN013ConnectionSnapshot: Codable, Equatable {
     }
 
     var targetIdentity: String { "\(revision)\n\(name)\n" + endpoints.joined(separator: "\n") }
+
+    /// Endpoint echo needs an address, not runtime traffic statistics. Auto must
+    /// still identify its actual member; its saved seed is not the current server.
+    static func pingTarget(isAutomatic: Bool, profileName: String,
+                           configuredEndpoints: [String], configuredHosts: [String],
+                           runtime: Self?) -> Self? {
+        let target: Self
+        if let runtime = runtime, runtime.isValid {
+            target = isAutomatic ? runtime : Self(name: profileName,
+                endpoints: runtime.endpoints, hosts: runtime.hosts, phase: nil,
+                revision: 0, statistics: .init())
+        } else {
+            guard !isAutomatic else { return nil }
+            target = Self(name: profileName, endpoints: configuredEndpoints,
+                hosts: configuredHosts, phase: nil, revision: 0, statistics: .init())
+        }
+        return target.isValid && !target.endpoints.isEmpty && !target.hosts.isEmpty ? target : nil
+    }
+
     var isValid: Bool {
         schema == 1 && !name.isEmpty && name.utf8.count <= 512 &&
             endpoints.count <= 64 && hosts.count <= 64 &&

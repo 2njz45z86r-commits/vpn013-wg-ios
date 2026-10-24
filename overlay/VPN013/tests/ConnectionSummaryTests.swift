@@ -49,8 +49,38 @@ import Foundation
         expect(changed.targetIdentity != snapshot.targetIdentity, "Auto change invalidates stale Ping")
         let duplicateStats = VPN013ConnectionSnapshot(name: "Home", endpoints: snapshot.endpoints, hosts: snapshot.hosts, phase: "Checking", revision: 4, statistics: .init())
         expect(duplicateStats.targetIdentity == snapshot.targetIdentity, "Statistics refresh does not cancel Ping")
+        func ping(_ automatic: Bool, _ runtime: VPN013ConnectionSnapshot?) -> VPN013ConnectionSnapshot? {
+            VPN013ConnectionSnapshot.pingTarget(isAutomatic: automatic, profileName: "Home",
+                configuredEndpoints: snapshot.endpoints, configuredHosts: snapshot.hosts, runtime: runtime)
+        }
+        let manualFallback = ping(false, nil)
+        expect(manualFallback?.hosts == snapshot.hosts, "Missing runtime must not disable an ordinary profile's endpoint Ping")
+        expect(manualFallback?.statistics == .init(), "A saved address is never presented as measured traffic or handshake")
+        expect(manualFallback?.targetIdentity == ping(false, snapshot)?.targetIdentity,
+               "Runtime recovery cannot discard a Ping for the same ordinary address")
+        expect(manualFallback?.targetIdentity == ping(false, duplicateStats)?.targetIdentity,
+               "Runtime refresh cannot discard a Ping result for the same ordinary address")
+        let unnamedRuntime = VPN013ConnectionSnapshot(name: "Сервер", endpoints: snapshot.endpoints,
+            hosts: snapshot.hosts, phase: nil, revision: 0, statistics: stats)
+        expect(manualFallback?.targetIdentity == ping(false, unnamedRuntime)?.targetIdentity,
+               "Provider's generic manual name cannot invalidate the profile's Ping target")
+        expect(ping(false, changed)?.targetIdentity != manualFallback?.targetIdentity,
+               "Changed endpoint must invalidate the old Ping")
+        expect(ping(true, nil) == nil, "Auto must never guess its current member from the saved seed")
+        expect(ping(true, changed)?.targetIdentity == changed.targetIdentity, "Auto retains the actual member revision")
+        expect(ping(true, duplicateStats)?.targetIdentity == snapshot.targetIdentity,
+               "Auto traffic counters do not invalidate Ping")
+        for (endpoints, hosts) in [([String](), [String]()), (["example.com:443"], []),
+                                    ([], ["example.com"]), (["example.com:443"], [String(repeating: "x", count: 256)])] {
+            expect(VPN013ConnectionSnapshot.pingTarget(isAutomatic: false, profileName: "Home",
+                configuredEndpoints: endpoints, configuredHosts: hosts, runtime: nil) == nil,
+                "A missing or invalid saved address cannot enable Ping")
+        }
         var invalid = snapshot; invalid.schema = 2
         expect(!invalid.isValid, "Unknown schema rejected")
+        expect(ping(true, invalid) == nil, "Invalid Auto member data cannot enable Ping")
+        expect(ping(false, invalid)?.targetIdentity == manualFallback?.targetIdentity,
+               "Ordinary profile remains usable when runtime schema is rejected")
         expect(VPN013ConnectionSnapshot.Statistics.parse(String(repeating: "x", count: 262145)).sent == nil, "Bounded runtime parser")
         print("Connection card and Auto-first core checks passed: \(checks)")
     }

@@ -58,7 +58,7 @@ class TunnelsListTableViewController: UIViewController {
     private let currentPingButton = UIButton(type: .system)
     private let currentPingRow = UIStackView()
     private let currentPingCoordinator = EndpointPingCoordinator()
-    private var currentSnapshot: VPN013ConnectionSnapshot?
+    private var currentPingTarget: VPN013ConnectionSnapshot?
     private var currentPingGeneration = UUID()
     private var currentPingIsRunning = false
     private let emptyStateLabel = TunnelsListTableViewController.makeLabel(style: .body, color: VPN013Theme.secondaryText)
@@ -516,6 +516,7 @@ class TunnelsListTableViewController: UIViewController {
         }
         switch tunnel.status {
         case .active:
+            if currentPingTarget == nil { showCurrentStatsUnavailable(for: tunnel) }
             updateRunningSummaryStatus(for: tunnel)
             summaryProofLabel.isHidden = false
             if tunnel.isVPN013Automatic {
@@ -573,12 +574,45 @@ class TunnelsListTableViewController: UIViewController {
 
     private func clearCurrentConnectionInfo() {
         cancelCurrentPing()
-        currentSnapshot = nil
+        currentPingTarget = nil
         currentPingLabel.text = "Пинг адреса · —"
         currentPingButton.isEnabled = false
         summaryEndpointLabel.isHidden = true
         summaryTrafficLabel.isHidden = true
         summaryHandshakeLabel.isHidden = true
+    }
+
+    private func updateCurrentPingTarget(for tunnel: TunnelContainer, runtime: VPN013ConnectionSnapshot?) {
+        let configuration = tunnel.isVPN013Automatic ? nil : tunnel.tunnelConfiguration
+        let target = VPN013ConnectionSnapshot.pingTarget(isAutomatic: tunnel.isVPN013Automatic,
+            profileName: tunnel.name,
+            configuredEndpoints: configuration?.peers.compactMap { $0.endpoint?.stringRepresentation } ?? [],
+            configuredHosts: configuration?.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } } ?? [],
+            runtime: runtime)
+        if currentPingTarget?.targetIdentity != target?.targetIdentity {
+            cancelCurrentPing()
+            currentPingLabel.text = "Пинг адреса · —"
+        }
+        currentPingTarget = target
+        currentPingButton.isEnabled = target != nil
+    }
+
+    private func showCurrentStatsUnavailable(for tunnel: TunnelContainer) {
+        updateCurrentPingTarget(for: tunnel, runtime: nil)
+        summaryEndpointLabel.isHidden = false
+        summaryEndpointLabel.text = currentPingTarget.map { "Адрес профиля: " + $0.endpoints.joined(separator: ", ") }
+            ?? (tunnel.isVPN013Automatic ? "Текущий сервер пока недоступен" : "Адрес сервера недоступен")
+        summaryTrafficLabel.isHidden = false
+        summaryTrafficLabel.text = "Статистика VPN пока недоступна"
+        summaryTrafficLabel.accessibilityLabel = summaryTrafficLabel.text
+        summaryHandshakeLabel.isHidden = true
+        if tunnel.isVPN013Automatic {
+            automaticSummaryName = nil
+            automaticSummaryPhase = nil
+            summaryNameLabel.text = tunnel.name
+            summaryProofLabel.text = "VPN запущен · трафик ещё не проверен"
+            updateRunningSummaryStatus(for: tunnel)
+        }
     }
 
     private func refreshAutomaticSummary() {
@@ -589,11 +623,10 @@ class TunnelsListTableViewController: UIViewController {
         automaticSummaryRequestID = requestID
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self = self, self.automaticSummaryRequestID == requestID,
+                  self.automaticSummaryTunnel === tunnel, tunnel.status == .active,
                   self.automaticSummaryRequestInFlight else { return }
             self.automaticSummaryRequestInFlight = false
-            self.clearCurrentConnectionInfo()
-            self.summaryEndpointLabel.isHidden = false
-            self.summaryEndpointLabel.text = "Нет свежих данных сервера"
+            self.showCurrentStatsUnavailable(for: tunnel)
             self.sizeSummaryHeader()
         }
         tunnel.getConnectionSnapshot { [weak self, weak tunnel] snapshot in
@@ -601,17 +634,10 @@ class TunnelsListTableViewController: UIViewController {
                   self.automaticSummaryRequestID == requestID, tunnel.status == .active else { return }
             self.automaticSummaryRequestInFlight = false
             guard let snapshot = snapshot else {
-                self.clearCurrentConnectionInfo()
-                self.summaryEndpointLabel.isHidden = false
-                self.summaryEndpointLabel.text = "Нет свежих данных сервера"
+                self.showCurrentStatsUnavailable(for: tunnel)
                 self.sizeSummaryHeader(); return
             }
-            if self.currentSnapshot?.targetIdentity != snapshot.targetIdentity {
-                self.cancelCurrentPing()
-                self.currentPingLabel.text = "Пинг адреса · —"
-            }
-            self.currentSnapshot = snapshot
-            self.currentPingButton.isEnabled = !snapshot.hosts.isEmpty
+            self.updateCurrentPingTarget(for: tunnel, runtime: snapshot)
             self.automaticSummaryName = tunnel.isVPN013Automatic ? snapshot.name : tunnel.name
             self.automaticSummaryPhase = snapshot.phase
             self.updateRunningSummaryStatus(for: tunnel)
@@ -651,7 +677,7 @@ class TunnelsListTableViewController: UIViewController {
             cancelCurrentPing(); currentPingLabel.text = "Пинг адреса · отменено"; return
         }
         guard let tunnel = automaticSummaryTunnel, tunnel.status == .active,
-              let snapshot = currentSnapshot, !snapshot.hosts.isEmpty else { return }
+              let snapshot = currentPingTarget, !snapshot.hosts.isEmpty else { return }
         let stamp = UUID(); currentPingGeneration = stamp
         let identity = snapshot.targetIdentity
         currentPingIsRunning = true
@@ -662,12 +688,12 @@ class TunnelsListTableViewController: UIViewController {
         var results: [EndpointPingResult] = []
         currentPingCoordinator.start(hosts: snapshot.hosts, update: { [weak self] _, result in
             guard let self = self, self.currentPingGeneration == stamp,
-                  self.currentSnapshot?.targetIdentity == identity, self.automaticSummaryTunnel === tunnel,
+                  self.currentPingTarget?.targetIdentity == identity, self.automaticSummaryTunnel === tunnel,
                   tunnel.status == .active else { return }
             results.append(result)
         }, completion: { [weak self] in
             guard let self = self, self.currentPingGeneration == stamp,
-                  self.currentSnapshot?.targetIdentity == identity, self.automaticSummaryTunnel === tunnel,
+                  self.currentPingTarget?.targetIdentity == identity, self.automaticSummaryTunnel === tunnel,
                   tunnel.status == .active else { return }
             let values = results.compactMap { result -> Double? in
                 if case .milliseconds(let value) = result { return value }; return nil
