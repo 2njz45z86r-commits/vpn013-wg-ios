@@ -44,7 +44,7 @@ swiftc VPN013/PrivateTunnelStore.swift VPN013/ClientUpdateProtocol.swift VPN013/
 ../../build/test-client-updates | tee ../../build/review/client-update-tests.txt
 xcodebuild -project WireGuard.xcodeproj -target WireGuardiOS -configuration Release -sdk iphoneos -arch arm64 \
  CONFIGURATION_BUILD_DIR="$PWD/../device" CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= \
- > ../device-build.log 2>&1 || { tail -100 ../device-build.log; exit 1; }
+ > ../device-build.log 2>&1 || { grep -n 'error:' ../device-build.log | head -80; tail -20 ../device-build.log; exit 1; }
 cd ../..
 test -d build/device/AmneziaWG.app/PlugIns/WireGuardNetworkExtension.appex
 mkdir -p build/Payload

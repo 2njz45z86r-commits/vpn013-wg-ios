@@ -1,5 +1,5 @@
 """Publish public, credential-free metadata only after successful native tests."""
-import base64, hashlib, json, os, subprocess
+import base64, hashlib, json, os, plistlib, subprocess, zipfile
 from pathlib import Path
 
 repository = os.environ['GITHUB_REPOSITORY']
@@ -8,9 +8,11 @@ run = os.environ['GITHUB_RUN_ID']
 verification = json.loads(Path('build/review/bundle-verification.json').read_text())
 ipa = Path('build/VPN013AWG-unsigned.ipa')
 summary = json.loads(Path('build/review/test-summary.json').read_text())
-assert ipa.is_file() and verification['version'] == '1.4.0'
-assert summary.get('failedTests', 0) == 0, 'Do not publish failed tests'
-value = dict(schema=1,app='vpn013-wg',platform='ios',version=verification['version'],build=9,
+assert ipa.is_file() and summary.get('failedTests') == 0, 'Do not publish failed or unverified tests'
+with zipfile.ZipFile(ipa) as archive:
+    info=plistlib.loads(archive.read('Payload/AmneziaWG.app/Info.plist'))
+assert info['CFBundleShortVersionString'] == verification['version']
+value = dict(schema=1,app='vpn013-wg',platform='ios',version=verification['version'],build=int(info['CFBundleVersion']),
     downloadURL=f'https://github.com/{repository}/releases/download/unsigned-{run}/VPN013AWG-unsigned.ipa',
     sha256=hashlib.sha256(ipa.read_bytes()).hexdigest(),
     notes='Проверка новых версий и обновление серверов по заявке из ZIP. Применение после отключения VPN; сторонние профили и ключи сохраняются.')

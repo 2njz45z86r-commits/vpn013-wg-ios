@@ -96,7 +96,7 @@ final class ClientUpdateCoordinator {
         self.presenter = presenter
         guard !busy, !quietForTests(), let manager = manager, loadingError == nil else { return }
         let now = Date()
-        if registry.bindings.values.contains(where: { $0.pending != nil }), !manager.mapTunnels({ $0.status != .inactive }).contains(true),
+        if registry.bindings.values.contains(where: { $0.pending != nil }), !manager.mapTunnels(transform: { $0.status != .inactive || $0.isActivateOnDemandEnabled }).contains(true),
            lastPendingAttempt == nil || now.timeIntervalSince(lastPendingAttempt!) > 60 {
             lastPendingAttempt = now
             applyPending(manager: manager) { _ in }
@@ -218,7 +218,7 @@ final class ClientUpdateCoordinator {
         guard !busy else { completion(ClientUpdateError.busy); return }
         let orders = registry.bindings.keys.filter { registry.bindings[$0]?.pending != nil }.sorted()
         guard !orders.isEmpty else { completion(nil); return }
-        guard !manager.mapTunnels({ $0.status != .inactive || $0.isActivateOnDemandEnabled }).contains(true) else { completion(ClientUpdateError.activeVPN); return }
+        guard !manager.mapTunnels(transform: { $0.status != .inactive || $0.isActivateOnDemandEnabled }).contains(true) else { completion(ClientUpdateError.activeVPN); return }
         busy = true; manager.beginManagedUpdate(); inferOldAuto(manager: manager)
         func next(_ index: Int) {
             guard index < orders.count else {
@@ -240,11 +240,11 @@ final class ClientUpdateCoordinator {
             plan = try ClientRosterPlan(previousIDs: Set(binding.profileIDs.keys), snapshot: snapshot)
             guard snapshot.expiry > Int64(Date().timeIntervalSince1970 * 1000) else { throw ClientUpdateError.accessEnded }
             for (serverID, id) in binding.profileIDs {
-                guard let current = manager.mapTunnels({ $0 }).first(where: { $0.persistentProfileIdentifier == id }), let config = current.tunnelConfiguration else { continue }
+                guard let current = manager.mapTunnels(transform: { $0 }).first(where: { $0.persistentProfileIdentifier == id }), let config = current.tunnelConfiguration else { continue }
                 guard binding.baseline[serverID] == ClientUpdateProtocol.digest(config.asWgQuickConfig()) else { throw ClientUpdateError.localChanges(current.name) }
             }
             for server in plan.retained {
-                guard let id = binding.profileIDs[server.id], let current = manager.mapTunnels({ $0 }).first(where: { $0.persistentProfileIdentifier == id }), let config = current.tunnelConfiguration else { continue }
+                guard let id = binding.profileIDs[server.id], let current = manager.mapTunnels(transform: { $0 }).first(where: { $0.persistentProfileIdentifier == id }), let config = current.tunnelConfiguration else { continue }
                 guard binding.baseline[server.id] == ClientUpdateProtocol.digest(config.asWgQuickConfig()),
                       Self.keyMaterial(config.asWgQuickConfig()) == Self.keyMaterial(server.config) else { throw ClientUpdateError.localChanges(current.name) }
             }
@@ -299,7 +299,7 @@ final class ClientUpdateCoordinator {
                     let config = TunnelConfiguration(name: "Авто · " + AutoTunnelProfile.serverCountLabel(members.count), interface: first.interface, peers: first.peers)
                     manager.modify(tunnel: tunnel, tunnelConfiguration: config, onDemandOption: tunnel.onDemandOption, automaticProfile: profile) { error in
                         if let error = error { completion(error); return }
-                        registry.automatic[recordIndex].sources = sourceIDs
+                        self.registry.automatic[recordIndex].sources = sourceIDs
                         do { try saveProgress(); nextAuto(index + 1) } catch { completion(error) }
                     }
                 } catch { completion(error) }
