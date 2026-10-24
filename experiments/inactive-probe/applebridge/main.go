@@ -1,7 +1,7 @@
 //go:build cgo
 
 // SPDX-License-Identifier: MIT
-// Experimental archive only. No client VPN start/stop API is exported here.
+// Numeric native transport/controller bridge; it never starts the primary VPN.
 package main
 
 /*

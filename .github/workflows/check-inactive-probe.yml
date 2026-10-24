@@ -17,9 +17,9 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-15]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
-      GOTOOLCHAIN: go1.25.14
+      GOTOOLCHAIN: go1.26.10
       CGO_ENABLED: '1'
     defaults:
       run:
@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: '1.25.14'
+          go-version: '1.26.10'
           cache: false
       - name: Verify pinned dependencies
         run: |
@@ -52,9 +52,28 @@ jobs:
       - name: Check physical driver against the iOS SDK
         if: runner.os == 'macOS'
         run: |
-          xcrun swiftc -typecheck -swift-version 5 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target arm64-apple-ios14.0 -import-objc-header applebridge/bridge.h platform/PhysicalUDPDriver.swift
+          xcrun swiftc -typecheck -swift-version 5 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target arm64-apple-ios14.0 -import-objc-header applebridge/bridge.h platform/PhysicalUDPDriver.swift platform/ProbeCoordinator.swift
       - name: Exercise Swift C Go callback ownership and close acknowledgement
         if: runner.os == 'macOS'
         run: |
           xcrun swiftc -parse-as-library -swift-version 5 -import-objc-header applebridge/bridge.h -Xcc -DR013_BRIDGE_TESTING platform/PhysicalUDPDriver.swift platform/BridgeNativeCheck.swift "$RUNNER_TEMP/r013-probe.a" -framework NetworkExtension -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-bridge-check"
           "$RUNNER_TEMP/r013-bridge-check"
+      - name: Exercise production controller C ABI and typed Swift decoding
+        if: runner.os == 'macOS'
+        run: |
+          xcrun swiftc -parse-as-library -swift-version 5 -import-objc-header applebridge/bridge.h platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-probe.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-controller-check"
+          "$RUNNER_TEMP/r013-controller-check"
+      - name: Merge into the official client single Go archive and recheck actual dependencies
+        if: runner.os == 'macOS'
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/r013-client-core"
+          git -C "$RUNNER_TEMP/r013-client-core" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
+          cp "$GITHUB_WORKSPACE/overlay/Sources/WireGuardKitGo/api-xray.go" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/api-xray.go"
+          python3 stage_into_client.py "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo"
+          cd "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo"
+          go mod verify
+          go test -mod=readonly -race -count=1 -timeout=90s -v ./r013probe
+          go build -mod=readonly -tags=r013_bridge_test -buildmode=c-archive -o "$RUNNER_TEMP/r013-client-core.a" .
+          cd "$GITHUB_WORKSPACE/experiments/inactive-probe"
+          xcrun swiftc -parse-as-library -swift-version 5 -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-merged-check"
+          "$RUNNER_TEMP/r013-merged-check"

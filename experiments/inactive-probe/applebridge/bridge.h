@@ -30,6 +30,23 @@ void R013UDPDeliver(uint64_t session, void *packet, uint32_t length);
 void R013UDPWriteDone(uint64_t session, uint64_t write_id, int32_t failed);
 void R013UDPFailed(uint64_t session);
 void R013UDPDidClose(uint64_t session);
+
+// Thread-safe production controller ABI. Begin/Cancel/Release MAY BLOCK while
+// waiting for actual UDP close (at most10s); invoke off the main/UDP queues.
+// A zero transition is a FAILURE, never permission to change the primary VPN.
+// Only integer handles and bounded, synchronously-copied bytes cross this ABI.
+uint64_t R013ProbeCreate(uint64_t physical_driver, uint64_t current_driver);
+uint64_t R013ProbeBeginChange(uint64_t controller);
+// known=0: unknown; known=1,length=0: idle; known=1,config: actual active UAPI.
+// Invalid active configuration leaves membership UNKNOWN and returns nonzero.
+int32_t R013ProbeCommitChange(uint64_t controller, uint64_t transition, int32_t known, void *config, uint32_t length);
+uint64_t R013ProbeStartScan(uint64_t controller, void *json, uint32_t length);
+// Returns exact JSON length, or -1. Output has no NUL, key or configuration.
+int32_t R013ProbePollScan(uint64_t controller, uint64_t operation, void *out, uint32_t capacity);
+int32_t R013ProbeCancelScan(uint64_t controller, uint64_t operation);
+// JSON contains exactly one FRESH selected snapshot and the SAME resolver.
+uint64_t R013ProbeBeginChoice(uint64_t controller, uint64_t operation, void *json, uint32_t length);
+int32_t R013ProbeRelease(uint64_t controller);
 #ifdef R013_BRIDGE_TESTING
 int32_t R013BridgeExercise(uint64_t driver);
 int32_t R013BridgeDNSExercise(uint64_t driver);

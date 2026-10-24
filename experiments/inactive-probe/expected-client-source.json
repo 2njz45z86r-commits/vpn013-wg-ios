@@ -1,0 +1,10 @@
+{
+  "upstream": "9d5ee60edefa95b933a738dd7cda671dd18021fc",
+  "overlay": "api-xray.go has existing vpn013_xray build tag",
+  "sha256_normalized_utf8": {
+    "api-apple.go": "d5839d6345aad444fc96e316d5382237668d366f2656f40de0da22fbc8177140",
+    "api-xray.go": "8f4217f09339ba7c74c4b068b11a3fd2b3796e8d68395aea3eacc62dcf466120",
+    "go.mod": "127106059c8a33071ce26ac021b894b28afb5da0c11c6a718bcb797fe11b7e0f",
+    "go.sum": "b3139623e33e506defb5b727f12a8b1e048759f8dcb47c234918b8d139e8585a"
+  }
+}
