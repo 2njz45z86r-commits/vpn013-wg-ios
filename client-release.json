@@ -2,9 +2,9 @@
   "schema": 1,
   "app": "vpn013-wg",
   "platform": "ios",
-  "version": "1.3.1",
-  "build": 8,
-  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40077263711/VPN013AWG-unsigned.ipa",
-  "sha256": "d58cfdbc6318e6e79dd4f238a3f05082eba7e1d7a3947e5ba20d2af1c4a3e733",
-  "notes": "Кнопка проверки пинга и результаты задержки для импортированных серверов."
+  "version": "1.4.0",
+  "build": 9,
+  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40082850467/VPN013AWG-unsigned.ipa",
+  "sha256": "d46fc9544d02d026ef27432dca86fbe5169ee82091b7385a7f6969c08507f2c9",
+  "notes": "Проверка новых версий и обновление серверов по заявке из ZIP. Применение после отключения VPN; сторонние профили и ключи сохраняются."
 }
