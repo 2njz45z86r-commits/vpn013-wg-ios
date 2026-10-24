@@ -226,3 +226,41 @@ func TestAbortedAndInvalidCommitsNeverResumeAGuessedIdentity(t *testing.T) {
 		t.Fatal("malformed commit re-enabled candidate traffic")
 	}
 }
+
+func TestMissingOrUnknownGuardNeverStartsCandidateTraffic(t *testing.T) {
+	for _, name := range []string{"missing", "unknown"} {
+		t.Run(name, func(t *testing.T) {
+			r, peer := fixture(t)
+			r.Guard = nil
+			if name == "unknown" {
+				r.Guard = guardForTest(t, ActiveState{})
+			}
+			if _, err := Measure(context.Background(), r); !errors.Is(err, ErrUnknownActiveState) {
+				t.Fatal("unconfirmed guard accepted a probe")
+			}
+			if peer.requests.Load() != 0 {
+				t.Fatal("unconfirmed guard opened candidate traffic")
+			}
+		})
+	}
+}
+
+func TestPrimaryTransitionsRemainSerializedUntilCompletion(t *testing.T) {
+	r, _ := fixture(t)
+	first, err := r.Guard.BeginTransition(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Abort()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := r.Guard.BeginTransition(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("another primary transition started before the first was committed")
+	}
+	if err := first.Commit(ActiveState{Known: true}); err != nil {
+		t.Fatal("a canceled waiter invalidated the actual primary transition")
+	}
+	if _, err := Measure(context.Background(), r); err != nil {
+		t.Fatal("serialized transition did not leave the committed state usable")
+	}
+}

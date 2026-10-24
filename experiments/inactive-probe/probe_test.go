@@ -250,5 +250,5 @@ func TestThirtySequentialProbesReleaseWorkers(t *testing.T) {
 	if count := runtime.NumGoroutine(); count > baseline+3 {
 		t.Fatalf("workers retained: before=%d after=%d", baseline, count)
 	}
-	t.Logf("30 sequential probes: workers before=%d after=%d; heap in-use before=%d peak=%d after-GC=%d bytes; Windows-only observation", baseline, runtime.NumGoroutine(), before.HeapInuse, peak, after.HeapInuse)
+	t.Logf("30 sequential probes: workers before=%d after=%d; heap in-use before=%d peak=%d after-GC=%d bytes; %s/%s CPUs=%d; runner observation, not an iOS budget", baseline, runtime.NumGoroutine(), before.HeapInuse, peak, after.HeapInuse, runtime.GOOS, runtime.GOARCH, runtime.NumCPU())
 }
