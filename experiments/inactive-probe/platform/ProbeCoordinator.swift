@@ -237,5 +237,6 @@ final class R013ProbeCoordinator {
     // This entry point is excluded from normal builds and claims no iOS timing.
     func runNowForTesting() { requireMain(); timer?.cancel(); timer = nil; run() }
     var nextHourForTesting: UInt64? { requireMain(); return due?.uptimeNanoseconds }
+    var measuringForTesting: Bool { requireMain(); return operation != 0 }
     #endif
 }

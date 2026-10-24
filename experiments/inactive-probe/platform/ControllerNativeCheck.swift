@@ -31,10 +31,10 @@ private func withBytes<T>(_ data: Data, _ call: (UnsafeMutableRawPointer?, UInt3
     var owned = data
     return owned.withUnsafeMutableBytes { call($0.baseAddress, UInt32($0.count)) }
 }
-private func spin(until condition: () -> Bool) {
+private func spin(file: StaticString = #filePath, line: UInt = #line, until condition: () -> Bool) {
     let deadline = Date().addingTimeInterval(4)
     while !condition() && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.005)) }
-    precondition(condition(), "main-queue coordinator did not complete")
+    precondition(condition(), "main-queue coordinator did not complete", file: file, line: line)
 }
 
 @main struct ControllerNativeCheck {
@@ -94,8 +94,7 @@ private func spin(until condition: () -> Bool) {
         spin { lock.lock(); defer { lock.unlock() }; return currentOpens > beforeEditOpens }
         freshInput = R013ProbeInput(auto_active: true, resolver: input.resolver, start_index: 0,
                                    candidates: [R013ProbeSnapshot(id: input.candidates[0].id, config: config + "\n", source: input.candidates[0].source)])
-        spin { lock.lock(); defer { lock.unlock() }; return currentOpens == beforeEditOpens + 2 && closes == currentOpens }
-        RunLoop.main.run(until: Date().addingTimeInterval(0.03))
+        spin { lock.lock(); defer { lock.unlock() }; return currentOpens == beforeEditOpens + 2 && closes == currentOpens && !coordinator.measuringForTesting }
         precondition(measured == 1, "edited profile received old snapshot metrics")
         freshInput = input
         lock.lock(); let beforeCancelOpens = currentOpens; lock.unlock()
