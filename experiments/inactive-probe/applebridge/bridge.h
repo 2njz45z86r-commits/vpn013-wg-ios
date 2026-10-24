@@ -47,6 +47,13 @@ int32_t R013ProbeCancelScan(uint64_t controller, uint64_t operation);
 // JSON contains exactly one FRESH selected snapshot and the SAME resolver.
 uint64_t R013ProbeBeginChoice(uint64_t controller, uint64_t operation, void *json, uint32_t length);
 int32_t R013ProbeRelease(uint64_t controller);
+// Process-wide fence shared by ALL native controllers and primary adapters.
+uint64_t R013PrimaryBegin(void);
+uint64_t R013PrimaryAdopt(uint64_t controller, uint64_t transition);
+int32_t R013PrimaryValidate(uint64_t ticket);
+int32_t R013PrimaryFinish(uint64_t ticket);
+int32_t R013PrimaryAbort(uint64_t ticket);
+int32_t R013BumpSocketsSync(int32_t handle, uint64_t ticket); // merged client only
 #ifdef R013_BRIDGE_TESTING
 int32_t R013BridgeExercise(uint64_t driver);
 int32_t R013BridgeDNSExercise(uint64_t driver);

@@ -150,11 +150,41 @@ type Controller struct {
 }
 
 func NewController(physical PhysicalUDPFactory, current TunnelUDPFactory) (*Controller, error) {
-	if physical == nil || current == nil {
+	guard, _ := NewActiveGuard(ActiveState{})
+	return NewControllerWithGuard(physical, current, guard)
+}
+
+// Native controllers in one extension share the process primary guard. A new
+// provider/controller cannot forget the identity or live probes of its predecessor.
+func NewControllerWithGuard(physical PhysicalUDPFactory, current TunnelUDPFactory, guard *ActiveGuard) (*Controller, error) {
+	if physical == nil || current == nil || guard == nil {
 		return nil, ErrPhysicalTransport
 	}
-	guard, _ := NewActiveGuard(ActiveState{})
 	return &Controller{guard: guard, physical: physical, current: current}, nil
+}
+
+// TransferChange moves a drained choice permit into the native primary gate.
+// The old controller token becomes unusable immediately. Close/new scans remain
+// blocked until the returned one-shot completion commits actual state.
+func (c *Controller) TransferChange(id uint64) (func(ActiveState) error, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed || c.change == nil || id == 0 || id != c.changeID {
+		return nil, ErrInvalidHandle
+	}
+	tr := c.change
+	c.change, c.changeID = nil, 0
+	var once sync.Once
+	return func(actual ActiveState) error {
+		err := ErrClosedTransition
+		once.Do(func() {
+			err = tr.Commit(actual)
+			c.mu.Lock()
+			c.changing = false
+			c.mu.Unlock()
+		})
+		return err
+	}, nil
 }
 
 func (c *Controller) BeginChange(ctx context.Context) (uint64, error) {

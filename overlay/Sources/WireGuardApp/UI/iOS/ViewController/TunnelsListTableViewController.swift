@@ -640,6 +640,10 @@ class TunnelsListTableViewController: UIViewController {
             self.updateCurrentPingTarget(for: tunnel, runtime: snapshot)
             self.automaticSummaryName = tunnel.isVPN013Automatic ? snapshot.name : tunnel.name
             self.automaticSummaryPhase = snapshot.phase
+            if tunnel.isVPN013Automatic, let hourly = snapshot.hourlyComparison {
+                self.summaryModeLabel.text = "Авто · " + hourly
+                self.summaryModeLabel.isHidden = false
+            }
             self.updateRunningSummaryStatus(for: tunnel)
             self.summaryNameLabel.text = self.automaticSummaryName
             if tunnel.isVPN013Automatic {

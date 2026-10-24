@@ -51,7 +51,12 @@ private func spin(file: StaticString = #filePath, line: UInt = #line, until cond
         precondition(R013ProbeRelease(extra) == 0)
         let config = "private_key=" + String(repeating: "11", count: 32) + "\npublic_key=" + String(repeating: "22", count: 32) + "\nendpoint=127.0.0.1:12345\nallowed_ip=0.0.0.0/0\n"
         let transition = R013ProbeBeginChange(controller); precondition(transition != 0)
-        precondition(withBytes(Data(config.utf8)) { R013ProbeCommitChange(controller, transition, 1, $0, $1) } == 0)
+        let adopted = R013PrimaryAdopt(controller, transition)
+        precondition(adopted != 0 && R013PrimaryValidate(adopted) == 0)
+        precondition(R013ProbeCommitChange(controller, transition, 1, nil, 0) != 0, "adopted token reused")
+        precondition(R013PrimaryFinish(adopted) == 0 && R013PrimaryValidate(adopted) != 0)
+        let actual = R013ProbeBeginChange(controller); precondition(actual != 0)
+        precondition(withBytes(Data(config.utf8)) { R013ProbeCommitChange(controller, actual, 1, $0, $1) } == 0)
         let input = R013ProbeInput(auto_active: true, resolver: "127.0.0.1:12345", start_index: 0,
                                    candidates: [R013ProbeSnapshot(id: "same-active-peer", config: config, source: "10.13.0.2")])
         let wire = try JSONEncoder().encode(input)

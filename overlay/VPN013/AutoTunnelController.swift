@@ -8,6 +8,7 @@ final class AutoTunnelController {
     private weak var provider: NEPacketTunnelProvider?
     private let adapter: WireGuardAdapter
     private let candidates: [TunnelConfiguration]
+    private let hourly: HourlyProbeSupport?
     private var policy: AutoFailoverPolicy
     private var timer: DispatchWorkItem?
     private var pathMonitor: NWPathMonitor?
@@ -20,10 +21,10 @@ final class AutoTunnelController {
     var activeName: String { candidates[installedIndex].name ?? "Сервер" }
     var currentConfiguration: TunnelConfiguration? { applying ? nil : candidates[installedIndex] }
     var connectionRevision: Int { epoch }
-    init(provider: NEPacketTunnelProvider, adapter: WireGuardAdapter, candidates: [TunnelConfiguration], initialIndex: Int) {
+    init(provider: NEPacketTunnelProvider, adapter: WireGuardAdapter, candidates: [TunnelConfiguration], initialIndex: Int, hourly: HourlyProbeSupport? = nil) {
         self.provider = provider; self.adapter = adapter; self.candidates = candidates
         policy = AutoFailoverPolicy(count: candidates.count, initialIndex: initialIndex)
-        installedIndex = initialIndex
+        installedIndex = initialIndex; self.hourly = hourly
     }
     func start() {
         dispatchPrecondition(condition: .onQueue(.main))
@@ -40,11 +41,20 @@ final class AutoTunnelController {
             }
         }
         monitor.start(queue: .main)
+        hourly?.start(candidates: candidates, current: { [weak self] in
+            guard let self = self, self.policy.running, self.networkAvailable else { return nil }
+            return self.currentConfiguration
+        }, apply: { [weak self] index, permit, done in
+            guard let self = self, self.policy.running, !self.applying else {
+                _ = permit.commit(.unknown); done(); return
+            }
+            self.applyCandidate(index, probePermit: permit, hourlyDone: done)
+        })
         schedule(after: 8)
     }
     func stop() {
         dispatchPrecondition(condition: .onQueue(.main))
-        epoch += 1; policy.stop(); timer?.cancel(); timer = nil
+        epoch += 1; policy.stop(); timer?.cancel(); timer = nil; hourly?.stop()
         applying=false;provider?.reasserting=false
         probe?.cancel(); probe = nil; pathMonitor?.cancel(); pathMonitor = nil
     }
@@ -76,38 +86,48 @@ final class AutoTunnelController {
             }
         }
     }
-    private func applyCandidate(_ index:Int) {
+    private func applyCandidate(_ index: Int, probePermit: R013PrimaryPermit? = nil, hourlyDone: (() -> Void)? = nil) {
+        let adopted: UInt64
+        if let permit = probePermit {
+            guard let ticket = permit.adoptForPrimary() else { _ = permit.commit(.unknown); hourlyDone?(); return }
+            adopted = ticket; policy.selectMeasuredCandidate(index)
+        } else { adopted = 0 }
         phase = "Переключение на " + (candidates[index].name ?? "сервер")
-        applying=true
-        epoch += 1;let change=epoch
-        wg_log(.info,message:"Auto failover: candidate index=\(index)")
-        provider?.reasserting=true
-        // Recreate the backend inside the SAME Packet Tunnel. An incremental UAPI
-        // update could retain optional AWG junk/header parameters from the old node.
-        // The system VPN is not stopped and the original profiles are not edited.
-        adapter.stop { [weak self] _ in
+        applying = true; epoch += 1; let change = epoch
+        probe?.cancel(); probe = nil
+        wg_log(.info, message: "Auto failover: candidate index=\(index)")
+        provider?.reasserting = true
+        // The adopted choice is already drained. Restart inside the SAME packet
+        // tunnel, retaining complete AWG settings and never editing source profiles.
+        adapter.stop(primaryTransition: adopted) { [weak self] stopError in
             DispatchQueue.main.async {
-                guard let self=self,self.policy.running,self.epoch==change else { return }
-                self.adapter.start(tunnelConfiguration:self.candidates[index]) { [weak self] error in
+                guard let self = self, self.policy.running, self.epoch == change else { hourlyDone?(); return }
+                guard stopError == nil else {
+                    self.applying = false; self.provider?.reasserting = false
+                    self.phase = "Переключение отложено. Повторная проверка"
+                    self.schedule(after: 5); hourlyDone?(); return
+                }
+                self.adapter.start(tunnelConfiguration: self.candidates[index]) { [weak self] error in
                     DispatchQueue.main.async {
-                        guard let self=self,self.policy.running,self.epoch==change else { return }
-                        self.applying=false
-                        self.provider?.reasserting=false
+                        guard let self = self, self.policy.running, self.epoch == change else { hourlyDone?(); return }
+                        self.applying = false; self.provider?.reasserting = false
                         if error == nil {
-                            self.installedIndex=index;self.phase="Проверка нового сервера";self.schedule(after:8)
+                            self.installedIndex = index; self.phase = "Проверка нового сервера"; self.schedule(after: 8)
                         } else {
-                            self.phase="Не удалось подключиться. Повторная попытка"
-                            switch self.policy.record(healthy:false,networkAvailable:true) {
-                            case .switchTo(let next):self.applyCandidate(next)
-                            case .wait(let seconds):self.schedule(after:seconds)
-                            default:self.schedule(after:60)
+                            self.phase = "Не удалось подключиться. Повторная попытка"
+                            switch self.policy.record(healthy: false, networkAvailable: true) {
+                            case .switchTo(let next): self.applyCandidate(next)
+                            case .wait(let seconds): self.schedule(after: seconds)
+                            default: self.schedule(after: 60)
                             }
                         }
+                        hourlyDone?()
                     }
                 }
             }
         }
     }
+
 }
 
 /// Explicit through-tunnel API; a normal provider URLSession could bypass the VPN.

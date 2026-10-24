@@ -52,7 +52,7 @@ func R013ProbeCreate(physicalID C.uint64_t, currentID C.uint64_t) C.uint64_t {
 	if len(controllers) >= 2 {
 		return 0
 	}
-	c, err := awgprobe.NewController(pv.(*nativeDriver), nativeTunnelFactory{cv.(*nativeDriver)})
+	c, err := awgprobe.NewControllerWithGuard(pv.(*nativeDriver), nativeTunnelFactory{cv.(*nativeDriver)}, primaryGuard)
 	if err != nil {
 		return 0
 	}
@@ -189,5 +189,10 @@ func R013ProbeRelease(id C.uint64_t) C.int32_t {
 	controllerLock.Lock()
 	delete(controllers, uint64(id))
 	controllerLock.Unlock()
+	// A predecessor provider may be released after a successor starts. Restore
+	// only the observed process registry, never the predecessor's saved identity.
+	if tr, err := primaryGuard.BeginTransition(ctx); err == nil {
+		_ = tr.Commit(primaryActualRead())
+	}
 	return 0
 }

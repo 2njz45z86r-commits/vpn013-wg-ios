@@ -1,6 +1,9 @@
 name: Build and inspect VPN013 WG
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'overlay/**'
 permissions:
   contents: write
 concurrency:

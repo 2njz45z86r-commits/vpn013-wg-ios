@@ -215,3 +215,82 @@ func TestControllerInputBoundsAndUnknownMembershipFailClosed(t *testing.T) {
 		t.Fatal("invalid scan opened UDP")
 	}
 }
+
+func TestTransferredChoiceCannotBeCommittedThroughItsOldControllerToken(t *testing.T) {
+	c, _, in := controllerForTest(t, &fakeTunnelFactory{})
+	id, err := c.BeginChange(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	finish, err := c.TransferChange(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.CommitChange(id, ActiveState{Known: true}) != ErrInvalidHandle {
+		t.Fatal("transferred token still usable")
+	}
+	if _, err := c.StartScan(in); err != ErrControllerBusy {
+		t.Fatal("scan opened during adopted primary mutation", err)
+	}
+	if err := finish(ActiveState{Known: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := finish(ActiveState{Known: true}); err != ErrClosedTransition {
+		t.Fatal("transferred permit replayed", err)
+	}
+}
+
+func TestSharedPrimaryGuardDrainsPredecessorControllerBeforeSuccessorChanges(t *testing.T) {
+	guard, _ := NewActiveGuard(ActiveState{})
+	ack := make(chan func(), 1)
+	f := &fakeTunnelFactory{silent: true, cancelled: ack}
+	old, _ := NewControllerWithGuard(loopbackPhysicalFactory{}, f, guard)
+	newer, _ := NewControllerWithGuard(loopbackPhysicalFactory{}, &fakeTunnelFactory{}, guard)
+	active, _ := fixture(t)
+	id, err := old.BeginChange(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old.CommitChange(id, ActiveState{Known: true, Configuration: active.Config}) != nil {
+		t.Fatal("initial membership")
+	}
+	candidate := scanCandidateForTest(t, "other", guard, time.Millisecond)
+	op, err := old.StartScan(ScanInput{AutoActive: true, Resolver: netip.AddrPortFrom(candidate.Target, 53).String(), Candidates: []Snapshot{{candidate.ID, candidate.Config, candidate.Source.String()}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for f.opens.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	changed := make(chan uint64, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		id, _ := newer.BeginChange(ctx)
+		changed <- id
+	}()
+	var closeAck func()
+	select {
+	case closeAck = <-ack:
+	case <-time.After(time.Second):
+		t.Fatal("predecessor session was not cancelled")
+	}
+	select {
+	case id := <-changed:
+		closeAck()
+		t.Fatal("successor changed before real close", id)
+	default:
+	}
+	closeAck()
+	id = <-changed
+	if id == 0 || newer.CommitChange(id, ActiveState{Known: true}) != nil {
+		t.Fatal("successor did not receive a real drained permit")
+	}
+	if awaitController(t, old, op).Status == "complete" {
+		t.Fatal("predecessor result survived successor epoch")
+	}
+	if old.Close(context.Background()) != nil || newer.Close(context.Background()) != nil {
+		t.Fatal("controllers did not release")
+	}
+}

@@ -40,3 +40,16 @@ for count in 1...30 {
     check(policy.record(healthy:true,networkAvailable:true,latencyMilliseconds:5000) == .stopped,"latency cannot restart a stopped tunnel")
 }
 print("AutoFailoverPolicy latency checks passed: 1200ms boundary, slow fallback, recovery, actual failure counting, offline and manual stop; total \(checks)")
+
+for count in 1...30 {
+    var policy = AutoFailoverPolicy(count: count)
+    _ = policy.record(healthy: false, networkAvailable: true)
+    policy.selectMeasuredCandidate(count - 1)
+    check(policy.current == count - 1 && policy.failures == 0, "measured selection updates actual policy index")
+    check(policy.record(healthy: false, networkAvailable: true) == .wait(5), "measured selection retains two-attempt rule")
+    policy.selectMeasuredCandidate(count)
+    check(policy.current == count - 1, "out-of-range measurement ignored")
+    policy.stop(); policy.selectMeasuredCandidate(0)
+    check(!policy.running && policy.current == count - 1, "measured choice cannot restart manual stop")
+}
+print("Measured selection policy: index consistency, fresh failure count and manual stop passed")

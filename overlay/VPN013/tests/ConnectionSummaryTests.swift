@@ -39,8 +39,9 @@ import Foundation
         for bad in ["NaN", "inf", "-1", "0", String(Date().timeIntervalSince1970 + 86400)] {
             expect(VPN013ConnectionSnapshot.Statistics.parse("public_key=a\nlast_handshake_time_sec=" + bad).handshake == nil, "Invalid/future handshake must not confirm anything")
         }
-        let snapshot = VPN013ConnectionSnapshot(name: "Home", endpoints: ["example.com:443"], hosts: ["example.com"], phase: nil, revision: 4, statistics: stats)
+        var snapshot = VPN013ConnectionSnapshot(name: "Home", endpoints: ["example.com:443"], hosts: ["example.com"], phase: nil, revision: 4, statistics: stats)
         expect(snapshot.isValid, "Bounded snapshot accepted")
+        snapshot.hourlyComparison = "Других VPN проверено: 12 · задержка DNS"
         let encoded = try JSONEncoder().encode(snapshot)
         expect(!String(decoding: encoded, as: UTF8.self).contains("never-export-this"), "No raw runtime keys cross boundary")
         let decoded = try JSONDecoder().decode(VPN013ConnectionSnapshot.self, from: encoded)

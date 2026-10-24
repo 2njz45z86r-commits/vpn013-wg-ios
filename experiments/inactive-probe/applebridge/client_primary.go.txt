@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: MIT
+// Compiled only after guarded staging into the existing client Go archive.
+package main
+
+/*
+#include "r013_bridge.h"
+*/
+import "C"
+
+import (
+    "time"
+    awgprobe "github.com/amnezia-vpn/amneziawg-apple/r013probe"
+)
+
+func init() {
+    primaryActualRead = func() awgprobe.ActiveState {
+        tunnelHandlesMu.RLock()
+        if len(tunnelHandles) == 0 { tunnelHandlesMu.RUnlock(); return awgprobe.ActiveState{Known:true} }
+        if len(tunnelHandles) != 1 { tunnelHandlesMu.RUnlock(); return awgprobe.ActiveState{} }
+        var entry tunnelHandle
+        for _, entry = range tunnelHandles {}
+        tunnelHandlesMu.RUnlock()
+        settings, err := entry.IpcGet()
+        if err != nil { return awgprobe.ActiveState{} }
+        return awgprobe.ActiveState{Known:true, Configuration:settings}
+    }
+}
+
+// This replaces the asynchronous bump ONLY on the guarded adapter paths.
+// The caller holds a validated primary ticket until this work really ends.
+//export R013BumpSocketsSync
+func R013BumpSocketsSync(handle C.int32_t, ticket C.uint64_t) C.int32_t {
+    if R013PrimaryValidate(ticket) != 0 { return 1 }
+    tunnelHandlesMu.RLock(); dev, ok := tunnelHandles[int32(handle)]; tunnelHandlesMu.RUnlock()
+    if !ok { return 1 }
+    for i:=0;i<10;i++ {
+        if err:=dev.BindUpdate();err==nil { dev.SendKeepalivesToPeersWithCurrentKeypair();return 0 }
+        time.Sleep(time.Second/2)
+    }
+    return 1
+}

@@ -9,11 +9,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var automatic: AutoTunnelController?
     private var automaticStartCompletion: ((Error?) -> Void)?
     private var automaticEpoch = 0
+    private lazy var hourlySupport = HourlyProbeSupport(provider: self)
 
     private lazy var adapter: WireGuardAdapter = {
-        return WireGuardAdapter(with: self) { logLevel, message in
+        let value = WireGuardAdapter(with: self) { logLevel, message in
             wg_log(logLevel.osLogLevel, message: message)
         }
+        let support = hourlySupport
+        value.primaryChangeObserved = { [weak support] in support?.willChange() }
+        value.primaryChangeCompleted = { [weak support] in support?.didChange() }
+        return value
     }()
 
 
@@ -194,11 +199,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                               self.automatic == nil || self.automatic?.currentConfiguration != nil else {
                             completionHandler(nil); return
                         }
-                        let value = VPN013ConnectionSnapshot(name: configuration.name ?? "Сервер",
+                        var value = VPN013ConnectionSnapshot(name: configuration.name ?? "Сервер",
                             endpoints: configuration.peers.compactMap { $0.endpoint?.stringRepresentation },
                             hosts: configuration.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } },
                             phase: self.automatic?.phase, revision: revision,
                             statistics: .parse(runtime))
+                        if self.automatic != nil { value.hourlyComparison = self.hourlySupport?.summary ?? "Часовая проверка недоступна" }
                         completionHandler(try? JSONEncoder().encode(value))
                     }
                 }
@@ -254,7 +260,7 @@ extension PacketTunnelProvider {
                     if error != nil && index+1<bootstrapCandidates.count { attemptResolved(index+1);return }
                     let done=self.automaticStartCompletion;self.automaticStartCompletion=nil
                     if let error=error { done?(error);return }
-                    let controller=AutoTunnelController(provider:self,adapter:self.adapter,candidates:bootstrapCandidates,initialIndex:index)
+                    let controller=AutoTunnelController(provider:self,adapter:self.adapter,candidates:bootstrapCandidates,initialIndex:index,hourly:self.hourlySupport)
                     self.automatic=controller;controller.start();done?(nil)
                 }
             }

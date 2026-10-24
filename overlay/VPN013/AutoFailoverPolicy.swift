@@ -15,6 +15,10 @@ struct AutoFailoverPolicy {
         self.count = count; current = initialIndex; visited = [initialIndex]
     }
     mutating func stop() { running = false }
+    mutating func selectMeasuredCandidate(_ index: Int) {
+        guard running, (0..<count).contains(index) else { return }
+        current = index; failures = 0; visited = [index]
+    }
     mutating func record(healthy: Bool, networkAvailable: Bool, latencyMilliseconds: Double? = nil) -> Decision {
         guard running else { return .stopped }
         guard networkAvailable else { failures = 0; return .wait(15) }

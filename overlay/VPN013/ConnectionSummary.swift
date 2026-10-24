@@ -4,6 +4,7 @@ import Foundation
 /// Only presentation data crosses this message boundary. Never encode a config or keys.
 struct VPN013ConnectionSnapshot: Codable, Equatable {
     var schema = 1
+    var hourlyComparison: String? = nil
     let name: String
     let endpoints: [String]
     let hosts: [String]
@@ -76,7 +77,7 @@ struct VPN013ConnectionSnapshot: Codable, Equatable {
             endpoints.count <= 64 && hosts.count <= 64 &&
             endpoints.allSatisfy { !$0.isEmpty && $0.utf8.count <= 1024 } &&
             hosts.allSatisfy { !$0.isEmpty && $0.utf8.count <= 255 } &&
-            (phase?.utf8.count ?? 0) <= 1024
+            (phase?.utf8.count ?? 0) <= 1024 && (hourlyComparison?.utf8.count ?? 0) <= 1024
     }
 }
 

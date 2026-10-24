@@ -26,11 +26,8 @@ backend replacement does not cancel and repeatedly restart that replacement.
 Manual profiles follow the system Packet Tunnel lifecycle without a foreground
 12-second handshake deadline that stops a quiet connection. A system connected
 status confirms tunnel startup, not successful peer traffic. Runtime handshake and
-byte counters remain available in the detail view. Auto checks traffic every 15 seconds; two failed checks rotate the candidate.
-HTTP response latency through the tunnel above 1200 ms also rotates the candidate,
-checking an independent target when an origin is slow. This measures response latency,
-not ICMP ping. Backend startup errors receive two actual attempts per candidate.
-Its header reports health and measured response latency.
+byte counters remain available in the detail view. Auto retains its separate
+through-tunnel traffic checks and reserve switching; its header reports health.
 Not a claim of uninterrupted TCP sessions or a comprehensive iOS Kill Switch.
 
 Policy tests cover counts 1...40 and every initial candidate, failures, exhaustion,
@@ -40,8 +37,8 @@ they do not verify Apple's trust chain or revocation. Real VPN failover, locked-
 behavior, ESign's actual profiles and radio transitions require an installed build
 on a physical iPhone. These checks cannot be claimed from CI screenshots.
 
-This standalone public repository contains only the VPN client source and build files.
-The separate owner-admin app and bot are not included. Build uses pinned public upstream
+CI source published only on awg-auto-ios branch in existing private repository.
+Main owner-admin app remains unchanged. Build uses pinned public upstream
 9d5ee60edefa95b933a738dd7cda671dd18021fc and a credential-free source overlay;
 Xray bridge build excluded. Go downloaded from official go.dev with SHA verification.
 No Apple certificate/private key or customer config goes to CI. Output has ad-hoc

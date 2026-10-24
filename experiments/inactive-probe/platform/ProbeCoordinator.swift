@@ -68,6 +68,14 @@ final class R013PrimaryPermit {
             }
         }
     }
+    // Transfer the already-drained choice into the process-wide adapter fence.
+    // The old controller token cannot be committed or reused after adoption.
+    func adoptForPrimary() -> UInt64? {
+        lock.lock(); defer { lock.unlock() }
+        guard !finished else { return nil }
+        let ticket = R013PrimaryAdopt(controller, transition)
+        guard ticket != 0 else { return nil }; finished = true; return ticket
+    }
 }
 
 // The provider MUST route every real start/update/stop/path/failure/Auto switch
@@ -78,6 +86,7 @@ final class R013ProbeCoordinator {
     typealias CurrentInput = () -> R013ProbeInput?
     typealias Apply = (R013ProbeSnapshot, R013PrimaryPermit, @escaping () -> Void) -> Void
     private let controller: UInt64
+    private let refreshActual: Bool
     private let work = DispatchQueue(label: "com.vpn013.probe.control", qos: .utility)
     private var generation: UInt64 = 0
     private var operation: UInt64 = 0
@@ -91,16 +100,16 @@ final class R013ProbeCoordinator {
     private var due: DispatchTime?
     var metrics: ((R013ProbeStatus) -> Void)? // Typed DNS values only; not ICMP.
 
-    init?(physical: UInt64, throughTunnel: UInt64) {
+    init?(physical: UInt64, throughTunnel: UInt64, refreshActual: Bool = false) {
         let id = R013ProbeCreate(physical, throughTunnel)
-        guard id != 0 else { return nil }; controller = id
+        guard id != 0 else { return nil }; controller = id; self.refreshActual = refreshActual
     }
     private func requireMain() { dispatchPrecondition(condition: .onQueue(.main)) }
 
     func startHourly(input: @escaping CurrentInput, apply: @escaping Apply) {
         requireMain(); guard !stopped else { return }
         cancelScheduledWork()
-        if !autoActive { due = .now() + 3600 }
+        if !autoActive { due = .now() + 30 }
         autoActive = true
         self.currentInput = input; self.apply = apply
         scheduleHour()
@@ -150,6 +159,7 @@ final class R013ProbeCoordinator {
         }
     }
     func resumeAfterPrimaryChange() { requireMain(); scheduleHour() }
+    func primaryWillChange() { requireMain(); cancelScheduledWork(cancelScan: false) }
 
     private func run() {
         requireMain()
@@ -162,7 +172,12 @@ final class R013ProbeCoordinator {
         let stamp = generation
         work.async { [self, data] in
             var owned = data
-            let id = owned.withUnsafeMutableBytes { bytes in R013ProbeStartScan(controller, bytes.baseAddress, UInt32(bytes.count)) }
+            var refreshed = true
+            if refreshActual {
+                let ticket = R013PrimaryBegin()
+                refreshed = ticket != 0 && R013PrimaryFinish(ticket) == 0
+            }
+            let id: UInt64 = refreshed ? owned.withUnsafeMutableBytes { bytes in R013ProbeStartScan(controller, bytes.baseAddress, UInt32(bytes.count)) } : 0
             DispatchQueue.main.async { [self] in
                 guard generation == stamp, autoActive, !stopped else {
                     if id != 0 { work.async { [self] in _ = R013ProbeCancelScan(controller, id) } }; return

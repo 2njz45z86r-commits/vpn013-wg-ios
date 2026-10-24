@@ -5,11 +5,11 @@ mkdir -p build/review
 python3 - <<'PY'
 import hashlib,json,os,platform,tarfile,urllib.request
 from pathlib import Path
-if os.popen('go version 2>/dev/null').read().split()[2:3] and 'go1.26.' in os.popen('go version').read():
+if os.popen('go version 2>/dev/null').read().split()[2:3] and 'go1.26.10' in os.popen('go version').read():
  print('Go 1.26 installed')
 else:
  data=json.load(urllib.request.urlopen('https://go.dev/dl/?mode=json&include=all',timeout=30))
- release=next(x for x in data if x['stable'] and x['version'].startswith('go1.26.'))
+ release=next(x for x in data if x['version']=='go1.26.10')
  arch='arm64' if platform.machine()=='arm64' else 'amd64'
  f=next(f for f in release['files'] if f['os']=='darwin' and f['arch']==arch and f['kind']=='archive')
  path=Path('build/go.tgz');urllib.request.urlretrieve('https://go.dev/dl/'+f['filename'],path)
@@ -26,12 +26,13 @@ python3 - <<'PY'
 from pathlib import Path
 source=Path('../../overlay')
 files=[p for p in source.rglob('*') if p.is_file()]
-assert len(files)==48, 'Unexpected source overlay'
+assert len(files)==75, 'Unexpected source overlay'
 for p in files:
  assert not p.is_symlink(), 'Source overlay must not contain symbolic links'
  target=Path(p.relative_to(source)); target.parent.mkdir(parents=True,exist_ok=True)
  target.write_bytes(p.read_bytes())
 PY
+python3 VPN013/prepare_hourly_project.py
 python3 VPN013/add_uitest_target.py
 mkdir -p ../../build/review
 swiftc VPN013/AutoFailoverPolicy.swift VPN013/tests/main.swift -o ../../build/test-auto-policy

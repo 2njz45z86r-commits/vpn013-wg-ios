@@ -41,6 +41,37 @@ private enum State {
 public class WireGuardAdapter {
     public typealias LogHandler = (WireGuardLogLevel, String) -> Void
 
+    /// Called on the adapter queue; observers must not wait for this queue.
+    public var primaryChangeObserved: (() -> Void)?
+    public var primaryChangeCompleted: (() -> Void)?
+
+    private func acquirePrimary(_ adopted: UInt64 = 0) throws -> UInt64 {
+        primaryChangeObserved?()
+        let ticket = adopted == 0 ? R013PrimaryBegin() : adopted
+        guard ticket != 0, R013PrimaryValidate(ticket) == 0 else {
+            throw WireGuardAdapterError.startWireGuardBackend(-9001)
+        }
+        return ticket
+    }
+    private func finishPrimary(_ ticket: UInt64) {
+        // Go reads the actual process-wide running device registry, not a seed.
+        _ = R013PrimaryFinish(ticket)
+        primaryChangeCompleted?()
+    }
+
+    /// Reuses the upstream UAPI generator, retaining every key/AWG parameter.
+    /// Numeric endpoint and IPv4 source are required; saved profiles are untouched.
+    public static func inactiveProbeSnapshot(_ config: TunnelConfiguration) -> (uapi: String, source: String)? {
+        guard config.peers.count == 1, let endpoint = config.peers[0].endpoint,
+              (config.interface.listenPort ?? 0) == 0,
+              let address = config.interface.addresses.first(where: { $0.address is IPv4Address }) else { return nil }
+        if case .name = endpoint.host { return nil }
+        let generator = PacketTunnelSettingsGenerator(tunnelConfiguration: config, resolvedEndpoints: [endpoint])
+        let (uapi, _) = generator.uapiConfiguration()
+        guard uapi.utf8.count <= 65536, uapi.contains("endpoint=") else { return nil }
+        return (uapi, String(describing: address.address))
+    }
+
     /// Network routes monitor.
     private var networkMonitor: NWPathMonitor?
 
@@ -153,7 +184,14 @@ public class WireGuardAdapter {
 
         // Shutdown the tunnel
         if case .started(let handle, _) = self.state {
-            wgTurnOff(handle)
+            // Destruction can occur on main. Keep the shared guard alive in Go,
+            // drain off-main, and commit the ACTUAL remaining registry afterward.
+            DispatchQueue.global(qos: .utility).async {
+                let ticket = R013PrimaryBegin()
+                guard ticket != 0 else { return }
+                wgTurnOff(handle)
+                _ = R013PrimaryFinish(ticket)
+            }
         }
     }
 
@@ -189,6 +227,15 @@ public class WireGuardAdapter {
                 return
             }
 
+            let primaryTicket: UInt64
+            do { primaryTicket = try self.acquirePrimary() }
+            catch { completionHandler(.startWireGuardBackend(-9001)); return }
+            defer { self.finishPrimary(primaryTicket) }
+            // Deliver only after the mutation scope commits observed state.
+            let completed: (WireGuardAdapterError?) -> Void = { error in
+                self.workQueue.async { completionHandler(error) }
+            }
+
             let networkMonitor = NWPathMonitor()
             networkMonitor.pathUpdateHandler = { [weak self] path in
                 self?.didReceivePathUpdate(path: path)
@@ -211,10 +258,10 @@ public class WireGuardAdapter {
                     settingsGenerator
                 )
                 self.networkMonitor = networkMonitor
-                completionHandler(nil)
+                completed(nil)
             } catch let error as WireGuardAdapterError {
                 networkMonitor.cancel()
-                completionHandler(error)
+                completed(error)
             } catch {
                 fatalError()
             }
@@ -223,8 +270,17 @@ public class WireGuardAdapter {
 
     /// Stop the tunnel.
     /// - Parameter completionHandler: completion handler.
-    public func stop(completionHandler: @escaping (WireGuardAdapterError?) -> Void) {
+    public func stop(primaryTransition: UInt64 = 0, completionHandler: @escaping (WireGuardAdapterError?) -> Void) {
         workQueue.async {
+            let primaryTicket: UInt64
+            do { primaryTicket = try self.acquirePrimary(primaryTransition) }
+            catch { completionHandler(.startWireGuardBackend(-9001)); return }
+            defer { self.finishPrimary(primaryTicket) }
+            // Deliver only after the mutation scope commits observed state.
+            let completed: (WireGuardAdapterError?) -> Void = { error in
+                self.workQueue.async { completionHandler(error) }
+            }
+
             self.logHandler(.verbose, "Adapter stop requested (state=\(self.state))")
             switch self.state {
             case .started(let handle, _):
@@ -234,7 +290,7 @@ public class WireGuardAdapter {
                 break
 
             case .stopped:
-                completionHandler(.invalidState)
+                completed(.invalidState)
                 return
             }
 
@@ -243,7 +299,7 @@ public class WireGuardAdapter {
 
             self.state = .stopped
 
-            completionHandler(nil)
+            completed(nil)
         }
     }
 
@@ -257,6 +313,16 @@ public class WireGuardAdapter {
                 completionHandler(.invalidState)
                 return
             }
+
+            let primaryTicket: UInt64
+            do { primaryTicket = try self.acquirePrimary() }
+            catch { completionHandler(.startWireGuardBackend(-9001)); return }
+            defer { self.finishPrimary(primaryTicket) }
+            // Deliver only after the mutation scope commits observed state.
+            let completed: (WireGuardAdapterError?) -> Void = { error in
+                self.workQueue.async { completionHandler(error) }
+            }
+
 
             // Tell the system that the tunnel is going to reconnect using new WireGuard
             // configuration.
@@ -293,9 +359,9 @@ public class WireGuardAdapter {
                     fatalError()
                 }
 
-                completionHandler(nil)
+                completed(nil)
             } catch let error as WireGuardAdapterError {
-                completionHandler(error)
+                completed(error)
             } catch {
                 fatalError()
             }
@@ -451,13 +517,17 @@ public class WireGuardAdapter {
     /// Helper method used by network path monitor.
     /// - Parameter path: new network path
     private func didReceivePathUpdate(path: Network.NWPath) {
+        let primaryTicket: UInt64
+        do { primaryTicket = try acquirePrimary() }
+        catch { logHandler(.error, "Network update deferred: probe transport did not close"); return }
+        defer { finishPrimary(primaryTicket) }
         self.logHandler(.verbose, "Network change detected with \(path.status) route and interface order \(path.availableInterfaces)")
         let lastUpdate = self.lastNetworkSettingsUpdateAt.map { String(describing: $0) } ?? "nil"
         self.logHandler(.verbose, "Path update state: state=\(self.state) everHadHandshake=\(self.everHadHandshake) lastNetworkSettingsUpdateAt=\(lastUpdate)")
 
         #if os(macOS)
         if case .started(let handle, _) = self.state {
-            wgBumpSockets(handle)
+            _ = R013BumpSocketsSync(handle, primaryTicket)
         }
         #elseif os(iOS)
         switch self.state {
@@ -469,7 +539,7 @@ public class WireGuardAdapter {
 
                 wgSetConfig(handle, wgConfig)
                 wgDisableSomeRoamingForBrokenMobileSemantics(handle)
-                wgBumpSockets(handle)
+                _ = R013BumpSocketsSync(handle, primaryTicket)
             } else {
                 if self.shouldPauseBackendOnUnsatisfiedPath() {
                     self.logHandler(.verbose, "Connectivity offline, pausing backend.")
