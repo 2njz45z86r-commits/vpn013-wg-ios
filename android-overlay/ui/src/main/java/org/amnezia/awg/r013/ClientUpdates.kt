@@ -26,9 +26,13 @@ import javax.net.ssl.HttpsURLConnection
 /** Same order protocol as iOS/Windows; APK identity is additionally checked before OS install. */
 object ClientUpdates {
     private var checking = false
+    private var refreshing = false
     private var downloading = false
     private var applying = false
     suspend fun refreshOrders(): String {
+        check(!refreshing) { "Обновление конфигураций уже выполняется" }
+        refreshing = true
+        try {
         val registry = ProfileRegistry.get(Application.get())
         val orders = withContext(Dispatchers.IO) { registry.vault.read().getJSONObject("orders") }
         if (orders.length() == 0) return "Нет привязанных заявок. Импортируйте ZIP с документом VPN013-Access.json."
@@ -40,6 +44,7 @@ object ClientUpdates {
             withContext(Dispatchers.IO) { registry.vault.edit { it.getJSONObject("orders").getJSONObject(order).put("pending", snapshot) } }
         }
         return if (applyPending()) "Конфигурации проверены и обновлены" else "Обновления загружены. Они применятся при открытом приложении после отключения VPN."
+        } finally { refreshing = false }
     }
     suspend fun applyPending(): Boolean {
         if (applying) return false
@@ -65,11 +70,22 @@ object ClientUpdates {
         checking = true
         try {
             withContext(Dispatchers.IO) { registry.vault.edit { it.put("lastDailyAttempt", now) } }
-            val release = withContext(Dispatchers.IO) { ClientProtocol.request("/client/releases/vpn013-wg/android").also { validateRelease(it) } }
-            if (newer(release)) promptDownload(activity, release)
-            val message = refreshOrders()
-            if (state.getJSONObject("orders").length() > 0) notify(message)
-            withContext(Dispatchers.IO) { registry.vault.edit { it.put("lastDailySuccess", now) } }
+            var complete = true
+            try {
+                val release = withContext(Dispatchers.IO) { ClientProtocol.request("/client/releases/vpn013-wg/android").also { validateRelease(it) } }
+                if (newer(release) && !downloading) {
+                    downloading = true
+                    try {
+                        val file = withContext(Dispatchers.IO) { downloadChecked(activity, release) }
+                        if (!activity.isFinishing && !activity.isDestroyed) MaterialAlertDialogBuilder(activity).setTitle("Обновление ${release.getString("version")} скачано")
+                            .setMessage("Файл проверен. Android предложит подтвердить установку; ваши профили сохранятся при обновлении поверх этой версии.")
+                            .setPositiveButton("Установить") { _, _ -> installChecked(activity, file) }.setNegativeButton("Позже", null).show()
+                    } finally { downloading = false }
+                }
+            } catch (_: Exception) { complete = false }
+            try { val message = refreshOrders(); if (state.getJSONObject("orders").length() > 0) notify(message) }
+            catch (_: Exception) { complete = false }
+            if (complete) withContext(Dispatchers.IO) { registry.vault.edit { it.put("lastDailySuccess", now) } }
         } catch (_: Exception) { /* Manual checks report errors; daily checks back off without interrupting VPN. */ }
         finally { checking = false }
     }
@@ -107,17 +123,21 @@ object ClientUpdates {
         activity.lifecycleScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) { downloadChecked(activity, release) }
-                if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
-                    MaterialAlertDialogBuilder(activity).setTitle("Разрешите обновления VPN013 WG")
-                        .setMessage("Android требует разрешение «Установка неизвестных приложений». Включите его для VPN013 WG, вернитесь сюда и снова выберите проверку обновления.")
-                        .setPositiveButton("Открыть разрешение") { _, _ -> activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))) }
-                        .setNegativeButton("Позже", null).show()
-                } else {
-                    val uri = FileProvider.getUriForFile(activity, activity.packageName + ".updates", file)
-                    activity.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                }
+                installChecked(activity, file)
             } catch (e: Exception) { message(activity, "Обновление не установлено", e.message ?: "Не удалось скачать и проверить APK. Прежняя версия сохранена.") }
             finally { downloading = false }
+        }
+    }
+    private fun installChecked(activity: Activity, file: File) {
+        if (activity.isFinishing || activity.isDestroyed) return
+        if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
+            MaterialAlertDialogBuilder(activity).setTitle("Разрешите обновления VPN013 WG")
+                .setMessage("Android требует разрешение «Установка неизвестных приложений». Включите его для VPN013 WG, вернитесь сюда и снова выберите проверку обновления.")
+                .setPositiveButton("Открыть разрешение") { _, _ -> activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))) }
+                .setNegativeButton("Позже", null).show()
+        } else {
+            val uri = FileProvider.getUriForFile(activity, activity.packageName + ".updates", file)
+            activity.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
         }
     }
     private fun downloadChecked(activity: Activity, release: JSONObject): File {
@@ -158,5 +178,5 @@ object ClientUpdates {
     @Suppress("DEPRECATION") private fun versionCode(info: PackageInfo): Long = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
     @Suppress("DEPRECATION") private fun signers(info: PackageInfo): Set<String> =
         (if (Build.VERSION.SDK_INT >= 28) info.signingInfo?.apkContentsSigners else info.signatures)?.map { it.toCharsString() }?.toSet().orEmpty()
-    private fun message(activity: Activity, title: String, text: String) { if (!activity.isFinishing) MaterialAlertDialogBuilder(activity).setTitle(title).setMessage(text).setPositiveButton("Понятно", null).show() }
+    private fun message(activity: Activity, title: String, text: String) { if (!activity.isFinishing && !activity.isDestroyed) MaterialAlertDialogBuilder(activity).setTitle(title).setMessage(text).setPositiveButton("Понятно", null).show() }
 }

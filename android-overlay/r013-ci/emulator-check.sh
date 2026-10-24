@@ -5,18 +5,21 @@ test "$GITHUB_ACTIONS" = true
 test "$RUNNER_ENVIRONMENT" = github-hosted
 test "$GITHUB_REPOSITORY" = '2njz45z86r-commits/vpn013-wg-ios'
 mkdir -p output/review
-# This is a disposable CI runner. These unused toolchains are not client sources.
-for unused in /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL; do
-  if [ -d "$unused" ]; then sudo rm -rf -- "$unused"; fi
- done
 df -h . > output/review/disk-before-emulator.txt
 SDK="$ANDROID_HOME/cmdline-tools/latest/bin"
+export ANDROID_USER_HOME="$RUNNER_TEMP/r013-android-user"
+export ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"
+export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 "$SDK/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
-echo no | "$SDK/avdmanager" create avd --force -n R013CI -k 'system-images;android-35;google_apis;x86_64' --device pixel_7
+echo no | "$SDK/avdmanager" create avd --force -n R013CI -p "$ANDROID_AVD_HOME/R013CI.avd" -k 'system-images;android-35;google_apis;x86_64' --device pixel_7
+test -s "$ANDROID_AVD_HOME/R013CI.ini"
+"$ANDROID_HOME/emulator/emulator" -list-avds > output/review/avd-list.txt
+grep -x R013CI output/review/avd-list.txt
 sudo chmod 666 /dev/kvm
 "$ANDROID_HOME/emulator/emulator" -accel-check > output/review/emulator-acceleration.txt 2>&1
-"$ANDROID_HOME/emulator/emulator" -avd R013CI -no-window -no-snapshot -no-audio -gpu swiftshader_indirect -no-boot-anim -memory 3072 -cores 2 -partition-size 1024 > "$RUNNER_TEMP/r013-emulator.log" 2>&1 &
+"$ANDROID_HOME/emulator/emulator" -avd R013CI -no-window -no-snapshot -no-audio -gpu swiftshader_indirect -no-boot-anim -memory 3072 -cores 2 > "$RUNNER_TEMP/r013-emulator.log" 2>&1 &
 emulator_pid=$!
 peer_pid=""
 finish() {

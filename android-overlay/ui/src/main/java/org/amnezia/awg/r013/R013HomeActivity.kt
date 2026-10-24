@@ -138,7 +138,7 @@ class R013HomeActivity : AppCompatActivity() {
         }
         content.addView(footer, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(24) })
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) { try { renderRows(); renderCurrent(); if (ClientUpdates.applyPending()) renderRows() } catch (_: Exception) { summaryDetails.text = "Не удалось прочитать защищённые данные. Откройте настройки и повторите." }; delay(2000) }
+            while (true) { try { renderCurrent(); renderRows(); if (ClientUpdates.applyPending()) renderRows() } catch (_: Exception) { summaryDetails.text = "Не удалось прочитать защищённые данные. Откройте настройки и повторите." }; delay(2000) }
         } }
         handleSharedFile(intent)
         lifecycleScope.launch { ClientUpdates.checkDaily(this@R013HomeActivity) { message -> feedback(message) } }
@@ -167,7 +167,7 @@ class R013HomeActivity : AppCompatActivity() {
     private fun settings() {
         MaterialAlertDialogBuilder(this).setTitle("VPN013 WG").setItems(arrayOf("Обновить конфигурации", "Проверить обновление приложения", "Настройки и журнал", "Купить конфигурацию")) { _, index ->
             when (index) {
-                0 -> lifecycleScope.launch { try { feedback(ClientUpdates.refreshOrders()) ; listSignature = "" } catch (e: Exception) { feedback(e.message ?: "Обновление не выполнено") } }
+                0 -> lifecycleScope.launch { try { feedback("Проверяем обновления конфигураций…"); feedback(ClientUpdates.refreshOrders()) ; listSignature = "" } catch (e: Exception) { feedback(e.message ?: "Обновление не выполнено") } }
                 1 -> ClientUpdates.offerUpdate(this)
                 2 -> startActivity(Intent(this, SettingsActivity::class.java))
                 3 -> open(ClientProtocol.BOT)
@@ -244,7 +244,7 @@ class R013HomeActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try { renderRows(true); tunnel.setStateAsync(if (up) Tunnel.State.UP else Tunnel.State.DOWN) }
             catch (e: Exception) { feedback(e.message ?: "Не удалось изменить подключение") }
-            finally { connecting = false; listSignature = ""; renderRows(); renderCurrent() }
+            finally { connecting = false; listSignature = ""; renderCurrent(); renderRows() }
         }
     }
     private suspend fun renderCurrent() {
@@ -259,7 +259,7 @@ class R013HomeActivity : AppCompatActivity() {
             Current(profile, member, endpoints, host, statistics?.takeIf { it.peers().isNotEmpty() }?.totalRx(), statistics?.takeIf { it.peers().isNotEmpty() }?.totalTx(), hs, live.revision())
         }
         val identity = "${snapshot.profile}|${snapshot.member}|${snapshot.endpoints}|${snapshot.revision}"
-        if (identity != currentIdentity) { currentIdentity = identity; currentHost = snapshot.host; pingJob?.cancel(); currentMeasurement = null; currentPing.text = ""; currentPing.icon = getDrawable(R.drawable.ic_r013_ping) }
+        if (identity != currentIdentity) { currentIdentity = identity; currentHost = snapshot.host; pingJob?.cancel(); currentMeasurement = null; listSignature = ""; currentPing.text = ""; currentPing.icon = getDrawable(R.drawable.ic_r013_ping) }
         summaryTitle.text = snapshot.member ?: snapshot.profile ?: "VPN отключён"
         currentPing.isEnabled = snapshot.host != null && pingJob?.isActive != true
         summaryDetails.text = if (snapshot.profile == null) "Выберите профиль ниже" else buildString {
@@ -278,7 +278,7 @@ class R013HomeActivity : AppCompatActivity() {
         currentPing.isEnabled = false; currentPing.text = "…"; currentPing.icon = null
         pingJob = lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { try { EndpointPing.measure(host) } catch (_: Exception) { null } }
-            if (identity == currentIdentity) { currentMeasurement = identity to result; currentPing.text = ""; currentPing.icon = getDrawable(R.drawable.ic_r013_ping); currentPing.isEnabled = true
+            if (identity == currentIdentity) { currentMeasurement = identity to result; listSignature = ""; currentPing.text = ""; currentPing.icon = getDrawable(R.drawable.ic_r013_ping); currentPing.isEnabled = true
                 feedback(result?.let { "Пинг текущего адреса: $it мс" } ?: "ICMP-ответ не получен. Это не доказывает отказ VPN.")
                 renderCurrent() }
         }

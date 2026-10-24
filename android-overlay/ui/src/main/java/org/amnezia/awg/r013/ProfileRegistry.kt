@@ -55,7 +55,7 @@ class ProfileRegistry private constructor(context: Context) {
     companion object {
         @Volatile private var instance: ProfileRegistry? = null
         fun get(context: Context): ProfileRegistry = instance ?: synchronized(this) { instance ?: ProfileRegistry(context.applicationContext).also { instance = it } }
-        fun parse(text: String): Config { require(text.toByteArray(Charsets.UTF_8).size <= 65_536); return Config.parse(ByteArrayInputStream(text.toByteArray(Charsets.UTF_8))) }
+        fun parse(text: String): Config { require(text.toByteArray(Charsets.UTF_8).size <= 65_536); return Config.parse(ByteArrayInputStream(text.removePrefix("\uFEFF").toByteArray(Charsets.UTF_8))) }
         fun digest(text: String): String = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
         fun validName(name: String): Boolean = !Tunnel.isNameInvalid(name) && name.trim() == name && name != "." && name != ".."
         fun find(p: JSONObject, name: String): JSONObject = p.keys().asSequence().map { p.getJSONObject(it) }.singleOrNull { it.getString("name") == name } ?: error("Профиль не найден")
