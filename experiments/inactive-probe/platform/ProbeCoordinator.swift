@@ -161,11 +161,11 @@ final class R013ProbeCoordinator {
                     if id != 0 { work.async { [self] in _ = R013ProbeCancelScan(controller, id) } }; return
                 }
                 guard id != 0 else { scheduleHour(); return }
-                operation = id; poll(stamp: stamp, id: id)
+                operation = id; poll(stamp: stamp, id: id, input: rotated)
             }
         }
     }
-    private func poll(stamp: UInt64, id: UInt64) {
+    private func poll(stamp: UInt64, id: UInt64, input: R013ProbeInput) {
         guard generation == stamp, operation == id, autoActive, !stopped else { return }
         work.async { [self] in
             var data = Data(count: 64 * 1024)
@@ -174,17 +174,21 @@ final class R013ProbeCoordinator {
             DispatchQueue.main.async { [self] in
                 guard generation == stamp, operation == id, autoActive, !stopped else { return }
                 if let status = status, status.status == "pending" {
-                    let item = DispatchWorkItem { [weak self] in self?.poll(stamp: stamp, id: id) }
+                    let item = DispatchWorkItem { [weak self] in self?.poll(stamp: stamp, id: id, input: input) }
                     polling = item; DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: item); return
                 }
                 operation = 0
                 guard let status = status, status.status == "complete" else { scheduleHour(); return }
+                // A profile can be edited/deleted without changing the active
+                // engine. Do not label fresh UI rows with old snapshot metrics.
+                guard let fresh = currentInput?(), fresh.auto_active, fresh.resolver == input.resolver,
+                      fresh.candidates == input.candidates else { scheduleHour(); return }
                 nextIndex = status.next_index
                 metrics?(status)
                 guard generation == stamp, autoActive, !stopped, let chosen = status.choice_id,
-                      let fresh = currentInput?(), fresh.auto_active,
-                      let snapshot = fresh.candidates.first(where: { $0.id == chosen }), let apply = apply else { scheduleHour(); return }
-                authorizeChoice(id: id, stamp: stamp, snapshot: snapshot, resolver: fresh.resolver, apply: apply)
+                      let latest = currentInput?(), latest.auto_active,
+                      let snapshot = latest.candidates.first(where: { $0.id == chosen }), let apply = apply else { scheduleHour(); return }
+                authorizeChoice(id: id, stamp: stamp, snapshot: snapshot, resolver: latest.resolver, apply: apply)
             }
         }
     }

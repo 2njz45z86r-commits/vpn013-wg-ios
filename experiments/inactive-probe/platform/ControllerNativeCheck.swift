@@ -85,9 +85,19 @@ private func spin(until condition: () -> Bool) {
         precondition(!initial!.commit(.idle), "permit committed twice")
         var measured = 0
         coordinator.metrics = { status in precondition(status.status == "complete"); measured += 1 }
-        coordinator.startHourly(input: { input }, apply: { _,_,_ in preconditionFailure("active peer must never be selected") })
+        var freshInput = input
+        coordinator.startHourly(input: { freshInput }, apply: { _,_,_ in preconditionFailure("active peer must never be selected") })
         coordinator.runNowForTesting()
         spin { measured == 1 }
+        lock.lock(); let beforeEditOpens = currentOpens; lock.unlock()
+        coordinator.runNowForTesting()
+        spin { lock.lock(); defer { lock.unlock() }; return currentOpens > beforeEditOpens }
+        freshInput = R013ProbeInput(auto_active: true, resolver: input.resolver, start_index: 0,
+                                   candidates: [R013ProbeSnapshot(id: input.candidates[0].id, config: config + "\n", source: input.candidates[0].source)])
+        spin { lock.lock(); defer { lock.unlock() }; return currentOpens == beforeEditOpens + 2 && closes == currentOpens }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.03))
+        precondition(measured == 1, "edited profile received old snapshot metrics")
+        freshInput = input
         lock.lock(); let beforeCancelOpens = currentOpens; lock.unlock()
         coordinator.runNowForTesting()
         spin { lock.lock(); defer { lock.unlock() }; return currentOpens > beforeCancelOpens }
