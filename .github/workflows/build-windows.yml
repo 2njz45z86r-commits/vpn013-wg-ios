@@ -25,6 +25,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) {throw 'Source download failed'}
           if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower() -ne 'f7c4a928eecc6e40a1d7b0bcf37bf26d7b6de1b449a2ca26f7cf1ffc2bd83e35') {throw 'Source hash mismatch'}
           Expand-Archive -LiteralPath $archive -DestinationPath $env:GITHUB_WORKSPACE
+      - name: Apply public overlays and preserve exact corresponding source
+        run: python windows/prepare-ci-source.py
       - name: Prepare hash-pinned official dependencies
         working-directory: vpn013-wg-windows
         run: |
@@ -60,10 +62,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.4.0-amd64.msi'
-          $source=Join-Path $env:RUNNER_TEMP 'windows-source.zip'
           $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.4.0-windows-source.zip'
-          Copy-Item -LiteralPath $source -Destination $sourceNamed
-          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.4.0';build=1;sourceSHA256='f7c4a928eecc6e40a1d7b0bcf37bf26d7b6de1b449a2ca26f7cf1ffc2bd83e35';msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true}
+          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.4.0';build=1;sourceSHA256=(Get-FileHash -LiteralPath $sourceNamed -Algorithm SHA256).Hash.ToLower();msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true}
           $provenance | ConvertTo-Json | Set-Content -LiteralPath 'installer/dist/windows-build-provenance.json' -Encoding utf8
           $notes=@'
           VPN013 WG Windows x64 1.4.0.
