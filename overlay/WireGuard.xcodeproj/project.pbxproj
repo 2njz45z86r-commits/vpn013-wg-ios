@@ -1399,7 +1399,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				9B5F58ECFF36F61BACAACA91 /* PrivateTunnelStore.swift in Sources */,
-				613013000000000000000082 /* EndpointPing.swift in Sources */,
 				B47708F94D16F2FA231D8BDE /* AutoTunnelController.swift in Sources */,
 				E3D6AA7389B9B6422CC0DCCE /* AutoTunnelProfile.swift in Sources */,
 				7A61590471721CA663530C04 /* AutoFailoverPolicy.swift in Sources */,
@@ -1435,6 +1434,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				89E5622BC10FBF68338CC739 /* PrivateTunnelStore.swift in Sources */,
+				613013000000000000000082 /* EndpointPing.swift in Sources */,
 				B71B60A57BD45DF7DBB7586E /* AutoTunnelUI.swift in Sources */,
 				2D29A92A3BA54077FFF769A1 /* AutoTunnelProfile.swift in Sources */,
 				6FE1765A21C90E87002690EA /* LocalizationHelper.swift in Sources */,
