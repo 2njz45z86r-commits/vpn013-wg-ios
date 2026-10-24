@@ -13,6 +13,7 @@ import Foundation
         let b = ClientServer(id:"finland",name:"Finland",config:"synthetic-fixture-configuration-B")
         let valid = snapshot([a,b])
         try valid.validate()
+        try check(valid.revision == "9f0f12eb4cfeb200bd29ce6650d12c6c6addf0ed3fb477c4c1a63d8eb3cf51c4") // Python server interoperability fixture.
         try check(ClientUpdateProtocol.validToken(String(repeating:"A",count:43)))
         for token in ["",String(repeating:"A",count:42),String(repeating:"A",count:44),String(repeating:"/",count:43)] {
             try check(!ClientUpdateProtocol.validToken(token))

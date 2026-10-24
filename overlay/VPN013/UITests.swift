@@ -243,9 +243,9 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(updates.waitForExistence(timeout:20))
         updates.tap()
         XCTAssertTrue(app.staticTexts["Пока нет привязанных заявок"].waitForExistence(timeout:5))
-        XCTAssertTrue(app.buttons["vpn013.update-check"].exists)
+        XCTAssertTrue(app.cells["vpn013.update-check"].exists)
         capture("17-updates-before-binding")
-        let fixture = app.buttons["vpn013.sync-fixture"]
+        let fixture = app.cells["vpn013.sync-fixture"]
         for _ in 0..<5 { if fixture.isHittable { break }; app.tables.firstMatch.swipeUp() }
         XCTAssertTrue(fixture.isHittable)
         fixture.tap()
