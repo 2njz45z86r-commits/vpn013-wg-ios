@@ -77,8 +77,10 @@ private func spin(until condition: () -> Bool) {
         #if R013_PROBE_TESTING
         let coordinator = R013ProbeCoordinator(physical: physical, throughTunnel: current)!
         var initial: R013PrimaryPermit?
+        var superseded = false
+        coordinator.beginPrimaryChange { precondition($0 == nil); superseded = true }
         coordinator.beginPrimaryChange { initial = $0 }
-        spin { initial != nil }
+        spin { initial != nil && superseded }
         precondition(initial!.commit(.active(uapi: config)))
         precondition(!initial!.commit(.idle), "permit committed twice")
         var measured = 0

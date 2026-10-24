@@ -128,13 +128,19 @@ final class R013ProbeCoordinator {
         let stamp = generation
         work.async { [self] in
             let transition = R013ProbeBeginChange(controller)
+            let acknowledged = DispatchSemaphore(value: 0)
             DispatchQueue.main.async { [self] in
+                defer { acknowledged.signal() }
                 guard generation == stamp, !stopped, transition != 0 else {
                     if transition != 0 { _ = R013PrimaryPermit(controller: controller, transition: transition).commit(.unknown) }
                     completed(nil); return
                 }
                 completed(R013PrimaryPermit(controller: controller, transition: transition))
             }
+            // Keep the control queue ordered until main has adopted or aborted
+            // this permit. A newer manual change cannot race a stale callback
+            // and receive Busy merely because that callback hasn't run yet.
+            acknowledged.wait()
         }
     }
     func resumeAfterPrimaryChange() { requireMain(); scheduleHour() }
@@ -188,7 +194,9 @@ final class R013ProbeCoordinator {
         work.async { [self] in
             var owned = data
             let token = owned.withUnsafeMutableBytes { bytes in R013ProbeBeginChoice(controller, id, bytes.baseAddress, UInt32(bytes.count)) }
+            let acknowledged = DispatchSemaphore(value: 0)
             DispatchQueue.main.async { [self] in
+                defer { acknowledged.signal() }
                 guard generation == stamp, autoActive, !stopped, token != 0 else {
                     if token != 0 { _ = R013PrimaryPermit(controller: controller, transition: token).commit(.unknown) }
                     if generation == stamp { scheduleHour() }; return
@@ -201,6 +209,7 @@ final class R013ProbeCoordinator {
                     }
                 }
             }
+            acknowledged.wait()
         }
     }
     // On failure the provider must retain this coordinator and retry shutdown;
