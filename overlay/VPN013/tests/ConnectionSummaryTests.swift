@@ -55,7 +55,7 @@ import Foundation
         }
         let manualFallback = ping(false, nil)
         expect(manualFallback?.hosts == snapshot.hosts, "Missing runtime must not disable an ordinary profile's endpoint Ping")
-        expect(manualFallback?.statistics == .init(), "A saved address is never presented as measured traffic or handshake")
+        expect(manualFallback?.statistics == VPN013ConnectionSnapshot.Statistics(), "A saved address is never presented as measured traffic or handshake")
         expect(manualFallback?.targetIdentity == ping(false, snapshot)?.targetIdentity,
                "Runtime recovery cannot discard a Ping for the same ordinary address")
         expect(manualFallback?.targetIdentity == ping(false, duplicateStats)?.targetIdentity,
