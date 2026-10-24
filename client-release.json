@@ -2,9 +2,9 @@
   "schema": 1,
   "app": "vpn013-wg",
   "platform": "ios",
-  "version": "1.4.0",
-  "build": 9,
-  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40082850467/VPN013AWG-unsigned.ipa",
-  "sha256": "d46fc9544d02d026ef27432dca86fbe5169ee82091b7385a7f6969c08507f2c9",
-  "notes": "Проверка новых версий и обновление серверов по заявке из ZIP. Применение после отключения VPN; сторонние профили и ключи сохраняются."
+  "version": "1.4.1",
+  "build": 10,
+  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40100372668/VPN013AWG-unsigned.ipa",
+  "sha256": "50c593a6be3214ba39924917a87eed4e3306d5eb86059f075c3b75fcfd167d3f",
+  "notes": "Авто всегда первым. В карточке текущего сервера: отдельная кнопка пинга адреса, трафик и время рукопожатия. Проверка не переключает VPN; старые результаты сбрасываются при смене сервера."
 }
