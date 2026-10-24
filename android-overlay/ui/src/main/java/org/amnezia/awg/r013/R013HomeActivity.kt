@@ -154,7 +154,7 @@ class R013HomeActivity : AppCompatActivity() {
         val box = vertical().apply { setPadding(dp(20), dp(12), dp(20), dp(24)) }
         box.addView(text("Добавить профиль", 22, true).apply { setPadding(dp(12), dp(12), dp(12), dp(16)) })
         val items = listOf<Pair<String, () -> Unit>>(
-            "Купить конфигурацию" to { open(ClientProtocol.BOT + "?start=awg") },
+            "Купить конфигурацию" to { open(ClientProtocol.BOT) },
             "1 час бесплатно" to { open(ClientProtocol.WEBSITE) },
             "Создать режим Авто" to { createAuto() },
             "Импорт из файла или ZIP" to { fileResult.launch(arrayOf("*/*")) },

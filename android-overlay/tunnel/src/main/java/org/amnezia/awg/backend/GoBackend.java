@@ -76,6 +76,11 @@ public final class GoBackend implements Backend {
     @Nullable private volatile Thread autoThread;
     @Nullable private volatile HttpURLConnection healthConnection;
     @Nullable private volatile AutoMember activeMember;
+    private final java.util.concurrent.ThreadPoolExecutor probeExecutor = new java.util.concurrent.ThreadPoolExecutor(
+        1, 1, 30, TimeUnit.SECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1), task -> {
+            Thread thread = new Thread(task, "R013-Traffic-Probe"); thread.setDaemon(true); return thread;
+        }, new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+    @Nullable private volatile java.util.concurrent.Future<Double> pendingProbe;
     private boolean replacing;
     private long connectionRevision;
     public synchronized long getConnectionRevision() { return connectionRevision; }
@@ -99,6 +104,8 @@ public final class GoBackend implements Backend {
     private void cancelAutomatic() {
         autoEpoch.incrementAndGet();
         Thread worker = autoThread; autoThread = null; activeMember = null;
+        java.util.concurrent.Future<Double> future = pendingProbe; if (future != null) future.cancel(true);
+        probeExecutor.purge();
         HttpURLConnection probe = healthConnection; if (probe != null) probe.disconnect();
         if (worker != null) worker.interrupt();
     }
@@ -160,7 +167,17 @@ public final class GoBackend implements Backend {
                 Thread.sleep(2500);
                 while (autoEpoch.get() == epoch && !Thread.currentThread().isInterrupted()) {
                     boolean available = physicalNetworkAvailable();
-                    Double latency = available ? trafficProbe() : null;
+                    Double latency = null;
+                    if (available) {
+                        try {
+                            pendingProbe = probeExecutor.submit(this::trafficProbe);
+                            latency = pendingProbe.get(11, TimeUnit.SECONDS);
+                        } catch (java.util.concurrent.TimeoutException | java.util.concurrent.ExecutionException | java.util.concurrent.RejectedExecutionException ignored) {
+                            if (pendingProbe != null) pendingProbe.cancel(true);
+                            HttpURLConnection connection = healthConnection; if (connection != null) connection.disconnect();
+                            probeExecutor.purge();
+                        } finally { pendingProbe = null; }
+                    }
                     boolean healthy;
                     synchronized (this) {
                         if (autoEpoch.get() != epoch || currentTunnel != tunnel) break;

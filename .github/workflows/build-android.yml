@@ -6,14 +6,14 @@ on:
       - 'android-overlay/**'
       - '.github/workflows/build-android.yml'
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: r013-android-inspection
   cancel-in-progress: false
 jobs:
   compile:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -47,3 +47,35 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew --no-daemon --console=plain :ui:compileDebugKotlin :ui:compileDebugJavaWithJavac :ui:compileDebugAndroidTestKotlin
+      - name: Build native debug and unsigned release APKs
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd android
+          ./gradlew --no-daemon --console=plain :ui:assembleDebug :ui:assembleDebugAndroidTest :ui:assembleRelease
+      - name: Exercise real VPN and native Material UI in emulator
+        id: emulator
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd android
+          bash r013-ci/emulator-check.sh
+      - name: Export reviewable source and build evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p android/output/review
+          find android/ui/build -name '*.xml' -path '*androidTest-results*' -exec cp {} android/output/review/ \; 2>/dev/null || true
+          (cd android/output && zip -qr android-review.zip review)
+          if [ '${{ steps.emulator.outcome }}' = success ]; then
+            cp android/ui/build/outputs/apk/release/ui-release-unsigned.apk android/output/VPN013WG-Android-unsigned.apk
+            (cd android && tar --exclude='./.git' --exclude='*/.git' --exclude='./.gradle' --exclude='*/.cxx' --exclude='*/build' --exclude='./output' --exclude='./local.properties' -czf ../VPN013WG-Android-source.tar.gz .)
+            sha256sum android/output/VPN013WG-Android-unsigned.apk VPN013WG-Android-source.tar.gz android/output/android-review.zip > android/output/SHA256SUMS-Android.txt
+            gh release create "android-inspection-${GITHUB_RUN_ID}" android/output/VPN013WG-Android-unsigned.apk VPN013WG-Android-source.tar.gz android/output/android-review.zip android/output/SHA256SUMS-Android.txt --target "$GITHUB_SHA" --prerelease --title 'Android native inspection' --notes 'Unsigned Android candidate and official-source overlay. No customer credentials. Review emulator evidence before signing or installing. Physical Android testing remains separate.'
+          else
+            gh release create "android-inspection-${GITHUB_RUN_ID}" android/output/android-review.zip --target "$GITHUB_SHA" --prerelease --title 'Android inspection diagnostics' --notes 'Build or emulator diagnostics. No ready APK.'
+          fi

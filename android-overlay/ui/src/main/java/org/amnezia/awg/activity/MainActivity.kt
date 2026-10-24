@@ -68,7 +68,7 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
         backPressedCallback = onBackPressedDispatcher.addCallback(this) { handleBackPressed() }
         onBackStackChanged()
         if (savedInstanceState == null && intent.getBooleanExtra("r013_detail_only", false)) lifecycleScope.launch {
-            val target = Application.getTunnelManager().getTunnels()[intent.getStringExtra("selected_tunnel")]
+            val target = intent.getStringExtra("selected_tunnel")?.let { Application.getTunnelManager().getTunnels()[it] }
             if (target != null) {
                 if (selectedTunnel == target) onSelectedTunnelChanged(null, target) else selectedTunnel = target
             }
