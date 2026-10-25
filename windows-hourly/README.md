@@ -93,3 +93,13 @@ rollback traffic while a prior primary stream continues during candidate Scan.
 Its seed persistence dependency is in-memory; that does not establish actual
 secure-file persistence, complete hourly integration, physical WAN/owner-PC or
 manual-stop-during-handover acceptance. No installer or release is published.
+
+
+The stronger owner fixture additionally uses the REAL existing DPAPI writer and
+loader with a test-only temporary root. It injects a failure AFTER writing a new
+working seed, checks decrypted rollback, and compares original source/vault
+ciphertext byte-for-byte. A second real SCM stop case cancels an in-flight owner
+inside persistence and must never acknowledge stale success or undo that stop.
+This strengthened revision requires fresh native acceptance. The pure cadence
+helper covers initial30s, one in-flight scan,3600s-after-completion and no missed-
+period catchup storm; it alone is not an integrated service hourly producer.

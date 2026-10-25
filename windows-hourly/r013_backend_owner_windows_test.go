@@ -3,6 +3,7 @@ package tunnel
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,13 +35,14 @@ import (
 )
 
 type backendReceipt struct {
-	Success                                                             bool
-	Phase, Error                                                        string
-	Selected, Rollback, Stale, ExternalUnknown, SameTUN, VaultPreserved bool
-	Before, After                                                       uint32
+	Success                                                                       bool
+	Phase, Error                                                                  string
+	Selected, Rollback, Stale, ExternalUnknown, SameTUN, VaultPreserved, StopWins bool
+	Before, After                                                                 uint32
 }
 type backendFixture struct {
 	directory string
+	stop      bool
 	receipt   backendReceipt
 }
 
@@ -136,6 +138,28 @@ func (f *backendFixture) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Only this disposable fixture process uses a temporary secure-store root.
+	// Exercise the REAL DPAPI writer/loader, not a second persistence format.
+	conf.PresetRootDirectory(f.directory)
+	if err = os.WriteFile(filepath.Join(f.directory, "r013-auto.dat"), cipher, 0600); err != nil {
+		return err
+	}
+	sourceHashes := make(map[string]string)
+	for _, c := range []*conf.Config{one, two, three} {
+		if err = c.Save(true); err != nil {
+			return err
+		}
+		path, e := c.Path()
+		if e != nil {
+			return e
+		}
+		data, e := os.ReadFile(path)
+		if e != nil {
+			return e
+		}
+		sourceHashes[path] = fmt.Sprintf("%x", sha256.Sum256(data))
+	}
+
 	gate, err := r013gate.Open()
 	if err != nil {
 		return err
@@ -178,9 +202,12 @@ func (f *backendFixture) run(ctx context.Context) error {
 	}
 	working.Name = "R013-Auto"
 	configuration := &working
+	if err = working.Save(true); err != nil {
+		return err
+	}
 	// Bootstrap the SAME real implementation used by selected and rollback paths.
 	var observation comparisonServiceObservation
-	owner := &comparisonBackendOwner{ctx: ctx, gate: gate, relay: relay, native: native, configuration: &configuration, engine: &engine, watcher: &watcher, observation: &observation, load: func() (r013vault.Snapshot, error) { return snapshot, nil }, persist: func(*conf.Config) error { return nil }}
+	owner := &comparisonBackendOwner{ctx: ctx, gate: gate, relay: relay, native: native, configuration: &configuration, engine: &engine, watcher: &watcher, observation: &observation, load: r013vault.Load, persist: func(c *conf.Config) error { return c.Save(true) }}
 	f.receipt.Phase = "restrictive-primary-bootstrap"
 	uapi, err := working.ToUAPI()
 	if err != nil {
@@ -351,7 +378,54 @@ func (f *backendFixture) run(ctx context.Context) error {
 	if err = verifyOwnNetwork(luid, two); err != nil {
 		return err
 	}
+	stored, e := conf.LoadFromName("R013-Auto")
+	if e != nil {
+		return e
+	}
+	storedDigest, e := r013vault.WorkingDigest(*stored)
+	expectedDigest, _ := r013vault.WorkingDigest(*two)
+	if e != nil || storedDigest != expectedDigest {
+		return errors.New("selected secure seed readback differs")
+	}
 	f.receipt.Selected = true
+	if f.stop {
+		f.receipt.Phase = "manual-SCM-stop-during-persist"
+		selection, err = scan(2, netip.MustParseAddr("10.213.99.5"), false)
+		if err != nil {
+			return err
+		}
+		owner.persist = func(c *conf.Config) error {
+			if err := c.Save(true); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(f.directory, "stop-persist-ready"), []byte("ready"), 0600); err != nil {
+				return err
+			}
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		if err = owner.apply(selection); err == nil || ctx.Err() == nil || observation.ready.Load() || observation.member.Load() != nil {
+			return errors.New("manual SCM stop was undone or acknowledged as successful selection")
+		}
+		if _, e := slot.Observe(func(r013gate.PrimaryUAPIDevice) (r013gate.Observation, error) { return r013gate.Observation{}, nil }); e == nil {
+			return errors.New("stopped backend remained available")
+		}
+		actualVault, e := os.ReadFile(filepath.Join(f.directory, "r013-auto.dat"))
+		if e != nil || string(actualVault) != string(beforeVault) {
+			return errors.New("stop changed Auto vault")
+		}
+		for path, want := range sourceHashes {
+			data, e := os.ReadFile(path)
+			if e != nil || fmt.Sprintf("%x", sha256.Sum256(data)) != want {
+				return errors.New("stop changed source profile")
+			}
+		}
+		f.receipt.StopWins = true
+		f.receipt.SameTUN = winipcfg.LUID(native.LUID()) == luid
+		f.receipt.VaultPreserved = true
+		f.receipt.Phase = "stopped-without-stale-ack"
+		return nil
+	}
 	f.receipt.Phase = "persist-failure-exact-native-rollback"
 	selection, err = scan(2, netip.MustParseAddr("10.213.99.5"), false)
 	if err != nil {
@@ -360,9 +434,12 @@ func (f *backendFixture) run(ctx context.Context) error {
 	injected := errors.New("synthetic persist failure")
 	owner.persist = func(c *conf.Config) error {
 		if c.Interface.MTU == 1410 {
+			if err := c.Save(true); err != nil {
+				return err
+			}
 			return injected
 		}
-		return nil
+		return c.Save(true)
 	}
 	if err = owner.apply(selection); !errors.Is(err, injected) {
 		return fmt.Errorf("persist failure not returned: %w", err)
@@ -378,6 +455,14 @@ func (f *backendFixture) run(ctx context.Context) error {
 	}
 	if err = verifyOwnNetwork(luid, two); err != nil {
 		return err
+	}
+	stored, e = conf.LoadFromName("R013-Auto")
+	if e != nil {
+		return e
+	}
+	storedDigest, e = r013vault.WorkingDigest(*stored)
+	if e != nil || storedDigest != expectedDigest {
+		return errors.New("rollback secure seed readback differs")
 	}
 	f.receipt.Rollback = true
 	f.receipt.Phase = "stale-choice-and-raw-edit"
@@ -400,7 +485,17 @@ func (f *backendFixture) run(ctx context.Context) error {
 	}
 	f.receipt.ExternalUnknown = true
 	f.receipt.SameTUN = winipcfg.LUID(native.LUID()) == luid
-	f.receipt.VaultPreserved = string(cipher) == string(beforeVault)
+	actualVault, e := os.ReadFile(filepath.Join(f.directory, "r013-auto.dat"))
+	if e != nil {
+		return e
+	}
+	f.receipt.VaultPreserved = string(actualVault) == string(beforeVault)
+	for path, want := range sourceHashes {
+		data, e := os.ReadFile(path)
+		if e != nil || fmt.Sprintf("%x", sha256.Sum256(data)) != want {
+			return errors.New("original source profile file changed")
+		}
+	}
 	if !f.receipt.SameTUN || !f.receipt.VaultPreserved {
 		return errors.New("TUN or immutable vault changed")
 	}
@@ -409,6 +504,11 @@ func (f *backendFixture) run(ctx context.Context) error {
 }
 
 func TestNativeActualBackendOwnerSelectsAndRollsBackOnSameWintun(t *testing.T) {
+	runBackendFixture(t, false)
+}
+func TestNativeSCMStopWinsDuringActualBackendPersistence(t *testing.T) { runBackendFixture(t, true) }
+func runBackendFixture(t *testing.T, stop bool) {
+	t.Helper()
 	name := fmt.Sprintf("R013BackendCI-%d", time.Now().UnixNano())
 	directory := t.TempDir()
 	exe, err := os.Executable()
@@ -420,7 +520,11 @@ func TestNativeActualBackendOwnerSelectsAndRollsBackOnSameWintun(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer scm.Disconnect()
-	service, err := scm.CreateService(name, exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, DisplayName: name, SidType: windows.SERVICE_SID_TYPE_UNRESTRICTED}, "--r013-backend-fixture", name, directory)
+	argument := "--r013-backend-fixture"
+	if stop {
+		argument = "--r013-backend-stop-fixture"
+	}
+	service, err := scm.CreateService(name, exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, DisplayName: name, SidType: windows.SERVICE_SID_TYPE_UNRESTRICTED}, argument, name, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,7 +548,16 @@ func TestNativeActualBackendOwnerSelectsAndRollsBackOnSameWintun(t *testing.T) {
 	}
 	var receipt backendReceipt
 	deadline := time.Now().Add(110 * time.Second)
+	stopSent := false
 	for time.Now().Before(deadline) {
+		if stop && !stopSent {
+			if _, e := os.Stat(filepath.Join(directory, "stop-persist-ready")); e == nil {
+				if _, e = service.Control(svc.Stop); e != nil {
+					t.Fatal(e)
+				}
+				stopSent = true
+			}
+		}
 		if data, e := os.ReadFile(filepath.Join(directory, "backend-receipt.json")); e == nil {
 			if json.Unmarshal(data, &receipt) == nil {
 				break
@@ -452,7 +565,13 @@ func TestNativeActualBackendOwnerSelectsAndRollsBackOnSameWintun(t *testing.T) {
 		}
 		time.Sleep(30 * time.Millisecond)
 	}
-	if !receipt.Success || !receipt.Selected || !receipt.Rollback || !receipt.Stale || !receipt.ExternalUnknown || !receipt.SameTUN || !receipt.VaultPreserved || receipt.Before == 0 || receipt.After <= receipt.Before {
+	passed := receipt.Success && receipt.Selected && receipt.SameTUN && receipt.VaultPreserved && receipt.Before > 0 && receipt.After > receipt.Before
+	if stop {
+		passed = passed && stopSent && receipt.StopWins
+	} else {
+		passed = passed && receipt.Rollback && receipt.Stale && receipt.ExternalUnknown
+	}
+	if !passed {
 		if state, e := service.Query(); e == nil {
 			t.Logf("SCM state=%d win32=%d specific=%d", state.State, state.Win32ExitCode, state.ServiceSpecificExitCode)
 		}
@@ -465,5 +584,9 @@ func TestNativeActualBackendOwnerSelectsAndRollsBackOnSameWintun(t *testing.T) {
 		}
 		t.Fatalf("actual shared backend owner failed: %+v", receipt)
 	}
-	t.Logf("Real primary DNS %d -> %d during encrypted candidate UNDER restrictive service-SID WFP; actual shared owner selected different keys/address/DNS/MTU on SAME raw Wintun, restored exact native backend after injected persist failure, refused stale choice, invalidated membership on raw UAPI edit. In-memory persistence dependency; NOT installed owner-PC, complete hourly producer, or real seed-file persistence proof.", receipt.Before, receipt.After)
+	if stop {
+		t.Log("Real SCM Stop during actual DPAPI seed persistence cancelled owner, left membership/slot unavailable, did not undo manual stop or acknowledge stale success, and preserved source profiles/vault.")
+		return
+	}
+	t.Logf("Real primary DNS %d -> %d during encrypted candidate UNDER restrictive service-SID WFP; actual shared owner selected different keys/address/DNS/MTU on SAME raw Wintun, restored exact native backend after injected persist failure, refused stale choice, invalidated membership on raw UAPI edit. Real temporary secure-store DPAPI seed write/readback and rollback after an injected error AFTER writing; original source ciphertext and Auto vault unchanged. NOT owner-PC or complete hourly producer proof.", receipt.Before, receipt.After)
 }
