@@ -452,6 +452,13 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string, progres
 		if err := onlyDriverPrivilegeRemains(); err != nil {
 			return err
 		}
+		if err := progress("before-initial-WFP-close"); err != nil {
+			return err
+		}
+		firewall.DisableFirewall()
+		if err := progress("initial-WFP-closed-after-drop"); err != nil {
+			return err
+		}
 		for _, permissive := range []bool{true, false, true} {
 			if err := progress(fmt.Sprintf("before-WFP-%t", permissive)); err != nil {
 				return err

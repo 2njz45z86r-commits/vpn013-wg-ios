@@ -18,6 +18,7 @@ import (
 
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013probe/protectedudp"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/elevate"
+	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/firewall"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
@@ -95,7 +96,19 @@ func (f *systemFixture) write() error {
 	}
 	from, _ := windows.UTF16PtrFromString(temp)
 	to, _ := windows.UTF16PtrFromString(filepath.Join(f.directory, "receipt.json"))
-	return windows.MoveFileEx(from, to, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
+	// A concurrent parent read may temporarily deny replacement on Windows.
+	// Retry only sharing/access contention, with a strict one-second bound.
+	end := time.Now().Add(time.Second)
+	for {
+		err = windows.MoveFileEx(from, to, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
+		if err == nil {
+			return nil
+		}
+		if (err != windows.ERROR_ACCESS_DENIED && err != windows.ERROR_SHARING_VIOLATION) || time.Now().After(end) {
+			return fmt.Errorf("fixture receipt replace: %w", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func systemIdentityAndPrivileges() (bool, bool, error) {
@@ -185,6 +198,23 @@ func (f *systemFixture) run(ctx context.Context) error {
 		return fmt.Errorf("Global before drop: %w", err)
 	}
 	defer gate.Close(context.Background())
+	if f.native {
+		// Actual tunnel service establishes its WFP session BEFORE dropping
+		// privileges. Match that lifecycle; a cold first-ever post-drop RPC is
+		// a different experiment. LUID is unused by this permissive policy.
+		f.receipt.Phase = "before-initial-WFP"
+		if err = f.write(); err != nil {
+			return err
+		}
+		if err = firewall.EnableFirewall(0, true, nil); err != nil {
+			return fmt.Errorf("initial WFP: %w", err)
+		}
+		defer firewall.DisableFirewall()
+		f.receipt.Phase = "initial-WFP-established"
+		if err = f.write(); err != nil {
+			return err
+		}
+	}
 	if err = elevate.DropAllPrivileges(true); err != nil {
 		return err
 	}
@@ -317,7 +347,11 @@ func runSystemFixtureTest(t *testing.T, native bool) {
 	}
 	// Match the real tunnel installer: WFP's process-security descriptor requires
 	// the service SID. A bare SYSTEM token alone is not the same native context.
-	service, err := scm.CreateService(name, exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, DisplayName: name, SidType: windows.SERVICE_SID_TYPE_UNRESTRICTED}, args...)
+	sidType := uint32(windows.SERVICE_SID_TYPE_NONE)
+	if native {
+		sidType = windows.SERVICE_SID_TYPE_UNRESTRICTED
+	}
+	service, err := scm.CreateService(name, exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, DisplayName: name, SidType: sidType}, args...)
 	if err != nil {
 		t.Fatal(err)
 	}
