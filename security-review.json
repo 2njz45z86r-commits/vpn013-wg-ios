@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-25T21:59:53.221520+00:00",
-  "source_sha256": "ef850a48bd2503772d30784cbc4a4571d9d11c177d165818021907271e16641b",
-  "source_commit_reviewed": "02abb61336c002da562716e7a1e01cf8474af87a",
+  "reviewed_at": "2026-10-25T22:11:00.121115+00:00",
+  "source_sha256": "836a7c853eb7c4cbc7fbf20b9a1eb696a2abc94322b17184a5b414908669a86b",
+  "source_commit_reviewed": "1caf50dea2f3b2a602a5cca1d9aef3e34a2ca000",
   "scope_complete": false,
   "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/android-draft",
   "baseline_only": false,
@@ -179,7 +179,7 @@
     }
   ],
   "baseline_report_ref": "private-local:vpn013-bot-migration-20261025/baseline",
-  "review_note": "iOS/Android three-day source-only validation. Nine runtime/security/native gaps remain open; existing installer release paths must reject this review. Owner source-validation exception remains applicable.",
+  "review_note": "Three-platform native3day validation source. Nine new runtime/native checks remain unverified. Windows109inventory not yet executed; no installer release approval. Owner source-validation exception is explicit.",
   "validation_only_authorization": {
     "source": "explicit owner reply in current task",
     "scope": "Public client source and free validation while audit is incomplete",

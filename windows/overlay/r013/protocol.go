@@ -18,7 +18,6 @@ import (
 const AutoName = "R013-Auto"
 const MaxDocument = 1048576
 const PurchaseURL = "https://t.me/vpn013_com_bot"
-const TrialURL = "https://vpn013.com/"
 const SupportURL = "https://t.me/R013_Support"
 
 var ErrDocument = errors.New("Документ обновления не прошёл проверку. Прежние конфигурации сохранены.")

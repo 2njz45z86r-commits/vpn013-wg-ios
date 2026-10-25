@@ -112,7 +112,8 @@ func (tp *TunnelsPage) addR013Menu(menu *walk.Menu) {
 	}{
 		{"Создать режим Авто", tp.onCreateAuto},
 		{"Купить конфигурацию", func() { externalLink(tp.Form(), r013.PurchaseURL) }},
-		{"1 час бесплатно", func() { externalLink(tp.Form(), r013.TrialURL) }},
+		{r013.NativeTrialLabel, tp.onNativeTrial},
+		{"Продлить конфигурацию", tp.onNativeRenewal},
 	} {
 		action := walk.NewAction()
 		action.SetText(item.text)

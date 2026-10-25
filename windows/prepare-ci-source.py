@@ -32,6 +32,11 @@ page_source = tunnels_page.read_text(encoding='utf-8')
 page_field = '\tupdatesBusy            int32\n'
 assert page_source.count(page_field) == 1, 'Unexpected native page source'
 tunnels_page.write_text(page_source.replace(page_field, page_field + '\tr013Upgrade           *r013UpgradeOffer\n'), encoding='utf-8', newline='\n')
+tray_file=root/'ui/tray.go'
+tray_source=tray_file.read_text(encoding='utf-8')
+tray_anchor='return tray, tray.setup()'
+assert tray_source.count(tray_anchor)==1
+tray_file.write_text(tray_source.replace(tray_anchor,'if err=tray.setup();err!=nil{return tray,err}\ntray.startNativeTrialNotifications()\nreturn tray,nil'),encoding='utf-8',newline='\n')
 # The base archive's build=1 predates releases1.5.x. A fixed current build must
 # not keep treating the currently installed catalog entry as a new update.
 install_source = root / 'r013/install_windows.go'
