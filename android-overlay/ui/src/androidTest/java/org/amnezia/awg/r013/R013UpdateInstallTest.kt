@@ -83,6 +83,16 @@ class R013UpdateInstallTest {
             val pkg=instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString().orEmpty()
             !marker.exists() && (pkg.contains("packageinstaller") || pkg.contains("permissioncontroller"))
         }
+        // A package-installer process can still show only "Staging app...".
+        // Require the parsed same-package UPDATE confirmation before capture
+        // and cancellation; entering the staging process alone is not enough.
+        waitFor {
+            listOf("Update", "Обновить").any { label ->
+                instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText(label)?.any {
+                    it.isEnabled && it.text?.toString()?.equals(label, ignoreCase = true) == true
+                } == true
+            }
+        }
         val review=File(context.getExternalFilesDir(null),"review").apply { mkdirs() }
         instrumentation.uiAutomation.takeScreenshot().also { bitmap -> File(review,"update-install-confirmation.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }; bitmap.recycle() }
         assertTrue(instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
