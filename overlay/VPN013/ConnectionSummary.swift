@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import Foundation
+import CryptoKit
 
 /// Only presentation data crosses this message boundary. Never encode a config or keys.
 struct VPN013ConnectionSnapshot: Codable, Equatable {
@@ -92,8 +93,37 @@ struct VPN013ConnectionSnapshot: Codable, Equatable {
     }
 }
 
+/// Manual statistics do not require reopening the saved encrypted profile.
+/// Raw UAPI (including keys) stays inside the extension; only parsed metrics leave it.
+struct VPN013RuntimeStatisticsReply: Codable, Equatable {
+    var schema = 1
+    let statistics: VPN013ConnectionSnapshot.Statistics?
+    let peerIdentity: String?
+
+    init(runtime: String?) {
+        statistics = runtime.map { VPN013ConnectionSnapshot.Statistics.parse($0) }
+        let peers = runtime.flatMap { text -> [String]? in
+            guard text.utf8.count <= 262_144 else { return nil }
+            return text.split(separator: "\n").filter { $0.hasPrefix("public_key=") }.map { String($0.dropFirst(11)) }
+        }
+        peerIdentity = peers.flatMap(Self.identity)
+    }
+
+    static func identity(_ peers: [String]) -> String? {
+        let keys = peers.map { $0.lowercased() }
+        guard (1...64).contains(keys.count), Set(keys).count == keys.count,
+              keys.allSatisfy({ $0.utf8.count == 64 && $0.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) } }) else { return nil }
+        let value = Data(("vpn013-manual-statistics-v1\n" + keys.sorted().joined(separator: "\n")).utf8)
+        return SHA256.hash(data: value).map { String(format: "%02x", $0) }.joined()
+    }
+
+    var hasMeasurements: Bool {
+        statistics.map { $0.hasCounters || $0.handshakeReported == true } ?? false
+    }
+}
+
 enum VPN013SnapshotIssue {
-    case notRunning, noSession, requestFailed, emptyResponse, oversizedResponse, invalidResponse, timedOut
+    case notRunning, noSession, requestFailed, emptyResponse, oversizedResponse, invalidResponse, timedOut, runtimeUnavailable
 
     var explanation: String {
         switch self {
@@ -104,6 +134,7 @@ enum VPN013SnapshotIssue {
         case .oversizedResponse: return "Ответ VPN-расширения превысил допустимый размер"
         case .invalidResponse: return "Ответ VPN-расширения не прошёл проверку формата"
         case .timedOut: return "Нет ответа VPN-расширения за 3 секунды"
+        case .runtimeUnavailable: return "VPN-движок пока не вернул измеренные счётчики"
         }
     }
 }

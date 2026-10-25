@@ -173,6 +173,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
         guard let completionHandler = completionHandler else { return }
 
+        if messageData == Data([4]) {
+            // Read the running backend directly. In particular, do not reopen
+            // protocolConfiguration/private storage or wait on the main queue.
+            // Only bounded parsed counters and handshake time cross this IPC.
+            adapter.getRuntimeConfiguration { runtime in
+                let value = VPN013RuntimeStatisticsReply(runtime: runtime)
+                completionHandler(try? JSONEncoder().encode(value))
+            }
+            return
+        }
+
         if messageData == Data([2]) {
             DispatchQueue.main.async {
                 let text = self.automatic.map { $0.activeName + "\n" + $0.phase }

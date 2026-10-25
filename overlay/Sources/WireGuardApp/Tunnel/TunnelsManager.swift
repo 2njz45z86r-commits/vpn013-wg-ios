@@ -908,13 +908,39 @@ class TunnelContainer: NSObject {
             return
         }
         #endif
+        let automatic = isVPN013Automatic
+        let manualConfiguration = automatic ? nil : tunnelConfiguration
+        let manualName = name
         guard let session = tunnelProvider.connection as? NETunnelProviderSession else { connectionSnapshotIssue = .noSession; completion(nil); return }
         do {
-            try session.sendProviderMessage(Data([3])) { data in
+            try session.sendProviderMessage(Data([automatic ? 3 : 4])) { data in
                 DispatchQueue.main.async {
                     guard self.status == .active else { self.connectionSnapshotIssue = .notRunning; completion(nil); return }
                     guard let data = data, !data.isEmpty else { self.connectionSnapshotIssue = .emptyResponse; completion(nil); return }
                     guard data.count <= 32_768 else { self.connectionSnapshotIssue = .oversizedResponse; completion(nil); return }
+                    if !automatic {
+                        guard let reply = try? JSONDecoder().decode(VPN013RuntimeStatisticsReply.self, from: data), reply.schema == 1 else {
+                            self.connectionSnapshotIssue = .invalidResponse; completion(nil); return
+                        }
+                        guard reply.hasMeasurements, let statistics = reply.statistics else {
+                            self.connectionSnapshotIssue = .runtimeUnavailable; completion(nil); return
+                        }
+                        guard let config = manualConfiguration else {
+                            self.connectionSnapshotIssue = .invalidResponse; completion(nil); return
+                        }
+                        guard !self.isVPN013Automatic,
+                              self.tunnelConfiguration?.asWgQuickConfig() == config.asWgQuickConfig(),
+                              let expected = VPN013RuntimeStatisticsReply.identity(config.peers.map { $0.publicKey.hexKey }),
+                              reply.peerIdentity == expected else {
+                            self.connectionSnapshotIssue = .invalidResponse; completion(nil); return
+                        }
+                        let value = VPN013ConnectionSnapshot(name: manualName,
+                            endpoints: config.peers.compactMap { $0.endpoint?.stringRepresentation },
+                            hosts: config.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } },
+                            phase: nil, revision: 0, statistics: statistics)
+                        guard value.isValid else { self.connectionSnapshotIssue = .invalidResponse; completion(nil); return }
+                        self.connectionSnapshotIssue = nil; completion(value); return
+                    }
                     guard let value = try? JSONDecoder().decode(VPN013ConnectionSnapshot.self, from: data), value.isValid
                     else { self.connectionSnapshotIssue = .invalidResponse; completion(nil); return }
                     self.connectionSnapshotIssue = nil
