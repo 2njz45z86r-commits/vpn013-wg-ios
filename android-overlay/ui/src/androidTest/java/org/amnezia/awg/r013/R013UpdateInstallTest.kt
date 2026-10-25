@@ -68,6 +68,7 @@ class R013UpdateInstallTest {
         val method = ClientUpdates::class.java.getDeclaredMethod("installChecked",androidx.appcompat.app.AppCompatActivity::class.java,File::class.java,JSONObject::class.java).apply { isAccessible = true }
         instrumentation.runOnMainSync { method.invoke(ClientUpdates,activity!!,file,release) }
         assertTrue(marker.exists())
+        waitFor { findText("Открыть разрешение") != null }
         val permission = findText("Открыть разрешение") ?: error("Permission action not shown")
         assertTrue(permission.performAction(AccessibilityNodeInfo.ACTION_CLICK))
         waitFor { instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == "com.android.settings" }
