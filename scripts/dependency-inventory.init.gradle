@@ -2,8 +2,10 @@
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import groovy.json.JsonOutput
 
-gradle.projectsEvaluated {
-    def appProject = gradle.rootProject.project(':ui')
+// Task registration must happen before task selection. projectsEvaluated is
+// too late when this official build enables configuration on demand.
+gradle.beforeProject { appProject ->
+    if (appProject.path != ':ui') { return }
     appProject.tasks.register('r013ProductionDependencyInventory') {
         doLast {
             def configuration = appProject.configurations.getByName('releaseRuntimeClasspath')
