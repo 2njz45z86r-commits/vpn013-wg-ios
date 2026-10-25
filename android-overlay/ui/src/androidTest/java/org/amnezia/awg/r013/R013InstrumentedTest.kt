@@ -261,17 +261,15 @@ class R013InstrumentedTest {
     }
     @Test fun iProductionHourlyTimerKeepsRealPrimaryAndCancelsOnManualChoice() = runBlocking {
         val slow = fixture().replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
-        val encoded = InstrumentationRegistry.getArguments().getString("syntheticCandidate") ?: error("Second isolated peer missing")
-        val fast = String(android.util.Base64.decode(encoded,android.util.Base64.DEFAULT),Charsets.UTF_8)
-            .replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
-        OfflineChanges.apply { registry.importOrdinary(listOf("A Slow Fixture" to ProfileRegistry.parse(slow),"B Fast Fixture" to ProfileRegistry.parse(fast))); registry.createAuto() }
+        OfflineChanges.apply { registry.create("A Timer Fixture",ProfileRegistry.parse(slow)); registry.createAuto() }
         startHome(); val manager = Application.getTunnelManager(); val auto = manager.getTunnels().first()
         val backend = Application.getBackend() as GoBackend
         val started = android.os.SystemClock.elapsedRealtime()
         auto.setStateAsync(Tunnel.State.UP)
-        // These isolated peers answer DNS and ICMP, not public HTTPS health
-        // origins. The existing two-attempt policy rotates to B and backs off.
-        waitFor(28000) { backend.automaticMemberName == "B Fast Fixture" && android.os.SystemClock.elapsedRealtime()-started >= 20_000 }
+        // A one-member Auto cannot rotate because these isolated peers don't
+        // implement public HTTPS origins. Real second-peer routing is tested
+        // separately; this case isolates the production timer from health.
+        waitFor(20000) { EndpointPing.measure("10.13.99.1") != null }
         val revision = backend.connectionRevision
         val handleField = GoBackend::class.java.getDeclaredField("currentTunnelHandle").apply { isAccessible = true }
         val handle = handleField.getInt(backend)
@@ -281,17 +279,45 @@ class R013InstrumentedTest {
         assertTrue("Production timer fired before its initial 30 seconds",android.os.SystemClock.elapsedRealtime()-started >= 30_000)
         assertEquals("Scan unexpectedly restarted the primary",revision,backend.connectionRevision)
         assertEquals(handle,handleField.getInt(backend))
-        assertEquals("B Fast Fixture",backend.automaticMemberName)
+        assertEquals("A Timer Fixture",backend.automaticMemberName)
         assertTrue(backend.getStatistics(auto).totalRx() > rx)
         assertNotNull(EndpointPing.measure("10.13.99.1"))
         screenshot("hourly-real-vpn")
-        manager.getTunnels()["B Fast Fixture"]!!.setStateAsync(Tunnel.State.UP)
+        manager.getTunnels()["A Timer Fixture"]!!.setStateAsync(Tunnel.State.UP)
         assertFalse(backend.isAutomaticRunning)
         assertNull(backend.connectionView().hourlySummary())
         val manualRevision = backend.connectionRevision
         Thread.sleep(1500)
         assertEquals(manualRevision,backend.connectionRevision)
-        assertEquals("B Fast Fixture",backend.currentProfileName)
+        assertEquals("A Timer Fixture",backend.currentProfileName)
+    }
+    @Test fun jRealCoordinatorChoosesFasterPeerWithActualPolicyAndUnchangedProfiles() = runBlocking {
+        val slow = fixture().replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
+        val encoded = InstrumentationRegistry.getArguments().getString("syntheticCandidate") ?: error("Second isolated peer missing")
+        val fast = String(android.util.Base64.decode(encoded,android.util.Base64.DEFAULT),Charsets.UTF_8)
+            .replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
+        OfflineChanges.apply { registry.importOrdinary(listOf("A Slow Fixture" to ProfileRegistry.parse(slow),"B Fast Fixture" to ProfileRegistry.parse(fast))); registry.createAuto() }
+        startHome(); val manager = Application.getTunnelManager(); val auto = manager.getTunnels().first()
+        val backend = Application.getBackend() as GoBackend
+        auto.setStateAsync(Tunnel.State.UP)
+        waitFor(20000) { EndpointPing.measure("10.13.99.1") != null }
+        assertEquals("A Slow Fixture",backend.automaticMemberName)
+        val saved = registry.vault.read().toString()
+        val policy = GoBackend::class.java.getDeclaredField("automaticPolicy").apply { isAccessible = true }.get(backend) as AutoPolicy
+        val epoch = (GoBackend::class.java.getDeclaredField("autoEpoch").apply { isAccessible = true }.get(backend) as java.util.concurrent.atomic.AtomicLong).get()
+        val members = registry.members(auto.name).map { GoBackend.AutoMember(it.first,it.second) }
+        val compare = GoBackend::class.java.getDeclaredMethod("compareHourly",Tunnel::class.java,List::class.java,
+            AutoPolicy::class.java,java.lang.Long.TYPE,Integer.TYPE).apply { isAccessible = true }
+        // Same production coordinator; invoke its due work directly so the
+        // synthetic HTTPS health failure can't win before the comparison.
+        compare.invoke(backend,auto,members,policy,epoch,0)
+        assertEquals("B Fast Fixture",backend.automaticMemberName)
+        assertEquals(1,policy.current())
+        assertTrue(backend.connectionView().hourlySummary()!!.contains("выбран более быстрый"))
+        waitFor(20000) { EndpointPing.measure("10.13.99.1") != null }
+        assertTrue(backend.getLastHandshake(auto) > 0)
+        assertEquals("Comparison rewrote a saved profile or membership",saved,registry.vault.read().toString())
+        screenshot("hourly-selected-real-vpn")
     }
     private fun fixture(): String {
         val encoded = InstrumentationRegistry.getArguments().getString("syntheticConfig") ?: error("Synthetic peer fixture missing")

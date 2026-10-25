@@ -80,6 +80,7 @@ public final class GoBackend implements Backend {
     @Nullable private volatile Thread autoThread;
     @Nullable private volatile HttpURLConnection healthConnection;
     @Nullable private volatile AutoMember activeMember;
+    @Nullable private AutoPolicy automaticPolicy;
     private final java.util.concurrent.ThreadPoolExecutor probeExecutor = new java.util.concurrent.ThreadPoolExecutor(
         1, 1, 30, TimeUnit.SECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1), task -> {
             Thread thread = new Thread(task, "R013-Traffic-Probe"); thread.setDaemon(true); return thread;
@@ -125,6 +126,7 @@ public final class GoBackend implements Backend {
         Thread hourly = hourlyThread; hourlyThread = null; hourlySummary = null;
         if (hourly != null) hourly.interrupt();
         Thread worker = autoThread; autoThread = null; activeMember = null;
+        automaticPolicy = null;
         java.util.concurrent.Future<Double> future = pendingProbe; if (future != null) future.cancel(true);
         probeExecutor.purge();
         HttpURLConnection probe = healthConnection; if (probe != null) probe.disconnect();
@@ -202,6 +204,7 @@ public final class GoBackend implements Backend {
         final long epoch = autoEpoch.incrementAndGet();
         activeMember = members.get(0);
         final AutoPolicy policy = new AutoPolicy(members.size(), 0);
+        automaticPolicy = policy;
         final Thread worker = new Thread(() -> {
             try {
                 Thread.sleep(2500);
@@ -385,18 +388,22 @@ public final class GoBackend implements Backend {
                 if (ticket == 0) return cursor;
                 replacing = true;
                 try {
+                    if (!sameHourly(tunnel,members,epoch,snapshot) || !scope.routes().isCurrent() ||
+                            Thread.currentThread().isInterrupted()) return cursor;
                     java.util.concurrent.Future<Double> health = pendingProbe; if (health != null) health.cancel(true);
                     HttpURLConnection connection = healthConnection; if (connection != null) connection.disconnect();
                     invalidateHourly();
                     setStateInternalGuarded(tunnel,null,State.DOWN,ticket);
                     activeMember = null;
+                    if (autoEpoch.get() != epoch || physicalPathRevision.get() != snapshot.pathRevision() ||
+                            Thread.currentThread().isInterrupted()) throw new IllegalStateException("Comparison cancelled");
                     setStateInternalGuarded(tunnel,next.config(),State.UP,ticket);
                     activeMember = next; policy.selectMeasuredCandidate(index);
                     hourlySummary = "Авто: выбран более быстрый VPN по одинаковой проверке DNS";
                 } catch (Exception ignored) {
                     // Restore the exact previous configuration if establishing
                     // the selected backend failed, using the same guarded span.
-                    if (currentTunnelHandle < 0) {
+                    if (currentTunnelHandle < 0 && autoEpoch.get() == epoch && VpnService.prepare(context) == null) {
                         try { setStateInternalGuarded(tunnel,snapshot.config(),State.UP,ticket); activeMember = snapshot.member(); }
                         catch (Exception retryFailed) { currentTunnel = tunnel; currentConfig = null; }
                     }
