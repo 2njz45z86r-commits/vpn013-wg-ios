@@ -30,7 +30,11 @@ func (iw *interfaceWatcher) ConfigureExisting(ctx context.Context, binder conn.B
 	if len(copy.Interface.Addresses) == 0 || len(copy.Interface.Addresses) > 64 || len(copy.Interface.DNS) > 64 || len(copy.Peers) > 30 {
 		return windows.ERROR_INVALID_PARAMETER
 	}
-	return iw.comparisonGate.Primary(ctx, r013gate.Stamp{}, func(context.Context) error {
+	bound, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(iw.comparisonContext, cancel)
+	defer stop()
+	defer cancel()
+	return iw.comparisonGate.Primary(bound, r013gate.Stamp{}, func(context.Context) error {
 		iw.setupMutex.Lock()
 		defer iw.setupMutex.Unlock()
 		if err := iw.comparisonContext.Err(); err != nil {
@@ -59,7 +63,7 @@ func (iw *interfaceWatcher) ConfigureExisting(ctx context.Context, binder conn.B
 			}
 		}
 		// Native DAD is asynchronous; absence of a preferred source is never ready.
-		verifyCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		verifyCtx, cancel := context.WithTimeout(bound, 8*time.Second)
 		defer cancel()
 		for {
 			err = verifyOwnNetwork(luid, &copy)
@@ -149,7 +153,7 @@ func verifyOwnNetwork(luid winipcfg.LUID, configuration *conf.Config) error {
 			return fmt.Errorf("source address missing: %w", err)
 		}
 		if row.DadState != winipcfg.DadStatePreferred || row.OnLinkPrefixLength != address.Cidr {
-			return errors.New("source address not preferred or prefix differs")
+			return fmt.Errorf("source address not preferred or prefix differs (DAD=%d prefix=%d expected=%d)", row.DadState, row.OnLinkPrefixLength, address.Cidr)
 		}
 	}
 	for _, family := range []winipcfg.AddressFamily{windows.AF_INET, windows.AF_INET6} {
@@ -177,6 +181,7 @@ func verifyOwnNetwork(luid winipcfg.LUID, configuration *conf.Config) error {
 				if !haveSource {
 					continue
 				}
+				prefix.IP = append(net.IP(nil), prefix.IP...)
 				prefix.MaskSelf()
 				hop := net.IPv6zero
 				if prefix.Bits() == 32 {
