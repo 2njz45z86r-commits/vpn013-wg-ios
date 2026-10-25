@@ -62,15 +62,62 @@ struct ClientAccessDocument: Codable {
     let kind: String
     let capability: String
     let snapshot: ClientSnapshot
+    var trial: ClientTrialMetadata? = nil
     func validate() throws {
         guard schema == 1, kind == "vpn013-access", ClientUpdateProtocol.validToken(capability) else { throw ClientUpdateError.invalidDocument }
         try snapshot.validate()
+        try trial?.validate()
     }
     static func decode(_ data: Data) throws -> Self {
         guard data.count <= ClientUpdateProtocol.maximumResponseBytes else { throw ClientUpdateError.invalidDocument }
         let value = try JSONDecoder().decode(Self.self, from: data)
         try value.validate()
         return value
+    }
+}
+
+struct ClientTrialMetadata: Codable {
+    let durationSeconds: Int64
+    let renewalURL: String
+    func validate() throws {
+        guard durationSeconds == 259200, Self.validRenewalURL(renewalURL) else { throw ClientUpdateError.invalidDocument }
+    }
+    static func validRenewalURL(_ value: String) -> Bool {
+        value.range(of: "^https://t\\.me/vpn013_com_bot\\?start=trial_[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil
+    }
+}
+
+struct ClientNativeTrialInfo: Codable {
+    let schema: Int
+    let kind: String
+    let app: String
+    let orderID: String
+    let state: String
+    let issuedAt: Int64
+    let expiresAt: Int64
+    let serverTime: Int64
+    let durationSeconds: Int64
+    let isTrial: Bool
+    let renewalURL: String
+    var ticket: String? = nil
+    func validate(previous: Self? = nil) throws {
+        guard schema == 1, kind == "vpn013-native-trial", app == "vpn013-wg", ClientUpdateProtocol.validID(orderID),
+              ["provisioning", "active", "revoking", "revoked", "expired"].contains(state),
+              issuedAt > 0, expiresAt > 0, serverTime > 0, durationSeconds == 259200,
+              !isTrial || expiresAt.subtractingReportingOverflow(issuedAt) == (259200000, false),
+              ClientTrialMetadata.validRenewalURL(renewalURL), ticket == nil || ClientUpdateProtocol.validToken(ticket!),
+              previous == nil || (previous!.orderID == orderID && previous!.renewalURL == renewalURL) else { throw ClientUpdateError.invalidResponse }
+    }
+}
+
+struct ClientNativeTrialState: Codable {
+    var requestID: String
+    var ticket: String? = nil
+    var info: ClientNativeTrialInfo? = nil
+    var serverOffset: Int64 = 0
+    static func fresh() -> Self {
+        let random = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
+        return .init(requestID: random.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: ""))
     }
 }
 
@@ -117,8 +164,12 @@ final class ClientHTTPTask: NSObject, URLSessionDataDelegate {
     private var contents = Data()
     private var response: HTTPURLResponse?
     private var failed = false
+    private let maximumBytes: Int
+    private let mimeType: String
+    private let acceptedStatuses: Set<Int>
     private let completion: (Result<Data, Error>) -> Void
-    init(request: URLRequest, completion: @escaping (Result<Data, Error>) -> Void) {
+    init(request: URLRequest, maximumBytes: Int = ClientUpdateProtocol.maximumResponseBytes, mimeType: String = "application/json", acceptedStatuses: Set<Int> = [200], completion: @escaping (Result<Data, Error>) -> Void) {
+        self.maximumBytes = maximumBytes; self.mimeType = mimeType; self.acceptedStatuses = acceptedStatuses
         self.completion = completion
         super.init()
         let config = URLSessionConfiguration.ephemeral
@@ -132,11 +183,11 @@ final class ClientHTTPTask: NSObject, URLSessionDataDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         self.response = response as? HTTPURLResponse
-        guard response.expectedContentLength <= ClientUpdateProtocol.maximumResponseBytes else { failed = true; completionHandler(.cancel); return }
+        guard response.expectedContentLength <= maximumBytes else { failed = true; completionHandler(.cancel); return }
         completionHandler(.allow)
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard contents.count + data.count <= ClientUpdateProtocol.maximumResponseBytes else { failed = true; dataTask.cancel(); return }
+        guard data.count <= maximumBytes - contents.count else { failed = true; dataTask.cancel(); return }
         contents.append(data)
     }
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -145,10 +196,11 @@ final class ClientHTTPTask: NSObject, URLSessionDataDelegate {
         if failed { result = .failure(ClientUpdateError.invalidResponse) }
         else if let error = error { result = .failure(error) }
         else if let response = response, [401, 403, 410].contains(response.statusCode) { result = .failure(ClientUpdateError.accessEnded) }
-        else if response?.statusCode == 200, response?.mimeType == "application/json" { result = .success(contents) }
+        else if let response = response, acceptedStatuses.contains(response.statusCode), response.mimeType == mimeType { result = .success(contents) }
         else { result = .failure(ClientUpdateError.invalidResponse) }
         DispatchQueue.main.async { self.completion(result) }
     }
+    func cancel() { session?.invalidateAndCancel() }
     static func request(path: String, capability: String? = nil, originIndex: Int = 0, completion: @escaping (Result<Data, Error>) -> Void) {
         guard ClientUpdateProtocol.origins.indices.contains(originIndex), path.hasPrefix("/client/") else { completion(.failure(ClientUpdateError.network)); return }
         var request = URLRequest(url: URL(string: ClientUpdateProtocol.origins[originIndex] + path)!, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData)

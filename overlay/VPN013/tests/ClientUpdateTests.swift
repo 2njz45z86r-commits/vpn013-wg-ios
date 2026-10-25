@@ -20,6 +20,18 @@ import Foundation
         }
         let document = ClientAccessDocument(schema:1,kind:"vpn013-access",capability:String(repeating:"A",count:43),snapshot:valid)
         let bytes = try JSONEncoder().encode(document)
+        let renewal = "https://t.me/vpn013_com_bot?start=trial_" + String(repeating: "C", count: 43)
+        let trial = ClientTrialMetadata(durationSeconds: 259200, renewalURL: renewal)
+        try trial.validate(); count += 1
+        for url in [renewal + "&extra=1", renewal + "#x", renewal.replacingOccurrences(of: "https", with: "http"), "https://t.me/other?start=trial_" + String(repeating: "C", count: 43), "https://vpn013.com/"] {
+            fails { try ClientTrialMetadata(durationSeconds: 259200, renewalURL: url).validate() }
+        }
+        fails { try ClientTrialMetadata(durationSeconds: 3600, renewalURL: renewal).validate() }
+        let info = ClientNativeTrialInfo(schema: 1, kind: "vpn013-native-trial", app: "vpn013-wg", orderID: valid.orderID, state: "active", issuedAt: 1_900_000_000_000, expiresAt: 1_900_259_200_000, serverTime: 1_900_000_001_000, durationSeconds: 259200, isTrial: true, renewalURL: renewal)
+        try info.validate(); count += 1
+        var fresh = ClientNativeTrialState.fresh(); try check(ClientUpdateProtocol.validToken(fresh.requestID)); fresh.ticket = String(repeating: "A", count: 43); fresh.info = info
+        let trialDoc = ClientAccessDocument(schema: 1, kind: "vpn013-access", capability: document.capability, snapshot: valid, trial: trial)
+        try check(try ClientAccessDocument.decode(JSONEncoder().encode(trialDoc)).trial?.renewalURL == renewal)
         try check(try ClientAccessDocument.decode(bytes).snapshot.servers == [a,b])
         fails { _ = try ClientAccessDocument.decode(Data("{}".utf8)) }
         fails { _ = try ClientAccessDocument.decode(Data(repeating:32,count:1_048_577)) }
@@ -64,11 +76,14 @@ import Foundation
         try check(try store.load().bindings.isEmpty)
         var registry = ClientRegistry()
         registry.bindings[valid.orderID] = ClientBinding(document:document,profileIDs:["germany":UUID().uuidString],baseline:["germany":"hash"],pending:valid,lastCheck:Date())
+        registry.nativeTrial = fresh
         try store.save(registry)
         try check(try store.load().bindings[valid.orderID]?.document.capability == document.capability)
         let encrypted = try Data(contentsOf:root.appendingPathComponent("client-subscriptions-v1.enc"))
         try check(encrypted.range(of:Data(document.capability.utf8)) == nil)
         try check(encrypted.range(of:Data(a.config.utf8)) == nil)
+        try check(encrypted.range(of:Data(renewal.utf8)) == nil)
+        try check(try store.load().nativeTrial?.requestID == fresh.requestID)
         registry.bindings[valid.orderID]?.pending = nil
         try store.save(registry)
         try check(try store.load().bindings[valid.orderID]?.pending == nil)

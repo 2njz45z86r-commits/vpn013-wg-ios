@@ -13,6 +13,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, willFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         Logger.configureGlobal(tagged: "APP", withFilePath: FileManager.logFileURL?.path)
+        _ = NativeTrialCoordinator.shared
 
         if let launchOptions = launchOptions {
             if launchOptions[.url] != nil || launchOptions[.shortcutItem] != nil {

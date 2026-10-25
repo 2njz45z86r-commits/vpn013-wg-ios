@@ -931,8 +931,13 @@ class TunnelsListTableViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "Купить конфигурацию", style: .default) { [weak self] _ in
             self?.openConfigurationWebsite("https://t.me/vpn013_com_bot")
         })
-        alert.addAction(UIAlertAction(title: "1 час бесплатно", style: .default) { [weak self] _ in
-            self?.openConfigurationWebsite("https://vpn013.com/")
+        alert.addAction(UIAlertAction(title: NativeTrialCoordinator.label, style: .default) { [weak self] _ in
+            guard let self = self, let manager = self.tunnelsManager else { return }
+            NativeTrialCoordinator.shared.show(manager: manager, presenter: self)
+        })
+        alert.addAction(UIAlertAction(title: "Продлить конфигурацию", style: .default) { [weak self] _ in
+            guard let self = self, let manager = self.tunnelsManager else { return }
+            NativeTrialCoordinator.shared.renewalMenu(manager: manager, presenter: self, source: sender)
         })
         let importFileAction = UIAlertAction(title: tr("addTunnelMenuImportFile"), style: .default) { [weak self] _ in
             self?.presentViewControllerForFileImport()

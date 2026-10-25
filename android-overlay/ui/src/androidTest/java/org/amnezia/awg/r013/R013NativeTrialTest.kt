@@ -137,7 +137,7 @@ class R013NativeTrialTest {
         val image=instrumentation.uiAutomation.takeScreenshot()
         File(root,"native-trial-$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) };image.recycle()
     }
-    @Test fun directButtonImportsFullZIPWithoutOpeningWebsite() {
+    @Test fun directButtonImportsFullZIPWithoutOpeningWebsite()=runBlocking {
         start();click("Добавить");waitFor { node(NativeTrial.LABEL)!=null };assertNotNull(node("Продлить конфигурацию"));assertNull(node("1 час бесплатно"));screenshot("menu")
         click(NativeTrial.LABEL);waitFor { node("Тестовые профили добавлены")!=null };screenshot("imported")
         assertEquals(1,creates);assertEquals(1,downloads);assertTrue(outside.isEmpty())

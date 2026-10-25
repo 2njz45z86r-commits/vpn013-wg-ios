@@ -234,7 +234,9 @@
 		913013000000000000000103 /* ConnectionSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 913013000000000000000101; };
 		913013000000000000000104 /* ConnectionSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 913013000000000000000101; };
 		913013000000000000000105 /* ConnectionSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 913013000000000000000101; };
+813013000000000000000095 /* NativeTrial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 713013000000000000000095; };
 /* End PBXBuildFile section */
+// Native trial source uses only the existing app target/runtime.
 
 /* Begin PBXContainerItemProxy section */
 		6F5D0C20218352EF000F85AD /* PBXContainerItemProxy */ = {
@@ -465,6 +467,7 @@
 		713013000000000000000093 /* ClientUpdatesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPN013/ClientUpdatesViewController.swift; sourceTree = SOURCE_ROOT; };
 		713013000000000000000094 /* ClientUpdateFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPN013/ClientUpdateFixture.swift; sourceTree = SOURCE_ROOT; };
 		913013000000000000000101 /* ConnectionSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPN013/ConnectionSummary.swift; sourceTree = SOURCE_ROOT; };
+713013000000000000000095 /* NativeTrial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPN013/NativeTrial.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1454,6 +1457,7 @@
 				813013000000000000000094 /* ClientUpdateFixture.swift in Sources */,
 				813013000000000000000093 /* ClientUpdatesViewController.swift in Sources */,
 				813013000000000000000092 /* ClientSubscriptions.swift in Sources */,
+				813013000000000000000095 /* NativeTrial.swift in Sources */,
 				813013000000000000000091 /* ClientUpdateProtocol.swift in Sources */,
 				B71B60A57BD45DF7DBB7586E /* AutoTunnelUI.swift in Sources */,
 				2D29A92A3BA54077FFF769A1 /* AutoTunnelProfile.swift in Sources */,

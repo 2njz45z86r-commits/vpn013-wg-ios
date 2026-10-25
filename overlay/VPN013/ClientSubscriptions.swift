@@ -18,6 +18,8 @@ struct ClientRegistry: Codable {
     var version = 1
     var bindings: [String: ClientBinding] = [:]
     var automatic: [ClientAutoBinding] = []
+    var nativeTrial: ClientNativeTrialState? = nil
+    var renewalsAwaitingReturn: [String: Int64]? = nil
 }
 
 /// Capabilities and cached configurations stay encrypted in this app's sandbox.
@@ -30,7 +32,7 @@ final class ClientRegistryStore {
     func load() throws -> ClientRegistry {
         guard FileManager.default.fileExists(atPath: file.path) else { return ClientRegistry() }
         let bytes = try Data(contentsOf: file, options: .mappedIfSafe)
-        guard bytes.count <= 1_500_000 else { throw ClientUpdateError.invalidDocument }
+        guard bytes.count <= 6_000_000 else { throw ClientUpdateError.invalidDocument }
         let envelope = try JSONDecoder().decode(DiskEnvelope.self, from: bytes)
         let data = try PrivateTunnelStore(directory: directory).open(.init(id: envelope.id, ciphertext: envelope.ciphertext))
         let registry = try JSONDecoder().decode(ClientRegistry.self, from: data)
@@ -74,7 +76,7 @@ final class ClientUpdateCoordinator {
         do { registry = try store.load() }
         catch { loadingError = error; status = "Не удалось открыть защищённые привязки. Импортируйте ZIP из бота заново." }
         #if DEBUG && targetEnvironment(simulator)
-        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-sync") {
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-sync") || ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--vpn013-test-native-trial") }) {
             registry = ClientRegistry(); loadingError = nil
             try? store.save(registry)
         }
@@ -101,6 +103,8 @@ final class ClientUpdateCoordinator {
     func tick(manager: TunnelsManager?, presenter: UIViewController) {
         self.presenter = presenter
         guard !busy, !quietForTests(), let manager = manager, loadingError == nil else { return }
+        NativeTrialCoordinator.shared.tick(manager: manager, presenter: presenter)
+        guard !busy else { return }
         let now = Date()
         if registry.bindings.values.contains(where: { $0.pending != nil }), !manager.mapTunnels(transform: { $0.status != .inactive || $0.isActivateOnDemandEnabled }).contains(true),
            lastPendingAttempt == nil || now.timeIntervalSince(lastPendingAttempt!) > 60 {
@@ -314,7 +318,7 @@ final class ClientUpdateCoordinator {
         }
         func remove(_ index: Int) {
             guard index < plan.removedIDs.count else {
-                registry.bindings[order]?.document = ClientAccessDocument(schema: 1, kind: "vpn013-access", capability: binding.document.capability, snapshot: snapshot)
+                registry.bindings[order]?.document = ClientAccessDocument(schema: 1, kind: "vpn013-access", capability: binding.document.capability, snapshot: snapshot, trial: binding.document.trial)
                 registry.bindings[order]?.pending = nil
                 do { try saveProgress(); completion(nil) } catch { completion(error) }
                 return
@@ -341,6 +345,35 @@ final class ClientUpdateCoordinator {
     func unbind(order: String) throws {
         guard !busy else { throw ClientUpdateError.busy }
         registry.bindings.removeValue(forKey: order); try save(); publish("Обновления заявки отключены. Конфигурации сохранены.")
+    }
+    func nativeTrialState() throws -> ClientNativeTrialState {
+        guard loadingError == nil else { throw ClientUpdateError.invalidDocument }
+        if let value = registry.nativeTrial { return value }
+        let value = ClientNativeTrialState.fresh(); registry.nativeTrial = value; try save(); return value
+    }
+    func saveNativeTrial(_ value: ClientNativeTrialState) throws {
+        guard ClientUpdateProtocol.validToken(value.requestID), value.ticket == nil || ClientUpdateProtocol.validToken(value.ticket!) else { throw ClientUpdateError.invalidDocument }
+        try value.info?.validate(previous: registry.nativeTrial?.info)
+        registry.nativeTrial = value; try save()
+    }
+    func rememberRenewal(_ order: String) throws {
+        guard ClientUpdateProtocol.validID(order) else { throw ClientUpdateError.invalidDocument }
+        if registry.renewalsAwaitingReturn == nil { registry.renewalsAwaitingReturn = [:] }
+        registry.renewalsAwaitingReturn?[order] = registry.bindings[order]?.document.snapshot.expiry ?? registry.nativeTrial?.info?.expiresAt ?? 0
+        try save()
+    }
+    func refreshRenewal(order: String, manager: TunnelsManager, completion: @escaping () -> Void) {
+        guard !busy, registry.bindings[order] != nil else { completion(); return }
+        busy = true
+        fetch(orders: [order], index: 0, errors: []) { _ in
+            self.busy = false
+            let binding = self.registry.bindings[order]
+            let expiry = binding?.pending?.expiry ?? binding?.document.snapshot.expiry ?? 0
+            if let old = self.registry.renewalsAwaitingReturn?[order], expiry > old {
+                self.registry.renewalsAwaitingReturn?.removeValue(forKey: order); try? self.save()
+            }
+            self.applyPending(manager: manager) { _ in completion() }
+        }
     }
     private func showResult() {
         guard let presenter = presenter, presenter.presentedViewController == nil else { return }

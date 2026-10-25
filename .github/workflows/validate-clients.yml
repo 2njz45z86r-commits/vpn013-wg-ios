@@ -19,7 +19,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: client-validation-${{ github.ref }}
+  group: client-validation-${{ github.ref }}-${{ inputs.platform }}
   cancel-in-progress: false
 jobs:
   ios:
@@ -56,6 +56,7 @@ jobs:
             sh inspect-on-mac.sh
           fi
       - name: Preserve synthetic acceptance evidence only
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: validation-ios-${{ github.run_id }}
@@ -139,6 +140,7 @@ jobs:
           export CC="$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
           python3 scripts/check_go_security.py android/tunnel/tools/libwg-go
       - name: Preserve synthetic acceptance evidence only
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: validation-android-${{ github.run_id }}

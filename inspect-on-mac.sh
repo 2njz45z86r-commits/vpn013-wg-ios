@@ -12,7 +12,11 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testTwoPersonalServers \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testThirtyPersonalServers \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testEmptyListDisablesAutomaticCreation \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCenteredAddShowsPurchaseAndFreeHour \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCenteredAddShowsPurchaseAndThreeDayTrial \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayTrialImportsFullZIPWithoutBrowser \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayRepeatedButtonKeepsSameProfiles \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayUnsafeZIPPreservesExistingProfiles \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayExpiredOffersPersonalRenewalWithoutImport \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedZipImportsThirteenWithoutDuplicateError \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testRedesignedListKeepsNativeControls \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAddMenuKeepsAllActions \
@@ -50,6 +54,15 @@ PY
 if [ -d build/AutoTunnel.xcresult ]; then
  xcrun xcresulttool export attachments --path build/AutoTunnel.xcresult --output-path build/review/flow
  xcrun xcresulttool get test-results summary --path build/AutoTunnel.xcresult > build/review/test-summary.json || true
+fi
+# A missing selector must never silently reduce the required native suite.
+if [ "$result" -eq 0 ]; then
+ python3 - <<'PY'
+import json
+from pathlib import Path
+s=json.loads(Path('build/review/test-summary.json').read_text())
+assert s['result']=='Passed' and s['passedTests']==30 and s['failedTests']==0 and s['skippedTests']==0,s
+PY
 fi
 # Keep failure screenshots with a PNG extension; never publish UI hierarchy text.
 python3 - <<'PY'

@@ -47,7 +47,7 @@ extension ZipArchive {
         zipClose(zipFile, nil)
     }
 
-    static func unarchive(url: URL, requiredFileExtensions: [String]) throws -> [(fileBaseName: String, contents: Data)] {
+    static func unarchive(url: URL, requiredFileExtensions: [String], strictRoot: Bool = false) throws -> [(fileBaseName: String, contents: Data)] {
 
         var results = [(fileBaseName: String, contents: Data)]()
         let requiredFileExtensionsLowercased = requiredFileExtensions.map { $0.lowercased() }
@@ -65,7 +65,7 @@ extension ZipArchive {
         var totalBytes = 0
         repeat {
             entryCount += 1
-            guard entryCount <= 512 else { throw ZipArchiveError.badArchive }
+            guard entryCount <= (strictRoot ? 60 : 512) else { throw ZipArchiveError.badArchive }
             guard unzOpenCurrentFile(zipFile) == UNZ_OK else { throw ZipArchiveError.badArchive }
 
             let bufferSize = 16384 // 16 KiB
@@ -83,6 +83,11 @@ extension ZipArchive {
                   Int(information.size_filename) < bufferSize else { throw ZipArchiveError.badArchive }
 
             let lastChar = String(cString: fileNameBuffer).suffix(1)
+            if strictRoot {
+                let name = String(cString: fileNameBuffer)
+                guard !name.isEmpty, !name.contains("/"), !name.contains("\\"), !name.contains(".."),
+                      !name.contains(where: { $0.isASCII && $0.asciiValue! < 32 }) else { throw ZipArchiveError.badArchive }
+            }
             let isDirectory = (lastChar == "/" || lastChar == "\\")
             let fileURL = URL(fileURLWithFileSystemRepresentation: fileNameBuffer, isDirectory: isDirectory, relativeTo: nil)
 

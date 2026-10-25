@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-25T21:53:56.242610+00:00",
-  "source_sha256": "ca30d60d1579c14b773381124e829625f89e4c1f3f3d71e0dc0c75d9130858d9",
-  "source_commit_reviewed": "c043992588d6836886435f14c9170486bf642030",
+  "reviewed_at": "2026-10-25T21:59:53.221520+00:00",
+  "source_sha256": "ef850a48bd2503772d30784cbc4a4571d9d11c177d165818021907271e16641b",
+  "source_commit_reviewed": "02abb61336c002da562716e7a1e01cf8474af87a",
   "scope_complete": false,
   "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/android-draft",
   "baseline_only": false,
@@ -179,7 +179,7 @@
     }
   ],
   "baseline_report_ref": "private-local:vpn013-bot-migration-20261025/baseline",
-  "review_note": "Validation-only Android3day draft. Server prototype not deployed; native acceptance and new runtime audit remain unverified. Existing installer release gates must reject this state.",
+  "review_note": "iOS/Android three-day source-only validation. Nine runtime/security/native gaps remain open; existing installer release paths must reject this review. Owner source-validation exception remains applicable.",
   "validation_only_authorization": {
     "source": "explicit owner reply in current task",
     "scope": "Public client source and free validation while audit is incomplete",

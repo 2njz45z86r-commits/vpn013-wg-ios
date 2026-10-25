@@ -1,6 +1,69 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
     func capture(_ name:String) { let a=XCTAttachment(screenshot:XCUIScreen.main.screenshot());a.name=name;a.lifetime = .keepAlways;add(a) }
+    private func nativeTrialApp(_ variant: String = "") -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-native-trial" + variant]
+        app.launch(); XCTAssertTrue(app.buttons["vpn013.add-profile"].waitForExistence(timeout:20)); return app
+    }
+    private func startNativeTrial(_ app: XCUIApplication) {
+        app.buttons["vpn013.add-profile"].tap()
+        XCTAssertTrue(app.buttons["Три дня теста бесплатно"].waitForExistence(timeout:5))
+        XCTAssertFalse(app.buttons["1 час бесплатно"].exists)
+        app.buttons["Три дня теста бесплатно"].tap()
+    }
+    private func trialImportResult(_ app: XCUIApplication) -> XCUIElement {
+        let result = app.alerts["Тестовые профили добавлены"]
+        let deadline = Date().addingTimeInterval(20)
+        while Date() < deadline && !result.exists {
+            let system = XCUIApplication(bundleIdentifier:"com.apple.springboard")
+            for title in ["Allow", "Разрешить", "Don’t Allow", "Не разрешать"] {
+                let button = system.alerts.buttons[title]
+                if button.exists { button.tap(); break }
+            }
+            Thread.sleep(forTimeInterval:0.2)
+        }
+        XCTAssertTrue(result.exists); return result
+    }
+    func testNativeThreeDayTrialImportsFullZIPWithoutBrowser() {
+        let app = nativeTrialApp(); startNativeTrial(app)
+        let result = trialImportResult(app)
+        XCTAssertTrue(result.staticTexts.matching(NSPredicate(format:"label CONTAINS %@", "Добавлено профилей: 2")).firstMatch.exists)
+        XCTAssertTrue(result.staticTexts.matching(NSPredicate(format:"label CONTAINS %@", "выдач 1, загрузок 1")).firstMatch.exists)
+        capture("native-three-day-import-synthetic-api-real-importer")
+        result.buttons["Готово"].tap()
+        for name in ["Личный сервер 1", "Личный сервер 2", "Тестовый сервер 1", "Тестовый сервер 2"] {
+            XCTAssertTrue(app.tables.cells.staticTexts[name].exists)
+        }
+        XCTAssertTrue(app.navigationBars["VPN013"].exists)
+    }
+    func testNativeThreeDayRepeatedButtonKeepsSameProfiles() {
+        let app = nativeTrialApp(); startNativeTrial(app); trialImportResult(app).buttons["Готово"].tap()
+        startNativeTrial(app); let result = trialImportResult(app)
+        XCTAssertTrue(result.staticTexts.matching(NSPredicate(format:"label CONTAINS %@", "выдач 1, загрузок 2")).firstMatch.exists)
+        result.buttons["Готово"].tap()
+        XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:"Тестовый сервер 1").count,1)
+        XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:"Тестовый сервер 2").count,1)
+        capture("native-three-day-repeat-no-new-grant-or-profiles")
+    }
+    func testNativeThreeDayUnsafeZIPPreservesExistingProfiles() {
+        let app = nativeTrialApp("-bad-zip"); startNativeTrial(app)
+        let alert = app.alerts["Тест не добавлен"]
+        XCTAssertTrue(alert.waitForExistence(timeout:15)); capture("native-three-day-unsafe-zip-refused")
+        alert.buttons["Готово"].tap()
+        XCTAssertTrue(app.tables.cells.staticTexts["Личный сервер 1"].exists)
+        XCTAssertFalse(app.tables.cells.staticTexts["Тестовый сервер 1"].exists)
+    }
+    func testNativeThreeDayExpiredOffersPersonalRenewalWithoutImport() {
+        let app = nativeTrialApp("-expired"); startNativeTrial(app)
+        let alert = app.alerts["Срок доступа закончился"]
+        XCTAssertTrue(alert.waitForExistence(timeout:10))
+        XCTAssertTrue(alert.buttons["Продлить конфигурацию"].isEnabled)
+        capture("native-three-day-expired-personal-renewal")
+        alert.buttons["Позже"].tap()
+        XCTAssertFalse(app.tables.cells.staticTexts["Тестовый сервер 1"].exists)
+        XCTAssertTrue(app.tables.cells.staticTexts["Личный сервер 1"].exists)
+    }
     func testCreateAutomaticFromThirteenImportedFixtures() {
         let app=XCUIApplication();app.launchArguments=["-AppleLanguages","(ru)","-AppleLocale","ru_RU"];app.launch()
         XCTAssertTrue(app.tables.cells.staticTexts["Беларусь"].waitForExistence(timeout:20))
@@ -64,7 +127,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.buttons["vpn013.add-profile"].waitForExistence(timeout:20))
         app.buttons["vpn013.add-profile"].tap()
         XCTAssertTrue(app.buttons["Купить конфигурацию"].isEnabled)
-        XCTAssertTrue(app.buttons["1 час бесплатно"].isEnabled)
+        XCTAssertTrue(app.buttons["Три дня теста бесплатно"].isEnabled)
         let action = app.buttons["Создать режим Авто"]
         XCTAssertTrue(action.waitForExistence(timeout:5)); XCTAssertFalse(action.isEnabled)
         capture("dynamic-0-creation-disabled")
@@ -106,7 +169,7 @@ final class AutoTunnelUITests:XCTestCase {
         capture("settings-short-name-and-rendered-wordmark-no-domain")
     }
 
-    func testCenteredAddShowsPurchaseAndFreeHour() {
+    func testCenteredAddShowsPurchaseAndThreeDayTrial() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "0"]
         app.launch()
@@ -115,7 +178,7 @@ final class AutoTunnelUITests:XCTestCase {
         add.tap()
         XCTAssertTrue(app.buttons["Купить конфигурацию"].waitForExistence(timeout:5))
         XCTAssertTrue(app.buttons["Купить конфигурацию"].isEnabled)
-        XCTAssertTrue(app.buttons["1 час бесплатно"].isEnabled)
+        XCTAssertTrue(app.buttons["Три дня теста бесплатно"].isEnabled)
         capture("empty-list-centered-add-purchase-menu")
     }
 
@@ -150,7 +213,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(add.waitForExistence(timeout:20))
         add.tap()
         XCTAssertTrue(app.buttons["Купить конфигурацию"].waitForExistence(timeout:5))
-        for title in ["Купить конфигурацию", "1 час бесплатно", "Создать из файла или архива", "Создать режим Авто", "Создать из QR-кода", "Создать с нуля"] {
+        for title in ["Купить конфигурацию", "Три дня теста бесплатно", "Продлить конфигурацию", "Создать из файла или архива", "Создать режим Авто", "Создать из QR-кода", "Создать с нуля"] {
             let action = app.buttons[title]
             XCTAssertTrue(action.exists, "Missing add-menu action: " + title)
             XCTAssertTrue(action.isEnabled, "Disabled add-menu action: " + title)
