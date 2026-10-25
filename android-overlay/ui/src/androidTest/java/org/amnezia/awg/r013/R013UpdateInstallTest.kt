@@ -75,16 +75,18 @@ class R013UpdateInstallTest {
         // This is the disposable emulator's system permission, not an app
         // bypass. Returning to the app must continue without another check.
         shell("appops set ${context.packageName} REQUEST_INSTALL_PACKAGES allow")
-        shell("am start -W -n ${context.packageName}/org.amnezia.awg.r013.R013HomeActivity")
+        // Return from the actual Settings activity, as the owner does. Starting
+        // an existing task with `am start` can leave Settings above the app and
+        // never deliver onResume (confirmed by the captured native UI state).
+        assertTrue(instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
         waitFor {
             val pkg=instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString().orEmpty()
             !marker.exists() && (pkg.contains("packageinstaller") || pkg.contains("permissioncontroller"))
         }
         val review=File(context.getExternalFilesDir(null),"review").apply { mkdirs() }
         instrumentation.uiAutomation.takeScreenshot().also { bitmap -> File(review,"update-install-confirmation.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }; bitmap.recycle() }
-        instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
-        shell("am start -W -n ${context.packageName}/org.amnezia.awg.r013.R013HomeActivity")
-        Thread.sleep(800)
+        assertTrue(instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
+        waitFor { instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == context.packageName }
         assertFalse(marker.exists())
         assertEquals(context.packageName,instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString())
         assertEquals(12,context.packageManager.getPackageInfo(context.packageName,0).longVersionCode.toInt())
