@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
+import sys
 import zipfile
 
 workspace = Path(os.environ['GITHUB_WORKSPACE']).resolve()
@@ -22,6 +24,8 @@ if overlays.is_dir():
         assert target.resolve().is_relative_to(root)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, target)
+os.environ['PYTHONUTF8']='1'
+subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/stage-hourly-into-existing.py'),str(workspace),str(root)],check=True)
 manifest = []
 files = []
 for path in sorted(root.rglob('*')):
@@ -34,7 +38,7 @@ for path in sorted(root.rglob('*')):
     manifest.append({'path': 'vpn013-wg-windows/' + name, 'sha256': hashlib.sha256(contents).hexdigest()})
     files.append((name, contents))
 (root / 'SOURCE-MANIFEST.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-archive = Path(os.environ['RUNNER_TEMP']) / 'VPN013WG-1.4.1-windows-source.zip'
+archive = Path(os.environ['RUNNER_TEMP']) / 'VPN013WG-1.5.0-windows-source.zip'
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
     for name, contents in files:
         bundle.writestr('vpn013-wg-windows/' + name, contents)
