@@ -2,9 +2,9 @@
   "schema": 1,
   "app": "vpn013-wg",
   "platform": "ios",
-  "version": "1.5.0",
-  "build": 12,
-  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40153059000/VPN013AWG-unsigned.ipa",
-  "sha256": "b19a6eb59f413d86104f7eb2bdced16f3e8f63a3fb9526b4074a388c094a1bd0",
+  "version": "1.5.1",
+  "build": 13,
+  "downloadURL": "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-40218884369/VPN013AWG-unsigned.ipa",
+  "sha256": "553ce15ed836ea346c990814049f756bc1313b0daa5ccd06cccb99ac12af0d9c",
   "notes": "Авто сравнивает задержку DNS через другие VPN без отключения текущего: первая проверка через 30 секунд, затем раз в час. Выбор сверяет актуальный профиль и состояние подключения; две неудачные попытки и порог 1200 мс сохранены. Для iPhone скачайте IPA, подпишите в ESign и установите. Проверки сборки и симулятора не заменяют проверку на физическом iPhone."
 }
