@@ -1,0 +1,63 @@
+name: Windows hourly safety foundation
+on:
+  push:
+    paths:
+      - 'windows-hourly/**'
+      - '.github/workflows/check-windows-hourly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-hourly-foundation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux
+          - runner: windows-latest
+            platform: windows
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      GOTOOLCHAIN: local
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.25.14'
+          cache: false
+      - name: Verified baseline plus source-only overlay
+        shell: pwsh
+        run: |
+          python windows-hourly/prepare-foundation.py "$env:GITHUB_WORKSPACE" "$env:RUNNER_TEMP/foundation"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verified official compiler only
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = "$env:RUNNER_TEMP/llvm.zip"
+          curl.exe --fail --location --silent --show-error --max-time 240 --retry 2 -o $archive https://github.com/mstorsjo/llvm-mingw/releases/download/20231128/llvm-mingw-20231128-ucrt-x86_64.zip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '7a344dafa6942de2c1f4643b3eb5c5ce5317fbab671a887e4d39f326b331798f') { throw 'Compiler hash mismatch' }
+          Expand-Archive $archive "$env:RUNNER_TEMP/compiler"
+          "CC=$env:RUNNER_TEMP/compiler/llvm-mingw-20231128-ucrt-x86_64/bin/x86_64-w64-mingw32-gcc.exe" >> $env:GITHUB_ENV
+      - name: Exact complete native test inventory
+        shell: pwsh
+        run: |
+          Set-Location "$env:RUNNER_TEMP/foundation/vpn013-wg-windows"
+          python "$env:GITHUB_WORKSPACE/windows-hourly/check-foundation.py" "$env:RUNNER_TEMP/foundation/report" '${{ matrix.platform }}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Evidence only, never an installer or release
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-hourly-foundation-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/foundation/report
+            ${{ runner.temp }}/foundation/source-evidence.json
+          if-no-files-found: error

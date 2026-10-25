@@ -1,0 +1,3 @@
+# Windows hourly comparison — source-only foundation
+
+This isolated overlay tests the previously verified AWG/DNS scan core, a cross-process Windows kernel barrier, and explicit unconnected UDP interface pinning. It is not integrated into the production manager or tunnel service. It does not build or publish an application, and does not establish Wintun route behavior, service lifecycle safety or physical device performance. The native fixtures use random local kernel objects and loopback UDP only; the broader cross-platform core has real isolated AWG peers. Module versions remain pinned to the verified Windows baseline. No application installers or signing credentials are used.
