@@ -28,18 +28,26 @@ type Gate interface {
 	Prepare(route int, fd uintptr) error
 }
 
+// NetworkGate receives the exact socket family selected by net.Dialer before
+// connect. Windows must not infer that family from an unbound socket or permit
+// an unspecified-interface/default-route fallback.
+type NetworkGate interface {
+	PrepareNetwork(route int, network string, fd uintptr) error
+}
+
 type Factory struct {
-	mu        sync.Mutex
-	ctx       context.Context
-	cancel    context.CancelFunc
-	gate      Gate
-	role      int
-	closed    bool
-	opening   sync.WaitGroup
-	drainOnce sync.Once
-	drained   chan struct{}
-	live      map[*session]struct{}
-	slots     chan struct{}
+	mu          sync.Mutex
+	ctx         context.Context
+	cancel      context.CancelFunc
+	gate        Gate
+	networkGate NetworkGate
+	role        int
+	closed      bool
+	opening     sync.WaitGroup
+	drainOnce   sync.Once
+	drained     chan struct{}
+	live        map[*session]struct{}
+	slots       chan struct{}
 }
 
 func New(role int, gate Gate) (*Factory, error) {
@@ -48,6 +56,14 @@ func New(role int, gate Gate) (*Factory, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Factory{ctx: ctx, cancel: cancel, gate: gate, role: role, live: make(map[*session]struct{}), slots: make(chan struct{}, 2), drained: make(chan struct{})}, nil
+}
+
+func NewForNetwork(role int, gate NetworkGate) (*Factory, error) {
+	if gate == nil || role != Physical && role != ThroughTunnel {
+		return nil, ErrRoute
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Factory{ctx: ctx, cancel: cancel, networkGate: gate, role: role, live: make(map[*session]struct{}), slots: make(chan struct{}, 2), drained: make(chan struct{})}, nil
 }
 
 func (f *Factory) OpenPhysical(peer netip.AddrPort, deliver func([]byte), failed func()) (probe.PhysicalUDPSession, error) {
@@ -94,7 +110,15 @@ func (f *Factory) open(peer netip.AddrPort, deliver func([]byte), failed func())
 			return ErrRoute
 		}
 		var denied bool
-		if raw.Control(func(fd uintptr) { denied = f.gate.Prepare(f.role, fd) != nil }) != nil || denied || ctx.Err() != nil {
+		if raw.Control(func(fd uintptr) {
+			if f.networkGate != nil {
+				denied = f.networkGate.PrepareNetwork(f.role, network, fd) != nil
+			} else if f.gate != nil {
+				denied = f.gate.Prepare(f.role, fd) != nil
+			} else {
+				denied = true
+			}
+		}) != nil || denied || ctx.Err() != nil {
 			return ErrRoute
 		}
 		return nil

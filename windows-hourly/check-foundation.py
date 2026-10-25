@@ -11,7 +11,7 @@ packages = ['./r013probe/...'] + (['./r013gate', './r013winudp'] if native else 
 before = {f: Path(f).read_bytes() for f in ('go.mod', 'go.sum')}
 listed = subprocess.run(['go', 'test', '-mod=readonly', '-list', '^Test', *packages], capture_output=True, text=True, check=True)
 expected = set(line.strip() for line in listed.stdout.splitlines() if line.startswith('Test'))
-assert len(expected) == (49 if native else 40), expected
+assert len(expected) == (50 if native else 40), expected
 result = subprocess.run(['go', 'test', '-mod=readonly', '-race', '-count=1', '-timeout=5m', '-json', *packages], capture_output=True, text=True)
 (out / 'tests.jsonl').write_text(result.stdout, encoding='utf-8')
 (out / 'stderr.txt').write_text(result.stderr, encoding='utf-8')

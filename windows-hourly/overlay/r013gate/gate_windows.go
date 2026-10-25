@@ -45,12 +45,15 @@ type Gate struct {
 // SYSTEM services, not the unprivileged GUI. No credential or key is mapped.
 func Open() (*Gate, error) { return openNamed(productionName) }
 
-func verifyACL(handle windows.Handle) error {
+func verifyACL(handle windows.Handle, fullAccess uint32) error {
 	sd, err := windows.GetSecurityInfo(handle, windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
 	if err != nil || sd == nil {
 		return fmt.Errorf("%w: reading kernel DACL: %v", ErrUnavailable, err)
 	}
-	if sd.String() != objectACL {
+	// Windows maps GENERIC_ALL into the kernel object's specific mask. Preserve
+	// the same protected two-trustee DACL; do not accept additional ACEs/SIDs.
+	expected := fmt.Sprintf("D:P(A;;0x%x;;;SY)(A;;0x%x;;;BA)", fullAccess, fullAccess)
+	if sd.String() != objectACL && sd.String() != expected {
 		return fmt.Errorf("%w: kernel DACL differs: %s", ErrUnavailable, sd.String())
 	}
 	return nil
@@ -78,7 +81,7 @@ func openNamed(name string) (*Gate, error) {
 		return nil, ErrUnavailable
 	}
 	fail := func() { windows.CloseHandle(mutex) }
-	if aclErr := verifyACL(mutex); aclErr != nil {
+	if aclErr := verifyACL(mutex, windows.MUTEX_ALL_ACCESS); aclErr != nil {
 		fail()
 		return nil, aclErr
 	}
@@ -96,7 +99,7 @@ func openNamed(name string) (*Gate, error) {
 		fail()
 		return nil, ErrUnavailable
 	}
-	if aclErr := verifyACL(mapping); aclErr != nil {
+	if aclErr := verifyACL(mapping, windows.FILE_MAP_ALL_ACCESS); aclErr != nil {
 		windows.CloseHandle(mapping)
 		fail()
 		return nil, aclErr
