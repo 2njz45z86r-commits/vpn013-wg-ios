@@ -2,7 +2,7 @@
   "schema_version": 1,
   "reviewed_at": "2026-10-25T15:28:42.949126+00:00",
   "source_sha256": "d505746c0ef6eb697a1e1322885022748fc1000af947f2b8515552f6ede0a995",
-  "source_commit_reviewed": "295e004c61d2987a3c5c3f4ee63ae309106ea624",
+  "source_commit_reviewed": "1963dec7e7f60670ca70724a81c2fbb891571fb0",
   "scope_complete": false,
   "private_report_ref": "private-local:vpn013-bot-migration-20261025",
   "baseline_only": true,
