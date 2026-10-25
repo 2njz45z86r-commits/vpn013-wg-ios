@@ -1,0 +1,42 @@
+name: Inventory production dependencies without publishing apps
+on:
+  workflow_dispatch:
+    inputs:
+      validation_authorized:
+        description: Owner explicitly authorizes client source and free validation while audit is open
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+jobs:
+  android-production-graph:
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Obtain exact official source and prepared client overlays
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/amnezia-vpn/amneziawg-android.git android
+          git -C android checkout ff15093bf3856fea0947923474870b86efb682f0
+          cp -a android-overlay/. android/
+          test ! -f android/keystore.properties
+      - name: Resolve the complete production Maven graph without compiling or signing
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain -I ../scripts/dependency-inventory.init.gradle :ui:r013ProductionDependencyInventory
+      - name: Preserve package coordinates only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-production-dependencies-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: android/output/dependency-inventory.json

@@ -1,0 +1,27 @@
+// Resolve the production graph only. No APK tasks, credentials or signing.
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import groovy.json.JsonOutput
+
+gradle.projectsEvaluated {
+    def appProject = gradle.rootProject.project(':ui')
+    appProject.tasks.register('r013ProductionDependencyInventory') {
+        doLast {
+            def configuration = appProject.configurations.getByName('releaseRuntimeClasspath')
+            def components = configuration.incoming.resolutionResult.allComponents
+                .findAll { it.id instanceof ModuleComponentIdentifier }
+                .collect { ['group': it.id.group, 'name': it.id.module, 'version': it.id.version] }
+                .unique { it.group + ':' + it.name + ':' + it.version }
+                .sort { a, b -> (a.group + ':' + a.name) <=> (b.group + ':' + b.name) }
+            if (components.isEmpty() || components.size() > 500) {
+                throw new GradleException('Unexpected production dependency inventory')
+            }
+            def output = new File(gradle.rootProject.projectDir, 'output/dependency-inventory.json')
+            output.parentFile.mkdirs()
+            output.setText(JsonOutput.prettyPrint(JsonOutput.toJson([
+                'schema': 1, 'configuration': 'releaseRuntimeClasspath',
+                'platform': 'android', 'components': components
+            ])) + '\n', 'UTF-8')
+            println('Resolved production component inventory: ' + components.size())
+        }
+    }
+}
