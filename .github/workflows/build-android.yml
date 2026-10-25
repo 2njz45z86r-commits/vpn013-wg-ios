@@ -63,6 +63,13 @@ jobs:
           export PATH="$JAVA_HOME/bin:$PATH"
           cd android
           ./gradlew --no-daemon --console=plain :ui:assembleDebug :ui:assembleDebugAndroidTest :ui:assembleRelease
+      - name: Build historical1.5.0 debug source for in-place upgrade acceptance
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          bash scripts/build-previous-android-fixture.sh
+          bash scripts/build-future-android-fixture.sh
       - name: Exercise real VPN and native Material UI in emulator
         id: emulator
         run: |
