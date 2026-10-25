@@ -83,4 +83,5 @@ jobs:
             ${{ runner.temp }}/foundation/service-lifecycle-evidence.json
             ${{ runner.temp }}/foundation/observation-evidence.json
             ${{ runner.temp }}/foundation/owned-tun-evidence.json
+            ${{ runner.temp }}/foundation/firewall-sid-evidence.json
           if-no-files-found: error
