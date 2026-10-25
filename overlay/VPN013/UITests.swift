@@ -329,8 +329,13 @@ final class AutoTunnelUITests:XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         capture("22-current-manual-server-landscape-synthetic-vpn")
         XCUIDevice.shared.orientation = .portrait
+        let portraitReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true AND value == '1'"), object: profile.switches.firstMatch)
+        XCTAssertEqual(XCTWaiter.wait(for: [portraitReady], timeout: 5), .completed)
         profile.switches.firstMatch.tap()
-        XCTAssertFalse(ping.isHittable)
+        let disconnected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '0'"), object: profile.switches.firstMatch)
+        XCTAssertEqual(XCTWaiter.wait(for: [disconnected], timeout: 5), .completed)
+        let pingHidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == false"), object: ping)
+        XCTAssertEqual(XCTWaiter.wait(for: [pingHidden], timeout: 5), .completed)
     }
 
     private func checkManualPingWithoutRuntime(_ fixture: String, captureName: String) {
