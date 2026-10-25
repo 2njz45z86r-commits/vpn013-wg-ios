@@ -12,7 +12,10 @@ concurrency:
   group: windows-1.5.0
   cancel-in-progress: false
 jobs:
+  security-review:
+    uses: ./.github/workflows/security-review.yml
   windows:
+    needs: [security-review]
     if: github.repository == '2njz45z86r-commits/vpn013-wg-ios'
     runs-on: windows-2025
     timeout-minutes: 40

@@ -11,7 +11,10 @@ concurrency:
   group: r013-android-inspection
   cancel-in-progress: false
 jobs:
+  security-review:
+    uses: ./.github/workflows/security-review.yml
   compile:
+    needs: [security-review]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

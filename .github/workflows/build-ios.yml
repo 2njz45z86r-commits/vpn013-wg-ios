@@ -10,7 +10,10 @@ concurrency:
   group: vpn013-ios-manual
   cancel-in-progress: false
 jobs:
+  security-review:
+    uses: ./.github/workflows/security-review.yml
   build:
+    needs: [security-review]
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -34,7 +37,7 @@ jobs:
             sh inspect-on-mac.sh
           fi
       - name: Preserve build evidence
-        if: always()
+        if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
