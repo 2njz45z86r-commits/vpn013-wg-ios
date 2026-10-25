@@ -1,4 +1,4 @@
-"""Reuse completed native UI evidence only for the exact tested app/toolchains.
+"""Reuse native UI evidence for identical app code/toolchains, with an icon-only delta.
 Fresh device compilation, core checks and live Go SCA still run in this job.
 No distribution/signing/publication is performed by this evidence reader.
 """
@@ -10,14 +10,26 @@ RUN=40215533930
 ARTIFACT=12607512992
 HEAD='e0263201fd947aac53296d6d60fc511f60f78867'
 DIGEST='c96ffa859bd0d18668358f1cb37f7230938c0f44776a20394d5b3c9f5598f107'
-PINS={'overlay':'02e2f1cb8062f3293370491a3689eb6dc75de4ed',
-      'build-on-mac.sh':'f618b7ed33dc9c98dac57dfe1d31cbf3ec9ce9f6',
+PINS={'overlay':'3827104e3a60539a4cd8e4eff7b1f3a7828bfbcd',
+      'build-on-mac.sh':'bb14b80743baf457674855b2286e8cbe0c03da04',
       'inspect-on-mac.sh':'a35ee4de8dc5244e15cf62a2d7589c6f75bf64f5',
       'tests/AutoControllerLifecycleTests.swift':'cceaa6f76316290f759dbec758fa4721444d1cd4',
       'scripts/check_go_security.py':'282b68bd42672af5fd00f408cf554be73525e163'}
 assert os.environ.get('GITHUB_ACTIONS')=='true' and os.environ.get('GITHUB_REPOSITORY')==REPOSITORY
 for path,expected in PINS.items():
     assert subprocess.check_output(['git','rev-parse','HEAD:'+path],text=True).strip()==expected,'Native source differs: '+path
+# The owner replaced the avatar AFTER the23accepted UI tests. Exclude only
+# these five pinned image resources; every code and other overlay blob must
+# still equal the tested source. The whole new overlay is ALSO pinned above.
+excluded={'overlay/Sources/WireGuardApp/UI/iOS/Assets.xcassets/AppIcon.appiconset/1024.png',
+    *{'overlay/Sources/WireGuardApp/Resources/DocumentIcons/'+name for name in [
+        'wireguard_doc_logo_22x29.png','wireguard_doc_logo_44x58.png','wireguard_doc_logo_64x64.png','wireguard_doc_logo_320x320.png']}}
+entries=[]
+for row in subprocess.check_output(['git','ls-tree','-rz','HEAD','--','overlay']).split(b'\0'):
+    if not row:continue
+    meta,name=row.split(b'\t',1);mode,kind,sha=meta.decode().split();path=name.decode()
+    if path not in excluded:entries.append([path,mode,kind,sha])
+assert len(entries)==78 and hashlib.sha256(json.dumps(entries,separators=(',',':')).encode()).hexdigest()=='608eb81394fd4852166eeb311fb3cb8ad5f01eb89284d2e3624624b604d8306d'
 assert subprocess.check_output(['xcodebuild','-version'],text=True).strip()=='Xcode 16.4\nBuild version 16F6'
 assert platform.machine()=='arm64'
 assert subprocess.check_output(['go','version'],text=True).strip()=='go version go1.26.10 darwin/arm64'
@@ -72,5 +84,7 @@ with zipfile.ZipFile(io.BytesIO(raw)) as archive:
 (root/'native-evidence-provenance.json').write_text(json.dumps({'schema':1,'nativeEvidenceRun':RUN,
     'nativeArtifactID':ARTIFACT,'nativeArchiveSHA256':DIGEST,'sourcePins':PINS,'nativeTestsPassed':23,
     'nativeTestsFailed':0,'nativeTestsSkipped':0,'freshDeviceBuildChecked':True,'nativeUITestsRerunInPackagingJob':False,
+    'avatarOnlyDelta':True,'excludedImagePaths':sorted(excluded),'unchangedCodeEntriesCompared':78,
+    'newAvatarSourceSHA256':'c5a7d52da96df34be707e9a1ad0acb3c1512b03a3e47616234eafee80c82af19',
     'xcode':'16.4(16F6)','go':'1.26.10','physicalIPhoneTested':False},indent=2))
-print('Verified23 native UI passes on identical app source/Xcode/Go; fresh device build independently checked')
+print('Verified23 native UI passes for unchanged app code/Xcode/Go; explicit avatar-only delta and fresh device build independently checked')

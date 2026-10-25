@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "acceptedNativeRun": 40215533930,
+  "acceptedNativeHead": "e0263201fd947aac53296d6d60fc511f60f78867",
+  "acceptedNativeOverlay": "02e2f1cb8062f3293370491a3689eb6dc75de4ed",
+  "newOverlay": "3827104e3a60539a4cd8e4eff7b1f3a7828bfbcd",
+  "codeOnlySHA256": "608eb81394fd4852166eeb311fb3cb8ad5f01eb89284d2e3624624b604d8306d",
+  "explicitExcludedImagePaths": [
+    "overlay/Sources/WireGuardApp/Resources/DocumentIcons/wireguard_doc_logo_22x29.png",
+    "overlay/Sources/WireGuardApp/Resources/DocumentIcons/wireguard_doc_logo_320x320.png",
+    "overlay/Sources/WireGuardApp/Resources/DocumentIcons/wireguard_doc_logo_44x58.png",
+    "overlay/Sources/WireGuardApp/Resources/DocumentIcons/wireguard_doc_logo_64x64.png",
+    "overlay/Sources/WireGuardApp/UI/iOS/Assets.xcassets/AppIcon.appiconset/1024.png"
+  ],
+  "codeEntriesCompared": 78,
+  "allOtherOverlayEntriesIdentical": true,
+  "buildScriptOnlyChangesOverlayCount79To83": true,
+  "newBuildScriptBlob": "bb14b80743baf457674855b2286e8cbe0c03da04",
+  "newAvatarSourceSHA256": "c5a7d52da96df34be707e9a1ad0acb3c1512b03a3e47616234eafee80c82af19",
+  "freshDeviceBuildRequired": true,
+  "physicalIPhoneTested": false
+}
