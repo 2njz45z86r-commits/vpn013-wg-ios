@@ -16,21 +16,31 @@ func TestWFPStatusUsesReturnedDWORDAndRejectsInvalidSession(t *testing.T) {
 	// These documented invalid-session calls do not change any WFP object.
 	// Compare with the real return DWORD, independent of thread LastError.
 	for _, tc := range []struct {
-		name    string
-		raw     func() uintptr
-		wrapped func() error
+		name             string
+		raw              func() uintptr
+		wrapped          func() error
+		rejectZeroHandle bool
 	}{
-		{"close", func() uintptr { r, _, _ := procFwpmEngineClose0.Call(0); return r }, func() error { return fwpmEngineClose0(0) }},
-		{"commit", func() uintptr { r, _, _ := procFwpmTransactionCommit0.Call(0); return r }, func() error { return fwpmTransactionCommit0(0) }},
-		{"begin", func() uintptr { r, _, _ := procFwpmTransactionBegin0.Call(0, 0); return r }, func() error { return fwpmTransactionBegin0(0, 0) }},
+		{"close", func() uintptr { r, _, _ := procFwpmEngineClose0.Call(0); return r }, func() error { return fwpmEngineClose0(0) }, false},
+		{"commit", func() uintptr { r, _, _ := procFwpmTransactionCommit0.Call(0); return r }, func() error { return fwpmTransactionCommit0(0) }, true},
+		{"begin", func() uintptr { r, _, _ := procFwpmTransactionBegin0.Call(0, 0); return r }, func() error { return fwpmTransactionBegin0(0, 0) }, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			status := tc.raw()
-			if status == 0 {
+			if status == 0 && tc.rejectZeroHandle {
 				t.Fatal("invalid handle unexpectedly succeeded")
 			}
+			// This Windows build accepts Close(NULL) as idempotent success.
+			// Preserve the actual SDK status; do not invent a required failure.
+			wrapped := tc.wrapped()
+			if status == 0 {
+				if wrapped != nil {
+					t.Fatal("successful native return was replaced by LastError")
+				}
+				return
+			}
 			var code syscall.Errno
-			if !errors.As(tc.wrapped(), &code) || uintptr(code) != status {
+			if !errors.As(wrapped, &code) || uintptr(code) != status {
 				t.Fatal("WFP return status was hidden or replaced with LastError")
 			}
 		})
