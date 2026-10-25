@@ -117,7 +117,7 @@ object ClientUpdates {
     }
     fun offerUpdate(activity: AppCompatActivity) {
         if (checking || downloading || resumingInstall) return
-        if (BuildConfig.DEBUG) { message(activity, "Тестовая сборка", "Для обновлений нужна подписанная версия VPN013.com WG."); return }
+        if (BuildConfig.DEBUG) { message(activity, "Тестовая сборка", "Для обновлений нужна подписанная версия VPN013 WG."); return }
         checking = true
         activity.lifecycleScope.launch {
             try {
@@ -166,8 +166,8 @@ object ClientUpdates {
         temporary.outputStream().use { out -> out.write(release.toString().toByteArray(Charsets.UTF_8)); out.fd.sync() }
         check(temporary.renameTo(marker)) { "Не удалось сохранить запрос обновления" }
         if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
-            MaterialAlertDialogBuilder(activity).setTitle("Разрешите обновления VPN013.com WG")
-                .setMessage("Android требует один раз разрешить установку из VPN013.com WG. Включите разрешение и вернитесь в приложение — установка уже скачанного обновления продолжится. Профили и привязка к заявке сохранятся.")
+            MaterialAlertDialogBuilder(activity).setTitle("Разрешите обновления VPN013 WG")
+                .setMessage("Android требует один раз разрешить установку из VPN013 WG. Включите разрешение и вернитесь в приложение — установка уже скачанного обновления продолжится. Профили и привязка к заявке сохранятся.")
                 .setPositiveButton("Открыть разрешение") { _, _ -> activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))) }
                 .setNegativeButton("Позже") { _, _ -> marker.delete() }
                 .setOnCancelListener { marker.delete() }.show()

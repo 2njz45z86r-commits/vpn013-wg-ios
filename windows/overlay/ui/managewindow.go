@@ -57,7 +57,7 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 	}
 
 	mtw := new(ManageTunnelsWindow)
-	mtw.SetName("VPN013.com WG")
+	mtw.SetName("VPN013 WG")
 
 	err = walk.InitWindow(mtw, nil, manageWindowWindowClass, win.WS_OVERLAPPEDWINDOW, win.WS_EX_CONTROLPARENT)
 	if err != nil {
@@ -70,7 +70,7 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 	if icon, err := loadLogoIcon(32); err == nil {
 		mtw.SetIcon(icon)
 	}
-	mtw.SetTitle("VPN013.com WG")
+	mtw.SetTitle("VPN013 WG")
 	mtw.SetFont(font)
 	mtw.SetSize(walk.Size{980, 700})
 	mtw.SetMinMaxSize(walk.Size{820, 560}, walk.Size{0, 0})
@@ -134,7 +134,7 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 			CbSize:     uint32(unsafe.Sizeof(win.MENUITEMINFO{})),
 			FMask:      win.MIIM_ID | win.MIIM_STRING | win.MIIM_FTYPE,
 			FType:      win.MIIM_STRING,
-			DwTypeData: windows.StringToUTF16Ptr(l18n.Sprintf("&О VPN013.com WG…")),
+			DwTypeData: windows.StringToUTF16Ptr(l18n.Sprintf("&О VPN013 WG…")),
 			WID:        uint32(aboutWireGuardCmd),
 		})
 		win.InsertMenuItem(systemMenu, 1, true, &win.MENUITEMINFO{

@@ -106,7 +106,7 @@ class R013HomeActivity : AppCompatActivity() {
         WindowCompat.getInsetsController(window, root).isAppearanceLightStatusBars = false
         WindowCompat.getInsetsController(window, root).isAppearanceLightNavigationBars = false
         val toolbar = MaterialToolbar(this).apply {
-            title = "VPN013.com WG"; setTitleTextColor(color(R.color.r013_text)); setNavigationIcon(R.drawable.ic_r013_settings)
+            title = "VPN013 WG"; setTitleTextColor(color(R.color.r013_text)); setNavigationIcon(R.drawable.ic_r013_settings)
             navigationContentDescription = "Настройки и обновления"; setNavigationIconTint(color(R.color.r013_accent))
             setNavigationOnClickListener { settings() }
             menu.add("Добавить").apply { setIcon(R.drawable.ic_r013_add); setShowAsAction(2) }
@@ -176,7 +176,7 @@ class R013HomeActivity : AppCompatActivity() {
         dialog.setContentView(box); dialog.show()
     }
     private fun settings() {
-        MaterialAlertDialogBuilder(this).setTitle("VPN013.com WG").setItems(arrayOf("Обновить конфигурации", "Проверить обновление приложения", "Настройки и журнал", "Купить конфигурацию")) { _, index ->
+        MaterialAlertDialogBuilder(this).setTitle("VPN013 WG").setItems(arrayOf("Обновить конфигурации", "Проверить обновление приложения", "Настройки и журнал", "Купить конфигурацию")) { _, index ->
             when (index) {
                 0 -> lifecycleScope.launch { try { feedback("Проверяем обновления конфигураций…"); feedback(ClientUpdates.refreshOrders()) ; listSignature = "" } catch (e: Exception) { feedback(e.message ?: "Обновление не выполнено") } }
                 1 -> ClientUpdates.offerUpdate(this)

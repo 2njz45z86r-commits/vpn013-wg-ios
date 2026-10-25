@@ -6,7 +6,7 @@ enum PrivateStoreError: LocalizedError {
     case invalidEnvelope, missingKey, oversized, keyConflict
     var errorDescription: String? {
         switch self {
-        case .missingKey: return "Один раз включите этот VPN из VPN013.com WG, чтобы подготовить защищённое хранилище расширения. Если приложение переустановлено, импортируйте прежний ZIP."
+        case .missingKey: return "Один раз включите этот VPN из VPN013 WG, чтобы подготовить защищённое хранилище расширения. Если приложение переустановлено, импортируйте прежний ZIP."
         case .oversized: return "Конфигурация слишком велика для защищённого профиля."
         case .keyConflict: return "Ключ защищённого профиля не совпадает. Создайте профиль заново из прежних конфигураций."
         case .invalidEnvelope: return "Не удалось проверить зашифрованную конфигурацию."

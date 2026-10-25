@@ -181,7 +181,7 @@ class TunnelsListTableViewController: UIViewController {
         navigationItem.titleView = nil
         switch tableState {
         case .normal:
-            appTitleLabel.text = "VPN013.com WG"
+            appTitleLabel.text = "VPN013 WG"
             appTitleLabel.numberOfLines = 1
             appTitleLabel.adjustsFontSizeToFitWidth = true
             appTitleLabel.minimumScaleFactor = 0.65
@@ -211,7 +211,7 @@ class TunnelsListTableViewController: UIViewController {
         if case .multiSelect(let selectionCount) = tableState, selectionCount > 0 {
             navigationItem.title = tr(format: "tunnelsListSelectedTitle (%d)", selectionCount)
         } else {
-            navigationItem.title = "VPN013.com WG"
+            navigationItem.title = "VPN013 WG"
         }
         if case .multiSelect = tableState {
             tableView.allowsMultipleSelectionDuringEditing = true
@@ -434,7 +434,7 @@ class TunnelsListTableViewController: UIViewController {
 
     private func configureDeveloperFooter() {
         let credit = Self.makeLabel(style: .caption2, color: VPN013Theme.secondaryText)
-        credit.text = "Разработчик VPN013.com WG"
+        credit.text = "Разработчик VPN013 WG"
         credit.textAlignment = .center
         let support = UIButton(type: .system)
         var configuration = UIButton.Configuration.plain()
@@ -454,7 +454,7 @@ class TunnelsListTableViewController: UIViewController {
         support.titleLabel?.numberOfLines = 0
         support.titleLabel?.textAlignment = .center
         support.accessibilityIdentifier = "vpn013.developer-support"
-        support.accessibilityLabel = "Написать разработчику VPN013.com WG в Telegram, @R013_Support"
+        support.accessibilityLabel = "Написать разработчику VPN013 WG в Telegram, @R013_Support"
         support.accessibilityHint = "Открыть страницу поддержки"
         support.addTarget(self, action: #selector(developerSupportTapped), for: .touchUpInside)
         support.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true

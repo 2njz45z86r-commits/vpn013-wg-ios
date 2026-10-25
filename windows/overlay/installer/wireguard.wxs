@@ -25,7 +25,7 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 	<Product
 		Id="*"
-		Name="VPN013.com WG"
+		Name="VPN013 WG"
 		Language="1033"
 		Version="$(var.WIREGUARD_VERSION)"
 		Manufacturer="R013"
@@ -34,7 +34,7 @@
 			InstallerVersion="500"
 			Compressed="yes"
 			InstallScope="perMachine"
-			Description="VPN013.com WG"
+			Description="VPN013 WG"
 			ReadOnly="yes" />
 
 		<MediaTemplate EmbedCab="yes" CompressionLevel="high" />
@@ -76,9 +76,9 @@
 		-->
 		<ComponentGroup Id="WireGuardComponents">
 			<Component Directory="WireGuardFolder" Id="WireGuardExecutable" Guid="a3ce8ab4-43ec-5e83-b901-766910e26ea8">
-                <RemoveFile Id="RemoveOldVPN013MenuShortcut" Directory="ProgramMenuFolder" Name="VPN013 WG.lnk" On="install" />
+                <RemoveFile Id="RemoveOldVPN013MenuShortcut" Directory="ProgramMenuFolder" Name="VPN013.com WG.lnk" On="install" />
 				<File Source="..\$(var.WIREGUARD_PLATFORM)\VPN013WG.exe" KeyPath="yes">
-					<Shortcut Id="WireGuardStartMenuShortcut" Directory="ProgramMenuFolder" Name="VPN013.com WG" Description="VPN013.com WG" WorkingDirectory="WireGuardFolder" Advertise="yes" />
+					<Shortcut Id="WireGuardStartMenuShortcut" Directory="ProgramMenuFolder" Name="VPN013 WG" Description="VPN013 WG" WorkingDirectory="WireGuardFolder" Advertise="yes" />
 				</File>
 				<ServiceControl Id="DummyService.3AA0C492_29F4_4342_B608_DB95B2DECB13" Name="DummyService.3AA0C492_29F4_4342_B608_DB95B2DECB13" /><!-- A dummy to make WiX create ServiceControl table for us. -->
 			</Component>

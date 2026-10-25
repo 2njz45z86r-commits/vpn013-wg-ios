@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>VPN013.com WG</string>
+	<string>VPN013 WG</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

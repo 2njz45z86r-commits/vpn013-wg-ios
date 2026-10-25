@@ -87,7 +87,7 @@ final class AutoTunnelUITests:XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2"]
         app.launch()
-        XCTAssertTrue(app.navigationBars["VPN013.com WG"].waitForExistence(timeout:20))
+        XCTAssertTrue(app.navigationBars["VPN013 WG"].waitForExistence(timeout:20))
         let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
         XCTAssertTrue(profile.waitForExistence(timeout:5))
         let toggle = profile.switches.firstMatch
@@ -124,7 +124,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.navigationBars["Новая конфигурация"].waitForExistence(timeout:5))
         capture("09b-native-new-config-form")
         app.navigationBars["Новая конфигурация"].buttons["Отменить"].tap()
-        XCTAssertTrue(app.navigationBars["VPN013.com WG"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.navigationBars["VPN013 WG"].waitForExistence(timeout:5))
     }
 
     func testDeveloperFooterAvailable() {
@@ -142,7 +142,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(support.isHittable)
         XCTAssertTrue(support.isEnabled)
         XCTAssertTrue(support.label.contains("@R013_Support"))
-        XCTAssertTrue(app.staticTexts["Разработчик VPN013.com WG"].exists)
+        XCTAssertTrue(app.staticTexts["Разработчик VPN013 WG"].exists)
         capture("11-dark-thirteen-profile-list-developer-footer-simulator-fixture")
     }
 
@@ -161,7 +161,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(support.exists)
         XCTAssertTrue(support.isHittable)
         XCTAssertTrue(support.label.contains("@R013_Support"))
-        XCTAssertTrue(app.staticTexts["Разработчик VPN013.com WG"].exists)
+        XCTAssertTrue(app.staticTexts["Разработчик VPN013 WG"].exists)
         XCTAssertTrue(add.isHittable)
         capture("12-dark-empty-list-developer-footer-simulator-fixture")
     }

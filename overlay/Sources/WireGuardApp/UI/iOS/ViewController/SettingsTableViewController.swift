@@ -57,7 +57,7 @@ class SettingsTableViewController: UITableViewController {
         let brand = UIImageView(image: UIImage(named: "VPN013Wordmark"))
         brand.contentMode = .scaleAspectFit
         brand.isAccessibilityElement = true
-        brand.accessibilityLabel = "VPN013.com WG"
+        brand.accessibilityLabel = "VPN013 WG"
         brand.accessibilityIdentifier = "vpn013.settings-wordmark"
         tableView.tableFooterView = brand
     }

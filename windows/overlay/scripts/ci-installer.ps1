@@ -59,7 +59,7 @@ if ($process.ExitCode -notin @(0,3010)) {throw "MSI install failed: $($process.E
 if (!(Test-Path -LiteralPath (Join-Path $installRoot 'VPN013WG.exe'))) {throw 'Installed binary missing'}
 if (!(Test-Path -LiteralPath (Join-Path $installRoot 'THIRD-PARTY-NOTICES.txt'))) {throw 'Installed notices missing'}
 $products=@(Registered-Products)
-if ($products.Count -ne 1 -or $products[0].DisplayName -ne 'VPN013.com WG' -or $products[0].DisplayVersion -ne $releaseVersion -or $products[0].PSChildName -ine $newCode) {throw 'Upgrade left duplicate or old product registration'}
+if ($products.Count -ne 1 -or $products[0].DisplayName -ne 'VPN013 WG' -or $products[0].DisplayVersion -ne $releaseVersion -or $products[0].PSChildName -ine $newCode) {throw 'Upgrade left duplicate or old product registration'}
 if ([Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $installRoot 'VPN013WG.exe')).ProductVersion -ne $releaseVersion) {throw 'Installed executable version mismatch'}
 function Assert-PreservedData {
   if ([IO.File]::ReadAllText($dataSentinel) -ne 'owned data sentinel' -or (Get-FileHash -LiteralPath $privateSentinel -Algorithm SHA256).Hash -ne $privateHash) {throw 'Existing data bytes changed'}

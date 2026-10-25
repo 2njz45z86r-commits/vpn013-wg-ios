@@ -158,7 +158,7 @@ func (tp *TunnelsPage) checkR013Updates(visible bool) {
 			// A discovered release exposes an Install button. A background or
 			// manual version check never installs software on its own.
 			if visible && !available {
-				walk.MsgBox(tp.Form(), "Обновления VPN013.com WG", message, walk.MsgBoxIconInformation)
+				walk.MsgBox(tp.Form(), "Обновления VPN013 WG", message, walk.MsgBoxIconInformation)
 			}
 		})
 	}()

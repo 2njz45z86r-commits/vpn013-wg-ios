@@ -55,7 +55,7 @@ build_r013.write_text(build_r013_text.replace(icon_anchor,
     "Copy-Item -LiteralPath ui/icon/vpn013.ico -Destination ui/icon/wireguard.ico -Force\n" + icon_anchor), encoding='utf-8', newline='\n')
 about = root / 'ui/aboutdialog.go'
 about_text = about.read_text(encoding='utf-8')
-for old,new in [('About AmneziaWG','О VPN013.com WG'),('https://amnezia.org/','https://vpn013.com/'),('AmneziaWG logo image','VPN013.com WG'),('wgLbl.SetText("AmneziaWG")','wgLbl.SetText("VPN013.com WG")')]:
+for old,new in [('About AmneziaWG','О VPN013 WG'),('https://amnezia.org/','https://vpn013.com/'),('AmneziaWG logo image','VPN013 WG'),('wgLbl.SetText("AmneziaWG")','wgLbl.SetText("VPN013 WG")')]:
     assert old in about_text
     about_text=about_text.replace(old,new)
 # Copyright/licensing text is retained verbatim.
@@ -68,7 +68,7 @@ about_text = about_text[:wordmark_start] + '''\twordmark, err := walk.NewImageVi
 \tdefer brand.Dispose()
 \twordmark.SetImage(brand)
 \twordmark.SetMinMaxSize(walk.Size{330,110},walk.Size{330,110})
-\twordmark.Accessibility().SetName("VPN013.com WG")
+\twordmark.Accessibility().SetName("VPN013 WG")
 ''' + about_text[wordmark_end:]
 about.write_text(about_text,encoding='utf-8',newline='\n')
 # Keep the original protocol fixture in the same millisecond units as the
