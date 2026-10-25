@@ -37,6 +37,8 @@ python3 VPN013/add_uitest_target.py
 mkdir -p ../../build/review
 swiftc VPN013/AutoFailoverPolicy.swift VPN013/tests/main.swift -o ../../build/test-auto-policy
 ../../build/test-auto-policy | tee ../../build/review/policy-tests.txt
+swiftc -D R013_AUTO_LIFECYCLE_TESTING VPN013/AutoFailoverPolicy.swift VPN013/AutoTunnelController.swift ../../tests/AutoControllerLifecycleTests.swift -o ../../build/test-auto-controller-lifecycle
+../../build/test-auto-controller-lifecycle | tee ../../build/review/auto-controller-lifecycle-tests.txt
 swiftc VPN013/PrivateTunnelStore.swift VPN013/tests/PrivateStorageTests.swift -o ../../build/test-private-storage
 ../../build/test-private-storage | tee ../../build/review/private-storage-tests.txt
 swiftc VPN013/EndpointPing.swift VPN013/tests/EndpointPingTests.swift -o ../../build/test-endpoint-ping

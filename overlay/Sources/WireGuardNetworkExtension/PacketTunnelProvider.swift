@@ -37,16 +37,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private func logTunnelConfigurationSummary(_ tunnelConfiguration: TunnelConfiguration) {
         let interface = tunnelConfiguration.interface
-        let addressStrings = interface.addresses.map { $0.stringRepresentation }
-        let dnsStrings = interface.dns.map { $0.stringRepresentation }
         let mtuString = interface.mtu.map { String($0) } ?? "auto"
         let peerSummaries = tunnelConfiguration.peers.enumerated().map { index, peer in
-            let endpoint = peer.endpoint?.stringRepresentation ?? "nil"
             let keepalive = peer.persistentKeepAlive.map { String($0) } ?? "0"
-            return "peer[\(index)]: endpoint=\(endpoint) allowedIPs=\(peer.allowedIPs.count) excludeIPs=\(peer.excludeIPs.count) keepalive=\(keepalive)"
+            return "peer[\(index)]: allowedIPs=\(peer.allowedIPs.count) excludeIPs=\(peer.excludeIPs.count) keepalive=\(keepalive)"
         }
         let peersSummary = peerSummaries.isEmpty ? "none" : peerSummaries.joined(separator: "; ")
-        wg_log(.info, message: "Config summary: addresses=\(addressStrings) dns=\(dnsStrings) mtu=\(mtuString) peers=\(peersSummary)")
+        wg_log(.info, message: "Config summary: addressCount=\(interface.addresses.count) dnsCount=\(interface.dns.count) mtu=\(mtuString) peers=\(peersSummary)")
     }
 
     private func logRuntimeConfigSummary(_ settings: String) {
@@ -125,14 +122,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 completionHandler(PacketTunnelProviderError.couldNotDetermineFileDescriptor)
 
             case .dnsResolution(let dnsErrors):
-                let hostnamesWithDnsResolutionFailure = dnsErrors.map { $0.address }
-                    .joined(separator: ", ")
-                wg_log(.error, message: "DNS resolution failed for the following hostnames: \(hostnamesWithDnsResolutionFailure)")
+                wg_log(.error, message: "DNS resolution failed; endpointCount=\(dnsErrors.count)")
                 errorNotifier.notify(PacketTunnelProviderError.dnsResolutionFailure)
                 completionHandler(PacketTunnelProviderError.dnsResolutionFailure)
 
-            case .setNetworkSettings(let error):
-                wg_log(.error, message: "Starting tunnel failed with setTunnelNetworkSettings returning \(error.localizedDescription)")
+            case .setNetworkSettings:
+                wg_log(.error, staticMessage: "Starting tunnel failed: could not apply network settings")
                 errorNotifier.notify(PacketTunnelProviderError.couldNotSetNetworkSettings)
                 completionHandler(PacketTunnelProviderError.couldNotSetNetworkSettings)
 
@@ -161,8 +156,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         adapter.stop { error in
             ErrorNotifier.removeLastErrorFile()
 
-            if let error = error {
-                wg_log(.error, message: "Failed to stop WireGuard adapter: \(error.localizedDescription)")
+            if error != nil {
+                wg_log(.error, staticMessage: "Failed to stop WireGuard adapter")
             }
             completionHandler()
 

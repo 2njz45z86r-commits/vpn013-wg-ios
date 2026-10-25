@@ -3,7 +3,7 @@ final class AutoTunnelUITests:XCTestCase {
     func capture(_ name:String) { let a=XCTAttachment(screenshot:XCUIScreen.main.screenshot());a.name=name;a.lifetime = .keepAlways;add(a) }
     func testCreateAutomaticFromThirteenImportedFixtures() {
         let app=XCUIApplication();app.launchArguments=["-AppleLanguages","(ru)","-AppleLocale","ru_RU"];app.launch()
-        XCTAssertTrue(app.staticTexts["Беларусь"].waitForExistence(timeout:20))
+        XCTAssertTrue(app.tables.cells.staticTexts["Беларусь"].waitForExistence(timeout:20))
         capture("01-thirteen-servers-simulator-fixture")
         app.buttons["vpn013.add-profile"].tap()
         XCTAssertTrue(app.buttons["Создать режим Авто"].waitForExistence(timeout:4))
@@ -36,7 +36,7 @@ final class AutoTunnelUITests:XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", String(count)]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Личный сервер 1"].waitForExistence(timeout:20))
+        XCTAssertTrue(app.tables.cells.staticTexts["Личный сервер 1"].waitForExistence(timeout:20))
         app.buttons["vpn013.add-profile"].tap()
         let action = app.buttons["Создать режим Авто"]
         XCTAssertTrue(action.waitForExistence(timeout:5)); XCTAssertTrue(action.isEnabled)
@@ -356,6 +356,118 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertEqual(app.staticTexts["vpn013.current-endpoint"].label, "Текущий сервер пока недоступен")
         capture("25-auto-unknown-member-no-seed-ping-synthetic-vpn")
         auto.switches.firstMatch.tap()
+    }
+
+    private func waitForPowerValue(_ value: String, in app: XCUIApplication) -> XCUIElement {
+        let button = app.buttons["vpn013.current-power"]
+        XCTAssertTrue(button.waitForExistence(timeout: 10))
+        let state = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: button)
+        XCTAssertEqual(XCTWaiter.wait(for: [state], timeout: 8), .completed)
+        return button
+    }
+
+    func testCurrentPowerButtonRemembersManualProfile() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-current-card-missing"]
+        app.launch()
+        let first = app.tables.cells.containing(.staticText, identifier: "Личный сервер 1").firstMatch
+        let second = app.tables.cells.containing(.staticText, identifier: "Личный сервер 2").firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 20))
+        let power = waitForPowerValue("Выключен", in: app)
+        XCTAssertTrue(power.isEnabled && power.isHittable)
+        XCTAssertGreaterThanOrEqual(power.frame.width, 44)
+        XCTAssertEqual(power.frame.width, power.frame.height, accuracy: 0.5)
+        capture("26a-current-power-off-synthetic")
+        power.tap()
+        _ = waitForPowerValue("Включён", in: app)
+        XCTAssertEqual(first.switches.firstMatch.value as? String, "1")
+        XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Личный сервер 1")
+        capture("26b-current-power-on-without-runtime-synthetic")
+        power.tap()
+        _ = waitForPowerValue("Выключен", in: app)
+        XCTAssertEqual(first.switches.firstMatch.value as? String, "0")
+        second.switches.firstMatch.tap()
+        _ = waitForPowerValue("Включён", in: app)
+        XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Личный сервер 2")
+        power.tap()
+        _ = waitForPowerValue("Выключен", in: app)
+        XCTAssertEqual(second.switches.firstMatch.value as? String, "0")
+        XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Личный сервер 2")
+        power.tap()
+        _ = waitForPowerValue("Включён", in: app)
+        XCTAssertEqual(second.switches.firstMatch.value as? String, "1", "Reconnect the last actual profile, not the first row")
+        XCTAssertEqual(first.switches.firstMatch.value as? String, "0")
+        capture("26c-current-power-remembers-second-manual-profile-synthetic")
+    }
+
+    func testCurrentPowerButtonControlsAutoWithoutRuntime() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-current-card-missing"]
+        app.launch()
+        XCTAssertTrue(app.tables.cells.staticTexts["Личный сервер 1"].waitForExistence(timeout: 20))
+        app.buttons["vpn013.add-profile"].tap()
+        app.buttons["Создать режим Авто"].tap()
+        XCTAssertTrue(app.alerts["Создать режим Авто"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Создать Авто"].tap()
+        if !app.tables.cells.element(boundBy: 0).staticTexts["Авто · 2 сервера"].waitForExistence(timeout: 2) {
+            XCTAssertTrue(app.navigationBars["Авто · 2 сервера"].waitForExistence(timeout: 6))
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+        }
+        let auto = app.tables.cells.element(boundBy: 0)
+        XCTAssertTrue(auto.staticTexts["Авто · 2 сервера"].waitForExistence(timeout: 6))
+        let power = waitForPowerValue("Выключен", in: app)
+        XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Авто · 2 сервера")
+        power.tap()
+        _ = waitForPowerValue("Включён", in: app)
+        XCTAssertEqual(auto.switches.firstMatch.value as? String, "1")
+        let ping = app.buttons["vpn013.current-ping"]
+        XCTAssertTrue(ping.waitForExistence(timeout: 8))
+        XCTAssertFalse(ping.isEnabled, "Unknown Auto member must still not ping a saved seed")
+        XCTAssertTrue(power.isEnabled && power.isHittable, "Power depends on the connection, not runtime statistics")
+        capture("27-current-power-auto-without-member-statistics-synthetic")
+        power.tap()
+        _ = waitForPowerValue("Выключен", in: app)
+        XCTAssertEqual(auto.switches.firstMatch.value as? String, "0")
+        power.tap()
+        _ = waitForPowerValue("Включён", in: app)
+        XCTAssertEqual(auto.switches.firstMatch.value as? String, "1")
+    }
+
+    func testCurrentPowerButtonEmptyAndLargeType() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "0"]
+        app.launch()
+        let emptyPower = waitForPowerValue("Выключен", in: app)
+        XCTAssertFalse(emptyPower.isEnabled, "No profile may be invented or connected from an empty list")
+        capture("28a-current-power-empty-disabled-synthetic")
+        app.terminate()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "--vpn013-test-count", "2", "--vpn013-test-current-card", "--vpn013-test-start-current"]
+        app.launch()
+        let power = waitForPowerValue("Включён", in: app)
+        for _ in 0..<5 {
+            if power.isHittable { break }
+            app.tables.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(power.isHittable)
+        XCTAssertGreaterThanOrEqual(power.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(power.frame.minX, 0)
+        XCTAssertLessThanOrEqual(power.frame.maxX, app.windows.firstMatch.frame.maxX)
+        let ping = app.buttons["vpn013.current-ping"]
+        if ping.exists { XCTAssertFalse(power.frame.intersects(ping.frame), "Power and Ping must remain separate targets") }
+        capture("28b-current-power-large-type-synthetic")
+    }
+
+    func testCurrentPowerButtonDisabledDuringTransition() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU",
+            "--vpn013-test-count", "2", "--vpn013-test-power-connecting"]
+        app.launch()
+        let power = waitForPowerValue("Изменение подключения", in: app)
+        XCTAssertFalse(power.isEnabled, "A second activation must not be submitted during a transition")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", "Подключение…")).firstMatch.exists)
+        capture("29-current-power-connecting-disabled-synthetic")
     }
 
     func testUpdatesScreenAndOrderSynchronization() {

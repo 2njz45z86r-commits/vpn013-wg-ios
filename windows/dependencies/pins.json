@@ -1,0 +1,61 @@
+{
+  "before": {
+    "go.mod": "0ffc3918f04162ed0dd982d6193252ecab7629209d301fd59b8aa0822f6254f7",
+    "go.sum": "4fe66e226c06924ec095e45388f229863a20617a913e765ab0f9f45cec4ef0f2"
+  },
+  "after": {
+    "go.mod": "86a4fc96098a41d7906bbcedd29afa3d20021768e78f44560404221194478e17",
+    "go.sum": "73291adaf20325ea1e380e4a190884c2459bca772df0e586dc374ed1f047b531"
+  },
+  "modules": [
+    {
+      "path": "golang.org/x/crypto",
+      "old": "v0.42.0",
+      "oldSum": "h1:chiH31gIWm57EkTXpwnqf8qeuMUi0yekh6mT2AvFlqI=",
+      "new": "v0.54.0",
+      "newSum": "h1:YLIA59K4fiNzHzjnZt2tUJQjQtUWfWbeHBqKtk3eScw="
+    },
+    {
+      "path": "golang.org/x/mod",
+      "old": "v0.28.0",
+      "oldSum": "h1:gQBtGhjxykdjY9YhZpSlZIsbnaE2+PgjfLWUQTnoZ1U=",
+      "new": "v0.37.0",
+      "newSum": "h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ="
+    },
+    {
+      "path": "golang.org/x/net",
+      "old": "v0.44.0",
+      "oldSum": "h1:evd8IRDyfNBMBTTY5XRF1vaZlD+EmWx6x8PkhR04H/I=",
+      "new": "v0.57.0",
+      "newSum": "h1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE="
+    },
+    {
+      "path": "golang.org/x/sync",
+      "old": "v0.17.0",
+      "oldSum": "h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug=",
+      "new": "v0.22.0",
+      "newSum": "h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek="
+    },
+    {
+      "path": "golang.org/x/sys",
+      "old": "v0.36.0",
+      "oldSum": "h1:KVRy2GtZBrk1cBYA7MKu5bEZFxQk4NIDV6RLVcC8o0k=",
+      "new": "v0.47.0",
+      "newSum": "h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs="
+    },
+    {
+      "path": "golang.org/x/text",
+      "old": "v0.29.0",
+      "oldSum": "h1:1neNs90w9YzJ9BocxfsQNHKuAT4pkghyXc4nhZ6sJvk=",
+      "new": "v0.40.0",
+      "newSum": "h1:Ub2Z6/xjgF1WrYQz2nuITOEegKFtiIy+rieRJ5lHZKs="
+    },
+    {
+      "path": "golang.org/x/tools",
+      "old": "v0.37.0",
+      "oldSum": "h1:DVSRzp7FwePZW356yEAChSdNcQo6Nsp+fex1SUW09lE=",
+      "new": "v0.47.0",
+      "newSum": "h1:7Kn5x/d1svx/PzryTsqeoZN4TZwqeH5pGWjefhLi/1Q="
+    }
+  ]
+}

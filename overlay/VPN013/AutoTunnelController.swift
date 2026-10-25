@@ -60,12 +60,18 @@ final class AutoTunnelController {
     }
     private func schedule(after seconds: TimeInterval) {
         timer?.cancel()
-        guard policy.running else { return }
-        let item = DispatchWorkItem { [weak self] in self?.check() }
+        timer = nil
+        guard policy.running, !applying else { return }
+        let scheduledEpoch = epoch
+        let item = DispatchWorkItem { [weak self] in
+            guard let self = self, self.epoch == scheduledEpoch, !self.applying else { return }
+            self.timer = nil
+            self.check()
+        }
         timer = item; DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: item)
     }
     private func check() {
-        guard policy.running, let provider = provider else { return }
+        guard policy.running, !applying, let provider = provider else { return }
         guard networkAvailable else { phase = "Ожидание сети"; schedule(after: 15); return }
         if installedIndex != policy.current { applyCandidate(policy.current); return }
         let stamp = epoch
@@ -87,6 +93,10 @@ final class AutoTunnelController {
         }
     }
     private func applyCandidate(_ index: Int, probePermit: R013PrimaryPermit? = nil, hourlyDone: (() -> Void)? = nil) {
+        guard policy.running, !applying, candidates.indices.contains(index) else {
+            if let permit = probePermit { _ = permit.commit(.unknown) }
+            hourlyDone?(); return
+        }
         let adopted: UInt64
         if let permit = probePermit {
             guard let ticket = permit.adoptForPrimary() else { _ = permit.commit(.unknown); hourlyDone?(); return }
@@ -94,6 +104,7 @@ final class AutoTunnelController {
         } else { adopted = 0 }
         phase = "Переключение на " + (candidates[index].name ?? "сервер")
         applying = true; epoch += 1; let change = epoch
+        timer?.cancel(); timer = nil
         probe?.cancel(); probe = nil
         wg_log(.info, message: "Auto failover: candidate index=\(index)")
         provider?.reasserting = true
@@ -128,6 +139,17 @@ final class AutoTunnelController {
         }
     }
 
+    #if R013_AUTO_LIFECYCLE_TESTING
+    // Only the standalone native harness uses these; never a Release entry point.
+    func applyForTesting(_ index: Int, permit: R013PrimaryPermit? = nil, done: (() -> Void)? = nil) {
+        applyCandidate(index, probePermit: permit, hourlyDone: done)
+    }
+    func checkForTesting() { check() }
+    func scheduleForTesting() { schedule(after: 60) }
+    var pendingHealthForTesting: Bool { timer != nil }
+    var applyingForTesting: Bool { applying }
+    var installedForTesting: Int { installedIndex }
+    #endif
 }
 
 /// Explicit through-tunnel API; a normal provider URLSession could bypass the VPN.

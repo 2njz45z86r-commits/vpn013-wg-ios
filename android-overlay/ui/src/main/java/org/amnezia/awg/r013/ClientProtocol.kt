@@ -7,7 +7,7 @@ import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 object ClientProtocol {
-    const val BOT = "https://t.me/vpn_access_orders_bot"
+    const val BOT = "https://t.me/vpn013_com_bot"
     const val WEBSITE = "https://vpn013.com"
     val origins = listOf("https://connect.vpn555.shop:8443", "https://connect.vpn555.shop:8444")
     private val id = Regex("^[a-f0-9]{12}$")

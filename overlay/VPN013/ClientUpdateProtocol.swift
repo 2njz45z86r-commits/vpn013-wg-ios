@@ -20,7 +20,7 @@ enum ClientUpdateError: LocalizedError {
 enum ClientUpdateProtocol {
     static let manifestName = "VPN013-Access"
     static let origins = ["https://connect.vpn555.shop:8443", "https://connect.vpn555.shop:8444"]
-    static let botURL = URL(string: "https://t.me/vpn_access_orders_bot?start=download_vpn013_ios")!
+    static let botURL = URL(string: "https://t.me/vpn013_com_bot?start=download_vpn013_ios")!
     static let maximumResponseBytes = 1_048_576
     static func digest(_ value: String) -> String { SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined() }
     static func validID(_ value: String) -> Bool { value.range(of: "^[a-f0-9]{12}$", options: .regularExpression) != nil }

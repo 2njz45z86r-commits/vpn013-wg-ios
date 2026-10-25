@@ -1,0 +1,235 @@
+# Validation only. Never add signing, release creation, catalogs or deployment.
+# While the audit is incomplete, publishing this client source and dispatching
+# this workflow requires the owner's explicit source-publication exception.
+# All existing release workflows retain their original security-review needs.
+name: Validate native clients without publishing releases
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        type: choice
+        options: [all, ios, android, windows]
+        default: all
+        required: true
+      validation_authorized:
+        description: Owner explicitly authorizes source publication for validation while audit is open
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: client-validation-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  ios:
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && (inputs.platform == 'all' || inputs.platform == 'ios')
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check tools and evidence export compatibility
+        run: |
+          xcodebuild -version
+          swift --version
+          xcrun xcresulttool export attachments --help >/dev/null
+          xcrun xcresulttool get test-results summary --help >/dev/null
+      - name: Test core and build unsigned app
+        run: sh build-on-mac.sh
+      - name: Check native Go dependencies without public finding details
+        run: |
+          set -eu
+          if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
+          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1 GOFLAGS=-mod=readonly
+          export CC="$(xcrun --sdk iphoneos --find clang)"
+          export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -miphoneos-version-min=14.0"
+          export CGO_LDFLAGS="$CGO_CFLAGS"
+          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo
+      - name: Verify native checks and appearances
+        id: native
+        run: |
+          if [ "$(git rev-parse HEAD:overlay)" = "adb8f91595889440912b7a2b3a29de081628b2fa" ]; then
+            python3 reuse-verified-native-review.py
+          else
+            sh inspect-on-mac.sh
+          fi
+      - name: Preserve synthetic acceptance evidence only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: validation-ios-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            build/review/*.json
+            build/review/*.png
+            build/review/*-tests.txt
+
+  android:
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && (inputs.platform == 'all' || inputs.platform == 'android')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Obtain pinned official source
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = '2njz45z86r-commits/vpn013-wg-ios'
+          git clone --filter=blob:none --no-checkout https://github.com/amnezia-vpn/amneziawg-android.git android
+          git -C android checkout ff15093bf3856fea0947923474870b86efb682f0
+          git -C android submodule update --init --recursive
+          test "$(git -C android/tunnel/tools/amneziawg-tools rev-parse HEAD)" = ee0f0a9aa34ff0a0da4b3433b9512781cfe02843
+          test "$(git -C android/tunnel/tools/elf-cleaner rev-parse HEAD)" = 7efc05090675ec6161b7def862728086a26c3b1f
+          cp -a android-overlay/. android/
+      - name: Pure policy and archive tests
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd android
+          mkdir -p output/core-tests
+          javac -encoding UTF-8 -d output/core-tests tunnel/src/main/java/org/amnezia/awg/r013/AutoPolicy.java tunnel/src/main/java/org/amnezia/awg/r013/HourlySchedule.java ui/src/main/java/org/amnezia/awg/r013/ArchiveReader.java r013-tests/*.java
+          java -cp output/core-tests AutoPolicyTest
+          java -cp output/core-tests ArchiveReaderTest
+          java -cp output/core-tests HourlyScheduleTest
+          (cd tunnel/tools/libwg-go && GOTOOLCHAIN=go1.26.10 go test -race -count=1 ./r013probe/... && GOTOOLCHAIN=go1.26.10 go vet ./r013probe/...)
+      - name: Compile native Android app sources
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;26.1.10909125' 'cmake;3.22.1'
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain :ui:compileDebugKotlin :ui:compileDebugJavaWithJavac :ui:compileDebugAndroidTestKotlin
+      - name: Build native debug and unsigned release APKs
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd android
+          ./gradlew --no-daemon --console=plain :ui:assembleDebug :ui:assembleDebugAndroidTest :ui:assembleRelease
+      - name: Exercise real VPN and native Material UI in emulator
+        id: emulator
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd android
+          bash r013-ci/emulator-check.sh
+      - name: Check native Go dependencies without public finding details
+        id: dependency_scan
+        run: |
+          set -euo pipefail
+          export GOOS=android GOARCH=arm64 CGO_ENABLED=1 GOFLAGS=-mod=readonly
+          export CC="$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          python3 scripts/check_go_security.py android/tunnel/tools/libwg-go
+      - name: Preserve synthetic acceptance evidence only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: validation-android-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            android/output/review/*.xml
+            android/output/review/screenshots/**/*.png
+            android/output/review/screenshots-final/**/*.png
+
+  windows:
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && (inputs.platform == 'all' || inputs.platform == 'windows')
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fetch exact reviewed corresponding source
+        run: |
+          $archive=Join-Path $env:RUNNER_TEMP 'windows-source.zip'
+          curl.exe --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --output $archive 'https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/windows-source-1.4.0/VPN013WG-1.4.0-windows-source.zip'
+          if ($LASTEXITCODE -ne 0) {throw 'Source download failed'}
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower() -ne 'f7c4a928eecc6e40a1d7b0bcf37bf26d7b6de1b449a2ca26f7cf1ffc2bd83e35') {throw 'Source hash mismatch'}
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:GITHUB_WORKSPACE
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Apply public overlays and preserve exact corresponding source
+        run: python windows/prepare-ci-source.py
+      - name: Prepare hash-pinned official dependencies
+        working-directory: vpn013-wg-windows
+        run: |
+          python scripts/bootstrap.py
+          if ($LASTEXITCODE -ne 0) {throw 'Toolchain preparation failed'}
+          ./scripts/bootstrap-driver.ps1
+          ./scripts/bootstrap-installer.ps1
+      - name: Build native application and MSI
+        working-directory: vpn013-wg-windows
+        run: |
+          ./scripts/build-r013.ps1
+          ./scripts/build-installer.ps1
+      - name: Check pinned Go dependencies without public finding details
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:PATH=(Join-Path $PWD '.deps/go/bin')+';'+(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          $env:GOFLAGS='-mod=vendor'
+          python "$env:GITHUB_WORKSPACE/scripts/check_go_security.py" "$PWD" --level symbol
+          if ($LASTEXITCODE -ne 0) {throw 'Private Go dependency review required'}
+      - name: Verify actual hourly product and complete native safety inventory
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/go/bin')+';'+(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          $env:R013_CI_WINTUN_DLL=Join-Path $PWD 'amd64/wintun.dll'
+          $env:R013_CI_CLIENT_EXE=Join-Path $PWD 'amd64/VPN013WG.exe'
+          python "$env:GITHUB_WORKSPACE/windows/release-check-hourly.py" "$env:RUNNER_TEMP/hourly-product-report" 'windows'
+          if ($LASTEXITCODE -ne 0) {throw 'Actual hourly product acceptance failed'}
+      - name: Test protocol, keys, recovery, policy and real ICMP
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./.deps/go/bin/go.exe test -mod=vendor -v ./r013 ./manager
+          if ($LASTEXITCODE -ne 0) {throw 'Core tests failed'}
+      - name: Test native current-card scenarios without customer VPN
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./scripts/ci-ui.ps1
+      - name: Test install, native AWG traffic, repair and uninstall
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./scripts/ci-installer.ps1
+      - name: Preserve synthetic acceptance evidence only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: validation-windows-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/hourly-product-report/verification.json
+            ${{ runner.temp }}/r013-ui-*.json

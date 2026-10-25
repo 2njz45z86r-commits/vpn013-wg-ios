@@ -74,6 +74,9 @@ class TunnelsManager {
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-start-current") {
             tunnels.first?.status = .active
         }
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-power-connecting") {
+            tunnels.first?.status = .activating
+        }
         #endif
         startObservingTunnelStatuses()
         startObservingTunnelConfigurations()

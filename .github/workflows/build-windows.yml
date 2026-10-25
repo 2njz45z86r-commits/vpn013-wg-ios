@@ -9,7 +9,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: windows-1.5.0
+  group: windows-1.5.1
   cancel-in-progress: false
 jobs:
   security-review:
@@ -35,7 +35,7 @@ jobs:
           Expand-Archive -LiteralPath $archive -DestinationPath $env:GITHUB_WORKSPACE
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: '1.25.14'
+          go-version: '1.26.10'
           cache: false
       - name: Apply public overlays and preserve exact corresponding source
         run: python windows/prepare-ci-source.py
@@ -51,6 +51,15 @@ jobs:
         run: |
           ./scripts/build-r013.ps1
           ./scripts/build-installer.ps1
+      - name: Check pinned Go dependencies without public finding details
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:PATH=(Join-Path $PWD '.deps/go/bin')+';'+(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          $env:GOFLAGS='-mod=vendor'
+          python "$env:GITHUB_WORKSPACE/scripts/check_go_security.py" "$PWD" --level symbol
+          if ($LASTEXITCODE -ne 0) {throw 'Private Go dependency review required'}
       - name: Verify actual hourly product and complete native safety inventory
         working-directory: vpn013-wg-windows
         run: |
@@ -92,7 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: windows-1.5.0-native-evidence
+          name: windows-1.5.1-native-evidence
           path: |
             ${{ runner.temp }}/hourly-product-report
             ${{ runner.temp }}/r013-ui-*.json
@@ -102,12 +111,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.5.0-amd64.msi'
-          $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.5.0-windows-source.zip'
-          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.5.0';build=3;sourceSHA256=(Get-FileHash -LiteralPath $sourceNamed -Algorithm SHA256).Hash.ToLower();msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true;nativeCurrentCardScenarios=3;autoPinnedFirst=$true;currentPing=$true;hourlyInactiveVPNComparison=$true;actualHourlyTests=98;actualHourlyFirstDelaySeconds=30;actualHourlyIntervalSeconds=3600}
+          $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.5.1-amd64.msi'
+          $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.5.1-windows-source.zip'
+          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.5.1';build=4;sourceSHA256=(Get-FileHash -LiteralPath $sourceNamed -Algorithm SHA256).Hash.ToLower();msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true;nativeCurrentCardScenarios=3;autoPinnedFirst=$true;currentPing=$true;hourlyInactiveVPNComparison=$true;actualHourlyTests=99;actualHourlyFirstDelaySeconds=30;actualHourlyIntervalSeconds=3600}
           $provenance | ConvertTo-Json | Set-Content -LiteralPath 'installer/dist/windows-build-provenance.json' -Encoding utf8
           $notes=@'
-          VPN013 WG Windows x64 1.5.0.
+          VPN013 WG Windows x64 1.5.1.
 
           Verified on a disposable Windows runner: native MSI install/repair/uninstall; preservation of existing and stock-app data; a real native Wintun tunnel with an obfuscated AmneziaWG handshake and in-tunnel ICMP response against an ephemeral memory-only peer. Protocol, scoped roster updates, key preservation, rollback, release signatures, Auto policy and IPv4/IPv6 ICMP tests passed.
 
@@ -118,5 +127,5 @@ jobs:
           Independent R013 client, not an official Amnezia/WireGuard release. Application/MSI publisher signature is absent; Wintun retains its original valid vendor signature. Corresponding source and original license texts are attached/included. No customer keys or configurations are present.
           '@
           $notes | Set-Content -LiteralPath 'installer/dist/release-notes.md' -Encoding utf8
-          gh release create windows-1.5.0 $msi $sourceNamed 'installer/dist/windows-build-provenance.json' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'VPN013 WG Windows 1.5.0' --notes-file 'installer/dist/release-notes.md'
+          gh release create windows-1.5.1 $msi $sourceNamed 'installer/dist/windows-build-provenance.json' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'VPN013 WG Windows 1.5.1' --notes-file 'installer/dist/release-notes.md'
           if ($LASTEXITCODE -ne 0) {throw 'Release publication failed'}

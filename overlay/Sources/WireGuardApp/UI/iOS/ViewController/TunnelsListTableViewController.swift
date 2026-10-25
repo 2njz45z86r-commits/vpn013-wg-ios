@@ -49,6 +49,12 @@ class TunnelsListTableViewController: UIViewController {
     private let summaryStatusLabel = TunnelsListTableViewController.makeLabel(style: .caption1)
     private let summaryNameLabel = TunnelsListTableViewController.makeLabel(style: .title3, weight: .semibold)
     private let summaryIdentityRow = UIStackView()
+    private let summaryDetailsRow = UIStackView()
+    private let currentPowerButton = UIButton(type: .system)
+    private var powerColumnWidth: NSLayoutConstraint?
+    private weak var rememberedPowerTunnel: TunnelContainer?
+    private var powerOperationID = UUID()
+    private var powerOperationInFlight = false
     private let summaryModeLabel = TunnelsListTableViewController.makeLabel(style: .subheadline, color: VPN013Theme.secondaryText)
     private let summaryProofLabel = TunnelsListTableViewController.makeLabel(style: .footnote, color: VPN013Theme.secondaryText)
     private let summaryEndpointLabel = TunnelsListTableViewController.makeLabel(style: .footnote, color: VPN013Theme.secondaryText)
@@ -210,6 +216,7 @@ class TunnelsListTableViewController: UIViewController {
         } else {
             tableView.allowsMultipleSelectionDuringEditing = false
         }
+        if isViewLoaded { updateCurrentPowerControl() }
     }
 
     func setTunnelsManager(tunnelsManager: TunnelsManager) {
@@ -306,8 +313,37 @@ class TunnelsListTableViewController: UIViewController {
         currentPingRow.addArrangedSubview(currentPingLabel)
         currentPingRow.addArrangedSubview(currentPingButton)
         currentPingRow.spacing = 10
-        let labels = UIStackView(arrangedSubviews: [summaryIdentityRow, summaryModeLabel, summaryProofLabel,
-            summaryEndpointLabel, summaryTrafficLabel, summaryHandshakeLabel, currentPingRow])
+        var powerConfiguration = UIButton.Configuration.filled()
+        powerConfiguration.image = UIImage(systemName: "power")
+        powerConfiguration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
+        powerConfiguration.cornerStyle = .capsule
+        powerConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
+        currentPowerButton.configuration = powerConfiguration
+        currentPowerButton.accessibilityIdentifier = "vpn013.current-power"
+        currentPowerButton.addTarget(self, action: #selector(currentPowerTapped), for: .touchUpInside)
+        currentPowerButton.translatesAutoresizingMaskIntoConstraints = false
+        let powerColumn = UIView()
+        powerColumn.addSubview(currentPowerButton)
+        powerColumnWidth = powerColumn.widthAnchor.constraint(equalToConstant: 64)
+        NSLayoutConstraint.activate([
+            currentPowerButton.widthAnchor.constraint(equalToConstant: 64),
+            currentPowerButton.heightAnchor.constraint(equalTo: currentPowerButton.widthAnchor),
+            currentPowerButton.trailingAnchor.constraint(equalTo: powerColumn.trailingAnchor),
+            currentPowerButton.leadingAnchor.constraint(greaterThanOrEqualTo: powerColumn.leadingAnchor),
+            currentPowerButton.centerYAnchor.constraint(equalTo: powerColumn.centerYAnchor),
+            currentPowerButton.topAnchor.constraint(greaterThanOrEqualTo: powerColumn.topAnchor),
+            currentPowerButton.bottomAnchor.constraint(lessThanOrEqualTo: powerColumn.bottomAnchor),
+            powerColumn.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
+        ])
+        let details = UIStackView(arrangedSubviews: [summaryModeLabel, summaryProofLabel,
+            summaryEndpointLabel, summaryTrafficLabel, summaryHandshakeLabel])
+        details.axis = .vertical
+        details.spacing = 5
+        details.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        summaryDetailsRow.addArrangedSubview(details)
+        summaryDetailsRow.addArrangedSubview(powerColumn)
+        summaryDetailsRow.spacing = 12
+        let labels = UIStackView(arrangedSubviews: [summaryIdentityRow, summaryDetailsRow, currentPingRow])
         labels.axis = .vertical
         labels.spacing = 5
         labels.translatesAutoresizingMaskIntoConstraints = false
@@ -318,6 +354,7 @@ class TunnelsListTableViewController: UIViewController {
             labels.leadingAnchor.constraint(equalTo: summary.layoutMarginsGuide.leadingAnchor),
             labels.trailingAnchor.constraint(equalTo: summary.layoutMarginsGuide.trailingAnchor)
         ])
+        updateSummaryIdentityLayout()
         var configuration = UIButton.Configuration.filled()
         configuration.title = "Проверить пинг"
         configuration.image = UIImage(systemName: "waveform.path.ecg")
@@ -386,6 +423,9 @@ class TunnelsListTableViewController: UIViewController {
         let accessibilitySize = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
         summaryIdentityRow.axis = accessibilitySize ? .vertical : .horizontal
         summaryIdentityRow.alignment = accessibilitySize ? .leading : .firstBaseline
+        summaryDetailsRow.axis = accessibilitySize ? .vertical : .horizontal
+        summaryDetailsRow.alignment = .fill
+        powerColumnWidth?.isActive = !accessibilitySize
         currentPingRow.axis = accessibilitySize ? .vertical : .horizontal
         currentPingRow.alignment = accessibilitySize ? .leading : .center
     }
@@ -480,6 +520,8 @@ class TunnelsListTableViewController: UIViewController {
         guard isViewLoaded else { return }
         let tunnels = tunnelsManager?.mapTunnels { $0 } ?? []
         let current = tunnels.first { $0.status == .active } ?? tunnels.first { $0.status != .inactive }
+        if let current = current { rememberedPowerTunnel = current }
+        updateCurrentPowerControl()
         summaryModeLabel.isHidden = true
         summaryProofLabel.isHidden = true
         summaryStatusLabel.textColor = VPN013Theme.secondaryText
@@ -492,9 +534,9 @@ class TunnelsListTableViewController: UIViewController {
             automaticSummaryRequestID = UUID()
             automaticSummaryRequestInFlight = false
             summaryStatusLabel.text = tunnelsManager == nil ? "Загрузка" : "Не подключено"
-            summaryNameLabel.text = tunnelsManager == nil ? "Загружаем серверы…" : (tunnels.isEmpty ? "Добавьте первый сервер" : "Выберите сервер")
+            summaryNameLabel.text = tunnelsManager == nil ? "Загружаем серверы…" : (preferredPowerTunnel(in: tunnels)?.name ?? "Добавьте первый сервер")
             summaryModeLabel.isHidden = tunnels.isEmpty
-            summaryModeLabel.text = "Включите переключатель рядом с сервером."
+            summaryModeLabel.text = "Нажмите кнопку питания, чтобы подключиться."
             sizeSummaryHeader()
             return
         }
@@ -541,6 +583,80 @@ class TunnelsListTableViewController: UIViewController {
         }
         sizeSummaryHeader()
         refreshAutomaticSummary()
+    }
+
+    private func preferredPowerTunnel(in tunnels: [TunnelContainer]) -> TunnelContainer? {
+        if let current = tunnels.first(where: { $0.status == .active }) ?? tunnels.first(where: { $0.status != .inactive }) {
+            return current
+        }
+        if let remembered = rememberedPowerTunnel, tunnels.contains(where: { $0 === remembered }) {
+            return remembered
+        }
+        return tunnels.first(where: { $0.isVPN013Automatic }) ?? tunnels.first
+    }
+
+    private func updateCurrentPowerControl() {
+        let tunnels = tunnelsManager?.mapTunnels { $0 } ?? []
+        let target = preferredPowerTunnel(in: tunnels)
+        let isOn = target?.status == .active
+        let changing = tunnels.contains { $0.status != .active && $0.status != .inactive }
+        currentPowerButton.isSelected = isOn
+        currentPowerButton.isEnabled = target != nil && !changing && !powerOperationInFlight && tableState == .normal
+        var configuration = currentPowerButton.configuration
+        configuration?.baseBackgroundColor = isOn ? .systemGreen : .systemGray5
+        configuration?.background.backgroundColor = isOn ? .systemGreen : .systemGray5
+        configuration?.baseForegroundColor = isOn ? VPN013Theme.background : VPN013Theme.secondaryText
+        currentPowerButton.configuration = configuration
+        currentPowerButton.accessibilityLabel = isOn ? "Выключить VPN" : "Включить VPN"
+        currentPowerButton.accessibilityValue = changing || powerOperationInFlight ? "Изменение подключения" : (isOn ? "Включён" : "Выключен")
+        currentPowerButton.accessibilityHint = target.map { "Профиль «\($0.name)»" } ?? "Сначала добавьте конфигурацию сервера"
+    }
+
+    private func cancelPendingPowerOperation() {
+        powerOperationID = UUID()
+        powerOperationInFlight = false
+        updateCurrentPowerControl()
+    }
+
+    @objc private func currentPowerTapped() {
+        guard let manager = tunnelsManager, tableState == .normal, !powerOperationInFlight else { return }
+        let tunnels = manager.mapTunnels { $0 }
+        guard !tunnels.contains(where: { $0.status != .active && $0.status != .inactive }),
+              let target = preferredPowerTunnel(in: tunnels), manager.index(of: target) != nil else { return }
+        rememberedPowerTunnel = target
+        cancelCurrentPing()
+        if target.status == .inactive {
+            // This button starts the actual connection; it does not enable an
+            // On-Demand policy that might leave the VPN disconnected.
+            manager.startActivation(of: target)
+            updateConnectionSummary()
+        } else if target.isActivateOnDemandEnabled {
+            // Turn off the policy first so iOS cannot immediately reconnect it.
+            let operation = UUID()
+            powerOperationID = operation
+            powerOperationInFlight = true
+            updateCurrentPowerControl()
+            manager.setOnDemandEnabled(false, on: target) { [weak self, weak manager, weak target] error in
+                DispatchQueue.main.async {
+                    guard let self = self, self.powerOperationID == operation else { return }
+                    self.powerOperationInFlight = false
+                    guard let manager = manager, let target = target,
+                          self.tunnelsManager === manager, manager.index(of: target) != nil else {
+                        self.updateConnectionSummary(); return
+                    }
+                    if let error = error {
+                        self.updateConnectionSummary()
+                        ErrorPresenter.showErrorAlert(error: error, from: self)
+                        return
+                    }
+                    manager.startDeactivation(of: target)
+                    self.updateConnectionSummary()
+                }
+            }
+        } else {
+            manager.startDeactivation(of: target)
+            updateConnectionSummary()
+        }
     }
 
     private func serverCountWord(_ count: Int) -> String {
@@ -792,7 +908,7 @@ class TunnelsListTableViewController: UIViewController {
 
         let alert = UIAlertController(title: "", message: tr("addTunnelMenuHeader"), preferredStyle: .actionSheet)
         alert.addAction(UIAlertAction(title: "Купить конфигурацию", style: .default) { [weak self] _ in
-            self?.openConfigurationWebsite("https://t.me/vpn_access_orders_bot")
+            self?.openConfigurationWebsite("https://t.me/vpn013_com_bot")
         })
         alert.addAction(UIAlertAction(title: "1 час бесплатно", style: .default) { [weak self] _ in
             self?.openConfigurationWebsite("https://vpn013.com/")
@@ -990,6 +1106,9 @@ extension TunnelsListTableViewController: UITableViewDataSource {
             cell.connectionTestText = connectionTestResults[ObjectIdentifier(tunnel)]
             cell.onSwitchToggled = { [weak self] isOn in
                 guard let self = self, let tunnelsManager = self.tunnelsManager else { return }
+                // A newer manual row action takes precedence over a pending
+                // card action; never stop a newly chosen connection afterwards.
+                self.cancelPendingPowerOperation()
                 if tunnel.hasOnDemandRules {
                     tunnelsManager.setOnDemandEnabled(isOn, on: tunnel) { error in
                         if error == nil && !isOn {

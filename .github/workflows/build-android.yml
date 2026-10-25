@@ -21,6 +21,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
       - name: Obtain pinned official source
         run: |
           set -euo pipefail
@@ -42,7 +46,7 @@ jobs:
           java -cp output/core-tests AutoPolicyTest
           java -cp output/core-tests ArchiveReaderTest
           java -cp output/core-tests HourlyScheduleTest
-          (cd tunnel/tools/libwg-go && GOTOOLCHAIN=go1.25.14 go test -race -count=1 ./r013probe/... && GOTOOLCHAIN=go1.25.14 go vet ./r013probe/...)
+          (cd tunnel/tools/libwg-go && GOTOOLCHAIN=go1.26.10 go test -race -count=1 ./r013probe/... && GOTOOLCHAIN=go1.26.10 go vet ./r013probe/...)
       - name: Compile native Android app sources
         run: |
           set -euo pipefail
@@ -67,6 +71,13 @@ jobs:
           export PATH="$JAVA_HOME/bin:$PATH"
           cd android
           bash r013-ci/emulator-check.sh
+      - name: Check native Go dependencies without public finding details
+        id: dependency_scan
+        run: |
+          set -euo pipefail
+          export GOOS=android GOARCH=arm64 CGO_ENABLED=1 GOFLAGS=-mod=readonly
+          export CC="$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          python3 scripts/check_go_security.py android/tunnel/tools/libwg-go
       - name: Export reviewable source and build evidence
         if: always()
         run: |
@@ -74,7 +85,7 @@ jobs:
           mkdir -p android/output/review
           find android/ui/build -name '*.xml' -path '*androidTest-results*' -exec cp {} android/output/review/ \; 2>/dev/null || true
           (cd android/output && zip -qr android-review.zip review)
-          if [ '${{ steps.emulator.outcome }}' = success ]; then
+          if [ '${{ steps.emulator.outcome }}' = success ] && [ '${{ steps.dependency_scan.outcome }}' = success ]; then
             cp android/ui/build/outputs/apk/release/ui-release-unsigned.apk android/output/VPN013WG-Android-unsigned.apk
             (cd android && tar --exclude='./.git' --exclude='*/.git' --exclude='./.gradle' --exclude='*/.cxx' --exclude='*/build' --exclude='./output' --exclude='./local.properties' -czf ../VPN013WG-Android-source.tar.gz .)
             sha256sum android/output/VPN013WG-Android-unsigned.apk VPN013WG-Android-source.tar.gz android/output/android-review.zip > android/output/SHA256SUMS-Android.txt

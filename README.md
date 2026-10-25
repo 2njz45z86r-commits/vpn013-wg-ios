@@ -1,7 +1,19 @@
 # VPN013 WG for iPhone
 
 Standalone VPN client project, separate from the owner administration app and Telegram bot.
-Version 1.3.0 build 5 is prepared for a native build; it has not yet been validated on an iPhone.
+The shipped clients are iOS 1.5.0 (12), Android 1.5.0 (11), and Windows 1.5.0 (3).
+The current **source candidate is 1.5.1**, not a published update. It updates the
+purchase/download links to `https://t.me/vpn013_com_bot`, adds the iOS current-card
+power control and handover/health-timer exclusion, and corrects the Windows
+order-expiry comparison to the shared API's Unix-millisecond units.
+
+Fresh native acceptance and the complete security review remain required.
+`security-review.json` is deliberately incomplete; existing release workflows
+must remain blocked until the actual review is complete. The separate, manual
+`validate-clients.yml` has read-only repository permissions and no release,
+signing, catalog or deployment step. While the audit is open, publishing this
+client source for that workflow needs the owner's explicit exception first.
+No private bot source, customer archives or signing keys belong in this repository.
 
 ## Source layout
 
@@ -59,11 +71,13 @@ Profile actions, private encrypted storage, import, manual connections and
 existing Auto health checks are preserved. No demonstration latency numbers
 are included in device builds.
 
-Hourly background testing of inactive VPN peers and automatic selection of the
-fastest inactive peer are NOT implemented in this release. Independent AWG
-handshake probes need physical-device validation of memory use, uninterrupted
-traffic and endpoint roaming. A handshake delay would not itself prove working
-internet traffic. The existing Auto failover behavior remains unchanged.
+The historical 1.3.x builds did not include hourly inactive-peer comparison.
+All three shipped 1.5.0 clients now contain it: Auto first checks after 30 seconds,
+then repeats after an hour, with bounded, separate candidate connections and
+the same DNS challenge measurement on the current and candidate paths.
+The comparison keeps the primary connection running; an accepted backend change
+can still lose packets. Native CI fixtures do not establish owner-device, WAN,
+sleep/wake or resource behavior. DNS latency is not a universal internet test.
 
 
 ## Endpoint ping in 1.3.1 (8)
@@ -105,7 +119,7 @@ membership follows the refreshed sources; unrelated manual sources are retained.
 After successful device compilation and native simulator tests the workflow publishes
 client-release.json. The private bot consumes this public metadata, so its IPA link
 and client update checks advance together. No private bot source is published here.
-Android/Windows binaries and installers are not part of this iOS release.
+Android/Windows binaries and installers use their own workflows and catalogs.
 Physical iPhone signing, traffic, and real order delivery require separate validation.
 
 
