@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-25T15:28:42.949126+00:00",
-  "source_sha256": "d505746c0ef6eb697a1e1322885022748fc1000af947f2b8515552f6ede0a995",
-  "source_commit_reviewed": "1963dec7e7f60670ca70724a81c2fbb891571fb0",
+  "reviewed_at": "2026-10-25T15:41:16.115761+00:00",
+  "source_sha256": "0449a6d2ffb6eec1029f481ca9406c90898143eccd1c6c7bef60b9fbc2372495",
+  "source_commit_reviewed": "c2a7c280fa35e56e8d1a8f7ac0080eec97f618d9",
   "scope_complete": false,
   "private_report_ref": "private-local:vpn013-bot-migration-20261025",
   "baseline_only": true,
@@ -179,7 +179,7 @@
     }
   ],
   "baseline_report_ref": "private-local:vpn013-bot-migration-20261025/baseline",
-  "review_note": "Owner explicitly authorized validation-only public client source publication and free standard native checks. This does not approve signing, installer publication or any unverified security control. Full native acceptance and complete client/backend/infrastructure audit remain incomplete.",
+  "review_note": "Owner-authorized validation only. First native run 40207659479: iOS build and Go package scan succeeded, UI pending; Android native build pending; Windows exact-hash preparation rejected checkout newline conversion. Real Git reproduction and scoped LF attributes preserve both pinned manifest hashes without weakening verification. Full security review and final native acceptance remain incomplete; no signing or installer release approval.",
   "validation_only_authorization": {
     "granted_at": "2026-10-25T15:28:42.949126+00:00",
     "source": "direct owner reply in this task",
