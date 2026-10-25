@@ -17,6 +17,14 @@ and authenticate a fresh backend without closing its owned TUN, avoiding stale
 omitted obfuscation fields. These are foundations: the manager hourly scheduler,
 conditional measured switch and route/DNS/firewall rollback remain unfinished.
 
+The real service now dispatches ordinary get/set/observe through a current-device
+slot. A queued set selects its device after the mutation fence, and a slow pipe
+reader cannot hold the slot during a swap. A bounded SCM forwarder invalidates
+stop/shutdown before a busy main loop can process a stale measured choice.
+Standalone endpoint preparation excludes active client/server aliases before
+resolution and keeps an immutable original domain/settings copy; only its
+bounded, cancellable numeric copy is used to build the future backend UAPI.
+
 Native fixtures create temporary SYSTEM services and ephemeral AWG peers with
 new random keys. They configure only disposable Wintun interfaces and their
 test addresses/routes. A path-race fixture adds and removes an explicitly
@@ -25,13 +33,21 @@ it never replaces an existing default route. These tests require the authorized
 GitHub-hosted Windows runner and are not intended for a user's installed PC.
 
 A separate synthetic SYSTEM fixture matches the real unrestricted service SID,
-establishes WFP before the unchanged privilege drop, then exercises native WFP
-enable/disable after it for permissive, restrictive with DNS, and permissive
-policies. Each dynamic policy is immediately closed on the disposable VM.
+establishes WFP before the unchanged privilege drop, then replaces permissive,
+restrictive with DNS, and permissive policies. The old dynamic session remains
+until its replacement is installed and verified by a native read-only
+transaction. Invalid replacement retains the previous session, failed close
+retains bounded ownership, and final cleanup closes the remaining policy.
 This API exercise is separate from proving production manager/candidate traffic
 through a restrictive policy owned by another actual tunnel service. A safe
 owned canonical SID copy retains the exact group attributes/service authority;
 no privilege, SID restriction or ACL is relaxed for this fixture.
+
+The exact-source WFP patch also propagates the documented returned DWORD status
+instead of unrelated thread LastError. Native invalid-session regressions compare
+the actual SDK return with the wrapper, including this runner's accepted
+idempotent Close(NULL). A successful API exercise is not a proof of production
+packet enforcement, a completed backend switch, or a released hourly client.
 
 The driver is extracted from an official hash-pinned, signature-checked MSI.
 No MSI is installed by this development workflow. Runtime fixtures are distinct
