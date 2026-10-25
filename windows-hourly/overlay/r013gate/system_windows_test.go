@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,17 @@ func TestMain(m *testing.M) {
 		native := len(os.Args) == 6 && os.Args[5] == "wintun"
 		if len(os.Args) == 6 && !native {
 			os.Exit(24)
+		}
+		// Service stderr is not inherited by the parent test. Capture only this
+		// synthetic CI fixture's fatal diagnostics; never any owner data/config.
+		crash, crashErr := os.OpenFile(filepath.Join(directory, "fixture-crash.txt"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+		if crashErr != nil {
+			os.Exit(29)
+		}
+		crashErr = debug.SetCrashOutput(crash, debug.CrashOptions{})
+		crash.Close()
+		if crashErr != nil {
+			os.Exit(30)
 		}
 		if svc.Run(name, &systemFixture{directory: directory, object: object, native: native}) != nil {
 			os.Exit(21)
@@ -394,6 +406,18 @@ func runSystemFixtureTest(t *testing.T, native bool) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	if !receipt.Ready || !receipt.System || !receipt.SessionZero || !receipt.PrivilegesDropped || !receipt.Echo || !receipt.VaultVerified {
+		if state, e := service.Query(); e == nil {
+			t.Logf("SCM fixture status: state=%d win32=%d specific=%d", state.State, state.Win32ExitCode, state.ServiceSpecificExitCode)
+		}
+		if crash, e := os.ReadFile(filepath.Join(directory, "fixture-crash.txt")); e == nil {
+			for _, line := range strings.Split(string(crash), "\n") {
+				// Only diagnostic labels and source locations, not argument/memory
+				// dumps. The complete private fixture file is not an artifact.
+				if strings.HasPrefix(line, "fatal error:") || strings.HasPrefix(line, "panic:") || (strings.Contains(line, "/tunnel/firewall/") && strings.Contains(line, ".go:")) {
+					t.Log(line)
+				}
+			}
+		}
 		t.Fatalf("SYSTEM proof missing: %+v", receipt)
 	}
 	gate := testGate(t, object)
