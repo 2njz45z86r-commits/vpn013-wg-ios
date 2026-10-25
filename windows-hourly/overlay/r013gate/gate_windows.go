@@ -45,6 +45,11 @@ type Gate struct {
 // SYSTEM services, not the unprivileged GUI. No credential or key is mapped.
 func Open() (*Gate, error) { return openNamed(productionName) }
 
+// NotifyChange invalidates measurements synchronously at a path/stop event.
+// It grants no mutation permission: real work must still enter Primary, which
+// waits for the candidate's actual UDP close acknowledgement.
+func (g *Gate) NotifyChange() Stamp { return g.bump(Stamp{}) }
+
 func verifyACL(handle windows.Handle, fullAccess uint32) error {
 	sd, err := windows.GetSecurityInfo(handle, windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
 	if err != nil || sd == nil {
