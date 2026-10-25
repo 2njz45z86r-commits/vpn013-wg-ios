@@ -46,6 +46,15 @@ jobs:
           if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '7a344dafa6942de2c1f4643b3eb5c5ce5317fbab671a887e4d39f326b331798f') { throw 'Compiler hash mismatch' }
           Expand-Archive $archive "$env:RUNNER_TEMP/compiler"
           "CC=$env:RUNNER_TEMP/compiler/llvm-mingw-20231128-ucrt-x86_64/bin/x86_64-w64-mingw32-gcc.exe" >> $env:GITHUB_ENV
+      - name: Verified official Wintun payload for disposable native fixture
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-Location "$env:RUNNER_TEMP/foundation/vpn013-wg-windows"
+          New-Item -ItemType Directory -Path .deps -Force | Out-Null
+          & ./scripts/bootstrap-driver.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "R013_CI_WINTUN_DLL=$env:RUNNER_TEMP/foundation/vpn013-wg-windows/.deps/official-extracted/AmneziaWG/wintun.dll" >> $env:GITHUB_ENV
       - name: Exact complete native test inventory
         shell: pwsh
         run: |

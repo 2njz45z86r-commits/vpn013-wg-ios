@@ -3,6 +3,7 @@ package r013gate
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,17 +26,37 @@ import (
 // This test executable acts as a short-lived SYSTEM service ONLY on disposable
 // CI. No application/driver/configuration is installed by this fixture.
 func TestMain(m *testing.M) {
-	if len(os.Args) == 5 && os.Args[1] == "--r013-scm-fixture" {
+	if (len(os.Args) == 5 || len(os.Args) == 6) && os.Args[1] == "--r013-scm-fixture" {
 		name, directory, object := os.Args[2], os.Args[3], os.Args[4]
 		service, err := svc.IsWindowsService()
 		if err != nil || !service || !strings.HasPrefix(name, "R013ProbeCI-") ||
 			!strings.HasPrefix(object, `Global\VPN013-Probe-CI-`) || !filepath.IsAbs(directory) {
 			os.Exit(20)
 		}
-		if svc.Run(name, &systemFixture{directory: directory, object: object}) != nil {
+		native := len(os.Args) == 6 && os.Args[5] == "wintun"
+		if len(os.Args) == 6 && !native {
+			os.Exit(24)
+		}
+		if svc.Run(name, &systemFixture{directory: directory, object: object, native: native}) != nil {
 			os.Exit(21)
 		}
 		os.Exit(0)
+	}
+	if driver := os.Getenv("R013_CI_WINTUN_DLL"); driver != "" {
+		if os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Getenv("RUNNER_OS") != "Windows" || os.Getenv("GITHUB_REPOSITORY") != "2njz45z86r-commits/vpn013-wg-ios" {
+			os.Exit(25)
+		}
+		data, err := os.ReadFile(driver)
+		if err != nil || fmt.Sprintf("%x", sha256.Sum256(data)) != "e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce" {
+			os.Exit(26)
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			os.Exit(27)
+		}
+		if err = os.WriteFile(filepath.Join(filepath.Dir(exe), "wintun.dll"), data, 0600); err != nil {
+			os.Exit(28)
+		}
 	}
 	os.Exit(m.Run())
 }
@@ -50,10 +71,14 @@ type systemReceipt struct {
 	Echo              bool   `json:"echo"`
 	Stamp             Stamp  `json:"stamp"`
 	Error             string `json:"error,omitempty"`
+	NativeWintun      bool   `json:"native_wintun"`
+	StreamBefore      uint32 `json:"stream_before"`
+	StreamAfter       uint32 `json:"stream_after"`
 }
 type systemFixture struct {
 	directory, object string
 	receipt           systemReceipt
+	native            bool
 }
 
 func (f *systemFixture) write() error {
@@ -113,7 +138,7 @@ func onlyDriverPrivilegeRemains() error {
 
 func (f *systemFixture) Execute(_ []string, requests <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
 	changes <- svc.Status{State: svc.StartPending}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	changes <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
 	finished := make(chan struct{})
@@ -176,6 +201,15 @@ func (f *systemFixture) run(ctx context.Context) error {
 	// Closing the extra handle conservatively invalidates old measurement stamps.
 	if err = reopened.Close(context.Background()); err != nil {
 		return err
+	}
+	if f.native {
+		before, after, err := runNativeWintunProof(ctx, gate, strings.TrimPrefix(f.object, `Global\VPN013-Probe-CI-`))
+		if err != nil {
+			return err
+		}
+		f.receipt.NativeWintun = true
+		f.receipt.StreamBefore = before
+		f.receipt.StreamAfter = after
 	}
 	return gate.Candidate(ctx, func(work context.Context, token Token) error {
 		var index uint32
@@ -249,7 +283,8 @@ func (f *systemFixture) run(ctx context.Context) error {
 	})
 }
 
-func TestGlobalSystemServiceKeepsBarrierAfterRealPrivilegeDrop(t *testing.T) {
+func runSystemFixtureTest(t *testing.T, native bool) {
+	t.Helper()
 	requireCI(t)
 	local := testName(t)
 	nonce := strings.TrimPrefix(local, `Local\VPN013-Probe-CI-`)
@@ -265,7 +300,11 @@ func TestGlobalSystemServiceKeepsBarrierAfterRealPrivilegeDrop(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer scm.Disconnect()
-	service, err := scm.CreateService(name, exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, DisplayName: name}, "--r013-scm-fixture", name, directory, object)
+	args := []string{"--r013-scm-fixture", name, directory, object}
+	if native {
+		args = append(args, "wintun")
+	}
+	service, err := scm.CreateService(name, exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, DisplayName: name}, args...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +334,7 @@ func TestGlobalSystemServiceKeepsBarrierAfterRealPrivilegeDrop(t *testing.T) {
 		}
 		return receipt
 	}
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(40 * time.Second)
 	var receipt systemReceipt
 	for time.Now().Before(deadline) {
 		receipt = read()
@@ -338,5 +377,22 @@ func TestGlobalSystemServiceKeepsBarrierAfterRealPrivilegeDrop(t *testing.T) {
 	if !receipt.Success || !receipt.Drained {
 		t.Fatalf("SYSTEM completion missing: %+v", receipt)
 	}
+	if native && (!receipt.NativeWintun || receipt.StreamBefore == 0 || receipt.StreamAfter <= receipt.StreamBefore) {
+		t.Fatalf("Native Wintun current/candidate proof missing: %+v", receipt)
+	}
+	if native {
+		t.Logf("Real Wintun DNS stream %d -> %d during separate AWG candidate; native primary unchanged; same-method choice and active-alias exclusion confirmed", receipt.StreamBefore, receipt.StreamAfter)
+	}
 	t.Log("SCM SYSTEM/session0 created Global barrier before actual DropAllPrivileges(true); post-drop reopen, pinned UDP echo, cross-session cancellation and real-close drain confirmed")
+}
+
+func TestGlobalSystemServiceKeepsBarrierAfterRealPrivilegeDrop(t *testing.T) {
+	runSystemFixtureTest(t, false)
+}
+func TestNativeWintunCurrentTrafficContinuesDuringOtherAWGScan(t *testing.T) {
+	requireCI(t)
+	if os.Getenv("R013_CI_WINTUN_DLL") == "" {
+		t.Fatal("Verified official Wintun payload is required, never skip")
+	}
+	runSystemFixtureTest(t, true)
 }
