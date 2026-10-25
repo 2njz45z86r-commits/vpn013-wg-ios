@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
 	"github.com/amnezia-vpn/amneziawg-go/v3/device"
@@ -34,6 +35,8 @@ var errBackendUnknown = errors.New("actual backend is no longer confirmed")
 // can create a choice. The hourly producer must close BOTH token UDP factories
 // before enqueueing an immutable one-shot measurement.
 type comparisonSelection struct {
+	created                time.Time
+	health                 *comparisonHealthProof
 	stamp                  r013gate.Stamp
 	current                r013gate.ConfirmedMember
 	revision, digest, path string
@@ -44,6 +47,7 @@ type comparisonSelection struct {
 	reply                  chan error
 }
 type comparisonBackendOwner struct {
+	generation    uint64
 	ctx           context.Context
 	gate          *r013gate.Gate
 	slot          *r013gate.PrimaryDeviceSlot
@@ -76,7 +80,8 @@ func (o *comparisonBackendOwner) confirmInitial() {
 	if err != nil {
 		return
 	}
-	state := &r013gate.ConfirmedMember{Index: index, Count: snapshot.Count(), Revision: snapshot.Revision(), Digest: digest}
+	o.generation++
+	state := &r013gate.ConfirmedMember{Generation: o.generation, Index: index, Count: snapshot.Count(), Revision: snapshot.Revision(), Digest: digest}
 	if state.Valid() {
 		o.observation.member.Store(state)
 	}
@@ -96,7 +101,10 @@ func (a *comparisonDeviceAccess) IpcSet(body string) error {
 }
 
 func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
-	if request == nil || request.member == nil || request.choice == nil || !request.current.Valid() || o.ctx.Err() != nil || request.fresh.Config != request.member.UAPI() || request.fresh.Source != request.member.Source() {
+	if request == nil || request.member == nil || !request.current.Valid() || o.ctx.Err() != nil || !comparisonRequestFresh(request.created) {
+		return errBackendUnknown
+	}
+	if request.health == nil && (request.choice == nil || request.fresh.Config != request.member.UAPI() || request.fresh.Source != request.member.Source()) {
 		return errBackendUnknown
 	}
 	selected, err := request.member.Original()
@@ -134,13 +142,21 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 	if err != nil {
 		return errBackendUnknown
 	}
-	transition, err := request.choice.BeginSwitch(o.ctx, request.fresh)
+	var transition *probe.ActiveTransition
+	if request.health != nil {
+		if request.choice != nil || !request.health.valid(request.index, request.current) {
+			return errBackendUnknown
+		}
+		transition, err = request.health.guard.BeginTransition(o.ctx)
+	} else {
+		transition, err = request.choice.BeginSwitch(o.ctx, request.fresh)
+	}
 	if err != nil {
 		return err
 	}
 	defer transition.Abort()
 	return o.slot.Swap(request.stamp, func(current r013gate.PrimaryUAPIDevice) (r013gate.PrimaryUAPIDevice, error) {
-		if current != *o.engine || o.ctx.Err() != nil {
+		if current != *o.engine || o.ctx.Err() != nil || !comparisonRequestFresh(request.created) || (request.health != nil && !request.health.valid(request.index, request.current)) {
 			return current, errBackendUnknown
 		}
 		known := o.observation.member.Load()
@@ -228,7 +244,8 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 			}
 			applyError = e
 			if applyError == nil {
-				state := &r013gate.ConfirmedMember{Index: request.index, Count: snapshot.Count(), Revision: snapshot.Revision(), Digest: request.digest}
+				o.generation++
+				state := &r013gate.ConfirmedMember{Generation: o.generation, Index: request.index, Count: snapshot.Count(), Revision: snapshot.Revision(), Digest: request.digest}
 				o.observation.member.Store(state)
 				o.observation.ready.Store(true)
 				return *o.engine, nil
@@ -275,7 +292,10 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 		if e != nil || index != known.Index || digest != known.Digest {
 			return nil, errors.Join(applyError, errBackendUnknown)
 		}
-		o.observation.member.Store(known)
+		o.generation++
+		restored := *known
+		restored.Generation = o.generation
+		o.observation.member.Store(&restored)
 		o.observation.ready.Store(true)
 		return *o.engine, applyError
 	})
@@ -395,4 +415,22 @@ func comparisonForeignPath(own winipcfg.LUID) (string, error) {
 	sort.Strings(parts)
 	digest := sha256.Sum256([]byte(strings.Join(parts, "\n")))
 	return hex.EncodeToString(digest[:]), nil
+}
+
+func comparisonRequestFresh(at time.Time) bool {
+	age := time.Since(at)
+	return !at.IsZero() && age >= 0 && age <= 15*time.Second
+}
+func (p *comparisonHealthProof) valid(index int, current r013gate.ConfirmedMember) bool {
+	if p == nil || p.guard == nil || !comparisonRequestFresh(p.at) || !current.Valid() {
+		return false
+	}
+	switch p.action {
+	case r013.Retry:
+		return index == current.Index && p.failures == 1 && p.latency == 0
+	case r013.Advance:
+		return index == (current.Index+1)%current.Count && ((p.failures == 2 && p.latency == 0) || (p.failures == 0 && p.latency > 1200*time.Millisecond))
+	default:
+		return false
+	}
 }

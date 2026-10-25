@@ -89,4 +89,5 @@ jobs:
             ${{ runner.temp }}/foundation/numeric-uapi-evidence.json
             ${{ runner.temp }}/foundation/existing-network-evidence.json
             ${{ runner.temp }}/foundation/backend-owner-evidence.json
+            ${{ runner.temp }}/foundation/hourly-worker-evidence.json
           if-no-files-found: error

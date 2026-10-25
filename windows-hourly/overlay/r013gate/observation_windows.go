@@ -15,35 +15,41 @@ import (
 	"time"
 )
 
-const ObservationVersion = 1
+const ObservationVersion = 2
 const maxObservationBytes = 8192
 
 type Observation struct {
-	Version     uint32           `json:"version"`
-	PID         uint32           `json:"pid"`
-	Name        string           `json:"name"`
-	Stamp       Stamp            `json:"stamp"`
-	Ready       bool             `json:"ready"`
-	Dirty       bool             `json:"dirty"`
-	Scripts     bool             `json:"scripts"`
-	TunnelIndex uint32           `json:"tunnel_index"`
-	Physical4   uint32           `json:"physical4"`
-	Physical6   uint32           `json:"physical6"`
-	Identity    string           `json:"identity"`
-	Member      *ConfirmedMember `json:"member,omitempty"`
+	HealthOwned            bool             `json:"health_owned"`
+	Comparing              bool             `json:"comparing"`
+	LastComparisonUnixNano int64            `json:"last_comparison_unix_nano"`
+	ComparedCount          int64            `json:"compared_count"`
+	WorkerStartedUnixNano  int64            `json:"worker_started_unix_nano"`
+	Version                uint32           `json:"version"`
+	PID                    uint32           `json:"pid"`
+	Name                   string           `json:"name"`
+	Stamp                  Stamp            `json:"stamp"`
+	Ready                  bool             `json:"ready"`
+	Dirty                  bool             `json:"dirty"`
+	Scripts                bool             `json:"scripts"`
+	TunnelIndex            uint32           `json:"tunnel_index"`
+	Physical4              uint32           `json:"physical4"`
+	Physical6              uint32           `json:"physical6"`
+	Identity               string           `json:"identity"`
+	Member                 *ConfirmedMember `json:"member,omitempty"`
 }
 
 // ConfirmedMember exposes only the exact immutable vault/member digests. It
 // carries no key or seed configuration; nil is explicitly unknown membership.
 type ConfirmedMember struct {
-	Index    int    `json:"index"`
-	Count    int    `json:"count"`
-	Revision string `json:"revision"`
-	Digest   string `json:"digest"`
+	Generation uint64 `json:"generation"`
+	Index      int    `json:"index"`
+	Count      int    `json:"count"`
+	Revision   string `json:"revision"`
+	Digest     string `json:"digest"`
 }
 
 func (m ConfirmedMember) Valid() bool {
-	if m.Count < 1 || m.Count > 30 || m.Index < 0 || m.Index >= m.Count {
+	if m.Generation == 0 || m.Count < 1 || m.Count > 30 || m.Index < 0 || m.Index >= m.Count {
 		return false
 	}
 	for _, value := range []string{m.Revision, m.Digest} {

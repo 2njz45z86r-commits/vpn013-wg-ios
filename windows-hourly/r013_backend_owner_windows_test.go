@@ -364,7 +364,7 @@ func (f *backendFixture) run(ctx context.Context) error {
 			if known == nil {
 				return errBackendUnknown
 			}
-			selection = &comparisonSelection{stamp: token.Stamp(), current: *known, revision: snapshot.Revision(), index: index, digest: digest, path: path, member: member, choice: result.Choice, fresh: fresh}
+			selection = &comparisonSelection{created: time.Now(), stamp: token.Stamp(), current: *known, revision: snapshot.Revision(), index: index, digest: digest, path: path, member: member, choice: result.Choice, fresh: fresh}
 			return nil
 		})
 		return selection, err

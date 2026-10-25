@@ -114,3 +114,32 @@ restrictive policy. They require native acceptance. PreparePrimary is explicit
 primary replacement preparation with no UDP; candidate Prepare and ActiveGuard
 still reject every active identity alias before candidate resolution/UDP. No
 service hourly/health producer or manager supervision migration is enabled yet.
+
+
+## Service-owned hourly/health and manager supervision candidate
+
+The version2 private observation adds health ownership, exact member engine
+generation and public comparison timing/counts. The actual service now starts
+one serialized health/hourly worker and drains it before UAPI/TUN teardown.
+Hourly starts at30seconds then3600seconds after completion; the90second context
+includes protected endpoint preparation and measurement. Both UDP factories
+really close before a fresh one-shot choice is queued. Health uses the same
+explicit protected current DNS plus actual handshake/RX evidence, preserves two
+attempts/1200ms, and sends only a bounded fresh private Retry/Advance proof.
+No remote mutation endpoint is added. Unknown measurements do not label a VPN dead.
+
+Manager now uses the common immutable vault loader and read-only confirmed
+membership supervision. It preserves running Auto, never replaces unknown
+runtime with seed/member zero, and starts a stopped Auto only when its saved
+working seed exactly matches the current vault. The legacy independent manager
+health SCM stop/start loop has been removed to avoid racing the service owner.
+
+A new test-only SYSTEM fixture launches the ACTUAL compiled Auto service with
+normal exact SCM definition and the real default secure store. It asserts no
+scan before29s, observed census/worker capability, faster authenticated member
+selection on the same Wintun, independent primary DNS traffic during Scan, real
+working-seed persistence and unchanged original vault. Only disposable free
+hosted Windows, with generated local peers and absent-before fixture files.
+These new worker/manager changes REQUIRE fresh native CI; compile-only and vet
+do not establish passing behavior or a released installer. The latest1.4.1 UI
+overlay/full strict UI/MSI preservation and release delivery remain separate.
