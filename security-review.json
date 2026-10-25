@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-25T15:41:16.115761+00:00",
-  "source_sha256": "0449a6d2ffb6eec1029f481ca9406c90898143eccd1c6c7bef60b9fbc2372495",
-  "source_commit_reviewed": "c2a7c280fa35e56e8d1a8f7ac0080eec97f618d9",
+  "reviewed_at": "2026-10-25T15:57:02.399Z",
+  "source_sha256": "5dd9f36314c6b5c4c7baa259c24c7fb3760553025f289833a7694a1784220ab5",
+  "source_commit_reviewed": "16fed8a4d2eae2b516f7a0b79f8eebfa912e99fd",
   "scope_complete": false,
   "private_report_ref": "private-local:vpn013-bot-migration-20261025",
   "baseline_only": true,
@@ -179,7 +179,7 @@
     }
   ],
   "baseline_report_ref": "private-local:vpn013-bot-migration-20261025/baseline",
-  "review_note": "Owner-authorized validation only. First native run 40207659479: iOS build and Go package scan succeeded, UI pending; Android native build pending; Windows exact-hash preparation rejected checkout newline conversion. Real Git reproduction and scoped LF attributes preserve both pinned manifest hashes without weakening verification. Full security review and final native acceptance remain incomplete; no signing or installer release approval.",
+  "review_note": "Validation-only source publication remains owner-authorized. Android native validation passed; iOS validation exposed two synthetic startup-fixture resets, corrected only for explicit simulator DEBUG flags. Full native rerun and complete security audit remain incomplete. No release approval.",
   "validation_only_authorization": {
     "granted_at": "2026-10-25T15:28:42.949126+00:00",
     "source": "direct owner reply in this task",
