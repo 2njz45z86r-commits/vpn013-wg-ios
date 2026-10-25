@@ -12,7 +12,7 @@ for name,want in expected.items():
  records[name]={'before':actual}
 p=base/'interfacewatcher.go';s=p.read_text()
 s=s.replace('"context"','"context"\n"errors"\n"fmt"',1)
-s=s.replace('setupMutex              sync.Mutex','retirementMutex sync.Mutex\nsetupMutex              sync.Mutex',1)
+s=s.replace('setupMutex              sync.Mutex','retirementMutex sync.Mutex\nexistingBackend bool\nsetupMutex              sync.Mutex',1)
 start=s.index('func (iw *interfaceWatcher) setup(')
 end=s.index('func watchInterface(',start)
 s=s[:start]+'''// setupFamilyLocked is only called with the primary barrier followed by
@@ -51,7 +51,7 @@ s=s[:start]+'''        if notificationType!=winipcfg.MibAddInstance||ctx.Err()!=
           if ctx.Err()!=nil{return ctx.Err()}
           if iw.tun==nil{iw.storedEvents=append(iw.storedEvents,interfaceWatcherEvent{iface.InterfaceLUID,iface.Family});return nil}
           if iface.InterfaceLUID!=winipcfg.LUID(iw.tun.LUID()){return nil}
-          return iw.setupFamilyLocked(iface.Family,false)
+          return iw.setupFamilyLocked(iface.Family,iw.existingBackend)
         }))''' +s[end:]
 start=s.index('func (iw *interfaceWatcher) Configure(')
 s=s[:start]+'''func (iw *interfaceWatcher) Configure(binder conn.BindSocketToInterface, configuration *conf.Config, native *tun.NativeTun) {
@@ -91,7 +91,8 @@ func (iw *interfaceWatcher) retire(ctx context.Context,preservePolicy bool) erro
   iw.setupMutex.Lock();defer iw.setupMutex.Unlock()
   if !preservePolicy{firewall.DisableFirewall()}
   if iw.tun==nil{return nil}
-  return flushOwnNetwork(winipcfg.LUID(iw.tun.LUID()))
+  luid:=winipcfg.LUID(iw.tun.LUID())
+  return errors.Join(flushOwnNetwork(luid),verifyRetiredNetwork(luid,iw.conf))
  })
 }
 

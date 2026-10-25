@@ -198,8 +198,8 @@ func (f *networkFixture) run(ctx context.Context) error {
 	if _, err = luid.Route(first.Peers[0].AllowedIPs[0].IPNet(), net.IPv4zero); !errors.Is(err, windows.ERROR_NOT_FOUND) {
 		return errors.New("retired route remains or readback failed")
 	}
-	if dns, e := luid.DNS(); e != nil || len(dns) != 0 {
-		return errors.New("retired DNS remains")
+	if err = verifyRetiredNetwork(luid, &first); err != nil {
+		return err
 	}
 	f.receipt.Retired = true
 	f.receipt.PolicyPreserved = true

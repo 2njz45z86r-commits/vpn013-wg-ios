@@ -20,7 +20,7 @@ import (
 // These are existing-TUN owner operations, not an hourly coordinator. The
 // caller must keep failed watchers owned for real retirement and rollback.
 func (iw *interfaceWatcher) ConfigureExisting(ctx context.Context, binder conn.BindSocketToInterface, original *conf.Config, native *tun.NativeTun) error {
-	if original == nil || binder == nil || native == nil {
+	if ctx == nil || original == nil || binder == nil || native == nil {
 		return windows.ERROR_INVALID_PARAMETER
 	}
 	copy, err := r013vault.CopyConfig(*original)
@@ -49,6 +49,7 @@ func (iw *interfaceWatcher) ConfigureExisting(ctx context.Context, binder conn.B
 			return errors.New("existing TUN interface unavailable")
 		}
 		iw.binder, iw.conf, iw.tun = binder, &copy, native
+		iw.existingBackend = true
 		iw.comparisonTunIndex.Store(row.InterfaceIndex)
 		iw.storedEvents = nil
 		for _, family := range []winipcfg.AddressFamily{windows.AF_INET, windows.AF_INET6} {
@@ -215,6 +216,56 @@ func verifyOwnNetwork(luid winipcfg.LUID, configuration *conf.Config) error {
 	for ip := range wanted {
 		if !actual[ip] {
 			return errors.New("DNS readback differs")
+		}
+	}
+	return nil
+}
+
+// Clearing manual DNS can expose Windows automatic/default entries. Verify
+// removal of the retired configuration's own servers rather than requiring
+// an OS-independent empty adapter list. Reapply still requires exact chosen DNS.
+func verifyRetiredNetwork(luid winipcfg.LUID, old *conf.Config) error {
+	if old == nil {
+		return nil
+	}
+	for _, address := range old.Interface.Addresses {
+		if _, err := luid.IPAddress(address.IP); !errors.Is(err, windows.ERROR_NOT_FOUND) {
+			return errors.New("retired owned source not confirmed absent")
+		}
+	}
+	if !old.Interface.TableOff {
+		for _, peer := range old.Peers {
+			for _, prefix := range peer.AllowedIPs {
+				haveSource := false
+				for _, source := range old.Interface.Addresses {
+					if source.Bits() == prefix.Bits() {
+						haveSource = true
+					}
+				}
+				if !haveSource {
+					continue
+				}
+				prefix.IP = append(net.IP(nil), prefix.IP...)
+				prefix.MaskSelf()
+				hop := net.IPv6zero
+				if prefix.Bits() == 32 {
+					hop = net.IPv4zero
+				}
+				if _, err := luid.Route(prefix.IPNet(), hop); !errors.Is(err, windows.ERROR_NOT_FOUND) {
+					return errors.New("retired owned route not confirmed absent")
+				}
+			}
+		}
+	}
+	actual, err := luid.DNS()
+	if err != nil {
+		return err
+	}
+	for _, before := range old.Interface.DNS {
+		for _, after := range actual {
+			if before.Equal(after) {
+				return errors.New("retired manual DNS remains")
+			}
 		}
 	}
 	return nil
