@@ -28,5 +28,7 @@ subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-observation.py
 subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-owned-tun.py'),str(root)],check=True)
 subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-firewall-sid.py'),str(root)],check=True)
 subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-service-dispatch.py'),str(root)],check=True)
+subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-firewall-replace.py'),str(root)],check=True)
+shutil.copy2(checkout/'windows-hourly/firewall_status_windows_test.go',root/'vendor/github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/firewall/firewall_status_windows_test.go')
 (workspace / 'source-evidence.json').write_text(json.dumps({'baseline_sha256': hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest(), 'module_files': before, 'scope': 'source-only barrier and socket primitives; NOT production lifecycle or Wintun integration'}, indent=2))
 print(root)

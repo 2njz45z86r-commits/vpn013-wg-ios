@@ -452,28 +452,32 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string, progres
 		if err := onlyDriverPrivilegeRemains(); err != nil {
 			return err
 		}
-		if err := progress("before-initial-WFP-close"); err != nil {
-			return err
+		if err := firewall.VerifyFirewall(); err != nil {
+			return fmt.Errorf("initial native WFP readback: %w", err)
 		}
-		firewall.DisableFirewall()
-		if err := progress("initial-WFP-closed-after-drop"); err != nil {
-			return err
+		if firewall.ReplaceFirewall(uint64(luid), false, []net.IP{{1, 2}}) == nil {
+			return errors.New("invalid WFP replacement accepted")
+		}
+		if err := firewall.VerifyFirewall(); err != nil {
+			return errors.New("failed replacement discarded preceding WFP session")
 		}
 		for _, permissive := range []bool{true, false, true} {
 			if err := progress(fmt.Sprintf("before-WFP-%t", permissive)); err != nil {
 				return err
 			}
-			if err := firewall.EnableFirewall(uint64(luid), permissive, []net.IP{net.ParseIP(primary.target.String()).To4()}); err != nil {
+			if err := firewall.ReplaceFirewall(uint64(luid), permissive, []net.IP{net.ParseIP(primary.target.String()).To4()}); err != nil {
 				return fmt.Errorf("post-drop WFP recreation: %w", err)
 			}
-			if err := progress(fmt.Sprintf("opened-WFP-%t", permissive)); err != nil {
-				firewall.DisableFirewall()
+			if err := firewall.VerifyFirewall(); err != nil {
 				return err
 			}
-			firewall.DisableFirewall()
-			if err := progress(fmt.Sprintf("closed-WFP-%t", permissive)); err != nil {
+			if err := progress(fmt.Sprintf("replaced-WFP-%t", permissive)); err != nil {
 				return err
 			}
+		}
+		firewall.DisableFirewall()
+		if firewall.VerifyFirewall() == nil {
+			return errors.New("closed native WFP reported available")
 		}
 		if err := progress("before-fresh-backend"); err != nil {
 			return err
