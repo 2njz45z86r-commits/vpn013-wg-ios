@@ -19,11 +19,58 @@ if overlays.is_dir():
         assert not path.is_symlink()
         relative = path.relative_to(overlays)
         assert not any(part in ('.git', '.deps', 'output') for part in relative.parts)
-        assert path.suffix in ('.ps1', '.py', '.go', '.wxs', '.c', '.h', '.txt', '.md')
+        assert path.suffix in ('.ps1', '.py', '.go', '.wxs', '.c', '.h', '.txt', '.md', '.ico', '.png')
         target = root / relative
         assert target.resolve().is_relative_to(root)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, target)
+# Add the update offer state to the exact existing native page. The button
+# does not replace the order/configuration refresh action.
+tunnels_page = root / 'ui/tunnelspage.go'
+page_source = tunnels_page.read_text(encoding='utf-8')
+page_field = '\tupdatesBusy            int32\n'
+assert page_source.count(page_field) == 1, 'Unexpected native page source'
+tunnels_page.write_text(page_source.replace(page_field, page_field + '\tr013Upgrade           *r013UpgradeOffer\n'), encoding='utf-8', newline='\n')
+# The base archive's build=1 predates releases1.5.x. A fixed current build must
+# not keep treating the currently installed catalog entry as a new update.
+install_source = root / 'r013/install_windows.go'
+install_text = install_source.read_text(encoding='utf-8')
+assert install_text.count('const CurrentBuild = 1') == 1
+install_source.write_text(install_text.replace('const CurrentBuild = 1', ''), encoding='utf-8', newline='\n')
+# An active VPN is not an installation queue. Keep the lifecycle protection,
+# but tell the user the real next action instead of promising a deferred task.
+update_service = root / 'manager/r013_update.go'
+update_text = update_service.read_text(encoding='utf-8')
+old_idle_message = 'Обновление доступно. Оно установится после отключения VPN.'
+assert update_text.count(old_idle_message) == 1
+update_service.write_text(update_text.replace(old_idle_message,
+    'Отключите VPN и нажмите «Установить обновление» ещё раз. Профили и привязки сохранятся.'), encoding='utf-8', newline='\n')
+# Keep the established executable/resource IDs and install directory. Replace
+# only the branding resource AFTER the base script regenerates upstream icons.
+build_r013 = root / 'scripts/build-r013.ps1'
+build_r013_text = build_r013.read_text(encoding='utf-8')
+icon_anchor = '$versionSource = Get-Content -LiteralPath version\\version.go -Raw'
+assert build_r013_text.count(icon_anchor) == 1
+build_r013.write_text(build_r013_text.replace(icon_anchor,
+    "Copy-Item -LiteralPath ui/icon/vpn013.ico -Destination ui/icon/wireguard.ico -Force\n" + icon_anchor), encoding='utf-8', newline='\n')
+about = root / 'ui/aboutdialog.go'
+about_text = about.read_text(encoding='utf-8')
+for old,new in [('About AmneziaWG','О VPN013.com WG'),('https://amnezia.org/','https://vpn013.com/'),('AmneziaWG logo image','VPN013.com WG'),('wgLbl.SetText("AmneziaWG")','wgLbl.SetText("VPN013.com WG")')]:
+    assert old in about_text
+    about_text=about_text.replace(old,new)
+# Copyright/licensing text is retained verbatim.
+wordmark_start = about_text.index('\twgLbl, err := walk.NewTextLabel(showingAboutDialog)')
+wordmark_end = about_text.index('\n\tdetailsLbl, err :=',wordmark_start)
+about_text = about_text[:wordmark_start] + '''\twordmark, err := walk.NewImageView(showingAboutDialog)
+\tif err != nil { return err }
+\tbrand, err := r013Wordmark()
+\tif err != nil { return err }
+\tdefer brand.Dispose()
+\twordmark.SetImage(brand)
+\twordmark.SetMinMaxSize(walk.Size{330,110},walk.Size{330,110})
+\twordmark.Accessibility().SetName("VPN013.com WG")
+''' + about_text[wordmark_end:]
+about.write_text(about_text,encoding='utf-8',newline='\n')
 # Keep the original protocol fixture in the same millisecond units as the
 # deployed backend. Production expiry checks reject seconds-valued documents.
 protocol_test = root / 'r013/protocol_test.go'

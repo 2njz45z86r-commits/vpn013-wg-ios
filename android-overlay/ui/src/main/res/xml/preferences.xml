@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     android:key="settings">
+    <Preference android:key="vpn013_brand" android:layout="@layout/r013_brand_preference" android:selectable="false" />
     <org.amnezia.awg.preference.VersionPreference
-        android:icon="@drawable/ic_icon"
+        android:icon="@mipmap/ic_launcher"
         android:key="version" />
     <CheckBoxPreference
         android:defaultValue="false"

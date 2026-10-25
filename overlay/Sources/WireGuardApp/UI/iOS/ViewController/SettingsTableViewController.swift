@@ -54,7 +54,12 @@ class SettingsTableViewController: UITableViewController {
         tableView.register(KeyValueCell.self)
         tableView.register(ButtonCell.self)
 
-        tableView.tableFooterView = UIImageView(image: UIImage(named: "wireguard.pdf"))
+        let brand = UIImageView(image: UIImage(named: "VPN013Wordmark"))
+        brand.contentMode = .scaleAspectFit
+        brand.isAccessibilityElement = true
+        brand.accessibilityLabel = "VPN013.com WG"
+        brand.accessibilityIdentifier = "vpn013.settings-wordmark"
+        tableView.tableFooterView = brand
     }
 
     override func viewDidLayoutSubviews() {

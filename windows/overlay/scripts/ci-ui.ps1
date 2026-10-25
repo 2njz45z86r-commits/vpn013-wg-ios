@@ -6,7 +6,7 @@ $projectRoot=Split-Path $PSScriptRoot -Parent
 $previewExe=Join-Path $env:RUNNER_TEMP 'VPN013-Preview.exe'
 & (Join-Path $projectRoot '.deps/go/bin/go.exe') build -mod=vendor -tags 'load_wgnt_from_rsrc,r013preview' -ldflags '-H windowsgui' -trimpath -buildvcs=false -o $previewExe .
 if ($LASTEXITCODE -ne 0) {throw 'Native UI fixture build failed'}
-foreach($scenario in @('manual-no-stats','auto','auto-no-stats')) {
+foreach($scenario in @('manual-no-stats','auto','auto-no-stats','update-offer')) {
   $env:VPN013_PREVIEW_SCENARIO=$scenario
   $env:VPN013_PREVIEW_VERIFY=Join-Path $env:RUNNER_TEMP ('r013-ui-'+$scenario+'.json')
   $process=Start-Process -FilePath $previewExe -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
@@ -19,7 +19,8 @@ foreach($scenario in @('manual-no-stats','auto','auto-no-stats')) {
   if ($process.ExitCode -ne 0 -or !$report.passed) {throw "Native UI fixture failed $scenario : $($report.failure)"}
   $expectedChecks=5
   if ($scenario -eq 'auto-no-stats') {$expectedChecks=3}
-  if ($report.checks.Count -ne $expectedChecks -or $report.actualLoopbackEcho -ne ($scenario -ne 'auto-no-stats')) {throw "Incomplete native UI proof: $scenario"}
+  if ($scenario -eq 'update-offer') {$expectedChecks=6}
+  if ($report.checks.Count -ne $expectedChecks -or $report.actualLoopbackEcho -ne ($scenario -notin @('auto-no-stats','update-offer'))) {throw "Incomplete native UI proof: $scenario"}
   $report | ConvertTo-Json -Depth 6
 }
 Remove-Item Env:VPN013_PREVIEW_VERIFY,Env:VPN013_PREVIEW_SCENARIO

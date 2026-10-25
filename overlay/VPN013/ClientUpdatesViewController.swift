@@ -73,7 +73,7 @@ final class ClientUpdatesViewController: UITableViewController {
             let orders = coordinator.registry.bindings.keys.sorted()
             if orders.isEmpty {
                 cell.textLabel?.text = "Пока нет привязанных заявок"
-                cell.detailTextLabel?.text = "Скачайте свежий ZIP из раздела «Мои заявки» в боте и импортируйте в VPN013 WG."
+                cell.detailTextLabel?.text = "Скачайте свежий ZIP из раздела «Мои заявки» в боте и импортируйте в VPN013.com WG."
             } else {
                 let order = orders[path.row]
                 if let binding = coordinator.registry.bindings[order] {

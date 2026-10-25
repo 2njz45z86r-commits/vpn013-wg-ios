@@ -113,7 +113,7 @@ jobs:
         run: |
           $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.5.1-amd64.msi'
           $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.5.1-windows-source.zip'
-          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.5.1';build=4;sourceSHA256=(Get-FileHash -LiteralPath $sourceNamed -Algorithm SHA256).Hash.ToLower();msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true;nativeCurrentCardScenarios=3;autoPinnedFirst=$true;currentPing=$true;hourlyInactiveVPNComparison=$true;actualHourlyTests=99;actualHourlyFirstDelaySeconds=30;actualHourlyIntervalSeconds=3600}
+          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.5.1';build=4;sourceSHA256=(Get-FileHash -LiteralPath $sourceNamed -Algorithm SHA256).Hash.ToLower();msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true;nativeCurrentCardScenarios=3;nativeUpdateOfferScenario=$true;inPlaceUpgradeFrom150=$true;autoPinnedFirst=$true;currentPing=$true;hourlyInactiveVPNComparison=$true;actualHourlyTests=100;actualHourlyFirstDelaySeconds=30;actualHourlyIntervalSeconds=3600}
           $provenance | ConvertTo-Json | Set-Content -LiteralPath 'installer/dist/windows-build-provenance.json' -Encoding utf8
           $notes=@'
           VPN013 WG Windows x64 1.5.1.

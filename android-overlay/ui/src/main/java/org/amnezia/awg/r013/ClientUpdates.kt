@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.amnezia.awg.Application
@@ -29,6 +30,7 @@ object ClientUpdates {
     private var refreshing = false
     private var downloading = false
     private var applying = false
+    private var resumingInstall = false
     private val failedPending = HashMap<String, String>()
     suspend fun refreshOrders(): String {
         check(!refreshing) { "Обновление конфигураций уже выполняется" }
@@ -86,7 +88,7 @@ object ClientUpdates {
         } finally { applying = false }
     }
     suspend fun checkDaily(activity: AppCompatActivity, notify: (String) -> Unit) {
-        if (checking || BuildConfig.DEBUG) return
+        if (checking || resumingInstall || BuildConfig.DEBUG) return
         val registry = ProfileRegistry.get(activity)
         val now = System.currentTimeMillis()
         val state = withContext(Dispatchers.IO) { registry.vault.read() }
@@ -97,14 +99,14 @@ object ClientUpdates {
             var complete = true
             try {
                 val release = withContext(Dispatchers.IO) { ClientProtocol.request("/client/releases/vpn013-wg/android").also { validateRelease(it) } }
-                if (newer(release) && !downloading) {
+                if (newer(release) && !downloading && !resumingInstall) {
                     downloading = true
                     try {
                         val file = withContext(Dispatchers.IO) { downloadChecked(activity, release) }
                         if (!activity.isFinishing && !activity.isDestroyed) MaterialAlertDialogBuilder(activity).setTitle("Обновление ${release.getString("version")} скачано")
                             .setMessage("Файл проверен. Android предложит подтвердить установку; ваши профили сохранятся при обновлении поверх этой версии.")
-                            .setPositiveButton("Установить") { _, _ -> installChecked(activity, file) }.setNegativeButton("Позже", null).show()
-                    } finally { downloading = false }
+                            .setPositiveButton("Установить обновление") { _, _ -> installChecked(activity, file, release) }.setNegativeButton("Позже", null).show()
+                    } finally { downloading = false; resumePendingInstall(activity) }
                 }
             } catch (_: Exception) { complete = false }
             try { val message = refreshOrders(); if (state.getJSONObject("orders").length() > 0) notify(message) }
@@ -114,8 +116,8 @@ object ClientUpdates {
         finally { checking = false }
     }
     fun offerUpdate(activity: AppCompatActivity) {
-        if (checking || downloading) return
-        if (BuildConfig.DEBUG) { message(activity, "Тестовая сборка", "Для обновлений нужна подписанная версия VPN013 WG."); return }
+        if (checking || downloading || resumingInstall) return
+        if (BuildConfig.DEBUG) { message(activity, "Тестовая сборка", "Для обновлений нужна подписанная версия VPN013.com WG."); return }
         checking = true
         activity.lifecycleScope.launch {
             try {
@@ -140,29 +142,83 @@ object ClientUpdates {
     private fun promptDownload(activity: AppCompatActivity, release: JSONObject) {
         MaterialAlertDialogBuilder(activity).setTitle("Доступна версия ${release.getString("version")}")
             .setMessage(release.optString("notes") + "\n\nПриложение проверит файл и откроет системную установку. Android попросит разрешение; профили сохраняются при обновлении поверх существующей версии.")
-            .setPositiveButton("Скачать обновление") { _, _ -> download(activity, release) }.setNegativeButton("Позже", null).show()
+            .setPositiveButton("Установить обновление") { _, _ -> download(activity, release) }.setNegativeButton("Позже", null).show()
     }
     private fun download(activity: AppCompatActivity, release: JSONObject) {
         if (downloading) return; downloading = true
         activity.lifecycleScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) { downloadChecked(activity, release) }
-                installChecked(activity, file)
+                installChecked(activity, file, release)
             } catch (e: Exception) { message(activity, "Обновление не установлено", e.message ?: "Не удалось скачать и проверить APK. Прежняя версия сохранена.") }
-            finally { downloading = false }
+            finally { downloading = false; resumePendingInstall(activity) }
         }
     }
-    private fun installChecked(activity: Activity, file: File) {
+    private fun installChecked(activity: AppCompatActivity, file: File, release: JSONObject) {
         if (activity.isFinishing || activity.isDestroyed) return
+        try {
+        // Persist only after the owner taps Install. A background download or
+        // a Later choice must never become an unsolicited install on resume.
+        val directory = File(activity.cacheDir, "updates").apply { mkdirs() }
+        check(file.canonicalFile == File(directory, "VPN013WG.apk").canonicalFile)
+        val marker = File(directory, "requested-install.json")
+        val temporary = File(directory, "requested-install.part")
+        temporary.outputStream().use { out -> out.write(release.toString().toByteArray(Charsets.UTF_8)); out.fd.sync() }
+        check(temporary.renameTo(marker)) { "Не удалось сохранить запрос обновления" }
         if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
-            MaterialAlertDialogBuilder(activity).setTitle("Разрешите обновления VPN013 WG")
-                .setMessage("Android требует разрешение «Установка неизвестных приложений». Включите его для VPN013 WG, вернитесь сюда и снова выберите проверку обновления.")
+            MaterialAlertDialogBuilder(activity).setTitle("Разрешите обновления VPN013.com WG")
+                .setMessage("Android требует один раз разрешить установку из VPN013.com WG. Включите разрешение и вернитесь в приложение — установка уже скачанного обновления продолжится. Профили и привязка к заявке сохранятся.")
                 .setPositiveButton("Открыть разрешение") { _, _ -> activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))) }
-                .setNegativeButton("Позже", null).show()
+                .setNegativeButton("Позже") { _, _ -> marker.delete() }
+                .setOnCancelListener { marker.delete() }.show()
         } else {
-            val uri = FileProvider.getUriForFile(activity, activity.packageName + ".updates", file)
-            activity.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            resumePendingInstall(activity)
         }
+        } catch (e: Exception) {
+            message(activity, "Обновление не установлено", e.message ?: "Не удалось подготовить установку. Профили сохранены.")
+        }
+    }
+    fun resumePendingInstall(activity: AppCompatActivity) {
+        if (resumingInstall || downloading || activity.isFinishing || activity.isDestroyed) return
+        if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) return
+        val directory = File(activity.cacheDir, "updates")
+        val marker = File(directory, "requested-install.json")
+        if (!marker.isFile) return
+        resumingInstall = true
+        activity.lifecycleScope.launch {
+            try {
+                val file = withContext(Dispatchers.IO) {
+                    require(marker.length() in 1..16384) { "Запрос обновления повреждён" }
+                    val release = JSONObject(marker.readText(Charsets.UTF_8))
+                    validateRelease(release)
+                    val apk = File(directory, "VPN013WG.apk")
+                    require(apk.isFile && apk.length() in 1..100_663_296L) { "Файл обновления недоступен. Повторите проверку обновлений." }
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    apk.inputStream().use { input -> val buffer = ByteArray(32768)
+                        while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+                    }
+                    require(digest.digest().joinToString("") { "%02x".format(it) } == release.getString("sha256")) { "Файл обновления изменился. Повторите проверку обновлений." }
+                    verifyUpgradeIdentity(activity, apk, release)
+                    apk
+                }
+                if (activity.isFinishing || activity.isDestroyed) return@launch
+                val uri = FileProvider.getUriForFile(activity, activity.packageName + ".updates", file)
+                check(marker.delete()) { "Не удалось подтвердить запрос установки" }
+                activity.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) {
+                marker.delete()
+                message(activity, "Обновление не установлено", e.message ?: "Не удалось проверить обновление. Профили сохранены.")
+            } finally { resumingInstall = false }
+        }
+    }
+    private fun verifyUpgradeIdentity(activity: Activity, file: File, release: JSONObject) {
+        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+        @Suppress("DEPRECATION") val incoming = activity.packageManager.getPackageArchiveInfo(file.absolutePath, flags) ?: error("Android не распознал подпись APK")
+        @Suppress("DEPRECATION") val installed = activity.packageManager.getPackageInfo(activity.packageName, flags)
+        require(incoming.packageName == activity.packageName && incoming.versionName == release.getString("version") &&
+            versionCode(incoming) == release.getInt("build").toLong() && versionCode(incoming) > versionCode(installed) &&
+            signers(incoming).isNotEmpty() && signers(incoming) == signers(installed)) { "APK относится к другому приложению, версии или подписи" }
     }
     private fun downloadChecked(activity: Activity, release: JSONObject): File {
         validateRelease(release)
@@ -189,12 +245,7 @@ object ClientUpdates {
                 } finally { connection.disconnect() }
             }
             require(finished && digest.digest().joinToString("") { "%02x".format(it) } == release.getString("sha256")) { "Не совпадает контрольная сумма APK" }
-            val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
-            @Suppress("DEPRECATION") val incoming = activity.packageManager.getPackageArchiveInfo(pending.absolutePath, flags) ?: error("Android не распознал подпись APK")
-            @Suppress("DEPRECATION") val installed = activity.packageManager.getPackageInfo(activity.packageName, flags)
-            require(incoming.packageName == activity.packageName && incoming.versionName == release.getString("version") &&
-                versionCode(incoming) == release.getInt("build").toLong() && versionCode(incoming) > versionCode(installed) &&
-                signers(incoming).isNotEmpty() && signers(incoming) == signers(installed)) { "APK относится к другому приложению, версии или подписи" }
+            verifyUpgradeIdentity(activity, pending, release)
             if (result.exists()) check(result.delete())
             check(pending.renameTo(result)) { "Не удалось сохранить обновление" }; return result
         } finally { if (pending.exists()) pending.delete() }

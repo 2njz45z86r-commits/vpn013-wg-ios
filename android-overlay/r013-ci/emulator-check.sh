@@ -41,8 +41,22 @@ adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard
 for setting in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global "$setting" 0; done
 adb shell cmd uimode night yes
-adb install -r -t ui/build/outputs/apk/debug/ui-debug.apk
+# First install the historical app, seed its real encrypted vault, then replace
+# it without uninstalling. Both APKs use the same ephemeral runner debug key.
+test -s "$RUNNER_TEMP/VPN013WG-previous-debug.apk"
+adb install -r -t "$RUNNER_TEMP/VPN013WG-previous-debug.apk"
 adb install -r -t ui/build/outputs/apk/androidTest/debug/ui-debug-androidTest.apk
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013UpgradePreservationTest -e upgradePhase seed com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/upgrade-before.txt
+grep -E '^OK \(1 test\)[[:space:]]*$' output/review/upgrade-before.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/upgrade-before.txt
+adb install -r -t ui/build/outputs/apk/debug/ui-debug.apk
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013UpgradePreservationTest -e upgradePhase verify com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/upgrade-after.txt
+grep -E '^OK \(1 test\)[[:space:]]*$' output/review/upgrade-after.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/upgrade-after.txt
+adb push "$RUNNER_TEMP/VPN013WG-future-debug.apk" /sdcard/Android/data/com.vpn013.awg.debug/files/update-fixture.apk
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013UpdateInstallTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/update-install-flow.txt
+grep -E '^OK \(3 tests\)[[:space:]]*$' output/review/update-install-flow.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/update-install-flow.txt
 adb shell appops set com.vpn013.awg.debug ACTIVATE_VPN allow
 (cd tunnel/tools/libwg-go && go run ../../../r013-ci/peer.go) > "$RUNNER_TEMP/r013-peer.log" 2>&1 &
 peer_pid=$!
@@ -52,7 +66,7 @@ test -s "$RUNNER_TEMP/r013-synthetic.conf"
 test -s "$RUNNER_TEMP/r013-synthetic-candidate.conf"
 fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic.conf")
 candidate_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic-candidate.conf")
-adb shell am instrument -w -r -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
 grep -E '^OK \(11 tests\)[[:space:]]*$' output/review/instrumentation.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/instrumentation.txt
 unset fixture candidate_fixture

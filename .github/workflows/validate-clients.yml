@@ -69,7 +69,7 @@ jobs:
   android:
     if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && (inputs.platform == 'all' || inputs.platform == 'android')
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -116,6 +116,13 @@ jobs:
           export PATH="$JAVA_HOME/bin:$PATH"
           cd android
           ./gradlew --no-daemon --console=plain :ui:assembleDebug :ui:assembleDebugAndroidTest :ui:assembleRelease
+      - name: Build historical1.5.0 debug source for in-place upgrade acceptance
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          bash scripts/build-previous-android-fixture.sh
+          bash scripts/build-future-android-fixture.sh
       - name: Exercise real VPN and native Material UI in emulator
         id: emulator
         run: |
@@ -139,6 +146,8 @@ jobs:
           if-no-files-found: error
           path: |
             android/output/review/*.xml
+            android/output/review/*.txt
+            android/output/review/screenshots/**/*.json
             android/output/review/screenshots/**/*.png
             android/output/review/screenshots-final/**/*.png
 
@@ -233,3 +242,4 @@ jobs:
           path: |
             ${{ runner.temp }}/hourly-product-report/verification.json
             ${{ runner.temp }}/r013-ui-*.json
+            ${{ runner.temp }}/r013-in-place-upgrade.json

@@ -1,0 +1,16 @@
+{
+  "approvedSourceSHA256": "cb8cf0e0878fba3e9b3870a967987075ccf6d0a85e2ed5a2242c9a2ab5dd719c",
+  "source": "owner-approved globe asset used by VPN013 bot,2026-10-16",
+  "artworkRedesigned": false,
+  "wordmark": "VPN013.com WG",
+  "fontRedistributed": false,
+  "assets": {
+    "vpn013-app-icon.ico": "b16228feed41dac62fcecffa91bec1b54c671cf5437c28da9750496a288a4328",
+    "vpn013-app-icon.png": "6b2c10043d0f706f29382b0939f124da3f240ffb5e573f4445675307de45633f",
+    "vpn013-wordmark.png": "dd0fe72a1daa5f8aa96aeeaab3270ad34722b534225dd3e0cea8087a51b2c8da"
+  },
+  "wordmarkOwnerApproved": true,
+  "wordmarkSource": "Owner-approved image generation edit of upstream handwritten palette;2026-10-25",
+  "appDisplayName": "VPN013.com WG",
+  "installationIDsUnchanged": true
+}

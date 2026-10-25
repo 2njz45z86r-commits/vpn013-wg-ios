@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013"
+	"github.com/amnezia-vpn/amneziawg-windows-client/version"
 	"github.com/lxn/walk"
 )
 
@@ -48,6 +49,9 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 	}
 	defer func() {
 		minimum := 5
+		if scenario == "update-offer" {
+			minimum = 6
+		}
 		if scenario == "auto-no-stats" {
 			minimum = 3
 		}
@@ -66,6 +70,49 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 			}
 		})
 	}()
+	if scenario == "update-offer" {
+		syncUI(func() {
+			tp := window.tunnelsPage
+			offer := tp.r013Upgrade
+			if offer == nil || offer.row.Visible() {
+				failure = "Install offer missing or visible before discovery"
+				return
+			}
+			checks = append(checks, "Install button is hidden before an update is discovered")
+			tp.showR013Upgrade(&r013.Release{Version: version.Number, Build: r013.CurrentBuild})
+			if offer.row.Visible() || offer.release != nil {
+				failure = "Installed build offered again"
+				return
+			}
+			checks = append(checks, "Currently installed build is not offered again")
+			tp.listView.selectTunnel("Germany")
+			candidate := &r013.Release{Version: version.Number, Build: r013.CurrentBuild + 1}
+			tp.showR013Upgrade(candidate)
+			if !offer.row.Visible() || !offer.button.Enabled() || offer.button.Text() != "Установить обновление" {
+				failure = "Newer build does not expose the install button"
+				return
+			}
+			checks = append(checks, "Newer build exposes the enabled Install update button")
+			candidate.Build++
+			if offer.release.Build != r013.CurrentBuild+1 {
+				failure = "Offered metadata was not copied"
+				return
+			}
+			checks = append(checks, "Offer retains an immutable release copy")
+			if offer.installing || tp.listView.CurrentTunnel() == nil || tp.listView.CurrentTunnel().Name != "Germany" {
+				failure = "Discovery installed software or changed the selected profile"
+				return
+			}
+			checks = append(checks, "Discovery preserves selection and never starts installation")
+			tp.showR013Upgrade(nil)
+			if offer.row.Visible() || offer.release != nil {
+				failure = "Cleared offer remains actionable"
+				return
+			}
+			checks = append(checks, "Clearing discovery removes the actionable offer")
+		})
+		return
+	}
 	deadline := time.Now().Add(15 * time.Second)
 	ready := false
 	for !ready && time.Now().Before(deadline) {
