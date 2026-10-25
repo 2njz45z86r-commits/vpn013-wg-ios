@@ -104,7 +104,7 @@ public final class GoBackend implements Backend {
     public record ConnectionView(String profile, String member, Config config, Statistics statistics, long revision, String hourlySummary) { }
     public synchronized ConnectionView connectionView() {
         return new ConnectionView(currentTunnel == null ? null : currentTunnel.getName(), getAutomaticMemberName(), currentConfig,
-            currentTunnel == null ? null : getStatistics(currentTunnel), connectionRevision, hourlySummary);
+            currentTunnel == null ? null : getStatistics(currentTunnel), connectionRevision, autoThread == null ? null : hourlySummary);
     }
     private void stopVpnService() {
         try {
@@ -271,6 +271,7 @@ public final class GoBackend implements Backend {
     }
 
     private void invalidateHourly() {
+        if (autoThread != null) hourlySummary = "Авто: подключение изменилось; сравнение по расписанию";
         HourlyScope scope = hourlyScope;
         if (scope != null) { scope.routes().invalidate(); r013ProbeInvalidate(scope.handle()); }
     }
