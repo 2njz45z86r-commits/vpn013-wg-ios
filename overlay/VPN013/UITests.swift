@@ -36,6 +36,7 @@ final class AutoTunnelUITests:XCTestCase {
             XCTAssertTrue(app.tables.cells.staticTexts[name].exists)
         }
         XCTAssertTrue(app.navigationBars["VPN013"].exists)
+        XCTAssertEqual(app.staticTexts["vpn013.profile-count"].label,"Профили · 4")
     }
     func testNativeThreeDayRepeatedButtonKeepsSameProfiles() {
         let app = nativeTrialApp(); startNativeTrial(app); trialImportResult(app).buttons["Готово"].tap()
@@ -44,6 +45,7 @@ final class AutoTunnelUITests:XCTestCase {
         result.buttons["Готово"].tap()
         XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:"Тестовый сервер 1").count,1)
         XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:"Тестовый сервер 2").count,1)
+        XCTAssertEqual(app.staticTexts["vpn013.profile-count"].label,"Профили · 4")
         capture("native-three-day-repeat-no-new-grant-or-profiles")
     }
     func testNativeThreeDayUnsafeZIPPreservesExistingProfiles() {
@@ -84,6 +86,7 @@ final class AutoTunnelUITests:XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["Швеция"].waitForExistence(timeout:20))
         XCTAssertEqual(app.alerts.count,0)
+        XCTAssertEqual(app.staticTexts["vpn013.profile-count"].label,"Профили · 13")
         for name in ["Беларусь","Германия","Германия 2","Грузия","Испания","Нидерланды","Польша","Польша 2","США","Турция","Финляндия","Финляндия 2","Швеция"] {
             XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:name).count,1)
         }

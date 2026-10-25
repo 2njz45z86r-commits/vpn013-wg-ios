@@ -8,6 +8,11 @@ import UserNotifications
 class TunnelsListTableViewController: UIViewController {
 
     private static let appDisplayName = "VPN013"
+    private weak var profileCountLabel: UILabel?
+
+    private func refreshProfileCount() {
+        profileCountLabel?.text = "Профили · \(tunnelsManager?.numberOfTunnels() ?? 0)"
+    }
 
     var tunnelsManager: TunnelsManager?
 
@@ -927,7 +932,7 @@ class TunnelsListTableViewController: UIViewController {
     @objc func addButtonTapped(sender: AnyObject) {
         guard tunnelsManager != nil else { return }
 
-        let alert = UIAlertController(title: "", message: tr("addTunnelMenuHeader"), preferredStyle: .actionSheet)
+        let alert = UIAlertController(title: "", message: "Добавить профиль VPN013", preferredStyle: .actionSheet)
         alert.addAction(UIAlertAction(title: "Купить конфигурацию", style: .default) { [weak self] _ in
             self?.openConfigurationWebsite("https://t.me/vpn013_com_bot")
         })
@@ -1160,6 +1165,8 @@ extension TunnelsListTableViewController: UITableViewDelegate {
         let header = UITableViewHeaderFooterView(reuseIdentifier: nil)
         let title = Self.makeLabel(style: .subheadline, weight: .semibold, color: VPN013Theme.text)
         title.text = "Профили · \(count)"
+        title.accessibilityIdentifier = "vpn013.profile-count"
+        profileCountLabel = title
         let latency = Self.makeLabel(style: .caption1, color: VPN013Theme.secondaryText)
         latency.text = "Задержка"
         latency.textAlignment = .right
@@ -1237,6 +1244,7 @@ extension TunnelsListTableViewController: UITableViewDelegate {
 extension TunnelsListTableViewController: TunnelsManagerListDelegate {
     func tunnelAdded(at index: Int) {
         tableView.insertRows(at: [IndexPath(row: index, section: 0)], with: .automatic)
+        refreshProfileCount()
         observeConnectionSummary()
         updateEmptyState()
     }
@@ -1257,6 +1265,7 @@ extension TunnelsListTableViewController: TunnelsManagerListDelegate {
     func tunnelRemoved(at index: Int, tunnel: TunnelContainer) {
         cancelEndpointPing()
         tableView.deleteRows(at: [IndexPath(row: index, section: 0)], with: .automatic)
+        refreshProfileCount()
         connectionTestResults[ObjectIdentifier(tunnel)] = nil
         observeConnectionSummary()
         updateEmptyState()
