@@ -66,8 +66,6 @@ jobs:
           bash r013-ci/emulator-check.sh
       - name: Export reviewable source and build evidence
         if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p android/output/review
@@ -77,7 +75,16 @@ jobs:
             cp android/ui/build/outputs/apk/release/ui-release-unsigned.apk android/output/VPN013WG-Android-unsigned.apk
             (cd android && tar --exclude='./.git' --exclude='*/.git' --exclude='./.gradle' --exclude='*/.cxx' --exclude='*/build' --exclude='./output' --exclude='./local.properties' -czf ../VPN013WG-Android-source.tar.gz .)
             sha256sum android/output/VPN013WG-Android-unsigned.apk VPN013WG-Android-source.tar.gz android/output/android-review.zip > android/output/SHA256SUMS-Android.txt
-            gh release create "android-inspection-${GITHUB_RUN_ID}" android/output/VPN013WG-Android-unsigned.apk VPN013WG-Android-source.tar.gz android/output/android-review.zip android/output/SHA256SUMS-Android.txt --target "$GITHUB_SHA" --prerelease --title 'Android native inspection' --notes 'Unsigned Android candidate and official-source overlay. No customer credentials. Review emulator evidence before signing or installing. Physical Android testing remains separate.'
-          else
-            gh release create "android-inspection-${GITHUB_RUN_ID}" android/output/android-review.zip --target "$GITHUB_SHA" --prerelease --title 'Android inspection diagnostics' --notes 'Build or emulator diagnostics. No ready APK.'
           fi
+      - name: Preserve native review and unsigned candidate
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-inspection-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            android/output/android-review.zip
+            android/output/VPN013WG-Android-unsigned.apk
+            android/output/SHA256SUMS-Android.txt
+            VPN013WG-Android-source.tar.gz
