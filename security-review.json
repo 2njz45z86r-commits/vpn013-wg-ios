@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-25T17:47:21.833600+00:00",
-  "source_sha256": "9432835d674eeca845343beaa3257931d307edb1bc0ce6c42a1ec6599cedbf48",
-  "source_commit_reviewed": "3995aedd07e1202d19ae2eec55172f7985e6b022",
+  "reviewed_at": "2026-10-25T17:55:36.838681+00:00",
+  "source_sha256": "e35990a55b0aa03201b9512b989e63c5d2c5642756c78fd03990db7e90916f17",
+  "source_commit_reviewed": "167710ab661bb9a3b77bd3461fb97dd9a79eae85",
   "scope_complete": true,
   "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/security-review-current",
   "baseline_only": false,
@@ -192,7 +192,9 @@
       "uiTests": 23,
       "fail": 0,
       "skip": 0,
-      "freshPackagingRequired": true
+      "freshPackagingRequired": true,
+      "avatarOnlyDelta": true,
+      "codeEntriesCompared": 78
     },
     "android": {
       "newUpgradeAcceptanceComplete": false
