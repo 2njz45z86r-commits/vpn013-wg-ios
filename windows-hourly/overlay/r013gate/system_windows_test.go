@@ -24,7 +24,8 @@ import (
 )
 
 // This test executable acts as a short-lived SYSTEM service ONLY on disposable
-// CI. No application/driver/configuration is installed by this fixture.
+// CI. No customer configuration is used. Its optional native case loads the
+// verified Wintun driver only inside the disposable hosted machine.
 func TestMain(m *testing.M) {
 	if (len(os.Args) == 5 || len(os.Args) == 6) && os.Args[1] == "--r013-scm-fixture" {
 		name, directory, object := os.Args[2], os.Args[3], os.Args[4]
@@ -68,6 +69,7 @@ type systemReceipt struct {
 	System            bool   `json:"system"`
 	SessionZero       bool   `json:"session_zero"`
 	PrivilegesDropped bool   `json:"privileges_dropped"`
+	VaultVerified     bool   `json:"vault_verified"`
 	Echo              bool   `json:"echo"`
 	Stamp             Stamp  `json:"stamp"`
 	Error             string `json:"error,omitempty"`
@@ -189,6 +191,10 @@ func (f *systemFixture) run(ctx context.Context) error {
 		return err
 	}
 	f.receipt.PrivilegesDropped = true
+	if err = proveSystemVaultRead(); err != nil {
+		return err
+	}
+	f.receipt.VaultVerified = true
 	// Reopen the same Global objects after removing privileges: existing object
 	// access remains governed by the unchanged SYSTEM/Administrators DACL.
 	reopened, err := openNamed(f.object)
@@ -346,7 +352,7 @@ func runSystemFixtureTest(t *testing.T, native bool) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if !receipt.Ready || !receipt.System || !receipt.SessionZero || !receipt.PrivilegesDropped || !receipt.Echo {
+	if !receipt.Ready || !receipt.System || !receipt.SessionZero || !receipt.PrivilegesDropped || !receipt.Echo || !receipt.VaultVerified {
 		t.Fatalf("SYSTEM proof missing: %+v", receipt)
 	}
 	gate := testGate(t, object)
