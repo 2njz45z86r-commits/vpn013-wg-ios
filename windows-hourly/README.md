@@ -24,6 +24,15 @@ nonpreferred default-route row after checking an existing lower-metric default;
 it never replaces an existing default route. These tests require the authorized
 GitHub-hosted Windows runner and are not intended for a user's installed PC.
 
+A separate synthetic SYSTEM fixture matches the real unrestricted service SID,
+establishes WFP before the unchanged privilege drop, then exercises native WFP
+enable/disable after it for permissive, restrictive with DNS, and permissive
+policies. Each dynamic policy is immediately closed on the disposable VM.
+This API exercise is separate from proving production manager/candidate traffic
+through a restrictive policy owned by another actual tunnel service. A safe
+owned canonical SID copy retains the exact group attributes/service authority;
+no privilege, SID restriction or ACL is relaxed for this fixture.
+
 The driver is extracted from an official hash-pinned, signature-checked MSI.
 No MSI is installed by this development workflow. Runtime fixtures are distinct
 from final UI/MSI acceptance and from physical-device or field validation.
