@@ -985,6 +985,15 @@ class TunnelContainer: NSObject {
     }
 
     func refreshStatus() {
+        #if targetEnvironment(simulator) && DEBUG
+        // These explicit UI fixtures have a model connection only. Simulator
+        // foreground refresh must not replace that state with the inactive
+        // NETunnelProviderSession stub. Button/row actions still update status.
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--vpn013-test-start-current") || arguments.contains("--vpn013-test-power-connecting") {
+            return
+        }
+        #endif
         if (status == .restarting)
             || (status == .waiting && tunnelProvider.connection.status == .disconnected)
         {
