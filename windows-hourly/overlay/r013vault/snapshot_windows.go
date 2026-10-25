@@ -35,18 +35,25 @@ func (s Snapshot) Member(index int) (conf.Config, string, error) {
 	if index < 0 || index >= len(s.members) {
 		return conf.Config{}, "", ErrVault
 	}
-	wire, err := json.Marshal(s.members[index])
+	copy, err := CopyConfig(s.members[index])
+	return copy, s.digests[index], err
+}
+
+// CopyConfig preserves every existing field while restoring native IPv4
+// representation. It never shares mutable slices/maps with either caller.
+func CopyConfig(original conf.Config) (conf.Config, error) {
+	wire, err := json.Marshal(original)
 	if err != nil {
-		return conf.Config{}, "", ErrVault
+		return conf.Config{}, ErrVault
 	}
 	var copy conf.Config
 	if json.Unmarshal(wire, &copy) != nil {
-		return conf.Config{}, "", ErrVault
+		return conf.Config{}, ErrVault
 	}
 	if normalizeAddresses(&copy) != nil {
-		return conf.Config{}, "", ErrVault
+		return conf.Config{}, ErrVault
 	}
-	return copy, s.digests[index], nil
+	return copy, nil
 }
 
 // net.IP JSON decoding yields 16-byte IPv4 values, while the existing native
