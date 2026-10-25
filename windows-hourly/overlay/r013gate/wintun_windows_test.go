@@ -28,6 +28,7 @@ import (
 	probe "github.com/amnezia-vpn/amneziawg-windows-client/r013probe"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013probe/protectedudp"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013tun"
+	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/firewall"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/winipcfg"
 	"golang.org/x/net/dns/dnsmessage"
 	"golang.org/x/sys/windows"
@@ -444,6 +445,19 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32
 	// old lease completely, then authenticate a fresh engine with the original
 	// immutable synthetic profile. No production switching is claimed here.
 	err = gate.Primary(ctx, Stamp{}, func(context.Context) error {
+		// Recreate actual upstream WFP sessions after the unchanged privilege
+		// drop. Both permissive and restrictive+DNS rules are installed on this
+		// disposable runner only. Each dynamic session is closed immediately;
+		// a process exit also closes it. No owner firewall/store is touched.
+		if err := onlyDriverPrivilegeRemains(); err != nil {
+			return err
+		}
+		for _, permissive := range []bool{true, false, true} {
+			if err := firewall.EnableFirewall(uint64(luid), permissive, []net.IP{net.ParseIP(primary.target.String()).To4()}); err != nil {
+				return fmt.Errorf("post-drop WFP recreation: %w", err)
+			}
+			firewall.DisableFirewall()
+		}
 		if err := engine.IpcSet("jc=1\njmin=32\njmax=32\nh1=100\n"); err != nil {
 			return err
 		}
