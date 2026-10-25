@@ -66,6 +66,7 @@ jobs:
             build/review/*.json
             build/review/*.png
             build/review/*-tests.txt
+            build/review/flow/**/*.png
 
   android:
     if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && (inputs.platform == 'all' || inputs.platform == 'android')

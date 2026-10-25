@@ -1,9 +1,16 @@
 name: Build and inspect VPN013 WG
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish only after final artifact review
+        type: boolean
+        default: false
   push:
     paths:
       - 'overlay/**'
+      - 'publish-client-release.py'
+      - '.github/workflows/build-ios.yml'
 permissions:
   contents: write
   actions: read
@@ -85,7 +92,7 @@ jobs:
           if-no-files-found: warn
           path: build/native-review.zip
       - name: Publish checked IPA when explicitly dispatched
-        if: success() && github.event_name == 'workflow_dispatch'
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.publish_release == true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
