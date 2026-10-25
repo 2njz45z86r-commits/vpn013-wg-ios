@@ -78,6 +78,12 @@ final class ClientUpdateCoordinator {
             registry = ClientRegistry(); loadingError = nil
             try? store.save(registry)
         }
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-direct-download") {
+            release = ClientAppRelease(schema: 1, app: "vpn013-wg", platform: "ios", version: "99.0.0", build: 999,
+                downloadURL: "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-test/VPN013AWG-unsigned.ipa",
+                sha256: String(repeating: "a", count: 64), notes: "Synthetic UI fixture; no external transfer")
+            status = "Доступна тестовая версия 99.0.0."
+        }
         #endif
     }
     private func publish(_ message: String) {
@@ -121,7 +127,7 @@ final class ClientUpdateCoordinator {
                     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
                     let build = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0") ?? 0
                     self.release = value.isNewer(version: version, build: build) ? value : nil
-                    appMessage = self.release.map { "Доступна версия \($0.version). Скачайте IPA в боте, подпишите и установите." } ?? "Установлена актуальная версия."
+                    appMessage = self.release.map { "Доступна версия \($0.version). Нажмите «Скачать IPA» для прямой загрузки, затем подпишите и установите файл." } ?? "Установлена актуальная версия."
                     UserDefaults.standard.set(Date(), forKey: "VPN013LastClientUpdateCheck")
                 } catch { appMessage = ClientUpdateError.invalidResponse.localizedDescription }
             case .failure: appMessage = ClientUpdateError.network.localizedDescription
@@ -339,7 +345,10 @@ final class ClientUpdateCoordinator {
     private func showResult() {
         guard let presenter = presenter, presenter.presentedViewController == nil else { return }
         let alert = UIAlertController(title: release == nil ? "Обновления" : "Доступно обновление", message: status, preferredStyle: .alert)
-        if release != nil { alert.addAction(UIAlertAction(title: "Перейти в бот", style: .default) { _ in UIApplication.shared.open(ClientUpdateProtocol.botURL) }) }
+        if let release = release { alert.addAction(UIAlertAction(title: "Скачать IPA", style: .default) { [weak presenter] _ in
+            guard let presenter = presenter else { return }
+            ClientReleaseDownload.open(release, from: presenter)
+        }) }
         alert.addAction(UIAlertAction(title: "Понятно", style: .cancel)); presenter.present(alert, animated: true)
     }
 }

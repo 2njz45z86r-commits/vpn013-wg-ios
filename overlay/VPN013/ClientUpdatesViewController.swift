@@ -62,8 +62,8 @@ final class ClientUpdatesViewController: UITableViewController {
                 cell.accessibilityTraits.insert(.button)
                 cell.isUserInteractionEnabled = !coordinator.busy
             } else {
-                cell.textLabel?.text = "Скачать обновление в боте"
-                cell.detailTextLabel?.text = "iOS: скачайте IPA, подпишите своей подписью и установите."
+                cell.textLabel?.text = "Скачать IPA"
+                cell.detailTextLabel?.text = "Прямая загрузка в браузере, без перехода в Telegram. Перед установкой подпишите IPA своим действующим сертификатом."
                 cell.textLabel?.textColor = VPN013Theme.accent
                 cell.accessibilityIdentifier = "vpn013.update-download"
                 cell.accessoryType = .disclosureIndicator
@@ -73,7 +73,7 @@ final class ClientUpdatesViewController: UITableViewController {
             let orders = coordinator.registry.bindings.keys.sorted()
             if orders.isEmpty {
                 cell.textLabel?.text = "Пока нет привязанных заявок"
-                cell.detailTextLabel?.text = "Скачайте свежий ZIP из раздела «Мои заявки» в боте и импортируйте в VPN013 WG."
+                cell.detailTextLabel?.text = "Скачайте свежий ZIP из раздела «Мои заявки» в боте и импортируйте в VPN013."
             } else {
                 let order = orders[path.row]
                 if let binding = coordinator.registry.bindings[order] {
@@ -109,7 +109,7 @@ final class ClientUpdatesViewController: UITableViewController {
         guard path.section == 0 else { return }
         coordinator.presenter = self
         if path.row == 1 { coordinator.check(manager: manager, manual: true) }
-        if path.row == 2 { UIApplication.shared.open(ClientUpdateProtocol.botURL) }
+        if path.row == 2, let release = coordinator.release { ClientReleaseDownload.open(release, from: self) }
     }
     @objc private func unbind(_ recognizer: UILongPressGestureRecognizer) {
         guard recognizer.state == .began, let cell = recognizer.view as? UITableViewCell, let path = tableView.indexPath(for: cell), !coordinator.busy else { return }
@@ -126,6 +126,33 @@ final class ClientUpdatesViewController: UITableViewController {
     private func showError(_ error: Error) {
         let alert = UIAlertController(title: "Обновления", message: error.localizedDescription, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Понятно", style: .default)); present(alert, animated: true)
+    }
+}
+
+/// Public software downloads never carry order capabilities or open Telegram.
+enum ClientReleaseDownload {
+    static func open(_ release: ClientAppRelease, from presenter: UIViewController) {
+        do {
+            try release.validate()
+            guard let url = URL(string: release.downloadURL) else { throw ClientUpdateError.invalidResponse }
+            #if DEBUG && targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-direct-download") {
+                let alert = UIAlertController(title: "Прямая загрузка IPA", message: url.absoluteString, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "Понятно", style: .default)); presenter.present(alert, animated: true)
+                return
+            }
+            #endif
+            UIApplication.shared.open(url, options: [:]) { [weak presenter] opened in
+                guard !opened, let presenter = presenter else { return }
+                let alert = UIAlertController(title: "Загрузка IPA", message: "Не удалось открыть прямую ссылку на загрузку. Повторите попытку.", preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "Понятно", style: .default))
+                presenter.present(alert, animated: true)
+            }
+        } catch {
+            let alert = UIAlertController(title: "Загрузка IPA", message: "Ссылка на обновление не прошла проверку. Проверьте обновления ещё раз.", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Понятно", style: .default))
+            presenter.present(alert, animated: true)
+        }
     }
 }
 

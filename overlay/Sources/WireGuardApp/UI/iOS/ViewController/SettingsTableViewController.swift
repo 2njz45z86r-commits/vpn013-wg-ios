@@ -14,7 +14,7 @@ class SettingsTableViewController: UITableViewController {
 
         var localizedUIString: String {
             switch self {
-            case .iosAppVersion: return tr("settingsVersionKeyWireGuardForIOS")
+            case .iosAppVersion: return "VPN013"
             case .goBackendVersion: return tr("settingsVersionKeyWireGuardGoBackend")
             case .exportZipArchive: return tr("settingsExportZipButtonTitle")
             case .viewLog: return tr("settingsViewLogButtonTitle")
@@ -54,10 +54,10 @@ class SettingsTableViewController: UITableViewController {
         tableView.register(KeyValueCell.self)
         tableView.register(ButtonCell.self)
 
-        let brand = UIImageView(image: UIImage(named: "VPN013Wordmark"))
+        let brand = UIImageView(image: UIImage(named: "VPN013WordmarkNoDomain"))
         brand.contentMode = .scaleAspectFit
         brand.isAccessibilityElement = true
-        brand.accessibilityLabel = "VPN013 WG"
+        brand.accessibilityLabel = "VPN013"
         brand.accessibilityIdentifier = "vpn013.settings-wordmark"
         tableView.tableFooterView = brand
     }

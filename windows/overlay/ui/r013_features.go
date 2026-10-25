@@ -68,7 +68,7 @@ func addR013Header(mtw *ManageTunnelsWindow) {
 	layout.SetMargins(walk.Margins{16, 10, 16, 4})
 	header.SetLayout(layout)
 	title, _ := walk.NewLabel(header)
-	title.SetText("VPN013 WG")
+	title.SetText("VPN013")
 	font, _ := walk.NewFont("Segoe UI", 17, walk.FontBold)
 	title.SetFont(font)
 	title.SetTextColor(pale)

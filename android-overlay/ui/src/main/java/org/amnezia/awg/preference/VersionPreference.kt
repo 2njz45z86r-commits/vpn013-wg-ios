@@ -27,7 +27,7 @@ class VersionPreference(context: Context, attrs: AttributeSet?) : Preference(con
 
     override fun getSummary() = versionSummary
 
-    override fun getTitle() = "VPN013 WG ${BuildConfig.VERSION_NAME}"
+    override fun getTitle() = "VPN013 ${BuildConfig.VERSION_NAME}"
 
     override fun onClick() {
         val intent = Intent(Intent.ACTION_VIEW)

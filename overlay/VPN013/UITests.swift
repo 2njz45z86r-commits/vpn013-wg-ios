@@ -70,6 +70,42 @@ final class AutoTunnelUITests:XCTestCase {
         capture("dynamic-0-creation-disabled")
     }
 
+    func testUpdateDownloadUsesDirectIPAInsteadOfTelegram() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-direct-download"]
+        app.launch()
+        XCTAssertTrue(app.buttons["vpn013.updates"].waitForExistence(timeout:20))
+        app.buttons["vpn013.updates"].tap()
+        let download = app.tables.cells.containing(.staticText, identifier: "Скачать IPA").firstMatch
+        XCTAssertTrue(download.waitForExistence(timeout:5))
+        XCTAssertFalse(app.staticTexts["Скачать обновление в боте"].exists)
+        XCTAssertFalse(app.buttons["Перейти в бот"].exists)
+        download.tap()
+        let alert = app.alerts["Прямая загрузка IPA"]
+        XCTAssertTrue(alert.waitForExistence(timeout:5))
+        XCTAssertTrue(alert.staticTexts["https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-test/VPN013AWG-unsigned.ipa"].exists)
+        capture("direct-ipa-download-no-telegram-synthetic-ui-fixture")
+        alert.buttons["Понятно"].tap()
+    }
+
+    func testSettingsBrandWordmarkAndVersionUseShortName() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["VPN013"].waitForExistence(timeout:20))
+        app.buttons["Настройки"].tap()
+        XCTAssertTrue(app.staticTexts["VPN013"].waitForExistence(timeout:5))
+        let wordmark = app.images["vpn013.settings-wordmark"]
+        for _ in 0..<3 {
+            if wordmark.isHittable { break }
+            app.tables.firstMatch.swipeUp()
+        }
+        XCTAssertTrue(wordmark.exists && wordmark.isHittable)
+        XCTAssertEqual(wordmark.label, "VPN013")
+        XCTAssertFalse(app.staticTexts["VPN013.com WG"].exists)
+        capture("settings-short-name-and-rendered-wordmark-no-domain")
+    }
+
     func testCenteredAddShowsPurchaseAndFreeHour() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "0"]
@@ -87,7 +123,7 @@ final class AutoTunnelUITests:XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2"]
         app.launch()
-        XCTAssertTrue(app.navigationBars["VPN013 WG"].waitForExistence(timeout:20))
+        XCTAssertTrue(app.navigationBars["VPN013"].waitForExistence(timeout:20))
         let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
         XCTAssertTrue(profile.waitForExistence(timeout:5))
         let toggle = profile.switches.firstMatch
@@ -124,7 +160,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.navigationBars["Новая конфигурация"].waitForExistence(timeout:5))
         capture("09b-native-new-config-form")
         app.navigationBars["Новая конфигурация"].buttons["Отменить"].tap()
-        XCTAssertTrue(app.navigationBars["VPN013 WG"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.navigationBars["VPN013"].waitForExistence(timeout:5))
     }
 
     func testDeveloperFooterAvailable() {
@@ -142,7 +178,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(support.isHittable)
         XCTAssertTrue(support.isEnabled)
         XCTAssertTrue(support.label.contains("@R013_Support"))
-        XCTAssertTrue(app.staticTexts["Разработчик VPN013 WG"].exists)
+        XCTAssertTrue(app.staticTexts["Разработчик VPN013"].exists)
         capture("11-dark-thirteen-profile-list-developer-footer-simulator-fixture")
     }
 
@@ -161,7 +197,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(support.exists)
         XCTAssertTrue(support.isHittable)
         XCTAssertTrue(support.label.contains("@R013_Support"))
-        XCTAssertTrue(app.staticTexts["Разработчик VPN013 WG"].exists)
+        XCTAssertTrue(app.staticTexts["Разработчик VPN013"].exists)
         XCTAssertTrue(add.isHittable)
         capture("12-dark-empty-list-developer-footer-simulator-fixture")
     }

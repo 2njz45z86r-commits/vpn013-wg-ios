@@ -909,7 +909,7 @@ public final class GoBackend implements Backend {
             if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(new NotificationChannel("r013-vpn", "VPN-подключение", NotificationManager.IMPORTANCE_LOW));
             Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
             Notification.Builder builder = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, "r013-vpn") : new Notification.Builder(this);
-            builder.setSmallIcon(android.R.drawable.ic_lock_lock).setContentTitle("VPN013 WG")
+            builder.setSmallIcon(android.R.drawable.ic_lock_lock).setContentTitle("VPN013")
                 .setContentText("VPN-служба работает · откройте приложение для управления")
                 .setOngoing(true).setCategory(Notification.CATEGORY_SERVICE);
             if (launch != null) builder.setContentIntent(PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));

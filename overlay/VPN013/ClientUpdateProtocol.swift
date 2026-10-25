@@ -7,7 +7,7 @@ enum ClientUpdateError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidDocument: return "Документ обновления повреждён или не относится к VPN013. Существующие конфигурации сохранены."
-        case .invalidResponse: return "Не удалось проверить полный ответ бота. Существующие конфигурации сохранены."
+        case .invalidResponse: return "Не удалось проверить полный ответ сервера обновлений. Существующие конфигурации сохранены."
         case .accessEnded: return "Доступ к обновлению заявки закончился или отозван. Откройте «Мои заявки» в боте."
         case .network: return "Сервис обновлений недоступен. Проверьте интернет и повторите позже."
         case .localChanges(let name): return "Профиль «\(name)» изменён вручную. Обновление остановлено, чтобы сохранить ваши настройки."
@@ -20,7 +20,6 @@ enum ClientUpdateError: LocalizedError {
 enum ClientUpdateProtocol {
     static let manifestName = "VPN013-Access"
     static let origins = ["https://connect.vpn555.shop:8443", "https://connect.vpn555.shop:8444"]
-    static let botURL = URL(string: "https://t.me/vpn013_com_bot?start=download_vpn013_ios")!
     static let maximumResponseBytes = 1_048_576
     static func digest(_ value: String) -> String { SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined() }
     static func validID(_ value: String) -> Bool { value.range(of: "^[a-f0-9]{12}$", options: .regularExpression) != nil }
@@ -89,6 +88,7 @@ struct ClientAppRelease: Codable {
               version.range(of: "^[0-9]+[.][0-9]+[.][0-9]+$", options: .regularExpression) != nil,
               ClientUpdateProtocol.validHash(sha256), notes.count <= 2000,
               let url = URL(string: downloadURL), url.scheme == "https", url.host == "github.com", url.user == nil, url.password == nil,
+              url.port == nil || url.port == 443, url.query == nil, url.fragment == nil,
               url.path.hasPrefix("/2njz45z86r-commits/vpn013-wg-ios/releases/download/"), url.path.hasSuffix(".ipa") else { throw ClientUpdateError.invalidResponse }
     }
     func isNewer(version current: String, build currentBuild: Int) -> Bool {

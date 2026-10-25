@@ -41,6 +41,18 @@ import Foundation
         try check(plan.removedIDs == ["retired"])
         let release = ClientAppRelease(schema:1,app:"vpn013-wg",platform:"ios",version:"1.4.0",build:9,downloadURL:"https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/unsigned-test/VPN013AWG-unsigned.ipa",sha256:String(repeating:"a",count:64),notes:"Synthetic release")
         try release.validate()
+        for address in [
+            "https://t.me/vpn013_com_bot?start=download_vpn013_ios",
+            release.downloadURL + "?next=https://example.com",
+            release.downloadURL + "#fragment",
+            release.downloadURL.replacingOccurrences(of:"github.com/",with:"github.com:8443/"),
+            release.downloadURL.replacingOccurrences(of:"github.com/",with:"user@github.com/"),
+            release.downloadURL.replacingOccurrences(of:"github.com/",with:"github.com.example.com/"),
+            release.downloadURL.replacingOccurrences(of:"https://",with:"http://"),
+            release.downloadURL.replacingOccurrences(of:"2njz45z86r-commits/vpn013-wg-ios",with:"other/project")
+        ] {
+            fails { try ClientAppRelease(schema:1,app:"vpn013-wg",platform:"ios",version:release.version,build:release.build,downloadURL:address,sha256:release.sha256,notes:"Synthetic release").validate() }
+        }
         try check(release.isNewer(version:"1.3.1",build:8))
         try check(release.isNewer(version:"1.4.0",build:8))
         try check(!release.isNewer(version:"1.4.0",build:9))

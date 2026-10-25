@@ -23,6 +23,8 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingButtonMeasuresActualLoopbackWithoutStartingVPN \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingCancellationIsAvailable \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUpdatesScreenAndOrderSynchronization \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUpdateDownloadUsesDirectIPAInsteadOfTelegram \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSettingsBrandWordmarkAndVersionUseShortName \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutoPinnedFirstWithCurrentMemberAndPing \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentServerPingAndInfo \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithMissingRuntime \
@@ -62,6 +64,11 @@ if [ "$result" -eq 0 ]; then
  sleep 3
  xcrun simctl io "$device" screenshot build/review/phone-large-type.png
  xcrun simctl ui "$device" content_size large
+ # Observe the ordinary launch path too, without any synthetic app arguments.
+ # A simulator launch does not validate a physical Network Extension or VPN traffic.
+ xcrun simctl launch --terminate-running-process "$device" com.vpn013.awg -AppleLanguages '(ru)' -AppleLocale ru_RU
+ sleep 3
+ xcrun simctl io "$device" screenshot build/review/phone-normal-launch-no-fixture.png
  tablet=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;v=json.load(sys.stdin);print(next(x["udid"] for rows in v["devices"].values() for x in rows if x["name"].startswith("iPad")))')
  xcrun simctl boot "$tablet" || true
  xcrun simctl bootstatus "$tablet" -b

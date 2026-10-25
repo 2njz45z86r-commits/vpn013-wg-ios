@@ -59,7 +59,7 @@ cp build/awg/Sources/WireGuardNetworkExtension/WireGuardNetworkExtension_iOS.ent
 python3 - <<'PY'
 from pathlib import Path
 import subprocess
-parts=['VPN013 WG is a modified AmneziaWG build.\n\n'+Path('build/awg/COPYING').read_text()]
+parts=['VPN013 is a modified AmneziaWG build.\n\n'+Path('build/awg/COPYING').read_text()]
 root=Path('build/awg/Sources/WireGuardKitGo')
 directories=set(subprocess.check_output(['go','list','-deps','-f','{{with .Module}}{{.Dir}}{{end}}'],cwd=root,text=True).splitlines())
 directories.add(subprocess.check_output(['go','env','GOROOT'],text=True).strip())

@@ -2,15 +2,15 @@
   "approvedSourceSHA256": "c5a7d52da96df34be707e9a1ad0acb3c1512b03a3e47616234eafee80c82af19",
   "source": "Owner-supplied replacement avatar,2026-10-25",
   "artworkRedesigned": false,
-  "wordmark": "VPN013 WG",
+  "wordmark": "VPN013",
   "fontRedistributed": false,
   "assets": {
     "vpn013-app-icon.ico": "b4acfa29eaf2b5c3daf62b98337cb0c6bfe2c13b5523621afd5af1a3e90dbceb",
     "vpn013-app-icon.png": "38442ba263dac8981daa5d445e80e161643a9a855a7acbd3d708fc705044ceb4",
-    "vpn013-wordmark.png": "d8f49381abcc5bf8db9e5cc3e1f1ae7bcb6bfc24bab329d812050f02ca3151bb"
+    "vpn013-wordmark.png": "4df8811cdc042090b911819cf2878f018a9c8519789077379d18da46b7a44148"
   },
   "wordmarkOwnerApproved": true,
-  "wordmarkSource": "Owner-requested removal of .com from approved brush wordmark;2026-10-25",
-  "appDisplayName": "VPN013 WG",
+  "wordmarkSource": "Owner-requested removal of both domain suffix and WG;2026-10-25",
+  "appDisplayName": "VPN013",
   "installationIDsUnchanged": true
 }
