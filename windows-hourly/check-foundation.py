@@ -9,7 +9,9 @@ packages = ['./r013probe/...'] + (['./r013gate', './r013winudp'] if native else 
 # Readonly module mode adds the already-pinned x/net/dns/dnsmessage package,
 # omitted from the original minimal vendor tree. Versions/sums stay immutable.
 before = {f: Path(f).read_bytes() for f in ('go.mod', 'go.sum')}
-listed = subprocess.run(['go', 'test', '-mod=readonly', '-list', '^Test', *packages], capture_output=True, text=True, check=True)
+listed = subprocess.run(['go', 'test', '-mod=readonly', '-list', '^Test', *packages], capture_output=True, text=True)
+(out / 'inventory.txt').write_text(listed.stdout + listed.stderr,encoding='utf-8')
+assert listed.returncode == 0, listed.stderr
 expected = set(line.strip() for line in listed.stdout.splitlines() if line.startswith('Test'))
 assert len(expected) == (50 if native else 40), expected
 result = subprocess.run(['go', 'test', '-mod=readonly', '-race', '-count=1', '-timeout=5m', '-json', *packages], capture_output=True, text=True)

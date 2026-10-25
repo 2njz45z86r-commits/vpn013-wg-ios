@@ -99,7 +99,10 @@ func openNamed(name string) (*Gate, error) {
 		fail()
 		return nil, ErrUnavailable
 	}
-	if aclErr := verifyACL(mapping, windows.FILE_MAP_ALL_ACCESS); aclErr != nil {
+	// SECTION_ALL_ACCESS / FILE_MAP_ALL_ACCESS in the pinned official SDK:
+	// STANDARD_RIGHTS_REQUIRED | QUERY | MAP_WRITE | MAP_READ | MAP_EXECUTE | EXTEND_SIZE.
+	const mappingAllAccess = 0x000f001f
+	if aclErr := verifyACL(mapping, mappingAllAccess); aclErr != nil {
 		windows.CloseHandle(mapping)
 		fail()
 		return nil, aclErr
