@@ -338,6 +338,22 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [pingHidden], timeout: 5), .completed)
     }
 
+    func testManualHandshakeSummaryUsesReturnedRuntimeData() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-current-card", "--vpn013-test-current-handshake"]
+        app.launch()
+        let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
+        XCTAssertTrue(profile.waitForExistence(timeout:20))
+        profile.switches.firstMatch.tap()
+        let proof = app.staticTexts["vpn013.current-proof"]
+        let received = XCTNSPredicateExpectation(predicate: NSPredicate(format:"label == %@", "Данные рукопожатия получены"), object: proof)
+        XCTAssertEqual(XCTWaiter.wait(for:[received], timeout:8), .completed)
+        XCTAssertTrue(app.staticTexts["vpn013.current-handshake"].label.hasPrefix("Рукопожатие:"))
+        XCTAssertFalse(app.staticTexts["vpn013.current-traffic"].label.contains("недоступна"))
+        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1")
+        capture("manual-runtime-handshake-summary-synthetic-no-internet-proof")
+    }
+
     private func checkManualPingWithoutRuntime(_ fixture: String, captureName: String) {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", fixture, "--vpn013-test-ping-loopback"]
@@ -350,7 +366,11 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(ping.isEnabled && ping.isHittable, "Saved ordinary address must remain usable without extension statistics")
         XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].label.contains("127.0.0.1"))
         XCTAssertEqual(app.staticTexts["vpn013.current-traffic"].label, "Статистика VPN пока недоступна")
-        XCTAssertFalse(app.staticTexts["vpn013.current-handshake"].exists)
+        let explanation = app.staticTexts["vpn013.current-handshake"]
+        XCTAssertTrue(explanation.waitForExistence(timeout:5))
+        XCTAssertEqual(explanation.label, fixture == "--vpn013-test-current-card-timeout"
+            ? "Нет ответа VPN-расширения за 3 секунды" : "VPN-расширение не вернуло данные статистики")
+        XCTAssertEqual(app.staticTexts["vpn013.current-proof"].label, "Данные рукопожатия пока недоступны")
         ping.tap()
         let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout:10), "Button must perform a real loopback ICMP echo")

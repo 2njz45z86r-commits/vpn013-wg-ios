@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-25T19:44:52.876477+00:00",
-  "source_sha256": "be05fa62dab2036c881a3c4707a9f5a378d1baefc339b34d5d045ef99af6b026",
-  "source_commit_reviewed": "adfa8786794cc617eb55f0f10fc7d44924d0e58e",
+  "reviewed_at": "2026-10-25T20:00:09.634656+00:00",
+  "source_sha256": "4c93a358801fb2307f082f78cfdd796f68af4b9a922f7b7c603829098e53a6b3",
+  "source_commit_reviewed": "df79df07bad072cad6b60038425a4e3172b79e92",
   "scope_complete": true,
   "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/security-review-current",
   "baseline_only": false,

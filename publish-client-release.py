@@ -1,5 +1,5 @@
 """Publish public, credential-free metadata only after successful native tests."""
-import base64, hashlib, json, os, plistlib, subprocess, zipfile
+import base64, hashlib, json, os, plistlib, subprocess, zipfile, sys
 from pathlib import Path
 
 repository = os.environ['GITHUB_REPOSITORY']
@@ -8,7 +8,7 @@ run = os.environ['GITHUB_RUN_ID']
 verification = json.loads(Path('build/review/bundle-verification.json').read_text())
 ipa = Path('build/VPN013AWG-unsigned.ipa')
 summary = json.loads(Path('build/review/test-summary.json').read_text())
-assert ipa.is_file() and summary.get('failedTests') == 0, 'Do not publish failed or unverified tests'
+assert ipa.is_file() and summary.get('failedTests') == 0 and summary.get('passedTests') == 26 and summary.get('skippedTests', 0) == 0, 'Do not publish failed or unverified tests'
 with zipfile.ZipFile(ipa) as archive:
     info=plistlib.loads(archive.read('Payload/AmneziaWG.app/Info.plist'))
 assert info['CFBundleShortVersionString'] == verification['version']
@@ -18,6 +18,9 @@ value = dict(schema=1,app='vpn013-wg',platform='ios',version=verification['versi
     notes='Авто сравнивает задержку DNS через другие VPN без отключения текущего: первая проверка через 30 секунд, затем раз в час. Выбор сверяет актуальный профиль и состояние подключения; две неудачные попытки и порог 1200 мс сохранены. Для iPhone скачайте IPA, подпишите в ESign и установите. Проверки сборки и симулятора не заменяют проверку на физическом iPhone.')
 manifest = json.dumps(value,ensure_ascii=False,indent=2)+'\n'
 Path('build/client-release.json').write_text(manifest,encoding='utf-8')
+if '--prepare-only' in sys.argv:
+    print('Verified public metadata prepared; nothing published')
+    raise SystemExit(0)
 path=f'repos/{repository}/contents/client-release.json'
 current=subprocess.run(['gh','api',path],capture_output=True,text=True)
 body={'message':f'Publish verified iOS release {value["version"]} build {value["build"]}',

@@ -27,6 +27,7 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSettingsBrandWordmarkAndVersionUseShortName \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutoPinnedFirstWithCurrentMemberAndPing \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentServerPingAndInfo \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualHandshakeSummaryUsesReturnedRuntimeData \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithMissingRuntime \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithRuntimeTimeout \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutoMissingRuntimeDoesNotPingSeed \

@@ -51,31 +51,50 @@ jobs:
           else
             sh inspect-on-mac.sh
           fi
-      - name: Preserve build evidence
+      - name: Package credential-free inspection evidence
+        if: always()
+        run: |
+          mkdir -p build/review
+          (cd build && zip -qr native-review.zip review -i '*.png' '*.json')
+      - name: Prepare verified IPA and exact public metadata
         if: success()
+        run: |
+          set -eu
+          test '${{ steps.native.outcome }}' = success
+          test -f build/VPN013AWG-unsigned.ipa
+          python3 publish-client-release.py --prepare-only
+          shasum -a 256 build/VPN013AWG-unsigned.ipa build/native-review.zip build/client-release.json > build/SHA256SUMS.txt
+      - name: Retain successfully checked IPA before release publication
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ios-verified-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            build/VPN013AWG-unsigned.ipa
+            build/native-review.zip
+            build/client-release.json
+            build/SHA256SUMS.txt
+      - name: Retain failed inspection without an installable file
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ios-diagnostics-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: build/native-review.zip
+      - name: Publish checked IPA when explicitly dispatched
+        if: success() && github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          mkdir -p build/review
-          (cd build && zip -qr native-review.zip review -i '*.png' '*.json')
-          if [ '${{ steps.native.outcome }}' = 'success' ]; then
-            test -f build/VPN013AWG-unsigned.ipa
-            shasum -a 256 build/VPN013AWG-unsigned.ipa build/native-review.zip > build/SHA256SUMS.txt
-            gh release create "unsigned-${GITHUB_RUN_ID}" \
-              build/VPN013AWG-unsigned.ipa build/native-review.zip build/SHA256SUMS.txt \
-              --target "$GITHUB_SHA" --prerelease \
-              --title "VPN013 WG unsigned build ${GITHUB_RUN_NUMBER}" \
-              --notes 'Unsigned development build. Requires owner signing and physical iPhone VPN verification. No customer configurations or credentials included.'
-            python3 publish-client-release.py
-          else
-            shasum -a 256 build/native-review.zip > build/SHA256SUMS.txt
-            gh release create "inspection-${GITHUB_RUN_ID}" \
-              build/native-review.zip build/SHA256SUMS.txt \
-              --target "$GITHUB_SHA" --prerelease \
-              --title "VPN013 WG inspection ${GITHUB_RUN_NUMBER}" \
-              --notes 'Native simulator diagnostics only. Failed evidence export or test run; no installable app published.'
-          fi
+          gh release create "unsigned-${GITHUB_RUN_ID}" \
+            build/VPN013AWG-unsigned.ipa build/native-review.zip build/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --prerelease --title "VPN013 unsigned build ${GITHUB_RUN_NUMBER}" \
+            --notes 'Requires owner signing and physical iPhone VPN verification. No customer credentials included.'
+          python3 publish-client-release.py
       - name: Export credential-free development files for verification
         if: always()
         run: python3 export-build-evidence.py

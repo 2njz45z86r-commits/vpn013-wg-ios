@@ -28,7 +28,9 @@ class R013UpdateInstallTest {
         check(BuildConfig.DEBUG && context.packageName == "com.vpn013.awg.debug")
         vaultBefore = PrivateVault(context).read().toString()
         marker.delete()
-        shell("appops set ${context.packageName} REQUEST_INSTALL_PACKAGES allow")
+        if (InstrumentationRegistry.getArguments().getString("initialInstallPermission") != "denied") {
+            shell("appops set ${context.packageName} REQUEST_INSTALL_PACKAGES allow")
+        }
         startHome()
     }
     @After fun finish() {
@@ -57,7 +59,9 @@ class R013UpdateInstallTest {
     }
     @Test fun permissionReturnResumesSameVerifiedUpdateAndCancelDoesNotLoop() {
         val file = futureFile(); val release = release(file)
-        shell("appops set ${context.packageName} REQUEST_INSTALL_PACKAGES deny")
+        // The host establishes denied permission BEFORE this process starts.
+        // Revoking it while instrumentation owns this UID can terminate the test.
+        assertEquals("denied",InstrumentationRegistry.getArguments().getString("initialInstallPermission"))
         assertFalse(context.packageManager.canRequestPackageInstalls())
         // Invoke the exact Install-button handler; the test never writes a
         // production signing key and never confirms the OS installer.

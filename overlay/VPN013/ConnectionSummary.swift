@@ -16,11 +16,20 @@ struct VPN013ConnectionSnapshot: Codable, Equatable {
         var received: UInt64?
         var sent: UInt64?
         var handshake: Date?
+        var handshakeReported: Bool? = nil
+
+        var hasCounters: Bool { received != nil || sent != nil }
+
+        var manualHandshakeSummary: String {
+            if handshake != nil { return "Данные рукопожатия получены" }
+            return handshakeReported == true ? "Рукопожатие пока не получено" : "Данные рукопожатия пока недоступны"
+        }
 
         static func parse(_ runtime: String?) -> Self {
             guard let runtime = runtime, runtime.utf8.count <= 262_144 else { return Self() }
             var received: [UInt64] = [], sent: [UInt64] = [], handshakes: [Date] = []
             var peers = 0, invalidReceived = false, invalidSent = false
+            var validHandshakeFields = 0
             for line in runtime.split(separator: "\n") {
                 let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
                 guard parts.count == 2 else { continue }
@@ -31,9 +40,10 @@ struct VPN013ConnectionSnapshot: Codable, Equatable {
                 case "tx_bytes":
                     if let value = UInt64(parts[1]) { sent.append(value) } else { invalidSent = true }
                 case "last_handshake_time_sec":
-                    if let value = Double(parts[1]), value.isFinite, value > 0,
+                    if let value = Double(parts[1]), value.isFinite, value >= 0,
                        value <= Date().timeIntervalSince1970 + 60 {
-                        handshakes.append(Date(timeIntervalSince1970: value))
+                        validHandshakeFields += 1
+                        if value > 0 { handshakes.append(Date(timeIntervalSince1970: value)) }
                     }
                 default: break
                 }
@@ -48,7 +58,8 @@ struct VPN013ConnectionSnapshot: Codable, Equatable {
                 return sum
             }
             return Self(received: total(received, invalid: invalidReceived),
-                        sent: total(sent, invalid: invalidSent), handshake: handshakes.max())
+                        sent: total(sent, invalid: invalidSent), handshake: handshakes.max(),
+                        handshakeReported: peers > 0 && peers <= 64 && validHandshakeFields == peers)
         }
     }
 
@@ -78,6 +89,22 @@ struct VPN013ConnectionSnapshot: Codable, Equatable {
             endpoints.allSatisfy { !$0.isEmpty && $0.utf8.count <= 1024 } &&
             hosts.allSatisfy { !$0.isEmpty && $0.utf8.count <= 255 } &&
             (phase?.utf8.count ?? 0) <= 1024 && (hourlyComparison?.utf8.count ?? 0) <= 1024
+    }
+}
+
+enum VPN013SnapshotIssue {
+    case notRunning, noSession, requestFailed, emptyResponse, oversizedResponse, invalidResponse, timedOut
+
+    var explanation: String {
+        switch self {
+        case .notRunning: return "VPN сейчас не запущен"
+        case .noSession: return "Сеанс VPN-расширения недоступен"
+        case .requestFailed: return "iOS не приняла запрос статистики"
+        case .emptyResponse: return "VPN-расширение не вернуло данные статистики"
+        case .oversizedResponse: return "Ответ VPN-расширения превысил допустимый размер"
+        case .invalidResponse: return "Ответ VPN-расширения не прошёл проверку формата"
+        case .timedOut: return "Нет ответа VPN-расширения за 3 секунды"
+        }
     }
 }
 

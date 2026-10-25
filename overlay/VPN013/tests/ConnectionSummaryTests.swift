@@ -31,6 +31,15 @@ import Foundation
         let stats = VPN013ConnectionSnapshot.Statistics.parse(raw)
         expect(stats.received == 2048 && stats.sent == 5120, "All current peers contribute")
         expect(stats.handshake == Date(timeIntervalSince1970: 2000), "Newest real handshake wins")
+        expect(stats.manualHandshakeSummary == "Данные рукопожатия получены", "Returned handshake data drives the manual summary")
+        expect(VPN013ConnectionSnapshot.Statistics().manualHandshakeSummary == "Данные рукопожатия пока недоступны", "Unavailable statistics are not a failed handshake")
+        expect(VPN013ConnectionSnapshot.Statistics(received: 0, sent: 0, handshakeReported: true).manualHandshakeSummary == "Рукопожатие пока не получено", "Explicit zero handshake differs from missing statistics")
+        expect(VPN013ConnectionSnapshot.Statistics.parse("public_key=a\nrx_bytes=0\ntx_bytes=0\n").manualHandshakeSummary == "Данные рукопожатия пока недоступны", "Traffic counters do not invent a missing handshake field")
+        expect(VPN013ConnectionSnapshot.Statistics.parse("public_key=a\nlast_handshake_time_sec=0\n").manualHandshakeSummary == "Рукопожатие пока не получено", "A returned zero handshake is explicitly known")
+        expect(!VPN013ConnectionSnapshot.Statistics().hasCounters, "Missing counters are not reported as measured")
+        expect(VPN013ConnectionSnapshot.Statistics(received: 0).hasCounters, "A measured zero remains available")
+        let issues: [VPN013SnapshotIssue] = [.notRunning, .noSession, .requestFailed, .emptyResponse, .oversizedResponse, .invalidResponse, .timedOut]
+        expect(Set(issues.map(\.explanation)).count == issues.count, "Safe diagnostic categories remain distinct")
         expect(VPN013ConnectionSnapshot.Statistics.parse(nil).received == nil, "Missing stats are not zero")
         expect(VPN013ConnectionSnapshot.Statistics.parse("public_key=a\nrx_bytes=0\ntx_bytes=0\n").received == 0, "Measured zero is retained")
         for bad in ["public_key=a\nrx_bytes=-1", "public_key=a\nrx_bytes=abc", "public_key=a\nrx_bytes=", "rx_bytes=10", "public_key=a\npublic_key=b\nrx_bytes=10", "public_key=a\nrx_bytes=10\nrx_bytes=20", "public_key=a\nrx_bytes=18446744073709551615\npublic_key=b\nrx_bytes=1"] {

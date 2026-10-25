@@ -54,8 +54,14 @@ adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013UpgradePreservat
 grep -E '^OK \(1 test\)[[:space:]]*$' output/review/upgrade-after.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/upgrade-after.txt
 adb push "$RUNNER_TEMP/VPN013WG-future-debug.apk" /sdcard/Android/data/com.vpn013.awg.debug/files/update-fixture.apk
-adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013UpdateInstallTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/update-install-flow.txt
-grep -E '^OK \(3 tests\)[[:space:]]*$' output/review/update-install-flow.txt
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013UpdateInstallTest#changedAPKIsRejectedBeforeInstaller,org.amnezia.awg.r013.R013UpdateInstallTest#noConsentDoesNotOpenInstaller com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/update-install-preflight.txt
+grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/update-install-preflight.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/update-install-preflight.txt
+# Establish denial outside the app UID; the production app still requests the
+# normal OS permission and the test never confirms package installation.
+adb shell appops set com.vpn013.awg.debug REQUEST_INSTALL_PACKAGES deny
+adb shell am instrument -w -r -e initialInstallPermission denied -e class org.amnezia.awg.r013.R013UpdateInstallTest#permissionReturnResumesSameVerifiedUpdateAndCancelDoesNotLoop com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/update-install-flow.txt
+grep -E '^OK \(1 test\)[[:space:]]*$' output/review/update-install-flow.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/update-install-flow.txt
 adb shell appops set com.vpn013.awg.debug ACTIVATE_VPN allow
 (cd tunnel/tools/libwg-go && go run ../../../r013-ci/peer.go) > "$RUNNER_TEMP/r013-peer.log" 2>&1 &

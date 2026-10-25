@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -104,7 +105,9 @@ for path in sorted(root.rglob('*')):
     manifest.append({'path': 'vpn013-wg-windows/' + name, 'sha256': hashlib.sha256(contents).hexdigest()})
     files.append((name, contents))
 (root / 'SOURCE-MANIFEST.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-archive = Path(os.environ['RUNNER_TEMP']) / 'VPN013WG-1.5.1-windows-source.zip'
+version_match = re.search(r'Number\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"', (root / 'version/version.go').read_text(encoding='utf-8'))
+assert version_match, 'Corresponding source version is missing'
+archive = Path(os.environ['RUNNER_TEMP']) / ('VPN013WG-' + version_match[1] + '-windows-source.zip')
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
     for name, contents in files:
         bundle.writestr('vpn013-wg-windows/' + name, contents)

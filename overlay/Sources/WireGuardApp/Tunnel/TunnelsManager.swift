@@ -888,11 +888,14 @@ class TunnelContainer: NSObject {
         } } catch { completion(nil) }
     }
 
+    private(set) var connectionSnapshotIssue: VPN013SnapshotIssue?
+
     func getConnectionSnapshot(completion: @escaping (VPN013ConnectionSnapshot?) -> Void) {
-        guard status == .active else { completion(nil); return }
+        connectionSnapshotIssue = nil
+        guard status == .active else { connectionSnapshotIssue = .notRunning; completion(nil); return }
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") { return }
-        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-missing") { completion(nil); return }
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-missing") { connectionSnapshotIssue = .emptyResponse; completion(nil); return }
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card") {
             let config = automaticProfileForUpdates.flatMap { try? $0.validatedConfigurations().last } ?? tunnelConfiguration
             guard let config = config else { completion(nil); return }
@@ -900,21 +903,25 @@ class TunnelContainer: NSObject {
                 endpoints: config.peers.compactMap { $0.endpoint?.stringRepresentation },
                 hosts: config.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } },
                 phase: "Симулятор · данные примера", revision: 0,
-                statistics: .init(received: 2048, sent: 1024, handshake: nil)))
+                statistics: .init(received: 2048, sent: 1024,
+                    handshake: ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-handshake") ? Date() : nil)))
             return
         }
         #endif
-        guard let session = tunnelProvider.connection as? NETunnelProviderSession else { completion(nil); return }
+        guard let session = tunnelProvider.connection as? NETunnelProviderSession else { connectionSnapshotIssue = .noSession; completion(nil); return }
         do {
             try session.sendProviderMessage(Data([3])) { data in
                 DispatchQueue.main.async {
-                    guard self.status == .active, let data = data, data.count <= 32_768,
-                          let value = try? JSONDecoder().decode(VPN013ConnectionSnapshot.self, from: data),
-                          value.isValid else { completion(nil); return }
+                    guard self.status == .active else { self.connectionSnapshotIssue = .notRunning; completion(nil); return }
+                    guard let data = data, !data.isEmpty else { self.connectionSnapshotIssue = .emptyResponse; completion(nil); return }
+                    guard data.count <= 32_768 else { self.connectionSnapshotIssue = .oversizedResponse; completion(nil); return }
+                    guard let value = try? JSONDecoder().decode(VPN013ConnectionSnapshot.self, from: data), value.isValid
+                    else { self.connectionSnapshotIssue = .invalidResponse; completion(nil); return }
+                    self.connectionSnapshotIssue = nil
                     completion(value)
                 }
             }
-        } catch { completion(nil) }
+        } catch { connectionSnapshotIssue = .requestFailed; completion(nil) }
     }
 
     var onDemandOption: ActivateOnDemandOption {

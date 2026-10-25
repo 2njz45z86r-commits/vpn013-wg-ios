@@ -67,6 +67,7 @@ class TunnelsListTableViewController: UIViewController {
     private let currentPingRow = UIStackView()
     private let currentPingCoordinator = EndpointPingCoordinator()
     private var currentPingTarget: VPN013ConnectionSnapshot?
+    private var currentRuntimeStatistics: VPN013ConnectionSnapshot.Statistics?
     private var currentPingGeneration = UUID()
     private var currentPingIsRunning = false
     private let emptyStateLabel = TunnelsListTableViewController.makeLabel(style: .body, color: VPN013Theme.secondaryText)
@@ -296,6 +297,7 @@ class TunnelsListTableViewController: UIViewController {
         summaryEndpointLabel.accessibilityIdentifier = "vpn013.current-endpoint"
         summaryTrafficLabel.accessibilityIdentifier = "vpn013.current-traffic"
         summaryHandshakeLabel.accessibilityIdentifier = "vpn013.current-handshake"
+        summaryProofLabel.accessibilityIdentifier = "vpn013.current-proof"
         currentPingLabel.accessibilityIdentifier = "vpn013.current-ping-result"
         currentPingLabel.text = "Пинг адреса · —"
         currentPingLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -573,10 +575,8 @@ class TunnelsListTableViewController: UIViewController {
             summaryProofLabel.isHidden = false
             if tunnel.isVPN013Automatic {
                 summaryProofLabel.text = automaticSummaryPhase ?? "VPN запущен · трафик ещё не проверен"
-            } else if tunnel.handshakeState == .confirmed {
-                summaryProofLabel.text = "Рукопожатие подтверждено"
             } else {
-                summaryProofLabel.text = "VPN запущен · рукопожатие не подтверждено"
+                summaryProofLabel.text = (currentRuntimeStatistics ?? .init()).manualHandshakeSummary
             }
         case .activating:
             summaryStatusLabel.text = "Подключение…"
@@ -693,13 +693,14 @@ class TunnelsListTableViewController: UIViewController {
     private func updateRunningSummaryStatus(for tunnel: TunnelContainer) {
         let confirmed = tunnel.isVPN013Automatic
             ? automaticSummaryPhase?.hasPrefix("Трафик проверен") == true
-            : tunnel.handshakeState == .confirmed
+            : false
         summaryStatusLabel.text = confirmed ? "Подключено" : "VPN запущен"
         summaryStatusLabel.textColor = confirmed ? VPN013Theme.accent : VPN013Theme.secondaryText
     }
 
     private func clearCurrentConnectionInfo() {
         cancelCurrentPing()
+        currentRuntimeStatistics = nil
         currentPingTarget = nil
         currentPingLabel.text = "Пинг адреса · —"
         currentPingButton.isEnabled = false
@@ -723,7 +724,8 @@ class TunnelsListTableViewController: UIViewController {
         currentPingButton.isEnabled = target != nil
     }
 
-    private func showCurrentStatsUnavailable(for tunnel: TunnelContainer) {
+    private func showCurrentStatsUnavailable(for tunnel: TunnelContainer, issue: VPN013SnapshotIssue? = nil) {
+        currentRuntimeStatistics = nil
         updateCurrentPingTarget(for: tunnel, runtime: nil)
         summaryEndpointLabel.isHidden = false
         summaryEndpointLabel.text = currentPingTarget.map { "Адрес профиля: " + $0.endpoints.joined(separator: ", ") }
@@ -731,7 +733,11 @@ class TunnelsListTableViewController: UIViewController {
         summaryTrafficLabel.isHidden = false
         summaryTrafficLabel.text = "Статистика VPN пока недоступна"
         summaryTrafficLabel.accessibilityLabel = summaryTrafficLabel.text
-        summaryHandshakeLabel.isHidden = true
+        summaryHandshakeLabel.isHidden = issue == nil
+        summaryHandshakeLabel.text = issue?.explanation
+        if !tunnel.isVPN013Automatic {
+            summaryProofLabel.text = VPN013ConnectionSnapshot.Statistics().manualHandshakeSummary
+        }
         if tunnel.isVPN013Automatic {
             automaticSummaryName = nil
             automaticSummaryPhase = nil
@@ -752,7 +758,7 @@ class TunnelsListTableViewController: UIViewController {
                   self.automaticSummaryTunnel === tunnel, tunnel.status == .active,
                   self.automaticSummaryRequestInFlight else { return }
             self.automaticSummaryRequestInFlight = false
-            self.showCurrentStatsUnavailable(for: tunnel)
+            self.showCurrentStatsUnavailable(for: tunnel, issue: .timedOut)
             self.sizeSummaryHeader()
         }
         tunnel.getConnectionSnapshot { [weak self, weak tunnel] snapshot in
@@ -760,10 +766,11 @@ class TunnelsListTableViewController: UIViewController {
                   self.automaticSummaryRequestID == requestID, tunnel.status == .active else { return }
             self.automaticSummaryRequestInFlight = false
             guard let snapshot = snapshot else {
-                self.showCurrentStatsUnavailable(for: tunnel)
+                self.showCurrentStatsUnavailable(for: tunnel, issue: tunnel.connectionSnapshotIssue ?? .emptyResponse)
                 self.sizeSummaryHeader(); return
             }
             self.updateCurrentPingTarget(for: tunnel, runtime: snapshot)
+            self.currentRuntimeStatistics = snapshot.statistics
             self.automaticSummaryName = tunnel.isVPN013Automatic ? snapshot.name : tunnel.name
             self.automaticSummaryPhase = snapshot.phase
             if tunnel.isVPN013Automatic, let hourly = snapshot.hourlyComparison {
@@ -774,6 +781,8 @@ class TunnelsListTableViewController: UIViewController {
             self.summaryNameLabel.text = self.automaticSummaryName
             if tunnel.isVPN013Automatic {
                 self.summaryProofLabel.text = snapshot.phase ?? "VPN запущен · трафик ещё не проверен"
+            } else {
+                self.summaryProofLabel.text = snapshot.statistics.manualHandshakeSummary
             }
             self.summaryEndpointLabel.isHidden = false
             self.summaryEndpointLabel.text = snapshot.endpoints.isEmpty ? "Адрес сервера недоступен"
@@ -783,8 +792,10 @@ class TunnelsListTableViewController: UIViewController {
                 guard let value = value, value <= UInt64(Int64.max) else { return "—" }
                 return ByteCountFormatter.string(fromByteCount: Int64(value), countStyle: .binary)
             }
-            self.summaryTrafficLabel.text = "↓ " + bytes(snapshot.statistics.received) + "  ·  ↑ " + bytes(snapshot.statistics.sent)
-            self.summaryTrafficLabel.accessibilityLabel = "Получено " + bytes(snapshot.statistics.received) + ", отправлено " + bytes(snapshot.statistics.sent)
+            self.summaryTrafficLabel.text = snapshot.statistics.hasCounters
+                ? "↓ " + bytes(snapshot.statistics.received) + "  ·  ↑ " + bytes(snapshot.statistics.sent)
+                : "VPN-движок пока не передал счётчики трафика"
+            self.summaryTrafficLabel.accessibilityLabel = self.summaryTrafficLabel.text
             self.summaryHandshakeLabel.isHidden = snapshot.statistics.handshake == nil
             self.summaryHandshakeLabel.text = snapshot.statistics.handshake.map {
                 "Рукопожатие: " + DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .medium)
