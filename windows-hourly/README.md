@@ -74,3 +74,22 @@ raw TUN after unchanged privilege dropping. It uses a recording bind adapter: it
 is NOT an encrypted packet-admission or actual backend-choice proof. Existing
 real-AWG/service regression tests remain required. Native packages are serialized
 to avoid concurrent global WFP state changes. No owner PC execution or installer.
+
+
+## Conditional service-main-loop backend owner (acceptance in progress)
+
+The actual service now consumes a private bounded selection queue through the
+shared backend owner. It rechecks immutable exact membership and settings, live
+identity, numeric actual rollback endpoint, one-shot generation and foreign
+routes before closing the old backend. It uses fresh engine leases on the same
+raw TUN, retained WFP replacement, checked native reapply/readback and exact old
+rollback on apply/persist failure. Public observation has optional confirmed
+member digests; raw external UAPI edits invalidate membership. No hourly queue
+producer or manager synchronization is enabled yet.
+
+The new disposable native fixture invokes that SAME implementation under the
+real service SID/WFP. Generated local authenticated AWG peers test selected and
+rollback traffic while a prior primary stream continues during candidate Scan.
+Its seed persistence dependency is in-memory; that does not establish actual
+secure-file persistence, complete hourly integration, physical WAN/owner-PC or
+manual-stop-during-handover acceptance. No installer or release is published.

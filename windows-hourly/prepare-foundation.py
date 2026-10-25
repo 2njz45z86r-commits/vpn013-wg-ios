@@ -33,6 +33,9 @@ subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-numeric-uapi.p
 subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-existing-network.py'),str(root)],check=True)
 for name in ('r013_existing_network.go','r013_existing_network_windows_test.go'):
     shutil.copy2(checkout/'windows-hourly'/name,root/'vendor/github.com/amnezia-vpn/amneziawg-windows/v3/tunnel'/name)
+subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-backend-owner.py'),str(root)],check=True)
+for name in ('r013_backend_owner.go','r013_backend_owner_windows_test.go','r013_backend_peers_windows_test.go'):
+    shutil.copy2(checkout/'windows-hourly'/name,root/'vendor/github.com/amnezia-vpn/amneziawg-windows/v3/tunnel'/name)
 shutil.copy2(checkout/'windows-hourly/firewall_status_windows_test.go',root/'vendor/github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/firewall/firewall_status_windows_test.go')
 (workspace / 'source-evidence.json').write_text(json.dumps({'baseline_sha256': hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest(), 'module_files': before, 'scope': 'source-only barrier and socket primitives; NOT production lifecycle or Wintun integration'}, indent=2))
 print(root)

@@ -29,10 +29,10 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	if len(os.Args) == 4 && os.Args[1] == "--r013-network-fixture" {
+	if len(os.Args) == 4 && (os.Args[1] == "--r013-network-fixture" || os.Args[1] == "--r013-backend-fixture") {
 		name, directory := os.Args[2], os.Args[3]
 		service, err := svc.IsWindowsService()
-		if err != nil || !service || !strings.HasPrefix(name, "R013NetworkCI-") || !filepath.IsAbs(directory) {
+		if err != nil || !service || !(strings.HasPrefix(name, "R013NetworkCI-") || strings.HasPrefix(name, "R013BackendCI-")) || !filepath.IsAbs(directory) {
 			os.Exit(20)
 		}
 		crash, err := os.Create(filepath.Join(directory, "crash.txt"))
@@ -44,7 +44,11 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			os.Exit(22)
 		}
-		if svc.Run(name, &networkFixture{directory: directory}) != nil {
+		var handler svc.Handler = &networkFixture{directory: directory}
+		if os.Args[1] == "--r013-backend-fixture" {
+			handler = &backendFixture{directory: directory}
+		}
+		if svc.Run(name, handler) != nil {
 			os.Exit(23)
 		}
 		os.Exit(0)

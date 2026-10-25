@@ -19,17 +19,40 @@ const ObservationVersion = 1
 const maxObservationBytes = 8192
 
 type Observation struct {
-	Version     uint32 `json:"version"`
-	PID         uint32 `json:"pid"`
-	Name        string `json:"name"`
-	Stamp       Stamp  `json:"stamp"`
-	Ready       bool   `json:"ready"`
-	Dirty       bool   `json:"dirty"`
-	Scripts     bool   `json:"scripts"`
-	TunnelIndex uint32 `json:"tunnel_index"`
-	Physical4   uint32 `json:"physical4"`
-	Physical6   uint32 `json:"physical6"`
-	Identity    string `json:"identity"`
+	Version     uint32           `json:"version"`
+	PID         uint32           `json:"pid"`
+	Name        string           `json:"name"`
+	Stamp       Stamp            `json:"stamp"`
+	Ready       bool             `json:"ready"`
+	Dirty       bool             `json:"dirty"`
+	Scripts     bool             `json:"scripts"`
+	TunnelIndex uint32           `json:"tunnel_index"`
+	Physical4   uint32           `json:"physical4"`
+	Physical6   uint32           `json:"physical6"`
+	Identity    string           `json:"identity"`
+	Member      *ConfirmedMember `json:"member,omitempty"`
+}
+
+// ConfirmedMember exposes only the exact immutable vault/member digests. It
+// carries no key or seed configuration; nil is explicitly unknown membership.
+type ConfirmedMember struct {
+	Index    int    `json:"index"`
+	Count    int    `json:"count"`
+	Revision string `json:"revision"`
+	Digest   string `json:"digest"`
+}
+
+func (m ConfirmedMember) Valid() bool {
+	if m.Count < 1 || m.Count > 30 || m.Index < 0 || m.Index >= m.Count {
+		return false
+	}
+	for _, value := range []string{m.Revision, m.Digest} {
+		decoded, err := hex.DecodeString(value)
+		if err != nil || len(decoded) != 32 || strings.ToLower(value) != value {
+			return false
+		}
+	}
+	return true
 }
 
 func (o Observation) Validate(token Token, name string, pid uint32) error {
