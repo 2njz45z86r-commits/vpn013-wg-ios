@@ -55,6 +55,16 @@ jobs:
           & ./scripts/bootstrap-driver.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "R013_CI_WINTUN_DLL=$env:RUNNER_TEMP/foundation/vpn013-wg-windows/.deps/official-extracted/AmneziaWG/wintun.dll" >> $env:GITHUB_ENV
+      - name: Compile disposable actual client service, never publish an installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-Location "$env:RUNNER_TEMP/foundation/vpn013-wg-windows"
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/foundation/native-client" -Force | Out-Null
+          go build -mod=vendor -o "$env:RUNNER_TEMP/foundation/native-client/VPN013WG.exe" .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item -LiteralPath $env:R013_CI_WINTUN_DLL -Destination "$env:RUNNER_TEMP/foundation/native-client/wintun.dll"
+          "R013_CI_CLIENT_EXE=$env:RUNNER_TEMP/foundation/native-client/VPN013WG.exe" >> $env:GITHUB_ENV
       - name: Exact complete native test inventory
         shell: pwsh
         run: |
@@ -70,4 +80,5 @@ jobs:
             ${{ runner.temp }}/foundation/report
             ${{ runner.temp }}/foundation/source-evidence.json
             ${{ runner.temp }}/foundation/device-fence-evidence.json
+            ${{ runner.temp }}/foundation/service-lifecycle-evidence.json
           if-no-files-found: error
