@@ -1,6 +1,16 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
     func capture(_ name:String) { let a=XCTAttachment(screenshot:XCUIScreen.main.screenshot());a.name=name;a.lifetime = .keepAlways;add(a) }
+    private func assertProfileCount(_ app: XCUIApplication, _ count: Int, file: StaticString = #filePath, line: UInt = #line) {
+        // UIKit exposes the same section-header UILabel through both its
+        // legacy table element and modern accessibility container. Verify
+        // every representation so an outdated header cannot be hidden.
+        let labels = app.tables.staticTexts.matching(identifier: "vpn013.profile-count")
+        XCTAssertGreaterThan(labels.count, 0, file: file, line: line)
+        for label in labels.allElementsBoundByIndex {
+            XCTAssertEqual(label.label, "Профили · \(count)", file: file, line: line)
+        }
+    }
     private func nativeTrialApp(_ variant: String = "") -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-native-trial" + variant]
@@ -36,7 +46,8 @@ final class AutoTunnelUITests:XCTestCase {
             XCTAssertTrue(app.tables.cells.staticTexts[name].exists)
         }
         XCTAssertTrue(app.navigationBars["VPN013"].exists)
-        XCTAssertEqual(app.staticTexts["vpn013.profile-count"].label,"Профили · 4")
+        assertProfileCount(app, 4)
+        capture("native-three-day-import-profile-count-four")
     }
     func testNativeThreeDayRepeatedButtonKeepsSameProfiles() {
         let app = nativeTrialApp(); startNativeTrial(app); trialImportResult(app).buttons["Готово"].tap()
@@ -45,7 +56,7 @@ final class AutoTunnelUITests:XCTestCase {
         result.buttons["Готово"].tap()
         XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:"Тестовый сервер 1").count,1)
         XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:"Тестовый сервер 2").count,1)
-        XCTAssertEqual(app.staticTexts["vpn013.profile-count"].label,"Профили · 4")
+        assertProfileCount(app, 4)
         capture("native-three-day-repeat-no-new-grant-or-profiles")
     }
     func testNativeThreeDayUnsafeZIPPreservesExistingProfiles() {
@@ -86,7 +97,7 @@ final class AutoTunnelUITests:XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["Швеция"].waitForExistence(timeout:20))
         XCTAssertEqual(app.alerts.count,0)
-        XCTAssertEqual(app.staticTexts["vpn013.profile-count"].label,"Профили · 13")
+        assertProfileCount(app, 13)
         for name in ["Беларусь","Германия","Германия 2","Грузия","Испания","Нидерланды","Польша","Польша 2","США","Турция","Финляндия","Финляндия 2","Швеция"] {
             XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:name).count,1)
         }

@@ -1,185 +1,185 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-25T23:09:27.036712+00:00",
-  "source_sha256": "a0f42227486615b4bca45820e501a1c9443dba408e7edb5215856252e6231840",
-  "source_commit_reviewed": "5a8339c54a1fa9933365c4f8c5c5093ce5068bd9",
+  "reviewed_at": "2026-10-25T23:23:28.459007+00:00",
+  "source_sha256": "57dc4d3be95b6ebafbb9fb7f0d95699ec346834645debd5be4244396d98548d6",
+  "source_commit_reviewed": "66a55eea54cf1f4611d7113168f1807f0f407692",
   "scope_complete": true,
-  "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs",
+  "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query",
   "baseline_only": false,
   "checks": [
     {
       "id": "1.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/1.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/1.1"
     },
     {
       "id": "1.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/1.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/1.2"
     },
     {
       "id": "1.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/1.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/1.3"
     },
     {
       "id": "1.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/1.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/1.4"
     },
     {
       "id": "2.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/2.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/2.1"
     },
     {
       "id": "2.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/2.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/2.2"
     },
     {
       "id": "2.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/2.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/2.3"
     },
     {
       "id": "2.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/2.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/2.4"
     },
     {
       "id": "2.5",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/2.5"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/2.5"
     },
     {
       "id": "3.1",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/3.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/3.1"
     },
     {
       "id": "3.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/3.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/3.2"
     },
     {
       "id": "3.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/3.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/3.3"
     },
     {
       "id": "3.4",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/3.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/3.4"
     },
     {
       "id": "4.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.1"
     },
     {
       "id": "4.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.2"
     },
     {
       "id": "4.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.3"
     },
     {
       "id": "4.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.4"
     },
     {
       "id": "4.5",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.5"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.5"
     },
     {
       "id": "4.6",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.6"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.6"
     },
     {
       "id": "4.7",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.7"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.7"
     },
     {
       "id": "4.8",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.8"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.8"
     },
     {
       "id": "4.9",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.9"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.9"
     },
     {
       "id": "4.10",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.10"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.10"
     },
     {
       "id": "4.11",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/4.11"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/4.11"
     },
     {
       "id": "5.1",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/5.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/5.1"
     },
     {
       "id": "5.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/5.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/5.2"
     },
     {
       "id": "5.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/5.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/5.3"
     },
     {
       "id": "6.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/6.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/6.1"
     },
     {
       "id": "6.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/6.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/6.2"
     },
     {
       "id": "6.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/6.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/6.3"
     },
     {
       "id": "6.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/6.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/6.4"
     },
     {
       "id": "6.5",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/6.5"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/6.5"
     },
     {
       "id": "6.6",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/6.6"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/6.6"
     },
     {
       "id": "6.7",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-platform-catalogs/6.7"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day-counter-query/6.7"
     }
   ],
   "baseline_report_ref": "private-local:vpn013-bot-migration-20261025/baseline",
-  "review_note": "Public Android152/Windows153 metadata only, fixed URL/hash validation and independent download/signature proofs. Client trees unchanged. iOS counter candidate still held for native product acceptance; iOS root catalog remains154.",
+  "review_note": "XCTest query only; verify every legacy/modern UIKit representation of the same header, exact4/4/13. No production code change. All34 audit decisions retained; actual30 native product acceptance must pass before IPA release. Android/Windows delivery already confirmed.",
   "validation_only_authorization": {
     "source": "explicit owner reply in current task",
     "scope": "Public client source and free validation while audit is incomplete",
