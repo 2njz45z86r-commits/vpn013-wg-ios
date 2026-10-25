@@ -6,6 +6,7 @@ on:
       - 'overlay/**'
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: vpn013-ios-manual
   cancel-in-progress: false
@@ -39,8 +40,13 @@ jobs:
           python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo
       - name: Verify native checks and appearances
         id: native
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$(git rev-parse HEAD:overlay)" = "adb8f91595889440912b7a2b3a29de081628b2fa" ]; then
+          if [ "$(git rev-parse HEAD:overlay)" = "02e2f1cb8062f3293370491a3689eb6dc75de4ed" ] && [ "$(git rev-parse HEAD:build-on-mac.sh)" = "f618b7ed33dc9c98dac57dfe1d31cbf3ec9ce9f6" ] && [ "$(git rev-parse HEAD:inspect-on-mac.sh)" = "a35ee4de8dc5244e15cf62a2d7589c6f75bf64f5" ]; then
+            if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
+            python3 reuse-reviewed-ios-validation.py
+          elif [ "$(git rev-parse HEAD:overlay)" = "adb8f91595889440912b7a2b3a29de081628b2fa" ]; then
             python3 reuse-verified-native-review.py
           else
             sh inspect-on-mac.sh
