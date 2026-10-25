@@ -13,7 +13,7 @@ listed = subprocess.run(['go', 'test', '-mod=vendor', '-list', '^Test', *package
 (out / 'inventory.txt').write_text(listed.stdout + listed.stderr,encoding='utf-8')
 assert listed.returncode == 0, listed.stderr
 expected = set(line.strip() for line in listed.stdout.splitlines() if line.startswith('Test'))
-assert len(expected) == (57 if native else 40), expected
+assert len(expected) == (59 if native else 40), expected
 result = subprocess.run(['go', 'test', '-mod=vendor', '-race', '-count=1', '-timeout=5m', '-json', *packages], capture_output=True, text=True)
 (out / 'tests.jsonl').write_text(result.stdout, encoding='utf-8')
 (out / 'stderr.txt').write_text(result.stderr, encoding='utf-8')

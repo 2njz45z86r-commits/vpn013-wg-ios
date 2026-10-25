@@ -20,6 +20,16 @@ var ErrActiveIdentity = errors.New("candidate has the active client/server ident
 var ErrUnknownActiveState = errors.New("current peer identity is not confirmed")
 var ErrInvalidIdentity = errors.New("one unambiguous client/server identity is required")
 
+// PublicIdentityDigest exposes only a digest of the clamped public client and
+// server keys. It never returns, retains or serializes the private scalar.
+func PublicIdentityDigest(configuration string) (string, error) {
+	id, err := peerIdentity(configuration)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(id[:]), nil
+}
+
 func peerIdentity(configuration string) ([32]byte, error) {
 	var none [32]byte
 	if len(configuration) == 0 || len(configuration) > 1_048_576 {

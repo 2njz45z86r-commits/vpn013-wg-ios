@@ -4,6 +4,7 @@ package r013gate
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -31,6 +32,7 @@ type PrimaryUAPIServer struct {
 	cancel     context.CancelFunc
 	stopParent func() bool
 	device     PrimaryUAPIDevice
+	observe    func() (Observation, error)
 	closed     bool
 	live       map[net.Conn]struct{}
 	active     sync.WaitGroup
@@ -39,11 +41,14 @@ type PrimaryUAPIServer struct {
 }
 
 func NewPrimaryUAPIServer(parent context.Context, device PrimaryUAPIDevice) (*PrimaryUAPIServer, error) {
+	return NewObservedPrimaryUAPIServer(parent, device, nil)
+}
+func NewObservedPrimaryUAPIServer(parent context.Context, device PrimaryUAPIDevice, observe func() (Observation, error)) (*PrimaryUAPIServer, error) {
 	if parent == nil || parent.Err() != nil || device == nil {
 		return nil, ErrUnavailable
 	}
 	ctx, cancel := context.WithCancel(parent)
-	s := &PrimaryUAPIServer{ctx: ctx, cancel: cancel, device: device, live: make(map[net.Conn]struct{}), drained: make(chan struct{})}
+	s := &PrimaryUAPIServer{ctx: ctx, cancel: cancel, device: device, observe: observe, live: make(map[net.Conn]struct{}), drained: make(chan struct{})}
 	s.stopParent = context.AfterFunc(parent, s.Invalidate)
 	return s, nil
 }
@@ -132,6 +137,30 @@ func (s *PrimaryUAPIServer) handle(connection net.Conn) {
 		}
 		var result error
 		switch operation {
+		case "r013_observe=1\n":
+			end, err := boundedUAPILine(reader, 2)
+			if err != nil || end != "\n" {
+				return
+			}
+			if s.ctx.Err() != nil {
+				return
+			}
+			connection.SetWriteDeadline(time.Now().Add(2 * time.Second))
+			if s.observe == nil {
+				result = ErrUnavailable
+			} else {
+				out, err := s.observe()
+				result = err
+				if err == nil {
+					wire, err := json.Marshal(out)
+					if err != nil || len(wire) > maxObservationBytes-32 {
+						return
+					}
+					if _, err = fmt.Fprintf(writer, "observation=%s\n", wire); err != nil {
+						return
+					}
+				}
+			}
 		case "get=1\n":
 			end, err := boundedUAPILine(reader, 2)
 			if err != nil || end != "\n" {

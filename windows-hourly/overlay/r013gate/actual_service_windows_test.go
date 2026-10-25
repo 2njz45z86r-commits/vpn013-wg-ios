@@ -177,6 +177,111 @@ func TestActualClientTunnelServicePreservesTrafficAndFencesPathSetStop(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	imageDigest, err := ExecutableDigest(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("observe-census", func(t *testing.T) {
+		err := gate.Candidate(context.Background(), func(ctx context.Context, token Token) error {
+			before := token.Stamp()
+			snapshot, err := InspectPrimary(ctx, token, imageDigest, name)
+			if err != nil {
+				return err
+			}
+			if snapshot.Observation.TunnelIndex != uint32(iface.Index) || snapshot.Observation.Physical4 == 0 || snapshot.Observation.PID == uint32(os.Getpid()) || snapshot.Membership == "" || snapshot.RuntimeConfiguration() == "" {
+				return errors.New("actual metadata/census is incomplete")
+			}
+			if gate.Current() != before || !token.Valid() {
+				return errors.New("read-only observation mutated the shared generation")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("unsupported-stopped-definition", func(t *testing.T) {
+		exe, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		definition, err := scm.CreateService("vpn013wgtunnel$R013Old"+nonce[:6], exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS}, "/tunnelservice", file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer definition.Close()
+		defer definition.Delete()
+		err = gate.Candidate(context.Background(), func(ctx context.Context, token Token) error {
+			if _, err := InspectPrimary(ctx, token, imageDigest, name); !errors.Is(err, ErrCensus) {
+				return errors.New("old stopped executable could bypass census")
+			}
+			status, err := service.Query()
+			if err != nil || status.State != svc.Running {
+				return errors.New("census refusal stopped the working primary")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("multiple-running-services", func(t *testing.T) {
+		secondName := "R013Dual" + nonce[:10]
+		secondFile := filepath.Join(t.TempDir(), secondName+".conf")
+		contents := strings.Replace(fixtureConfig(other.config), "Address = 10.213.99.2/32", "Address = 10.213.98.2/32", 1)
+		if err = os.WriteFile(secondFile, []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err = exec.Command(client, "/installtunnelservice", secondFile).Run(); err != nil {
+			t.Fatal("second isolated service install", err)
+		}
+		second, err := scm.OpenService(ownServicePrefix + secondName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			second.Control(svc.Stop)
+			deadline := time.Now().Add(8 * time.Second)
+			for time.Now().Before(deadline) {
+				status, e := second.Query()
+				if e == nil && status.State == svc.Stopped {
+					break
+				}
+				time.Sleep(25 * time.Millisecond)
+			}
+			second.Delete()
+			second.Close()
+		}()
+		deadline := time.Now().Add(10 * time.Second)
+		running := false
+		for time.Now().Before(deadline) {
+			status, e := second.Query()
+			if e == nil && status.State == svc.Running {
+				running = true
+				break
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+		if !running {
+			t.Fatal("second service not running")
+		}
+		time.Sleep(350 * time.Millisecond)
+		err = gate.Candidate(context.Background(), func(ctx context.Context, token Token) error {
+			if _, err := InspectPrimary(ctx, token, imageDigest, name); !errors.Is(err, ErrCensus) {
+				return errors.New("multiple actual primary services were guessed as one")
+			}
+			status, e := service.Query()
+			otherStatus, e2 := second.Query()
+			if e != nil || e2 != nil || status.State != svc.Running || otherStatus.State != svc.Running {
+				return errors.New("census refusal stopped an existing service")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	time.Sleep(350 * time.Millisecond)
 	var before, after uint32
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
