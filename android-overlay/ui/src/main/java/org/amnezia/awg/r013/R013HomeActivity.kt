@@ -267,7 +267,7 @@ class R013HomeActivity : AppCompatActivity() {
             val hs = statistics?.peers()?.mapNotNull { statistics.peer(it)?.latestHandshakeEpochMillis() }?.maxOrNull()?.takeIf { it > 0 && it <= System.currentTimeMillis() + 60_000 }
             val endpoints = config?.peers?.mapNotNull { it.endpoint.orElse(null)?.toString() }.orEmpty()
             val host = config?.peers?.firstOrNull()?.endpoint?.orElse(null)?.host
-            Current(profile, member, endpoints, host, statistics?.takeIf { it.peers().isNotEmpty() }?.totalRx(), statistics?.takeIf { it.peers().isNotEmpty() }?.totalTx(), hs, live.revision())
+            Current(profile, member, endpoints, host, statistics?.takeIf { it.peers().isNotEmpty() }?.totalRx(), statistics?.takeIf { it.peers().isNotEmpty() }?.totalTx(), hs, live.revision(), live.hourlySummary())
         }
         val identity = "${snapshot.profile}|${snapshot.member}|${snapshot.endpoints}|${snapshot.revision}"
         if (identity != currentIdentity) { currentIdentity = identity; currentHost = snapshot.host; pingJob?.cancel(); currentMeasurement = null; listSignature = ""; currentPing.text = ""; currentPing.icon = getDrawable(R.drawable.ic_r013_ping) }
@@ -280,9 +280,10 @@ class R013HomeActivity : AppCompatActivity() {
             if (snapshot.received != null && snapshot.sent != null) append("\n↓ ${bytes(snapshot.received)}  ↑ ${bytes(snapshot.sent)}")
             currentMeasurement?.takeIf { it.first == currentIdentity }?.let { append(it.second?.let { ms -> "\nПинг адреса: $ms мс" } ?: "\nПинг адреса недоступен") }
             snapshot.handshake?.let { append("\nРукопожатие: ${DateFormat.getTimeInstance(DateFormat.MEDIUM).format(Date(it))}") }
+            snapshot.hourly?.let { append("\n$it") }
         }
     }
-    private data class Current(val profile: String?, val member: String?, val endpoints: List<String>, val host: String?, val received: Long?, val sent: Long?, val handshake: Long?, val revision: Long)
+    private data class Current(val profile: String?, val member: String?, val endpoints: List<String>, val host: String?, val received: Long?, val sent: Long?, val handshake: Long?, val revision: Long, val hourly: String?)
     private fun pingCurrent() {
         val host = currentHost ?: return; val identity = currentIdentity
         if (pingJob?.isActive == true) return

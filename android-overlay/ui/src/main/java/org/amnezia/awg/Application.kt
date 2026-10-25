@@ -119,6 +119,7 @@ class Application : android.app.Application() {
      */
     private fun onNetworkChange(oldType: NetworkType, newType: NetworkType) {
         Log.i(TAG, "onNetworkChange called: $oldType -> $newType")
+        (backend as? GoBackend)?.onPhysicalPathChanged()
         
         if (newType == NetworkType.NONE) {
             Log.i(TAG, "Network lost, waiting for new connection...")

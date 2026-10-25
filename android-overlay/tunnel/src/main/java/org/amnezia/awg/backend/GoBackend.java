@@ -15,6 +15,9 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import org.amnezia.awg.r013.AutoPolicy;
+import org.amnezia.awg.r013.HourlySchedule;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import java.net.URL;
 import java.net.HttpURLConnection;
 import java.util.List;
@@ -73,6 +76,7 @@ public final class GoBackend implements Backend {
     public interface AutomaticSource { List<AutoMember> members(String profileName); }
     private AutomaticSource automaticSource = name -> Collections.emptyList();
     private final AtomicLong autoEpoch = new AtomicLong();
+    private final AtomicLong physicalPathRevision = new AtomicLong();
     @Nullable private volatile Thread autoThread;
     @Nullable private volatile HttpURLConnection healthConnection;
     @Nullable private volatile AutoMember activeMember;
@@ -82,13 +86,24 @@ public final class GoBackend implements Backend {
         }, new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
     @Nullable private volatile java.util.concurrent.Future<Double> pendingProbe;
     @Nullable private volatile VpnService activeService;
+    @Nullable private volatile Thread hourlyThread;
+    @Nullable private volatile HourlyScope hourlyScope;
+    @Nullable private volatile String hourlySummary;
+    private final Object hourlyCleanupLock = new Object();
+    private final java.util.ArrayList<HourlyScope> retiredHourlyScopes = new java.util.ArrayList<>(2);
+    // Resolution is bounded independently of the health worker. A blocked OS
+    // resolver cannot accumulate one new thread per start/stop or per candidate.
+    private final java.util.concurrent.ThreadPoolExecutor snapshotExecutor = new java.util.concurrent.ThreadPoolExecutor(
+        1, 1, 30, TimeUnit.SECONDS, new java.util.concurrent.SynchronousQueue<>(), task -> {
+            Thread thread = new Thread(task, "R013-Snapshot"); thread.setDaemon(true); return thread;
+        }, new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
     private boolean replacing;
     private long connectionRevision;
     public synchronized long getConnectionRevision() { return connectionRevision; }
-    public record ConnectionView(String profile, String member, Config config, Statistics statistics, long revision) { }
+    public record ConnectionView(String profile, String member, Config config, Statistics statistics, long revision, String hourlySummary) { }
     public synchronized ConnectionView connectionView() {
         return new ConnectionView(currentTunnel == null ? null : currentTunnel.getName(), getAutomaticMemberName(), currentConfig,
-            currentTunnel == null ? null : getStatistics(currentTunnel), connectionRevision);
+            currentTunnel == null ? null : getStatistics(currentTunnel), connectionRevision, hourlySummary);
     }
     private void stopVpnService() {
         try {
@@ -102,8 +117,13 @@ public final class GoBackend implements Backend {
     @Nullable public synchronized String getCurrentProfileName() { return currentTunnel == null ? null : currentTunnel.getName(); }
     @Nullable public String getAutomaticMemberName() { AutoMember member = activeMember; return member == null ? null : member.name(); }
     public boolean isAutomaticRunning() { return autoThread != null; }
+    /** Nonblocking path notification, before any delayed reconnect callback. */
+    public void onPhysicalPathChanged() { physicalPathRevision.incrementAndGet(); invalidateHourly(); }
     private void cancelAutomatic() {
         autoEpoch.incrementAndGet();
+        invalidateHourly();
+        Thread hourly = hourlyThread; hourlyThread = null; hourlySummary = null;
+        if (hourly != null) hourly.interrupt();
         Thread worker = autoThread; autoThread = null; activeMember = null;
         java.util.concurrent.Future<Double> future = pendingProbe; if (future != null) future.cancel(true);
         probeExecutor.purge();
@@ -181,8 +201,8 @@ public final class GoBackend implements Backend {
         if (members.size() > 30) throw new IllegalArgumentException("Auto supports 1–30 members");
         final long epoch = autoEpoch.incrementAndGet();
         activeMember = members.get(0);
+        final AutoPolicy policy = new AutoPolicy(members.size(), 0);
         final Thread worker = new Thread(() -> {
-            final AutoPolicy policy = new AutoPolicy(members.size(), 0);
             try {
                 Thread.sleep(2500);
                 while (autoEpoch.get() == epoch && !Thread.currentThread().isInterrupted()) {
@@ -193,23 +213,20 @@ public final class GoBackend implements Backend {
                         try {
                             pendingProbe = probeExecutor.submit(this::trafficProbe);
                             latency = pendingProbe.get(11, TimeUnit.SECONDS);
-                        } catch (java.util.concurrent.TimeoutException | java.util.concurrent.ExecutionException | java.util.concurrent.RejectedExecutionException ignored) {
+                        } catch (java.util.concurrent.TimeoutException | java.util.concurrent.ExecutionException | java.util.concurrent.RejectedExecutionException | java.util.concurrent.CancellationException ignored) {
                             if (pendingProbe != null) pendingProbe.cancel(true);
                             HttpURLConnection connection = healthConnection; if (connection != null) connection.disconnect();
                             probeExecutor.purge();
                         } finally { pendingProbe = null; }
                     }
-                    boolean healthy;
+                    final AutoPolicy.Decision decision;
                     synchronized (this) {
                         if (autoEpoch.get() != epoch || currentTunnel != tunnel) break;
                         if (connectionRevision != probeRevision) continue;
-                        healthy = latency != null && getLastHandshake(tunnel) > 0;
+                        boolean healthy = latency != null && getLastHandshake(tunnel) > 0;
                         available = physicalNetworkAvailable();
-                    }
-                    AutoPolicy.Decision decision = policy.record(healthy, available, latency);
-                    if (decision.action == AutoPolicy.Action.SWITCH) {
-                        synchronized (this) {
-                            if (autoEpoch.get() != epoch || currentTunnel != tunnel) break;
+                        decision = policy.record(healthy, available, latency);
+                        if (decision.action == AutoPolicy.Action.SWITCH) {
                             AutoMember next = members.get(decision.index);
                             replacing = true;
                             try {
@@ -230,6 +247,175 @@ public final class GoBackend implements Backend {
             finally { synchronized (this) { if (autoEpoch.get() == epoch) { autoThread = null; activeMember = null; } } }
         }, "R013-Auto");
         autoThread = worker; worker.start();
+        startHourly(tunnel, members, policy, epoch);
+    }
+
+    private record HourlyScope(long handle, R013SocketRoutes routes) { }
+    private record HourlySnapshot(long revision, int handle, Config config, VpnService service, AutoMember member, long pathRevision) { }
+
+    private void releaseHourly(@Nullable HourlyScope scope) {
+        // A failed drain retains its native/global-reference ownership. Retry
+        // on the next comparison instead of forgetting a potentially live FD.
+        synchronized (hourlyCleanupLock) {
+            if (scope != null && !retiredHourlyScopes.contains(scope)) retiredHourlyScopes.add(scope);
+            java.util.Iterator<HourlyScope> iterator = retiredHourlyScopes.iterator();
+            while (iterator.hasNext()) {
+                HourlyScope retired = iterator.next();
+                retired.routes().invalidate(); r013ProbeInvalidate(retired.handle());
+                if (r013ProbeRelease(retired.handle()) == 0) iterator.remove();
+            }
+        }
+    }
+
+    private void invalidateHourly() {
+        HourlyScope scope = hourlyScope;
+        if (scope != null) { scope.routes().invalidate(); r013ProbeInvalidate(scope.handle()); }
+    }
+    private static boolean sameMembers(List<AutoMember> a, List<AutoMember> b) {
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++)
+            if (!a.get(i).name().equals(b.get(i).name()) ||
+                !a.get(i).config().toAwgQuickString().equals(b.get(i).config().toAwgQuickString())) return false;
+        return true;
+    }
+    private boolean sameHourly(Tunnel tunnel, List<AutoMember> members, long epoch, HourlySnapshot snapshot) {
+        return autoEpoch.get() == epoch && autoThread != null && currentTunnel == tunnel &&
+            currentTunnelHandle == snapshot.handle() && currentConfig == snapshot.config() &&
+            activeService == snapshot.service() && connectionRevision == snapshot.revision() && physicalPathRevision.get() == snapshot.pathRevision() &&
+            sameMembers(members, automaticSource.members(tunnel.getName()));
+    }
+    private static JSONObject hourlyCandidate(int index, Config config) throws Exception {
+        String source = null;
+        for (InetNetwork address : config.getInterface().getAddresses())
+            if (address.getAddress() instanceof java.net.Inet4Address) { source = address.getAddress().getHostAddress(); break; }
+        if (source == null || config.getPeers().size() != 1) throw new IllegalArgumentException("Unsupported comparison snapshot");
+        String wire = config.toAwgUserspaceString();
+        if (wire.length() > 65536 || !wire.contains("\nendpoint=")) throw new IllegalArgumentException("Unresolved comparison snapshot");
+        return new JSONObject().put("id",Integer.toString(index)).put("source",source).put("config",wire);
+    }
+    private static JSONObject hourlyInput(JSONArray candidates, int cursor) throws Exception {
+        return new JSONObject().put("auto_active",true).put("resolver","1.1.1.1:53")
+            .put("start_index",Math.floorMod(cursor,candidates.length())).put("candidates",candidates);
+    }
+    private void startHourly(Tunnel tunnel, List<AutoMember> members, AutoPolicy policy, long epoch) {
+        final Thread worker = new Thread(() -> {
+            HourlySchedule schedule = new HourlySchedule(android.os.SystemClock.elapsedRealtime());
+            int cursor = 0;
+            try {
+                while (autoEpoch.get() == epoch && autoThread != null && !Thread.currentThread().isInterrupted()) {
+                    long remaining = schedule.remaining(android.os.SystemClock.elapsedRealtime());
+                    if (remaining > 0) { Thread.sleep(Math.min(remaining,60_000)); continue; }
+                    if (!schedule.take(android.os.SystemClock.elapsedRealtime())) continue;
+                    cursor = compareHourly(tunnel,members,policy,epoch,cursor);
+                }
+            } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            finally { synchronized (this) { if (hourlyThread == Thread.currentThread()) hourlyThread = null; } }
+        },"R013-Hourly");
+        hourlySummary = "Авто: сравнение VPN через 30 секунд, затем раз в час";
+        hourlyThread = worker; worker.setDaemon(true); worker.start();
+    }
+    private int compareHourly(Tunnel tunnel, List<AutoMember> members, AutoPolicy policy, long epoch, int cursor)
+            throws InterruptedException {
+        HourlyScope scope = null;
+        java.util.concurrent.Future<JSONArray> preparing = null;
+        try {
+            releaseHourly(null);
+            final HourlySnapshot snapshot;
+            synchronized (this) {
+                if (autoEpoch.get() != epoch || autoThread == null || currentTunnel != tunnel ||
+                        currentTunnelHandle < 0 || currentConfig == null || activeMember == null || activeService == null ||
+                        !physicalNetworkAvailable() || !sameMembers(members,automaticSource.members(tunnel.getName()))) return cursor;
+                snapshot = new HourlySnapshot(connectionRevision,currentTunnelHandle,currentConfig,activeService,activeMember,physicalPathRevision.get());
+            }
+            preparing = snapshotExecutor.submit(() -> {
+                JSONArray candidates = new JSONArray();
+                for (int i = 0; i < members.size(); i++) {
+                    if (Thread.currentThread().isInterrupted()) break;
+                    try { candidates.put(hourlyCandidate(i,members.get(i).config())); }
+                    catch (Exception ignored) { /* Unmeasured is not an unhealthy VPN. */ }
+                }
+                return candidates;
+            });
+            JSONArray candidates = preparing.get(10,TimeUnit.SECONDS);
+            if (candidates.length() == 0) return cursor;
+            synchronized (this) {
+                if (!sameHourly(tunnel,members,epoch,snapshot)) return cursor;
+                R013SocketRoutes routes = new R013SocketRoutes(context,snapshot.service(),awgGetInterfaceName(snapshot.handle()));
+                long handle = r013ProbeCreate(routes);
+                if (handle == 0) { routes.invalidate(); return cursor; }
+                scope = new HourlyScope(handle,routes); hourlyScope = scope;
+                if (r013ProbeRefresh(handle) != 0 || !routes.isCurrent()) return cursor;
+                hourlySummary = "Авто: сравниваем DNS через VPN, текущее соединение работает";
+            }
+            long operation = r013ProbeStart(scope.handle(),hourlyInput(candidates,cursor).toString());
+            if (operation == 0) return cursor;
+            long deadline = android.os.SystemClock.elapsedRealtime()+95_000;
+            JSONObject status = null;
+            while (android.os.SystemClock.elapsedRealtime() < deadline) {
+                if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+                synchronized (this) {
+                    if (!sameHourly(tunnel,members,epoch,snapshot) || !scope.routes().isCurrent()) return cursor;
+                }
+                String wire = r013ProbePoll(scope.handle(),operation);
+                if (wire == null) return cursor;
+                status = new JSONObject(wire);
+                if (!status.getString("status").equals("pending")) break;
+                Thread.sleep(250);
+            }
+            synchronized (this) {
+                if (!sameHourly(tunnel,members,epoch,snapshot) || !scope.routes().isCurrent()) return cursor;
+                if (status == null || !status.optString("status").equals("complete")) {
+                    hourlySummary = "Авто: сравнение DNS недоступно; текущий VPN сохранён"; return cursor;
+                }
+                cursor = status.getInt("next_index");
+                double baseline = status.getJSONObject("after").getDouble("milliseconds");
+                int measured = 0; JSONArray rows = status.getJSONArray("rows");
+                for (int i = 0; i < rows.length(); i++) if (rows.getJSONObject(i).getString("status").equals("measured")) measured++;
+                hourlySummary = String.format(java.util.Locale.ROOT,"Авто: DNS %.0f мс · сравнено %d · следующая проверка через час",baseline,measured);
+                String choice = status.optString("choice_id","");
+                if (choice.isEmpty()) return cursor;
+                int index = Integer.parseInt(choice);
+                if (index < 0 || index >= members.size()) return cursor;
+                AutoMember next = members.get(index);
+                JSONObject fresh = hourlyInput(new JSONArray().put(hourlyCandidate(index,next.config())),0);
+                // Recheck actual Java ownership immediately before the native
+                // one-shot guard drains UDP and authorizes the primary change.
+                if (!sameHourly(tunnel,members,epoch,snapshot) || !scope.routes().isCurrent()) return cursor;
+                long ticket = r013ProbeChoose(scope.handle(),operation,fresh.toString());
+                if (ticket == 0) return cursor;
+                replacing = true;
+                try {
+                    java.util.concurrent.Future<Double> health = pendingProbe; if (health != null) health.cancel(true);
+                    HttpURLConnection connection = healthConnection; if (connection != null) connection.disconnect();
+                    invalidateHourly();
+                    setStateInternalGuarded(tunnel,null,State.DOWN,ticket);
+                    activeMember = null;
+                    setStateInternalGuarded(tunnel,next.config(),State.UP,ticket);
+                    activeMember = next; policy.selectMeasuredCandidate(index);
+                    hourlySummary = "Авто: выбран более быстрый VPN по одинаковой проверке DNS";
+                } catch (Exception ignored) {
+                    // Restore the exact previous configuration if establishing
+                    // the selected backend failed, using the same guarded span.
+                    if (currentTunnelHandle < 0) {
+                        try { setStateInternalGuarded(tunnel,snapshot.config(),State.UP,ticket); activeMember = snapshot.member(); }
+                        catch (Exception retryFailed) { currentTunnel = tunnel; currentConfig = null; }
+                    }
+                    hourlySummary = "Авто: смена VPN не завершена; работает обычная проверка подключения";
+                } finally { replacing = false; r013PrimaryEnd(ticket); }
+            }
+            return cursor;
+        } catch (InterruptedException interrupted) { throw interrupted; }
+        catch (Exception ignored) {
+            synchronized (this) { if (autoEpoch.get() == epoch) hourlySummary = "Авто: сравнение DNS недоступно; настройки сохранены"; }
+            return cursor;
+        } finally {
+            if (preparing != null && !preparing.isDone()) preparing.cancel(true);
+            if (scope != null) {
+                scope.routes().invalidate(); r013ProbeInvalidate(scope.handle());
+                synchronized (this) { if (hourlyScope == scope) hourlyScope = null; }
+                releaseHourly(scope);
+            }
+        }
     }
 
     /**
@@ -522,6 +708,7 @@ public final class GoBackend implements Backend {
         // Drain every candidate before Builder.establish can change routes, not
         // merely before the native engine starts. Unknown active state disables
         // comparisons; it must not disable an otherwise valid manual profile.
+        invalidateHourly();
         final long ticket = r013PrimaryBegin();
         if (ticket == 0) throw new IllegalStateException("VPN transition is busy");
         try { setStateInternalGuarded(tunnel, config, state, ticket); }

@@ -35,9 +35,10 @@ jobs:
           export PATH="$JAVA_HOME/bin:$PATH"
           cd android
           mkdir -p output/core-tests
-          javac -encoding UTF-8 -d output/core-tests tunnel/src/main/java/org/amnezia/awg/r013/AutoPolicy.java ui/src/main/java/org/amnezia/awg/r013/ArchiveReader.java r013-tests/*.java
+          javac -encoding UTF-8 -d output/core-tests tunnel/src/main/java/org/amnezia/awg/r013/AutoPolicy.java tunnel/src/main/java/org/amnezia/awg/r013/HourlySchedule.java ui/src/main/java/org/amnezia/awg/r013/ArchiveReader.java r013-tests/*.java
           java -cp output/core-tests AutoPolicyTest
           java -cp output/core-tests ArchiveReaderTest
+          java -cp output/core-tests HourlyScheduleTest
           (cd tunnel/tools/libwg-go && GOTOOLCHAIN=go1.25.14 go test -race -count=1 ./r013probe/... && GOTOOLCHAIN=go1.25.14 go vet ./r013probe/...)
       - name: Compile native Android app sources
         run: |

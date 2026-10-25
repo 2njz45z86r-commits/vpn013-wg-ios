@@ -28,6 +28,11 @@ public final class AutoPolicy {
         this.count = count; current = initialIndex; visited.add(current);
     }
     public int current() { return current; }
+    /** Owner must serialize this with record and the actual backend transition. */
+    public void selectMeasuredCandidate(int index) {
+        if (!running || index < 0 || index >= count) throw new IllegalStateException("Invalid measured selection");
+        current = index; failures = 0; visited.clear(); visited.add(current);
+    }
     public void stop() { running = false; }
     private Decision decision(Action action, int wait) { return new Decision(action, current, wait); }
     public Decision record(boolean healthy, boolean networkAvailable, Double latencyMs) {

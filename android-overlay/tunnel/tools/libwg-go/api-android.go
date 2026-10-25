@@ -135,7 +135,15 @@ func awgTurnOnInternal(interfaceName string, tunFd int32, settings string) int32
 					if err != nil {
 						return
 					}
-					go device.IpcHandle(conn)
+					go func() {
+						ticket := r013PrimaryBegin()
+						if ticket == 0 {
+							conn.Close()
+							return
+						}
+						defer r013PrimaryEnd(ticket)
+						device.IpcHandle(conn)
+					}()
 				}
 			}()
 		}

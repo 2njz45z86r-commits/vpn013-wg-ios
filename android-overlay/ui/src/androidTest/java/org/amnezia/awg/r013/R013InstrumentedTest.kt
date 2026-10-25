@@ -259,6 +259,40 @@ class R013InstrumentedTest {
             assertEquals("Real JNI/UDP callbacks did not drain",0,org.amnezia.awg.GoBackend.r013ProbeRelease(scope))
         }
     }
+    @Test fun iProductionHourlyTimerKeepsRealPrimaryAndCancelsOnManualChoice() = runBlocking {
+        val slow = fixture().replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
+        val encoded = InstrumentationRegistry.getArguments().getString("syntheticCandidate") ?: error("Second isolated peer missing")
+        val fast = String(android.util.Base64.decode(encoded,android.util.Base64.DEFAULT),Charsets.UTF_8)
+            .replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
+        OfflineChanges.apply { registry.importOrdinary(listOf("A Slow Fixture" to ProfileRegistry.parse(slow),"B Fast Fixture" to ProfileRegistry.parse(fast))); registry.createAuto() }
+        startHome(); val manager = Application.getTunnelManager(); val auto = manager.getTunnels().first()
+        val backend = Application.getBackend() as GoBackend
+        val started = android.os.SystemClock.elapsedRealtime()
+        auto.setStateAsync(Tunnel.State.UP)
+        // These isolated peers answer DNS and ICMP, not public HTTPS health
+        // origins. The existing two-attempt policy rotates to B and backs off.
+        waitFor(28000) { backend.automaticMemberName == "B Fast Fixture" && android.os.SystemClock.elapsedRealtime()-started >= 20_000 }
+        val revision = backend.connectionRevision
+        val handleField = GoBackend::class.java.getDeclaredField("currentTunnelHandle").apply { isAccessible = true }
+        val handle = handleField.getInt(backend)
+        val rx = backend.getStatistics(auto).totalRx()
+        assertNotNull(EndpointPing.measure("10.13.99.1"))
+        waitFor(40000) { backend.connectionView().hourlySummary()?.contains("сравнено") == true }
+        assertTrue("Production timer fired before its initial 30 seconds",android.os.SystemClock.elapsedRealtime()-started >= 30_000)
+        assertEquals("Scan unexpectedly restarted the primary",revision,backend.connectionRevision)
+        assertEquals(handle,handleField.getInt(backend))
+        assertEquals("B Fast Fixture",backend.automaticMemberName)
+        assertTrue(backend.getStatistics(auto).totalRx() > rx)
+        assertNotNull(EndpointPing.measure("10.13.99.1"))
+        screenshot("hourly-real-vpn")
+        manager.getTunnels()["B Fast Fixture"]!!.setStateAsync(Tunnel.State.UP)
+        assertFalse(backend.isAutomaticRunning)
+        assertNull(backend.connectionView().hourlySummary())
+        val manualRevision = backend.connectionRevision
+        Thread.sleep(1500)
+        assertEquals(manualRevision,backend.connectionRevision)
+        assertEquals("B Fast Fixture",backend.currentProfileName)
+    }
     private fun fixture(): String {
         val encoded = InstrumentationRegistry.getArguments().getString("syntheticConfig") ?: error("Synthetic peer fixture missing")
         return String(android.util.Base64.decode(encoded,android.util.Base64.DEFAULT),Charsets.UTF_8)

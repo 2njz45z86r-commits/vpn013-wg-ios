@@ -20,13 +20,15 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 type echoDevice struct {
-	packets chan []byte
-	events  chan tun.Event
-	done    chan struct{}
-	once    sync.Once
+	packets  chan []byte
+	events   chan tun.Event
+	done     chan struct{}
+	once     sync.Once
+	dnsDelay time.Duration
 }
 
 func (d *echoDevice) File() *os.File           { return nil }
@@ -76,6 +78,13 @@ func (d *echoDevice) Write(bufs [][]byte, offset int) (int, error) {
 			total := int(binary.BigEndian.Uint16(packet[2:4]))
 			if total < header+20 || total > len(packet) {
 				continue
+			}
+			if d.dnsDelay > 0 {
+				select {
+				case <-time.After(d.dnsDelay):
+				case <-d.done:
+					return 0, io.EOF
+				}
 			}
 			reply := append([]byte(nil), packet[:total]...)
 			copy(reply[12:16], packet[16:20])
@@ -130,6 +139,9 @@ func startResponder(filename string) (*device.Device, string, error) {
 		return nil, "", err
 	}
 	memory := &echoDevice{packets: make(chan []byte, 8), events: make(chan tun.Event, 1), done: make(chan struct{})}
+	if filename == "r013-synthetic.conf" {
+		memory.dnsDelay = 40 * time.Millisecond
+	}
 	peer := device.NewDevice(memory, conn.NewDefaultBind(), device.NewLogger(device.LogLevelSilent, ""))
 	uapi := "private_key=" + hex.EncodeToString(serverKey.Bytes()) + "\nlisten_port=0\njc=3\njmin=40\njmax=70\ns1=20\ns2=30\nh1=1001\nh2=1002\nh3=1003\nh4=1004\npublic_key=" + hex.EncodeToString(clientKey.PublicKey().Bytes()) + "\nallowed_ip=10.13.99.2/32\n"
 	if peer.IpcSet(uapi) != nil || peer.Up() != nil {
