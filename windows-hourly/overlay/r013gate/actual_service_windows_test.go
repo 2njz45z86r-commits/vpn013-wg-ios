@@ -237,8 +237,20 @@ func TestActualClientTunnelServicePreservesTrafficAndFencesPathSetStop(t *testin
 			var once sync.Once
 			defer once.Do(func() { close(ack) })
 			done := make(chan error, 1)
+			scanContext, cancelScan := context.WithCancel(context.Background())
+			finished := make(chan struct{})
+			defer func() {
+				cancelScan()
+				once.Do(func() { close(ack) })
+				select {
+				case <-finished:
+				case <-time.After(2 * time.Second):
+					t.Error("failed race fixture did not release its owned candidate")
+				}
+			}()
 			go func() {
-				done <- gate.Candidate(context.Background(), func(ctx context.Context, token Token) error {
+				defer close(finished)
+				done <- gate.Candidate(scanContext, func(ctx context.Context, token Token) error {
 					factory, err := NewUDPFactory(protectedudp.Physical, physicalIndex, 0, token)
 					if err != nil {
 						return err
@@ -268,14 +280,43 @@ func TestActualClientTunnelServicePreservesTrafficAndFencesPathSetStop(t *testin
 				if err != nil {
 					t.Fatal(err)
 				}
-				ipif, err := luid.IPInterface(windows.AF_INET)
+				// Trigger an actual default-route notification on the disposable
+				// TUN without replacing any existing route. Its explicit huge
+				// metric cannot beat the observed existing default, and its exact
+				// row is removed on every exit. No owner PC executes this fixture.
+				rows, err := winipcfg.GetIPForwardTable2(windows.AF_INET)
 				if err != nil {
 					t.Fatal(err)
 				}
-				ipif.NLMTU--
-				if err = ipif.Set(); err != nil {
+				bestMetric := uint64(^uint32(0))
+				found := false
+				for _, row := range rows {
+					if row.DestinationPrefix.PrefixLength == 0 && row.InterfaceLUID != luid {
+						ipif, e := row.InterfaceLUID.IPInterface(windows.AF_INET)
+						if e == nil {
+							metric := uint64(row.Metric) + uint64(ipif.Metric)
+							if metric < bestMetric {
+								bestMetric = metric
+								found = true
+							}
+						}
+					}
+				}
+				if !found || bestMetric >= 1<<30 {
+					t.Fatal("safe existing default route was not observed")
+				}
+				destination := net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)}
+				if err = luid.AddRoute(destination, net.IPv4zero, 1<<30); err != nil {
 					t.Fatal(err)
 				}
+				defer func() {
+					row, e := luid.Route(destination, net.IPv4zero)
+					if e == nil {
+						if e = row.Delete(); e != nil {
+							t.Error(e)
+						}
+					}
+				}()
 			case "set":
 				setter, err = actualPipe(name)
 				if err != nil {
