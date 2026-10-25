@@ -101,5 +101,18 @@ class R013UpdateInstallTest {
     private fun shell(command: String) { instrumentation.uiAutomation.executeShellCommand(command).use { fd -> java.io.FileInputStream(fd.fileDescriptor).use { it.readBytes() } } }
     private fun findText(text: String): AccessibilityNodeInfo? = instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText(text)?.firstOrNull()
     private fun waitFor(test: () -> Boolean) { val until=android.os.SystemClock.elapsedRealtime()+15000
-        while(android.os.SystemClock.elapsedRealtime()<until) { if(test()) return; Thread.sleep(100) }; assertTrue("Native update flow timed out",test()) }
+        while(android.os.SystemClock.elapsedRealtime()<until) { if(test()) return; Thread.sleep(100) }
+        if (test()) return
+        val review=File(context.getExternalFilesDir(null),"review").apply { mkdirs() }
+        instrumentation.uiAutomation.takeScreenshot()?.also { bitmap -> File(review,"update-install-failure.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }; bitmap.recycle() }
+        val root=instrumentation.uiAutomation.rootInActiveWindow
+        fun visible(node: AccessibilityNodeInfo?): String = if (node == null) "null" else buildString {
+            append(node.packageName); append(':'); append(node.className); append(':'); append(node.text); append('\n')
+            for (i in 0 until node.childCount) append(visible(node.getChild(i)))
+        }
+        // This fixture contains only synthetic APKs and synthetic vault data.
+        // Persist bounded visible UI diagnostics, never production logs/keys.
+        File(review,"update-install-failure.txt").writeText("marker=${marker.exists()} permission=${context.packageManager.canRequestPackageInstalls()} finishing=${activity?.isFinishing} destroyed=${activity?.isDestroyed}\n"+visible(root).take(16000))
+        fail("Native update flow timed out; marker=${marker.exists()} permission=${context.packageManager.canRequestPackageInstalls()} package=${root?.packageName}")
+    }
 }
