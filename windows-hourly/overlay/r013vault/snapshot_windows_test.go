@@ -56,6 +56,9 @@ func TestLegacyDPAPIVaultSnapshotPreservesKeysSettingsAndDeepClone(t *testing.T)
 	if err != nil || len(digest) != 64 || first.Interface.PrivateKey != original[0].Interface.PrivateKey || first.Peers[0].PublicKey != original[0].Peers[0].PublicKey || first.Interface.IPackets["I1"] != "fixture-preserved" {
 		t.Fatal("legacy key/settings changed")
 	}
+	if first.Interface.Addresses[0].Bits() != 32 || first.Peers[0].AllowedIPs[0].Bits() != 32 || len(first.Interface.DNS[0]) != 4 {
+		t.Fatal("JSON IPv4 representation changed native family/route semantics")
+	}
 	beforeClone, _ := json.Marshal(first)
 	first.Interface.PrivateKey[0] ^= 1
 	first.Interface.Addresses[0].IP[0] ^= 1

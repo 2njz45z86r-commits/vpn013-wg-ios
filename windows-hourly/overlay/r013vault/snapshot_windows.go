@@ -10,6 +10,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf/dpapi"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,7 +43,54 @@ func (s Snapshot) Member(index int) (conf.Config, string, error) {
 	if json.Unmarshal(wire, &copy) != nil {
 		return conf.Config{}, "", ErrVault
 	}
+	if normalizeAddresses(&copy) != nil {
+		return conf.Config{}, "", ErrVault
+	}
 	return copy, s.digests[index], nil
+}
+
+// net.IP JSON decoding yields 16-byte IPv4 values, while the existing native
+// hasDefaultRoute uses slice length to recognize IPv4 default routes.
+// Restore representation only; IP text, prefix, keys and every other setting
+// remain equal. Never round-trip through a lossy hand-written config format.
+func normalizeAddresses(c *conf.Config) error {
+	normalize := func(ip net.IP) (net.IP, error) {
+		if v4 := ip.To4(); v4 != nil {
+			return append(net.IP(nil), v4...), nil
+		}
+		if v6 := ip.To16(); v6 != nil {
+			return append(net.IP(nil), v6...), nil
+		}
+		return nil, ErrVault
+	}
+	cidr := func(a *conf.IPCidr) error {
+		ip, err := normalize(a.IP)
+		if err != nil || int(a.Cidr) > 8*len(ip) {
+			return ErrVault
+		}
+		a.IP = ip
+		return nil
+	}
+	for i := range c.Interface.Addresses {
+		if cidr(&c.Interface.Addresses[i]) != nil {
+			return ErrVault
+		}
+	}
+	for i := range c.Interface.DNS {
+		ip, err := normalize(c.Interface.DNS[i])
+		if err != nil {
+			return err
+		}
+		c.Interface.DNS[i] = ip
+	}
+	for i := range c.Peers {
+		for j := range c.Peers[i].AllowedIPs {
+			if cidr(&c.Peers[i].AllowedIPs[j]) != nil {
+				return ErrVault
+			}
+		}
+	}
+	return nil
 }
 func EligibleForComparison(c conf.Config) bool {
 	return strings.TrimSpace(c.Interface.PreUp+c.Interface.PostUp+c.Interface.PreDown+c.Interface.PostDown) == ""
@@ -67,6 +115,10 @@ func Decode(ciphertext []byte) (Snapshot, error) {
 	}
 	digests := make([]string, len(members))
 	for i, member := range members {
+		if normalizeAddresses(&member) != nil {
+			return zero, ErrVault
+		}
+		members[i] = member
 		wire, err := json.Marshal(member)
 		if err != nil {
 			return zero, ErrVault

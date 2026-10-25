@@ -101,15 +101,14 @@ func (r *Relay) readLoop() {
 func (r *Relay) eventLoop() {
 	defer r.workers.Done()
 	for event := range r.raw.Events() {
+		if event & ^tun.EventMTUUpdate != 0 {
+			r.fail(ErrLease)
+			return
+		}
 		r.mu.Lock()
 		if l := r.active; !r.closing && l != nil && !l.closed {
 			// This relay is for Windows NativeTun, whose only event is MTU.
 			// Refuse an unknown lifecycle event rather than silently drop it.
-			if event & ^tun.EventMTUUpdate != 0 {
-				r.mu.Unlock()
-				r.fail(ErrLease)
-				return
-			}
 			select {
 			case l.events <- event:
 			default:

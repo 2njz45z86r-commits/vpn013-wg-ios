@@ -43,7 +43,7 @@ func TestObservedMetadataRequiresLiveConcreteLeaseAndCarriesNoPrivateConfig(t *t
 		if valid.Validate(token, "fixture", 123) != nil {
 			return errors.New("fresh metadata refused")
 		}
-		for _, change := range []func(*Observation){func(o *Observation) { o.Stamp.Epoch++ }, func(o *Observation) { o.PID++ }, func(o *Observation) { o.Ready = false }, func(o *Observation) { o.Dirty = true }, func(o *Observation) { o.Scripts = true }, func(o *Observation) { o.Physical4 = 0 }, func(o *Observation) { o.TunnelIndex = 0 }, func(o *Observation) { o.Identity = "unknown" }} {
+		for _, change := range []func(*Observation){func(o *Observation) { o.Stamp.Epoch++ }, func(o *Observation) { o.PID++ }, func(o *Observation) { o.Ready = false }, func(o *Observation) { o.Dirty = true }, func(o *Observation) { o.Scripts = true }, func(o *Observation) { o.Physical4 = 0 }, func(o *Observation) { o.Physical6 = o.TunnelIndex }, func(o *Observation) { o.TunnelIndex = 0 }, func(o *Observation) { o.Identity = "unknown" }} {
 			altered := valid
 			change(&altered)
 			if altered.Validate(token, "fixture", 123) == nil {
