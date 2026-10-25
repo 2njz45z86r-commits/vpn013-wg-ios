@@ -144,6 +144,31 @@ func TestActualClientTunnelServicePreservesTrafficAndFencesPathSetStop(t *testin
 		t.Fatal(err)
 	}
 	defer gate.Close(context.Background())
+	// SCM Running and an existing adapter do not establish that IPv4 DAD and
+	// the asynchronous address/route watcher have finished. Observe those OS
+	// facts before opening any candidate or current socket; never guess ready.
+	readyUntil := time.Now().Add(10 * time.Second)
+	var preferred, routeReady bool
+	for time.Now().Before(readyUntil) {
+		luid, lookupError := winipcfg.LUIDFromIndex(uint32(iface.Index))
+		if lookupError == nil {
+			address, addressError := luid.IPAddress(net.ParseIP(primary.source.String()).To4())
+			preferred = addressError == nil && address.DadState == winipcfg.DadStatePreferred
+			_, routeError := luid.Route(net.IPNet{IP: net.ParseIP(primary.target.String()).To4(), Mask: net.CIDRMask(32, 32)}, net.IPv4zero)
+			routeReady = routeError == nil
+		}
+		if preferred && routeReady {
+			stamp := gate.Current()
+			time.Sleep(300 * time.Millisecond)
+			if stamp == gate.Current() {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !preferred || !routeReady {
+		t.Fatal("actual primary address/DAD/route never became ready", preferred, routeReady)
+	}
 	actual, err = actualRuntime(name)
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +193,8 @@ func TestActualClientTunnelServicePreservesTrafficAndFencesPathSetStop(t *testin
 		defer current.Close(context.Background())
 		target := netip.AddrPortFrom(primary.target, 53)
 		if _, err = probe.MeasureCurrentDNS(work, probe.CurrentDNSRequest{Target: target, Factory: current, Guard: guard}); err != nil {
-			return fmt.Errorf("actual service baseline: %w", err)
+			status, _ := service.Query()
+			return fmt.Errorf("actual service baseline (tokenValid=%t state=%d workCancelled=%t): %w", token.Valid(), status.State, work.Err() != nil, err)
 		}
 		streamCtx, stop := context.WithCancel(work)
 		var replies atomic.Uint32
