@@ -49,11 +49,13 @@ peer_pid=$!
 # The EXIT trap preserves native failure evidence before emulator teardown.
 for i in $(seq 1 90); do test -s "$RUNNER_TEMP/r013-synthetic.conf" && break; sleep 2; done
 test -s "$RUNNER_TEMP/r013-synthetic.conf"
+test -s "$RUNNER_TEMP/r013-synthetic-candidate.conf"
 fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic.conf")
-adb shell am instrument -w -r -e syntheticConfig "$fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
+candidate_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic-candidate.conf")
+adb shell am instrument -w -r -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
 grep -E '^OK \([0-9]+ tests?\)' output/review/instrumentation.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/instrumentation.txt
-unset fixture
+unset fixture candidate_fixture
 adb pull /sdcard/Android/data/com.vpn013.awg.debug/files/review output/review/screenshots
 adb shell settings put system font_scale 1.3
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest#eNativeScreen -e reviewLabel phone-large-type com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/font-scale.txt

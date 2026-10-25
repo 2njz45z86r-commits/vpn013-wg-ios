@@ -519,6 +519,17 @@ public final class GoBackend implements Backend {
 
     private void setStateInternal(final Tunnel tunnel, @Nullable final Config config, final State state)
             throws Exception {
+        // Drain every candidate before Builder.establish can change routes, not
+        // merely before the native engine starts. Unknown active state disables
+        // comparisons; it must not disable an otherwise valid manual profile.
+        final long ticket = r013PrimaryBegin();
+        if (ticket == 0) throw new IllegalStateException("VPN transition is busy");
+        try { setStateInternalGuarded(tunnel, config, state, ticket); }
+        finally { r013PrimaryEnd(ticket); }
+    }
+
+    private void setStateInternalGuarded(final Tunnel tunnel, @Nullable final Config config, final State state,
+                                         final long ticket) throws Exception {
         connectionRevision++;
         Log.i(TAG, "Bringing tunnel " + tunnel.getName() + ' ' + state);
 
@@ -618,7 +629,7 @@ public final class GoBackend implements Backend {
                 if (tun == null)
                     throw new BackendException(Reason.TUN_CREATION_ERROR);
                 Log.d(TAG, "Go backend " + awgVersion());
-                currentTunnelHandle = awgTurnOn(tunnel.getName(), tun.detachFd(), goConfig);
+                currentTunnelHandle = awgTurnOnGuarded(ticket, tunnel.getName(), tun.detachFd(), goConfig);
             }
             if (currentTunnelHandle < 0)
                 throw new BackendException(Reason.GO_ACTIVATION_ERROR_CODE, currentTunnelHandle);
@@ -638,10 +649,11 @@ public final class GoBackend implements Backend {
             }
             stopStatusJob();
             int handleToClose = currentTunnelHandle;
+            if (awgTurnOffGuarded(ticket, handleToClose) != 0)
+                throw new IllegalStateException("VPN transition expired");
             currentTunnel = null;
             currentTunnelHandle = -1;
             currentConfig = null;
-            awgTurnOff(handleToClose);
             if (!replacing) stopVpnService();
         }
 
@@ -723,7 +735,11 @@ public final class GoBackend implements Backend {
                         backend.cancelAutomatic();
                         backend.stopStatusJob();
                         final Tunnel tunnel = backend.currentTunnel;
-                        if (backend.currentTunnelHandle != -1) awgTurnOff(backend.currentTunnelHandle);
+                        final long ticket = r013PrimaryBegin();
+                        if (ticket == 0) return; // Never close beneath a live candidate.
+                        try {
+                            if (backend.currentTunnelHandle != -1 && awgTurnOffGuarded(ticket, backend.currentTunnelHandle) != 0) return;
+                        } finally { r013PrimaryEnd(ticket); }
                         backend.currentTunnel = null;
                         backend.currentTunnelHandle = -1;
                         backend.currentConfig = null;

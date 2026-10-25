@@ -15,6 +15,9 @@ import org.amnezia.awg.Application
 import org.amnezia.awg.BuildConfig
 import org.amnezia.awg.backend.GoBackend
 import org.amnezia.awg.backend.Tunnel
+import org.amnezia.awg.backend.R013SocketRoutes
+import androidx.annotation.Keep
+import java.util.concurrent.atomic.AtomicInteger
 import org.amnezia.awg.crypto.KeyPair
 import org.json.JSONArray
 import org.json.JSONObject
@@ -188,6 +191,73 @@ class R013InstrumentedTest {
         waitFor(20000) { EndpointPing.measure("10.13.99.1") != null }
         Thread.sleep(7000)
         assertEquals("B Responder",backend.currentProfileName); assertFalse(backend.isAutomaticRunning)
+    }
+    @Keep class CountedRoutes(private val routes: R013SocketRoutes) {
+        val physical = AtomicInteger(); val through = AtomicInteger()
+        @Keep fun prepareSocket(role: Int, fd: Int): Boolean {
+            if (!routes.prepareSocket(role,fd)) return false
+            if (role == 1) physical.incrementAndGet() else if (role == 2) through.incrementAndGet()
+            return true
+        }
+    }
+    @Test fun hRealProtectedCandidateAndUninterruptedCurrentDns() = runBlocking {
+        val full = fixture().replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
+        val encoded = InstrumentationRegistry.getArguments().getString("syntheticCandidate") ?: error("Second isolated peer missing")
+        val candidate = ProfileRegistry.parse(String(android.util.Base64.decode(encoded,android.util.Base64.DEFAULT),Charsets.UTF_8)
+            .replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0"))
+        OfflineChanges.apply { registry.create("CI Uninterrupted",ProfileRegistry.parse(full)) }
+        startHome(); val tunnel = Application.getTunnelManager().getTunnels().single()
+        tunnel.setStateAsync(Tunnel.State.UP)
+        val backend = Application.getBackend() as GoBackend
+        waitFor(30000) { EndpointPing.measure("10.13.99.1") != null }
+        val handleField = GoBackend::class.java.getDeclaredField("currentTunnelHandle").apply { isAccessible = true }
+        val serviceField = GoBackend::class.java.getDeclaredField("activeService").apply { isAccessible = true }
+        val handle = handleField.getInt(backend)
+        val iface = org.amnezia.awg.GoBackend.awgGetInterfaceName(handle) ?: error("No actual native TUN name")
+        val service = serviceField.get(backend) as GoBackend.VpnService
+        var routes: R013SocketRoutes? = null
+        waitFor { try { routes = R013SocketRoutes(context,service,iface); true } catch (_: IllegalStateException) { false } }
+        val counted = CountedRoutes(routes!!)
+        val scope = org.amnezia.awg.GoBackend.r013ProbeCreate(counted)
+        assertTrue("Native scope was not created",scope > 0)
+        val revision = backend.connectionRevision
+        val initialRx = backend.getStatistics(tunnel).totalRx()
+        try {
+            assertEquals(0,org.amnezia.awg.GoBackend.r013ProbeRefresh(scope))
+            fun snapshot(id: String, config: org.amnezia.awg.config.Config) = JSONObject()
+                .put("id",id).put("config",config.toAwgUserspaceString()).put("source","10.13.99.2")
+            val input = JSONObject().put("auto_active",true).put("resolver","1.1.1.1:53").put("start_index",0)
+                .put("candidates",JSONArray().put(snapshot("active-alias",ProfileRegistry.parse(full))).put(snapshot("other",candidate)))
+            val operation = org.amnezia.awg.GoBackend.r013ProbeStart(scope,input.toString())
+            assertTrue("Native scan rejected",operation > 0)
+            var result = JSONObject()
+            waitFor(100000) {
+                val wire = org.amnezia.awg.GoBackend.r013ProbePoll(scope,operation) ?: error("Scan unexpectedly invalidated")
+                result = JSONObject(wire); result.getString("status") != "pending"
+            }
+            assertEquals("complete",result.getString("status"))
+            assertEquals(3,result.getJSONObject("before").getInt("samples"))
+            assertEquals(3,result.getJSONObject("after").getInt("samples"))
+            val rows = result.getJSONArray("rows")
+            assertEquals(2,rows.length())
+            assertEquals("active_identity_skipped",rows.getJSONObject(0).getString("status"))
+            assertEquals("measured",rows.getJSONObject(1).getString("status"))
+            assertEquals(3,rows.getJSONObject(1).getJSONObject("metric").getInt("samples"))
+            assertEquals("Unexpected physical gate count; active identity must never open UDP",1,counted.physical.get())
+            assertEquals("Both baselines must explicitly bind the actual VPN Network",2,counted.through.get())
+            assertEquals(handle,handleField.getInt(backend)); assertEquals(revision,backend.connectionRevision)
+            assertEquals("CI Uninterrupted",backend.currentProfileName)
+            assertTrue(backend.getStatistics(tunnel).totalRx() > initialRx)
+            assertNotNull("Primary traffic lost during candidate scan",EndpointPing.measure("10.13.99.1"))
+            // Stop must invalidate old handles and metrics before changing the TUN.
+            tunnel.setStateAsync(Tunnel.State.DOWN)
+            assertNull(org.amnezia.awg.GoBackend.r013ProbePoll(scope,operation))
+            assertEquals(0L,org.amnezia.awg.GoBackend.r013ProbeStart(scope,input.toString()))
+        } finally {
+            routes!!.invalidate()
+            org.amnezia.awg.GoBackend.r013ProbeInvalidate(scope)
+            assertEquals("Real JNI/UDP callbacks did not drain",0,org.amnezia.awg.GoBackend.r013ProbeRelease(scope))
+        }
     }
     private fun fixture(): String {
         val encoded = InstrumentationRegistry.getArguments().getString("syntheticConfig") ?: error("Synthetic peer fixture missing")
