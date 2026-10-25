@@ -32,6 +32,7 @@ type nativeDNSPeer struct {
 	done     chan struct{}
 	once     sync.Once
 	delay    time.Duration
+	resolve  netip.Addr
 	requests atomic.Uint64
 }
 
@@ -87,6 +88,10 @@ func (p *nativeDNSPeer) Write(bufs [][]byte, offset int) (int, error) {
 		dns.Response = true
 		dns.RecursionAvailable = true
 		dns.RCode = dnsmessage.RCodeNameError
+		if strings.EqualFold(dns.Questions[0].Name.String(), "peer-fixture.invalid.") && dns.Questions[0].Type == dnsmessage.TypeA && p.resolve.Is4() {
+			dns.RCode = dnsmessage.RCodeSuccess
+			dns.Answers = []dnsmessage.Resource{{Header: dnsmessage.ResourceHeader{Name: dns.Questions[0].Name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: 60}, Body: &dnsmessage.AResource{A: p.resolve.As4()}}}
+		}
 		payload, err := dns.Pack()
 		if err != nil {
 			continue
@@ -136,7 +141,7 @@ func newNativePeer(physical netip.Addr, source netip.Addr, delay time.Duration) 
 	if err != nil {
 		return f, err
 	}
-	p := &nativeDNSPeer{outbound: make(chan []byte, 16), events: make(chan tun.Event, 1), done: make(chan struct{}), delay: delay}
+	p := &nativeDNSPeer{outbound: make(chan []byte, 16), events: make(chan tun.Event, 1), done: make(chan struct{}), delay: delay, resolve: physical}
 	d := device.NewDevice(p, conn.NewStdNetBind(), device.NewLogger(device.LogLevelSilent, ""))
 	header := "jc=3\njmin=40\njmax=70\ns1=20\ns2=30\nh1=1001\nh2=1002\nh3=1003\nh4=1004\n"
 	err = d.IpcSet("private_key=" + hex.EncodeToString(server.Bytes()) + "\nlisten_port=0\n" + header + "public_key=" + hex.EncodeToString(client.PublicKey().Bytes()) + "\nallowed_ip=" + source.String() + "/32\n")

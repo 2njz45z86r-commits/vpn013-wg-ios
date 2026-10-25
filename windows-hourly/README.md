@@ -103,3 +103,14 @@ inside persistence and must never acknowledge stale success or undo that stop.
 This strengthened revision requires fresh native acceptance. The pure cadence
 helper covers initial30s, one in-flight scan,3600s-after-completion and no missed-
 period catchup storm; it alone is not an integrated service hourly producer.
+
+
+Endpoint preparation now has an explicit2s DNS resolver over one concrete protected
+physical OR through-tunnel factory, nonce/question/CNAME validation, bounded answers
+and TTL<=300s, genuine Cancel acknowledgment, no OS/default/network fallback. Native
+fixtures extend existing generated peers to answer a synthetic endpoint domain:
+physical role before restrictive policy and through real encrypted Wintun after
+restrictive policy. They require native acceptance. PreparePrimary is explicit
+primary replacement preparation with no UDP; candidate Prepare and ActiveGuard
+still reject every active identity alias before candidate resolution/UDP. No
+service hourly/health producer or manager supervision migration is enabled yet.

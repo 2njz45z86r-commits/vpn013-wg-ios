@@ -81,6 +81,18 @@ func Identity(c conf.Config) (string, error) {
 }
 
 func Prepare(parent context.Context, original conf.Config, activeIdentity string, roles Roles, resolver Resolver) (*Member, error) {
+	return prepareMember(parent, original, activeIdentity, roles, resolver, true)
+}
+
+// PreparePrimary resolves an immutable replacement for a fenced PRIMARY change.
+// It launches no UDP. An active identity may be retried only after the service
+// owner has genuinely retired the old engine. Candidate probes must still use
+// Prepare AND ActiveGuard, which rejects every running-identity alias before UDP.
+func PreparePrimary(parent context.Context, original conf.Config, roles Roles, resolver Resolver) (*Member, error) {
+	return prepareMember(parent, original, "", roles, resolver, false)
+}
+
+func prepareMember(parent context.Context, original conf.Config, activeIdentity string, roles Roles, resolver Resolver, denyActive bool) (*Member, error) {
 	if parent == nil || parent.Err() != nil || roles.Physical4 == 0 || resolver == nil {
 		return nil, ErrPreparation
 	}
@@ -94,12 +106,17 @@ func Prepare(parent context.Context, original conf.Config, activeIdentity string
 		return nil, ErrPreparation
 	}
 	identity, err := Identity(c)
-	active, activeError := hex.DecodeString(activeIdentity)
-	if err != nil || activeError != nil || len(active) != 32 || strings.ToLower(activeIdentity) != activeIdentity {
+	if err != nil {
 		return nil, ErrPreparation
 	}
-	if identity == activeIdentity {
-		return nil, probe.ErrActiveIdentity
+	if denyActive {
+		active, activeError := hex.DecodeString(activeIdentity)
+		if activeError != nil || len(active) != 32 || strings.ToLower(activeIdentity) != activeIdentity {
+			return nil, ErrPreparation
+		}
+		if identity == activeIdentity {
+			return nil, probe.ErrActiveIdentity
+		}
 	}
 	var source netip.Addr
 	for _, a := range c.Interface.Addresses {

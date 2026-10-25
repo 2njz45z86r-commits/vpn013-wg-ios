@@ -29,16 +29,17 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows/v3/elevate"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/firewall"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/winipcfg"
+	"golang.org/x/net/dns/dnsmessage"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
 type backendReceipt struct {
-	Success                                                                       bool
-	Phase, Error                                                                  string
-	Selected, Rollback, Stale, ExternalUnknown, SameTUN, VaultPreserved, StopWins bool
-	Before, After                                                                 uint32
+	Success                                                                                                         bool
+	Phase, Error                                                                                                    string
+	Selected, Rollback, Stale, ExternalUnknown, SameTUN, VaultPreserved, StopWins, EndpointPhysical, EndpointTunnel bool
+	Before, After                                                                                                   uint32
 }
 type backendFixture struct {
 	directory string
@@ -172,6 +173,12 @@ func (f *backendFixture) run(ctx context.Context) error {
 	if err = elevate.DropAllPrivileges(true); err != nil {
 		return err
 	}
+	f.receipt.Phase = "native-physical-endpoint-DNS"
+	if err = fixturePhysicalEndpointDNS(ctx, gate, physicalIndex, physical); err != nil {
+		return err
+	}
+	f.receipt.EndpointPhysical = true
+
 	nativeDevice, err := tun.CreateTUN("R013BackendCI", 1370)
 	if err != nil {
 		return err
@@ -285,6 +292,15 @@ func (f *backendFixture) run(ctx context.Context) error {
 				return e
 			}
 			defer currentFactory.Close(context.Background())
+			resolver, e := r013prepare.NewTunnelEndpointResolver(netip.AddrPortFrom(currentTarget, 53), currentFactory, false)
+			if e != nil {
+				return e
+			}
+			addresses, e := resolver.LookupNetIP(work, "ip", "peer-fixture.invalid")
+			if e != nil || len(addresses) != 1 || addresses[0] != physical || resolver.TTL("peer-fixture.invalid") != 60*time.Second {
+				return errors.New("actual through-Wintun endpoint resolution failed")
+			}
+			f.receipt.EndpointTunnel = true
 			raw, e := engine.IpcGet()
 			if e != nil {
 				return e
@@ -565,7 +581,7 @@ func runBackendFixture(t *testing.T, stop bool) {
 		}
 		time.Sleep(30 * time.Millisecond)
 	}
-	passed := receipt.Success && receipt.Selected && receipt.SameTUN && receipt.VaultPreserved && receipt.Before > 0 && receipt.After > receipt.Before
+	passed := receipt.Success && receipt.Selected && receipt.SameTUN && receipt.VaultPreserved && receipt.EndpointPhysical && receipt.EndpointTunnel && receipt.Before > 0 && receipt.After > receipt.Before
 	if stop {
 		passed = passed && stopSent && receipt.StopWins
 	} else {
@@ -588,5 +604,53 @@ func runBackendFixture(t *testing.T, stop bool) {
 		t.Log("Real SCM Stop during actual DPAPI seed persistence cancelled owner, left membership/slot unavailable, did not undo manual stop or acknowledge stale success, and preserved source profiles/vault.")
 		return
 	}
-	t.Logf("Real primary DNS %d -> %d during encrypted candidate UNDER restrictive service-SID WFP; actual shared owner selected different keys/address/DNS/MTU on SAME raw Wintun, restored exact native backend after injected persist failure, refused stale choice, invalidated membership on raw UAPI edit. Real temporary secure-store DPAPI seed write/readback and rollback after an injected error AFTER writing; original source ciphertext and Auto vault unchanged. NOT owner-PC or complete hourly producer proof.", receipt.Before, receipt.After)
+	t.Logf("Real primary DNS %d -> %d during encrypted candidate UNDER restrictive service-SID WFP; actual shared owner selected different keys/address/DNS/MTU on SAME raw Wintun, restored exact native backend after injected persist failure, refused stale choice, invalidated membership on raw UAPI edit. Real explicit physical endpoint DNS and encrypted-through-Wintun endpoint DNS with protected sockets/TTL; real temporary secure-store DPAPI seed write/readback and rollback after an injected error AFTER writing; original source ciphertext and Auto vault unchanged. NOT owner-PC or complete hourly producer proof.", receipt.Before, receipt.After)
+}
+
+func fixturePhysicalEndpointDNS(ctx context.Context, gate *r013gate.Gate, index uint32, address netip.Addr) error {
+	server, err := net.ListenUDP("udp4", &net.UDPAddr{IP: address.AsSlice()})
+	if err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	server.SetReadDeadline(time.Now().Add(3 * time.Second))
+	go func() {
+		wire := make([]byte, 1232)
+		n, from, e := server.ReadFromUDP(wire)
+		if e != nil {
+			done <- e
+			return
+		}
+		var message dnsmessage.Message
+		if message.Unpack(wire[:n]) != nil || len(message.Questions) != 1 {
+			done <- errors.New("native physical DNS malformed query")
+			return
+		}
+		message.Response = true
+		message.Answers = []dnsmessage.Resource{{Header: dnsmessage.ResourceHeader{Name: message.Questions[0].Name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: 60}, Body: &dnsmessage.AResource{A: address.As4()}}}
+		reply, e := message.Pack()
+		if e == nil {
+			_, e = server.WriteToUDP(reply, from)
+		}
+		done <- e
+	}()
+	err = gate.Candidate(ctx, func(work context.Context, token r013gate.Token) error {
+		factory, e := r013gate.NewUDPFactory(protectedudp.Physical, index, 0, token)
+		if e != nil {
+			return e
+		}
+		defer factory.Close(context.Background())
+		target := netip.AddrPortFrom(address, uint16(server.LocalAddr().(*net.UDPAddr).Port))
+		resolver, e := r013prepare.NewPhysicalEndpointResolver(target, factory, false)
+		if e != nil {
+			return e
+		}
+		addresses, e := resolver.LookupNetIP(work, "ip", "peer-fixture.invalid")
+		if e != nil || len(addresses) != 1 || addresses[0] != address || resolver.TTL("peer-fixture.invalid") != 60*time.Second {
+			return errors.New("actual physical endpoint DNS failed")
+		}
+		return nil
+	})
+	server.Close()
+	return errors.Join(err, <-done)
 }
