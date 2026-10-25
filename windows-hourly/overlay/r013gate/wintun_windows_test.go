@@ -299,6 +299,11 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32
 		luid = winipcfg.LUID(native.(*tun.NativeTun).LUID())
 		binding := conn.NewStdNetBind()
 		engine = device.NewDevice(tracked, binding, device.NewLogger(device.LogLevelSilent, ""))
+		if !engine.SetPrimaryMutationFence(func(work func() error) error {
+			return gate.Primary(context.Background(), Stamp{}, func(context.Context) error { return work() })
+		}) {
+			return errors.New("primary device fence not installed")
+		}
 		if engine.IpcSet(primary.config) != nil || engine.Up() != nil {
 			return errors.New("native primary start failed")
 		}

@@ -69,4 +69,5 @@ jobs:
           path: |
             ${{ runner.temp }}/foundation/report
             ${{ runner.temp }}/foundation/source-evidence.json
+            ${{ runner.temp }}/foundation/device-fence-evidence.json
           if-no-files-found: error
