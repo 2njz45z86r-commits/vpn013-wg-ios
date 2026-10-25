@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 	"sync"
@@ -46,8 +47,11 @@ func Open() (*Gate, error) { return openNamed(productionName) }
 
 func verifyACL(handle windows.Handle) error {
 	sd, err := windows.GetSecurityInfo(handle, windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
-	if err != nil || sd == nil || sd.String() != objectACL {
-		return ErrUnavailable
+	if err != nil || sd == nil {
+		return fmt.Errorf("%w: reading kernel DACL: %v", ErrUnavailable, err)
+	}
+	if sd.String() != objectACL {
+		return fmt.Errorf("%w: kernel DACL differs: %s", ErrUnavailable, sd.String())
 	}
 	return nil
 }
@@ -74,9 +78,9 @@ func openNamed(name string) (*Gate, error) {
 		return nil, ErrUnavailable
 	}
 	fail := func() { windows.CloseHandle(mutex) }
-	if verifyACL(mutex) != nil {
+	if aclErr := verifyACL(mutex); aclErr != nil {
 		fail()
-		return nil, ErrUnavailable
+		return nil, aclErr
 	}
 	mapName, err := windows.UTF16PtrFromString(name + "-epoch")
 	if err != nil {
@@ -92,10 +96,10 @@ func openNamed(name string) (*Gate, error) {
 		fail()
 		return nil, ErrUnavailable
 	}
-	if verifyACL(mapping) != nil {
+	if aclErr := verifyACL(mapping); aclErr != nil {
 		windows.CloseHandle(mapping)
 		fail()
-		return nil, ErrUnavailable
+		return nil, aclErr
 	}
 	view, err := windows.MapViewOfFile(mapping, windows.FILE_MAP_READ|windows.FILE_MAP_WRITE, 0, 0, mappingSize)
 	if err != nil {
@@ -146,6 +150,22 @@ func (g *Gate) Current() Stamp {
 		return Stamp{}
 	}
 	return Stamp{atomic.LoadUint64((*uint64)(unsafe.Pointer(g.view + 16))), atomic.LoadUint64((*uint64)(unsafe.Pointer(g.view + 8)))}
+}
+
+// Abandonment persists in shared memory until an explicit, successful primary
+// observation/mutation recovers it. Releasing WAIT_ABANDONED alone must not
+// let the second candidate trust the previous crashed process's state.
+func (g *Gate) poisoned(write *uint64) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed || g.view == 0 {
+		return true
+	}
+	flag := (*uint64)(unsafe.Pointer(g.view + 24))
+	if write != nil {
+		atomic.StoreUint64(flag, *write)
+	}
+	return atomic.LoadUint64(flag) != 0
 }
 func (g *Gate) bump(expected Stamp) Stamp {
 	g.mu.Lock()
@@ -244,7 +264,12 @@ func (g *Gate) Candidate(parent context.Context, work func(context.Context, Toke
 	}
 	defer windows.ReleaseMutex(g.mutex)
 	if abandoned {
+		one := uint64(1)
+		g.poisoned(&one)
 		g.bump(Stamp{})
+		return ErrAbandoned
+	}
+	if g.poisoned(nil) {
 		return ErrAbandoned
 	}
 	epoch := g.Current()
@@ -310,16 +335,28 @@ func (g *Gate) Primary(parent context.Context, expected Stamp, work func(context
 	}
 	defer windows.ReleaseMutex(g.mutex)
 	defer g.bump(Stamp{})
+	if abandoned {
+		one := uint64(1)
+		g.poisoned(&one)
+	}
 	if abandoned && expected != (Stamp{}) {
 		return ErrAbandoned
 	}
 	if expected != (Stamp{}) && g.Current() != mine {
 		return ErrStale
 	}
+	if expected != (Stamp{}) && g.poisoned(nil) {
+		return ErrAbandoned
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	return work(ctx)
+	err = work(ctx)
+	if err == nil && ctx.Err() == nil && expected == (Stamp{}) {
+		zero := uint64(0)
+		g.poisoned(&zero)
+	}
+	return err
 }
 
 // A failed Close retains kernel objects/mapping until real work returns. It is
@@ -329,6 +366,9 @@ func (g *Gate) Close(ctx context.Context) error {
 		return ErrUnavailable
 	}
 	g.mu.Lock()
+	if !g.closed && g.view != 0 {
+		atomic.AddUint64((*uint64)(unsafe.Pointer(g.view+8)), 1)
+	}
 	g.closed = true
 	g.cancel()
 	g.mu.Unlock()

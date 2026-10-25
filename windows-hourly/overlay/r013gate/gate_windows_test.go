@@ -203,6 +203,14 @@ func TestExpectedStampIsOneShotAndMappingLifetimeCannotABA(t *testing.T) {
 	if count != 1 {
 		t.Fatal("Replayed mutation ran")
 	}
+	peer := testGate(t, name)
+	beforeClose := g.Current()
+	if e := peer.Close(context.Background()); e != nil {
+		t.Fatal(e)
+	}
+	if e := g.Primary(context.Background(), beforeClose, func(context.Context) error { count++; return nil }); !errors.Is(e, ErrStale) {
+		t.Fatal("A disappearing coordinator left an old choice valid")
+	}
 	if e := g.Close(context.Background()); e != nil {
 		t.Fatal(e)
 	}
@@ -241,8 +249,22 @@ func TestDeadProcessClosesSocketAndAbandonedCandidateIsRefused(t *testing.T) {
 	if !errors.Is(e, ErrAbandoned) || called {
 		t.Fatalf("Abandoned identity trusted: %v", e)
 	}
+	e = g.Candidate(context.Background(), func(context.Context, Token) error { called = true; return nil })
+	if !errors.Is(e, ErrAbandoned) || called {
+		t.Fatal("Second candidate cleared abandoned state without observation")
+	}
+	if e = g.Primary(context.Background(), Stamp{}, func(context.Context) error { return errors.New("observation failed") }); e == nil {
+		t.Fatal("Failed recovery reported success")
+	}
+	e = g.Candidate(context.Background(), func(context.Context, Token) error { called = true; return nil })
+	if !errors.Is(e, ErrAbandoned) || called {
+		t.Fatal("Failed recovery cleared poisoned state")
+	}
 	if e = g.Primary(context.Background(), Stamp{}, func(context.Context) error { return nil }); e != nil {
 		t.Fatal(e)
+	}
+	if e = g.Candidate(context.Background(), func(context.Context, Token) error { called = true; return nil }); e != nil || !called {
+		t.Fatal("Successful explicit recovery did not restore barrier")
 	}
 }
 
