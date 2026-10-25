@@ -53,7 +53,11 @@ func verifyACL(handle windows.Handle, fullAccess uint32) error {
 	// Windows maps GENERIC_ALL into the kernel object's specific mask. Preserve
 	// the same protected two-trustee DACL; do not accept additional ACEs/SIDs.
 	expected := fmt.Sprintf("D:P(A;;0x%x;;;SY)(A;;0x%x;;;BA)", fullAccess, fullAccess)
-	if sd.String() != objectACL && sd.String() != expected {
+	canonical, err := windows.SecurityDescriptorFromString(expected)
+	if err != nil {
+		return ErrUnavailable
+	}
+	if sd.String() != objectACL && sd.String() != canonical.String() {
 		return fmt.Errorf("%w: kernel DACL differs: %s", ErrUnavailable, sd.String())
 	}
 	return nil
