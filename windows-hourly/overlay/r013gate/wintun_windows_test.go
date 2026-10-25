@@ -472,9 +472,33 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(runtime, "jc=0\n") || strings.Contains(runtime, "h1=100\n") {
-			return errors.New("fresh backend retained preceding obfuscation")
+		field := func(text, key string) string {
+			for _, line := range strings.Split(text, "\n") {
+				if value, ok := strings.CutPrefix(line, key+"="); ok {
+					return value
+				}
+			}
+			return ""
 		}
+		// Upstream IpcGet omits zero junk fields. Compare the actual original
+		// fresh-engine defaults, rather than requiring a fabricated jc=0 line.
+		for _, key := range []string{"jc", "jmin", "jmax", "h1"} {
+			if field(runtime, key) != field(actual, key) {
+				return errors.New("fresh backend retained preceding obfuscation")
+			}
+		}
+		// Actual watcher ForceMTU and engine MTU reads run concurrently. Native
+		// notifications are bounded/coalesced and native close cannot race a send.
+		var mtuWork sync.WaitGroup
+		mtuWork.Add(1)
+		go func() {
+			defer mtuWork.Done()
+			for i := 0; i < 1000; i++ {
+				tracked.Device.(*tun.NativeTun).ForceMTU(1420 + i%2)
+			}
+		}()
+		mtuWork.Wait()
+		tracked.Device.(*tun.NativeTun).ForceMTU(1420)
 		originalIdentity, err := probe.PublicIdentityDigest(actual)
 		if err != nil {
 			return err

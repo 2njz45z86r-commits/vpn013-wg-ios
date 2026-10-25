@@ -25,5 +25,6 @@ assert before == {f: hashlib.sha256((root / f).read_bytes()).hexdigest() for f i
 subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-device-fence.py'),str(root)],check=True)
 subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-service-lifecycle.py'),str(root)],check=True)
 subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-observation.py'),str(root)],check=True)
+subprocess.run([sys.executable,str(checkout/'windows-hourly/patch-owned-tun.py'),str(root)],check=True)
 (workspace / 'source-evidence.json').write_text(json.dumps({'baseline_sha256': hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest(), 'module_files': before, 'scope': 'source-only barrier and socket primitives; NOT production lifecycle or Wintun integration'}, indent=2))
 print(root)
