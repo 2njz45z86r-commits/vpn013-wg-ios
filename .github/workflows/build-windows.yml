@@ -23,6 +23,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Hide unregistered candidate with incomplete UI evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit windows-1.4.1 --repo $env:GITHUB_REPOSITORY --draft --notes 'Unregistered candidate. Its asynchronous native UI fixture reported before all assertions completed. Do not use this candidate; the checked replacement will be published separately. Core and native VPN/MSI checks were independent.'
+          if ($LASTEXITCODE -ne 0) {throw 'Could not quarantine unregistered candidate'}
       - name: Fetch exact reviewed corresponding source
         run: |
           $archive=Join-Path $env:RUNNER_TEMP 'windows-source.zip'
@@ -90,5 +96,5 @@ jobs:
           Independent R013 client, not an official Amnezia/WireGuard release. Application/MSI publisher signature is absent; Wintun retains its original valid vendor signature. Corresponding source and original license texts are attached/included. No customer keys or configurations are present.
           '@
           $notes | Set-Content -LiteralPath 'installer/dist/release-notes.md' -Encoding utf8
-          gh release create windows-1.4.1 $msi $sourceNamed 'installer/dist/windows-build-provenance.json' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'VPN013 WG Windows 1.4.1' --notes-file 'installer/dist/release-notes.md'
+          gh release create windows-1.4.1-r2 $msi $sourceNamed 'installer/dist/windows-build-provenance.json' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'VPN013 WG Windows 1.4.1' --notes-file 'installer/dist/release-notes.md'
           if ($LASTEXITCODE -ne 0) {throw 'Release publication failed'}

@@ -164,6 +164,15 @@ func (tp *TunnelsPage) onPingAll(button *walk.PushButton) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	tp.pingCancel = cancel
 	button.SetText("Остановить тест")
+	// Auto's old endpoint result must not survive a subsequent stopped/unknown
+	// membership scan. An inactive Auto has no current peer to measure.
+	tp.listView.model.pings[r013.AutoName] = "—"
+	for index, tunnel := range tp.listView.model.tunnels {
+		if tunnel.Name == r013.AutoName {
+			tp.listView.model.PublishRowChanged(index)
+			break
+		}
+	}
 	go func() {
 		defer cancel()
 		defer tp.Synchronize(func() { tp.pingCancel = nil; button.SetText("Проверить пинг") })
@@ -171,17 +180,36 @@ func (tp *TunnelsPage) onPingAll(button *walk.PushButton) {
 		if err != nil {
 			return
 		}
-		type target struct{ name, host string }
+		type target struct{ name, host, identity string }
 		targets := []target{}
 		for _, tunnel := range tunnels {
 			if ctx.Err() != nil {
 				break
 			}
-			c, e := tunnel.StoredConfig()
+			var c conf.Config
+			var e error
+			if tunnel.Name == r013.AutoName {
+				state, stateErr := tunnel.State()
+				if stateErr != nil || state != manager.TunnelStarted {
+					continue
+				}
+				c, e = tunnel.RuntimeConfig()
+			} else {
+				c, e = tunnel.StoredConfig()
+			}
 			if e != nil || len(c.Peers) != 1 || c.Peers[0].Endpoint.IsEmpty() {
 				continue
 			}
-			targets = append(targets, target{tunnel.Name, c.Peers[0].Endpoint.Host})
+			var pingTarget r013.CurrentPingTarget
+			if tunnel.Name == r013.AutoName {
+				pingTarget, e = r013.CurrentTarget(tunnel.Name, &c, nil)
+			} else {
+				pingTarget, e = r013.CurrentTarget(tunnel.Name, nil, &c)
+			}
+			if e != nil {
+				continue
+			}
+			targets = append(targets, target{tunnel.Name, pingTarget.Host, pingTarget.Identity})
 		}
 		jobs := make(chan target)
 		var workers sync.WaitGroup
@@ -191,6 +219,15 @@ func (tp *TunnelsPage) onPingAll(button *walk.PushButton) {
 				defer workers.Done()
 				for item := range jobs {
 					delay, e := r013.Echo(ctx, item.host, nil, 2500*time.Millisecond)
+					if item.name == r013.AutoName {
+						tunnel := manager.Tunnel{Name: item.name}
+						state, stateErr := tunnel.State()
+						live, liveErr := tunnel.RuntimeConfig()
+						fresh, targetErr := r013.CurrentTarget(item.name, &live, nil)
+						if stateErr != nil || state != manager.TunnelStarted || liveErr != nil || targetErr != nil || fresh.Identity != item.identity {
+							continue
+						}
+					}
 					text := "Нет ответа"
 					if e == nil {
 						if delay < time.Millisecond {

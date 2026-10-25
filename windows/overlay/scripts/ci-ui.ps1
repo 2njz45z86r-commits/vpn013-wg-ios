@@ -17,6 +17,9 @@ foreach($scenario in @('manual-no-stats','auto','auto-no-stats')) {
   if (!(Test-Path -LiteralPath $env:VPN013_PREVIEW_VERIFY)) {throw "Missing UI report: $scenario"}
   $report=Get-Content -LiteralPath $env:VPN013_PREVIEW_VERIFY -Raw | ConvertFrom-Json
   if ($process.ExitCode -ne 0 -or !$report.passed) {throw "Native UI fixture failed $scenario : $($report.failure)"}
+  $expectedChecks=5
+  if ($scenario -eq 'auto-no-stats') {$expectedChecks=3}
+  if ($report.checks.Count -ne $expectedChecks -or $report.actualLoopbackEcho -ne ($scenario -ne 'auto-no-stats')) {throw "Incomplete native UI proof: $scenario"}
   $report | ConvertTo-Json -Depth 6
 }
 Remove-Item Env:VPN013_PREVIEW_VERIFY,Env:VPN013_PREVIEW_SCENARIO

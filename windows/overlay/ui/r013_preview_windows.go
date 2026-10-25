@@ -38,12 +38,27 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 	scenario := os.Getenv("VPN013_PREVIEW_SCENARIO")
 	checks := []string{}
 	var failure string
+	echoVerified := false
+	// Walk Synchronize queues work; a test must wait for actual UI completion.
+	// A hung UI fails the external CI process timeout, never a partial pass.
+	syncUI := func(fn func()) {
+		done := make(chan struct{})
+		window.Synchronize(func() { defer close(done); fn() })
+		<-done
+	}
 	defer func() {
-		data, _ := json.MarshalIndent(map[string]any{"scenario": scenario, "checks": checks, "passed": failure == "", "failure": failure, "syntheticVPN": true, "actualLoopbackEcho": scenario != "auto-no-stats"}, "", "  ")
+		minimum := 5
+		if scenario == "auto-no-stats" {
+			minimum = 3
+		}
+		if len(checks) < minimum && failure == "" {
+			failure = "Required UI checks did not execute"
+		}
+		data, _ := json.MarshalIndent(map[string]any{"scenario": scenario, "checks": checks, "passed": failure == "", "failure": failure, "syntheticVPN": true, "actualLoopbackEcho": echoVerified}, "", "  ")
 		if os.WriteFile(destination, data, 0600) != nil {
 			failure = "Could not write verification report"
 		}
-		window.Synchronize(func() {
+		syncUI(func() {
 			if failure != "" {
 				walk.App().Exit(1)
 			} else {
@@ -54,7 +69,7 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 	deadline := time.Now().Add(15 * time.Second)
 	ready := false
 	for !ready && time.Now().Before(deadline) {
-		window.Synchronize(func() { ready = window.currentCard.current.active })
+		syncUI(func() { ready = window.currentCard.current.active })
 		if !ready {
 			time.Sleep(30 * time.Millisecond)
 		}
@@ -63,7 +78,7 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 		failure = "Current fixture did not become active"
 		return
 	}
-	window.Synchronize(func() {
+	syncUI(func() {
 		model := window.tunnelsPage.listView.model
 		if len(model.tunnels) == 0 || model.tunnels[0].Name != r013.AutoName {
 			failure = "Auto not first"
@@ -104,18 +119,19 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 	}
 	complete := false
 	for !complete && time.Now().Before(deadline) {
-		window.Synchronize(func() { complete = window.currentCard.pingCancel == nil })
+		syncUI(func() { complete = window.currentCard.pingCancel == nil })
 		if !complete {
 			time.Sleep(30 * time.Millisecond)
 		}
 	}
-	window.Synchronize(func() {
+	syncUI(func() {
 		text := window.currentCard.result.Text()
 		if !complete || !strings.Contains(text, "мс") {
 			failure = fmt.Sprintf("Actual loopback current ping did not complete: %s", text)
 			return
 		}
 		checks = append(checks, "Current button performs real OS loopback ICMP and displays milliseconds")
+		echoVerified = true
 		old := window.currentCard.current
 		changed := old
 		changed.target.Identity = "different-test-session"
