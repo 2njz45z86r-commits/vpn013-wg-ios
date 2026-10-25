@@ -63,6 +63,7 @@ func TestMain(m *testing.M) {
 }
 
 type systemReceipt struct {
+	Phase             string `json:"phase,omitempty"`
 	Ready             bool   `json:"ready"`
 	Drained           bool   `json:"drained"`
 	Success           bool   `json:"success"`
@@ -191,6 +192,10 @@ func (f *systemFixture) run(ctx context.Context) error {
 		return err
 	}
 	f.receipt.PrivilegesDropped = true
+	f.receipt.Phase = "post-drop"
+	if err = f.write(); err != nil {
+		return err
+	}
 	if err = proveSystemVaultRead(); err != nil {
 		return err
 	}
@@ -209,7 +214,7 @@ func (f *systemFixture) run(ctx context.Context) error {
 		return err
 	}
 	if f.native {
-		before, after, err := runNativeWintunProof(ctx, gate, strings.TrimPrefix(f.object, `Global\VPN013-Probe-CI-`))
+		before, after, err := runNativeWintunProof(ctx, gate, strings.TrimPrefix(f.object, `Global\VPN013-Probe-CI-`), func(phase string) error { f.receipt.Phase = phase; return f.write() })
 		if err != nil {
 			return err
 		}
@@ -310,7 +315,9 @@ func runSystemFixtureTest(t *testing.T, native bool) {
 	if native {
 		args = append(args, "wintun")
 	}
-	service, err := scm.CreateService(name, exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, DisplayName: name}, args...)
+	// Match the real tunnel installer: WFP's process-security descriptor requires
+	// the service SID. A bare SYSTEM token alone is not the same native context.
+	service, err := scm.CreateService(name, exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, DisplayName: name, SidType: windows.SERVICE_SID_TYPE_UNRESTRICTED}, args...)
 	if err != nil {
 		t.Fatal(err)
 	}

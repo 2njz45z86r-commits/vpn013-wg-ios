@@ -273,7 +273,7 @@ func nativeStream(ctx context.Context, factory *protectedudp.Factory, target net
 	return ctx.Err()
 }
 
-func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32, uint32, error) {
+func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string, progress func(string) error) (uint32, uint32, error) {
 	index, physical, err := observeCIPhysical()
 	if err != nil {
 		return 0, 0, err
@@ -453,10 +453,23 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32
 			return err
 		}
 		for _, permissive := range []bool{true, false, true} {
+			if err := progress(fmt.Sprintf("before-WFP-%t", permissive)); err != nil {
+				return err
+			}
 			if err := firewall.EnableFirewall(uint64(luid), permissive, []net.IP{net.ParseIP(primary.target.String()).To4()}); err != nil {
 				return fmt.Errorf("post-drop WFP recreation: %w", err)
 			}
+			if err := progress(fmt.Sprintf("opened-WFP-%t", permissive)); err != nil {
+				firewall.DisableFirewall()
+				return err
+			}
 			firewall.DisableFirewall()
+			if err := progress(fmt.Sprintf("closed-WFP-%t", permissive)); err != nil {
+				return err
+			}
+		}
+		if err := progress("before-fresh-backend"); err != nil {
+			return err
 		}
 		if err := engine.IpcSet("jc=1\njmin=32\njmax=32\nh1=100\n"); err != nil {
 			return err
@@ -529,6 +542,9 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32
 		return nil
 	})
 	if err != nil {
+		return before, after, err
+	}
+	if err = progress("fresh-backend-ready"); err != nil {
 		return before, after, err
 	}
 	guard, err = probe.NewActiveGuard(probe.ActiveState{Known: true, Configuration: actual})
