@@ -16,6 +16,7 @@ func TestWorkingMemberRequiresExactSettingsAndUniqueSnapshot(t *testing.T) {
 	alias, _ := CopyConfig(original)
 	alias.Name = "alias"
 	alias.Interface.MTU = 1300
+	alias.Peers[0].Endpoint.Port++
 	wire, _ := json.Marshal([]conf.Config{original, alias})
 	cipher, err := dpapi.Encrypt(wire, purpose)
 	if err != nil {
@@ -57,10 +58,10 @@ func TestWorkingMemberRequiresExactSettingsAndUniqueSnapshot(t *testing.T) {
 	duplicate.Name = "another label"
 	wire, _ = json.Marshal([]conf.Config{original, duplicate})
 	cipher, _ = dpapi.Encrypt(wire, purpose)
-	snapshot, err = Decode(cipher)
-	if err != nil {
-		t.Fatal(err)
+	if _, err = Decode(cipher); err == nil {
+		t.Fatal("legacy duplicate endpoint/key identity accepted")
 	}
+	snapshot = Snapshot{members: []conf.Config{original, duplicate}, digests: []string{"first", "second"}, revision: string(make([]byte, 64))}
 	if index, _, err := snapshot.WorkingMember(original); err == nil || index != -1 {
 		t.Fatal("ambiguous same settings guessed an index")
 	}

@@ -113,7 +113,7 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 	if err != nil {
 		return errBackendUnknown
 	}
-	actual, err := conf.FromUAPI(strings.NewReader(raw), &old)
+	actual, err := conf.FromUAPI(strings.NewReader(raw+"\n"), &old)
 	if err != nil || len(actual.Peers) != 1 {
 		return errBackendUnknown
 	}
@@ -179,7 +179,7 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 		if e != nil || nowIdentity != identity {
 			return current, errBackendUnknown
 		}
-		nowActual, e := conf.FromUAPI(strings.NewReader(now), &old)
+		nowActual, e := conf.FromUAPI(strings.NewReader(now+"\n"), &old)
 		if e != nil || len(nowActual.Peers) != 1 || nowActual.Peers[0].Endpoint != rollback.Peers[0].Endpoint {
 			return current, errBackendUnknown
 		}

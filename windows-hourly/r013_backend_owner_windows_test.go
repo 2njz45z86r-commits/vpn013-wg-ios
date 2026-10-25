@@ -77,7 +77,7 @@ func (f *backendFixture) Execute(_ []string, requests <-chan svc.ChangeRequest, 
 }
 func fixtureBackendConfig(peer nativePeerFixture, name string, dnsLast byte, mtu uint16) (*conf.Config, error) {
 	seed := &conf.Config{Name: name, Interface: conf.Interface{Addresses: []conf.IPCidr{{IP: net.ParseIP(peer.source.String()).To4(), Cidr: 32}}, DNS: []net.IP{{10, 213, 99, dnsLast}}, MTU: mtu}}
-	c, err := conf.FromUAPI(strings.NewReader(peer.config), seed)
+	c, err := conf.FromUAPI(strings.NewReader(peer.config+"\n"), seed)
 	if err != nil || len(c.Peers) != 1 {
 		return nil, errBackendUnknown
 	}
