@@ -54,3 +54,23 @@ No MSI is installed by this development workflow. Runtime fixtures are distinct
 from final UI/MSI acceptance and from physical-device or field validation.
 Module versions and sums stay pinned. No customer profiles, bot code, signing
 credentials or private server material belong in this overlay.
+
+
+## Existing-TUN network handover phase (not a release)
+
+The watcher now acquires the primary barrier before its setup lock, has checked
+callback retirement which preserves WFP, and explicitly configures an existing
+TUN without waiting for another MibAdd event. Retirement checks each owned row
+delete error (the pinned SDK address-flush method discards those errors).
+Explicit apply deep-copies the source and disables foreign disconnected-interface
+address cleanup; required IPv6 cannot be silently omitted. Preferred addresses,
+routes, DNS servers and explicit MTU are independently read back. Search domains
+are applied by the existing SDK but this phase does not claim full native search
+list readback or exact OS automatic-MTU equivalence.
+
+A disposable SYSTEM/session0 fixture checks real Wintun address/route/DNS/MTU
+apply, checked retirement with old WFP retained, and changed reapply on the same
+raw TUN after unchanged privilege dropping. It uses a recording bind adapter: it
+is NOT an encrypted packet-admission or actual backend-choice proof. Existing
+real-AWG/service regression tests remain required. Native packages are serialized
+to avoid concurrent global WFP state changes. No owner PC execution or installer.
