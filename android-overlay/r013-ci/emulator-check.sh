@@ -53,7 +53,7 @@ test -s "$RUNNER_TEMP/r013-synthetic-candidate.conf"
 fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic.conf")
 candidate_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic-candidate.conf")
 adb shell am instrument -w -r -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
-grep -E '^OK \([0-9]+ tests?\)' output/review/instrumentation.txt
+grep -E '^OK \(11 tests\)[[:space:]]*$' output/review/instrumentation.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/instrumentation.txt
 unset fixture candidate_fixture
 adb pull /sdcard/Android/data/com.vpn013.awg.debug/files/review output/review/screenshots

@@ -4,7 +4,7 @@ package org.amnezia.awg.r013;
 import java.util.HashSet;
 import java.util.Set;
 
-/** Pure decision state; a single VPN worker owns connection changes and probes. */
+/** Pure decisions; backend ownership serializes health and measured selection. */
 public final class AutoPolicy {
     public static final double MAXIMUM_LATENCY_MS = 1200;
     public enum Action { STAY, SWITCH, WAIT, STOPPED }
