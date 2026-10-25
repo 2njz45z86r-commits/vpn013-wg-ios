@@ -74,6 +74,9 @@ class R013HomeActivity : AppCompatActivity() {
     private var pendingTunnel: ObservableTunnel? = null
     private val pings = HashMap<String, Pair<String, Long?>>()
     private val fileResult = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) importFile(uri) }
+    private val trialNotificationsPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        NativeTrial.show(this) { listSignature = "" }
+    }
     private val permissionResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val pending = pendingTunnel; pendingTunnel = null
         if (pending != null && result.resultCode == RESULT_OK) connect(pending, true)
@@ -150,10 +153,13 @@ class R013HomeActivity : AppCompatActivity() {
         handleSharedFile(intent)
         lifecycleScope.launch { ClientUpdates.checkDaily(this@R013HomeActivity) { message -> feedback(message) } }
     }
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleSharedFile(intent) }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleSharedFile(intent); TrialExpiryNotifications.handleOpen(this,intent) }
     override fun onResume() {
         super.onResume()
         ClientUpdates.resumePendingInstall(this)
+        TrialExpiryNotifications.scheduleAll(this)
+        TrialExpiryNotifications.handleOpen(this,intent)
+        NativeTrial.resumeRenewal(this) { listSignature = "" }
     }
     private fun handleSharedFile(intent: Intent) {
         @Suppress("DEPRECATION") val uri = if (intent.action == Intent.ACTION_SEND) intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) else if (intent.action == Intent.ACTION_VIEW) intent.data else null
@@ -166,14 +172,21 @@ class R013HomeActivity : AppCompatActivity() {
         box.addView(text("Добавить профиль", 22, true).apply { setPadding(dp(12), dp(12), dp(12), dp(16)) })
         val items = listOf<Pair<String, () -> Unit>>(
             "Купить конфигурацию" to { open(ClientProtocol.BOT) },
-            "1 час бесплатно" to { open(ClientProtocol.WEBSITE) },
+            NativeTrial.LABEL to {
+                val notificationState=getSharedPreferences("trial-notification-permission",MODE_PRIVATE)
+                if (android.os.Build.VERSION.SDK_INT >= 33 && !notificationState.getBoolean("asked",false) && androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    notificationState.edit().putBoolean("asked",true).apply()
+                    trialNotificationsPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                } else NativeTrial.show(this) { listSignature = "" }
+            },
+            "Продлить конфигурацию" to { NativeTrial.renewalMenu(this) },
             "Создать режим Авто" to { createAuto() },
             "Импорт из файла или ZIP" to { fileResult.launch(arrayOf("*/*")) },
             "Сканировать QR-код" to { qrResult.launch(ScanOptions().setOrientationLocked(false).setBeepEnabled(false).setPrompt("Конфигурация AmneziaWG")) },
             "Создать с нуля" to { startActivity(Intent(this, TunnelCreatorActivity::class.java)) }
         )
         items.forEach { (label, action) -> box.addView(button(label) { dialog.dismiss(); action() }.apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; minimumHeight = dp(52) }) }
-        dialog.setContentView(box); dialog.show()
+        dialog.setContentView(ScrollView(this).apply { addView(box) }); dialog.show()
     }
     private fun settings() {
         MaterialAlertDialogBuilder(this).setTitle("VPN013").setItems(arrayOf("Обновить конфигурации", "Проверить обновление приложения", "Настройки и журнал", "Купить конфигурацию")) { _, index ->

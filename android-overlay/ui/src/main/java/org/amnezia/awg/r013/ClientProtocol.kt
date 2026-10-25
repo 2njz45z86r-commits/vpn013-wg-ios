@@ -12,12 +12,14 @@ object ClientProtocol {
     val origins = listOf("https://connect.vpn555.shop:8443", "https://connect.vpn555.shop:8444")
     private val id = Regex("^[a-f0-9]{12}$")
     private val hash = Regex("^[a-f0-9]{64}$")
+    @Volatile private var nativeTrialFixture: ((String,String?) -> JSONObject)?=null
+    fun installNativeTrialDebugFixture(value: ((String,String?) -> JSONObject)?) { check(org.amnezia.awg.BuildConfig.DEBUG);nativeTrialFixture=value }
     fun access(text: String): JSONObject {
         require(text.toByteArray(Charsets.UTF_8).size <= 1_048_576)
         val d = JSONObject(text)
         require(d.getInt("schema") == 1 && d.getString("kind") == "vpn013-access" &&
             Regex("^[A-Za-z0-9_-]{43}$").matches(d.getString("capability"))) { "Документ заявки повреждён" }
-        snapshot(d.getJSONObject("snapshot")); return d
+        snapshot(d.getJSONObject("snapshot")); NativeTrial.validateTrial(d); return d
     }
     /** Bind the Android-preferred files by exact cryptographic/endpoint identity.
      * A legacy iPhone manifest must never replace Android-specific routes or MTU.
@@ -64,7 +66,7 @@ object ClientProtocol {
     fun apply(registry: ProfileRegistry, document: JSONObject): Int {
         val checked = access(document.toString()); val snapshot = checked.getJSONObject("snapshot")
         check(snapshot.getLong("expiry") > System.currentTimeMillis()) { "Доступ закончился. Откройте «Мои заявки» в боте." }
-        return registry.vault.edit { root ->
+        val result = registry.vault.edit { root ->
             val order = snapshot.getString("orderID"); val orders = root.getJSONObject("orders"); val profiles = root.getJSONObject("profiles")
             val previous = orders.optJSONObject(order)
             val mapping = previous?.getJSONObject("mapping") ?: JSONObject()
@@ -106,11 +108,14 @@ object ClientProtocol {
             orders.put(order, JSONObject().put("document", checked).put("mapping", newMapping))
             servers.length()
         }
+        TrialExpiryNotifications.scheduleAll(org.amnezia.awg.Application.get())
+        return result
     }
     /** Credentials are sent only to fixed HTTPS origins, never to redirects. */
     fun request(path: String, capability: String? = null): JSONObject {
         require(path.matches(Regex("^/client/(releases/vpn013-wg/android|awg/[a-f0-9]{12}/android)$")))
         if (capability != null) require(Regex("^[A-Za-z0-9_-]{43}$").matches(capability))
+        if (org.amnezia.awg.BuildConfig.DEBUG) nativeTrialFixture?.let { return it(path,capability) }
         var last: Exception? = null
         for (origin in origins) {
             val connection = URL(origin + path).openConnection() as HttpsURLConnection

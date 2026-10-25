@@ -32,7 +32,8 @@ object ClientUpdates {
     private var applying = false
     private var resumingInstall = false
     private val failedPending = HashMap<String, String>()
-    suspend fun refreshOrders(): String {
+    suspend fun refreshOrders(onlyOrder: String? = null): String {
+        if (onlyOrder != null) require(Regex("^[a-f0-9]{12}$").matches(onlyOrder))
         check(!refreshing) { "Обновление конфигураций уже выполняется" }
         refreshing = true
         try {
@@ -40,6 +41,7 @@ object ClientUpdates {
         val orders = withContext(Dispatchers.IO) { registry.vault.read().getJSONObject("orders") }
         if (orders.length() == 0) return "Нет привязанных заявок. Импортируйте ZIP с документом VPN013-Access.json."
         for (order in orders.keys()) {
+            if (onlyOrder != null && order != onlyOrder) continue
             val document = orders.getJSONObject(order).getJSONObject("document")
             val snapshot = withContext(Dispatchers.IO) {
                 ClientProtocol.request("/client/awg/$order/android", document.getString("capability")).also { ClientProtocol.snapshot(it, order) }

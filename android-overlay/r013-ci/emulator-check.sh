@@ -64,6 +64,10 @@ adb shell am instrument -w -r -e initialInstallPermission denied -e class org.am
 grep -E '^OK \(1 test\)[[:space:]]*$' output/review/update-install-flow.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/update-install-flow.txt
 adb shell appops set com.vpn013.awg.debug ACTIVATE_VPN allow
+adb shell pm grant com.vpn013.awg.debug android.permission.POST_NOTIFICATIONS
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013NativeTrialTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/native-trial-flow.txt
+grep -E '^OK \(5 tests\)[[:space:]]*$' output/review/native-trial-flow.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/native-trial-flow.txt
 (cd tunnel/tools/libwg-go && go run ../../../r013-ci/peer.go) > "$RUNNER_TEMP/r013-peer.log" 2>&1 &
 peer_pid=$!
 # The EXIT trap preserves native failure evidence before emulator teardown.
