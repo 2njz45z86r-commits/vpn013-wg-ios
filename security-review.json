@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-25T22:11:00.121115+00:00",
-  "source_sha256": "836a7c853eb7c4cbc7fbf20b9a1eb696a2abc94322b17184a5b414908669a86b",
-  "source_commit_reviewed": "1caf50dea2f3b2a602a5cca1d9aef3e34a2ca000",
+  "reviewed_at": "2026-10-25T22:18:12.955954+00:00",
+  "source_sha256": "75bb1040397f295eced00ccf3507d2335fc99e0737f422ae1c84a2d7598ae797",
+  "source_commit_reviewed": "4ec07f16049df6ed9b48a4281eff3634ac12b57a",
   "scope_complete": false,
   "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/android-draft",
   "baseline_only": false,
@@ -179,7 +179,7 @@
     }
   ],
   "baseline_report_ref": "private-local:vpn013-bot-migration-20261025/baseline",
-  "review_note": "Three-platform native3day validation source. Nine new runtime/native checks remain unverified. Windows109inventory not yet executed; no installer release approval. Owner source-validation exception is explicit.",
+  "review_note": "Windows native event-handler type fix and responsive renewal UI. Android validation40238397342 passed; iOS native run pending. New server runtime audit and Windows acceptance remain unverified. Client source validation only.",
   "validation_only_authorization": {
     "source": "explicit owner reply in current task",
     "scope": "Public client source and free validation while audit is incomplete",

@@ -211,7 +211,7 @@ func (tp *TunnelsPage) onNativeTrial() {
 			cancel()
 		}
 	})
-	disposal := tp.Disposing().Attach(cancel)
+	disposal := tp.Disposing().Attach(func() { cancel() })
 	defer tp.Disposing().Detach(disposal)
 	go func() {
 		info, count, e := acquireNativeTrial(ctx, func() error {
@@ -263,7 +263,10 @@ func (tp *TunnelsPage) offerNativeRenewal(id, url string, expired bool) {
 	if walk.MsgBox(tp.Form(), title, "После оплаты и ручного подтверждения в боте продлятся прежние профили и ключи. Повторный импорт не нужен.\n\nПерейти к продлению?", walk.MsgBoxYesNo|walk.MsgBoxIconInformation) != walk.DlgCmdYes {
 		return
 	}
-	clientStateLock.Lock()
+	if !clientStateLock.TryLock() {
+		showErrorCustom(tp.Form(), title, "Проверка конфигураций ещё выполняется. Повторите позже.")
+		return
+	}
 	state, err := readClientState()
 	if err == nil {
 		if state.RenewalsAwaitingReturn == nil {
@@ -287,7 +290,10 @@ func (tp *TunnelsPage) onNativeRenewal() {
 	if r013Preview {
 		return
 	}
-	clientStateLock.Lock()
+	if !clientStateLock.TryLock() {
+		showErrorCustom(tp.Form(), "Продление", "Проверка конфигураций ещё выполняется. Повторите позже.")
+		return
+	}
 	state, err := readClientState()
 	clientStateLock.Unlock()
 	if err != nil {
