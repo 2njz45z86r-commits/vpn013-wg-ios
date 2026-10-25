@@ -18,7 +18,7 @@ root = workspace / 'vpn013-wg-windows'
 assert (root / 'go.mod').is_file()
 before = {f: hashlib.sha256((root / f).read_bytes()).hexdigest() for f in ('go.mod', 'go.sum')}
 overlay = checkout / 'windows-hourly' / 'overlay'
-for package in ('r013probe', 'r013gate', 'r013winudp','r013vault'):
+for package in ('r013probe', 'r013gate', 'r013winudp','r013vault','r013tun'):
     assert not (root / package).exists()
     shutil.copytree(overlay / package, root / package)
 assert before == {f: hashlib.sha256((root / f).read_bytes()).hexdigest() for f in before}

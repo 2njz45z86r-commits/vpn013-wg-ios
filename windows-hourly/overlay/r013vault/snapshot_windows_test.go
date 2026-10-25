@@ -56,12 +56,16 @@ func TestLegacyDPAPIVaultSnapshotPreservesKeysSettingsAndDeepClone(t *testing.T)
 	if err != nil || len(digest) != 64 || first.Interface.PrivateKey != original[0].Interface.PrivateKey || first.Peers[0].PublicKey != original[0].Peers[0].PublicKey || first.Interface.IPackets["I1"] != "fixture-preserved" {
 		t.Fatal("legacy key/settings changed")
 	}
+	beforeClone, _ := json.Marshal(first)
 	first.Interface.PrivateKey[0] ^= 1
 	first.Interface.Addresses[0].IP[0] ^= 1
 	first.Interface.IPackets["I1"] = "changed"
 	first.Peers[0].AllowedIPs[0].IP[0] ^= 1
 	second, again, _ := snapshot.Member(0)
-	if second.Interface.PrivateKey != original[0].Interface.PrivateKey || second.Interface.IPackets["I1"] != "fixture-preserved" || again != digest || second.Interface.Addresses[0].IP[0] != original[0].Interface.Addresses[0].IP[0] {
+	afterClone, _ := json.Marshal(second)
+	// net.IP's JSON decoder normalizes IPv4 to a 16-byte representation;
+	// compare the address and complete canonical wire, not slice byte zero.
+	if second.Interface.PrivateKey != original[0].Interface.PrivateKey || second.Interface.IPackets["I1"] != "fixture-preserved" || again != digest || !second.Interface.Addresses[0].IP.Equal(original[0].Interface.Addresses[0].IP) || !second.Peers[0].AllowedIPs[0].IP.Equal(original[0].Peers[0].AllowedIPs[0].IP) || string(beforeClone) != string(afterClone) {
 		t.Fatal("caller mutated immutable vault snapshot")
 	}
 	if string(encrypted) != string(before) {

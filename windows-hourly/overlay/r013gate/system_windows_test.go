@@ -388,6 +388,7 @@ func runSystemFixtureTest(t *testing.T, native bool) {
 	}
 	if native {
 		t.Logf("Real Wintun DNS stream %d -> %d during separate AWG candidate; native primary unchanged; same-method choice and active-alias exclusion confirmed", receipt.StreamBefore, receipt.StreamAfter)
+		t.Log("Exclusive native TUN leases survived real primary engine retirement; fresh backend reset omitted obfuscation fields, preserved identity and same TUN, authenticated DNS again after actual privilege drop")
 	}
 	t.Log("SCM SYSTEM/session0 created Global barrier before actual DropAllPrivileges(true); post-drop reopen, pinned UDP echo, cross-session cancellation and real-close drain confirmed")
 }

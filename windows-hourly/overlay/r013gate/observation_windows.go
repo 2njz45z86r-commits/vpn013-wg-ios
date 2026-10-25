@@ -33,7 +33,7 @@ type Observation struct {
 }
 
 func (o Observation) Validate(token Token, name string, pid uint32) error {
-	if !token.Valid() || o.Version != ObservationVersion || o.Name != name || o.PID == 0 || o.PID != pid || o.Stamp != token.Stamp() || !o.Ready || o.Dirty || o.Scripts || o.TunnelIndex == 0 || o.Physical4 == 0 || o.TunnelIndex == o.Physical4 {
+	if !token.Valid() || o.Version != ObservationVersion || o.Name != name || o.PID == 0 || o.PID != pid || o.Stamp != token.Stamp() || !o.Ready || o.Dirty || o.Scripts || o.TunnelIndex == 0 || o.Physical4 == 0 || o.TunnelIndex == o.Physical4 || o.TunnelIndex == o.Physical6 {
 		return ErrUnavailable
 	}
 	digest, err := hex.DecodeString(o.Identity)

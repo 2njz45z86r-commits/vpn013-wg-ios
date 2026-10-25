@@ -27,6 +27,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 	probe "github.com/amnezia-vpn/amneziawg-windows-client/r013probe"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013probe/protectedudp"
+	"github.com/amnezia-vpn/amneziawg-windows-client/r013tun"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/winipcfg"
 	"golang.org/x/net/dns/dnsmessage"
 	"golang.org/x/sys/windows"
@@ -287,6 +288,7 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32
 	}
 	defer candidate.device.Close()
 	var tracked *countedNativeTun
+	var relay *r013tun.Relay
 	var engine *device.Device
 	var luid winipcfg.LUID
 	var tunnelIndex uint32
@@ -296,9 +298,17 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32
 			return err
 		}
 		tracked = &countedNativeTun{Device: native}
+		relay, err = r013tun.New(tracked)
+		if err != nil {
+			return err
+		}
+		lease, err := relay.Open()
+		if err != nil {
+			return err
+		}
 		luid = winipcfg.LUID(native.(*tun.NativeTun).LUID())
 		binding := conn.NewStdNetBind()
-		engine = device.NewDevice(tracked, binding, device.NewLogger(device.LogLevelSilent, ""))
+		engine = device.NewDevice(lease, binding, device.NewLogger(device.LogLevelSilent, ""))
 		if !engine.SetPrimaryMutationFence(func(work func() error) error {
 			return gate.Primary(context.Background(), Stamp{}, func(context.Context) error { return work() })
 		}) {
@@ -346,6 +356,9 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32
 		}
 		if engine != nil {
 			engine.Close()
+		}
+		if relay != nil {
+			relay.Close()
 		} else if tracked != nil {
 			tracked.Close()
 		}
@@ -422,6 +435,85 @@ func runNativeWintunProof(ctx context.Context, gate *Gate, nonce string) (uint32
 			return errors.New("native current traffic did not continue during encrypted candidate scan")
 		}
 		return nil
+	})
+	if err != nil {
+		return before, after, err
+	}
+	// A fresh backend must not inherit omitted junk/header fields from the
+	// preceding profile. Keep the actual same Wintun/route/address, retire the
+	// old lease completely, then authenticate a fresh engine with the original
+	// immutable synthetic profile. No production switching is claimed here.
+	err = gate.Primary(ctx, Stamp{}, func(context.Context) error {
+		if err := engine.IpcSet("jc=1\njmin=32\njmax=32\nh1=100\n"); err != nil {
+			return err
+		}
+		engine.Close()
+		if tracked.closed.Load() != 0 {
+			return errors.New("retired backend closed owned Wintun")
+		}
+		lease, err := relay.Open()
+		if err != nil {
+			return err
+		}
+		binding := conn.NewStdNetBind()
+		engine = device.NewDevice(lease, binding, device.NewLogger(device.LogLevelSilent, ""))
+		if !engine.SetPrimaryMutationFence(func(work func() error) error {
+			return gate.Primary(context.Background(), Stamp{}, func(context.Context) error { return work() })
+		}) {
+			return errors.New("fresh primary missing lifecycle fence")
+		}
+		if engine.IpcSet(primary.config) != nil || engine.Up() != nil {
+			return errors.New("fresh native backend failed")
+		}
+		if err = binding.(conn.BindSocketToInterface).BindSocketToInterface4(index, false); err != nil {
+			return err
+		}
+		runtime, err := engine.IpcGet()
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(runtime, "jc=0\n") || strings.Contains(runtime, "h1=100\n") {
+			return errors.New("fresh backend retained preceding obfuscation")
+		}
+		originalIdentity, err := probe.PublicIdentityDigest(actual)
+		if err != nil {
+			return err
+		}
+		freshIdentity, err := probe.PublicIdentityDigest(runtime)
+		if err != nil || originalIdentity != freshIdentity {
+			return errors.New("fresh engine changed client/server identity")
+		}
+		row, err := luid.Interface()
+		if err != nil || row.InterfaceIndex != tunnelIndex {
+			return errors.New("native TUN changed at backend cutover")
+		}
+		actual = runtime
+		return nil
+	})
+	if err != nil {
+		return before, after, err
+	}
+	guard, err = probe.NewActiveGuard(probe.ActiveState{Known: true, Configuration: actual})
+	if err != nil {
+		return before, after, err
+	}
+	err = gate.Candidate(ctx, func(work context.Context, token Token) error {
+		current, err := NewUDPFactory(protectedudp.ThroughTunnel, tunnelIndex, 0, token)
+		if err != nil {
+			return err
+		}
+		defer current.Close(context.Background())
+		end := time.Now().Add(5 * time.Second)
+		for {
+			_, err = probe.MeasureCurrentDNS(work, probe.CurrentDNSRequest{Target: netip.AddrPortFrom(primary.target, 53), Factory: current, Guard: guard})
+			if err == nil {
+				return nil
+			}
+			if work.Err() != nil || time.Now().After(end) {
+				return fmt.Errorf("same TUN fresh backend DNS: %w", err)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 	})
 	return before, after, err
 }

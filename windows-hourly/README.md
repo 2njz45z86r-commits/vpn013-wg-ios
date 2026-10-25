@@ -9,8 +9,13 @@ The prototype wires a shared kernel barrier into actual primary Up, Down,
 configuration changes and asynchronous Close, service startup/teardown, route
 workers and bounded UAPI handling. Exact-source patch scripts preserve the
 verified upstream license and existing client-specific vendor changes. The
-manager's hourly coordinator, authoritative observed-runtime census and actual
-one-shot measured switch remain separate unfinished integration requirements.
+read-only observed-runtime protocol and authoritative SCM definition/PID/image
+census are exercised against actual services, including refusal of multiple
+running services and a stopped unsupported binary. The immutable legacy DPAPI
+vault remains unchanged. A batch-one native TUN relay can retire one backend
+and authenticate a fresh backend without closing its owned TUN, avoiding stale
+omitted obfuscation fields. These are foundations: the manager hourly scheduler,
+conditional measured switch and route/DNS/firewall rollback remain unfinished.
 
 Native fixtures create temporary SYSTEM services and ephemeral AWG peers with
 new random keys. They configure only disposable Wintun interfaces and their
