@@ -77,7 +77,7 @@ type hourlyFixture struct {
 
 func (f *hourlyFixture) Execute(_ []string, requests <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
 	changes <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	done := make(chan struct{})
 	defer close(done)
@@ -251,7 +251,9 @@ func (f *hourlyFixture) run(ctx context.Context) error {
 	}()
 	defer func() { stopStream(); <-streamDone; factory.Close(context.Background()) }()
 	f.receipt.Phase = "real30s-census-scan-selection"
-	until = time.Now().Add(65 * time.Second)
+	// Allow the production30s cadence plus its full unchanged90s scan budget.
+	// The earlier65s fixture cutoff canceled a legal in-flight scan.
+	until = time.Now().Add(130 * time.Second)
 	var scanBefore uint32
 	for time.Now().Before(until) && ctx.Err() == nil {
 		value, e := r013gate.ReadObservation(ctx, r013.AutoName)
@@ -292,11 +294,18 @@ func (f *hourlyFixture) run(ctx context.Context) error {
 	actual, err := conf.LoadFromName(r013.AutoName)
 	if err != nil || len(actual.Peers) != 1 || actual.Interface.PrivateKey != two.Interface.PrivateKey || actual.Interface.MTU != two.Interface.MTU {
 		var logs bytes.Buffer
-        logErr:=ringlogger.DumpTo(&logs,false)
-        var safe []string
-        for _,line:=range strings.Split(logs.String(),"\n"){if strings.Contains(line,"R013Routing:"){safe=append(safe,line)}}
-        detail:=strings.Join(safe,"\n");if len(detail)>12000{detail=detail[len(detail)-12000:]}
-        return fmt.Errorf("selected real working seed not persisted; log=%v\n%s",logErr,detail)
+		logErr := ringlogger.DumpTo(&logs, false)
+		var safe []string
+		for _, line := range strings.Split(logs.String(), "\n") {
+			if strings.Contains(line, "R013Routing:") {
+				safe = append(safe, line)
+			}
+		}
+		detail := strings.Join(safe, "\n")
+		if len(detail) > 12000 {
+			detail = detail[len(detail)-12000:]
+		}
+		return fmt.Errorf("selected real working seed not persisted; log=%v\n%s", logErr, detail)
 	}
 	if !f.receipt.Selected || !f.receipt.Compared || !f.receipt.TrafficDuringScan || !f.receipt.SameTUN || !f.receipt.VaultPreserved || f.receipt.Replies < 2 {
 		return errors.New("compiled hourly acceptance incomplete")
@@ -333,7 +342,7 @@ func TestCompiledAutoServiceRunsReal30sScanWithoutStoppingPrimary(t *testing.T) 
 		t.Fatal(err)
 	}
 	var receipt hourlyReceipt
-	until := time.Now().Add(110 * time.Second)
+	until := time.Now().Add(190 * time.Second)
 	for time.Now().Before(until) {
 		if raw, e := os.ReadFile(filepath.Join(directory, "hourly-receipt.json")); e == nil && json.Unmarshal(raw, &receipt) == nil {
 			break

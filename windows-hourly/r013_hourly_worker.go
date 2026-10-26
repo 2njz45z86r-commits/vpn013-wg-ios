@@ -215,6 +215,8 @@ func (w *comparisonWorker) prepare(ctx context.Context, snapshot r013vault.Snaps
 
 func (w *comparisonWorker) scan() {
 	stage := "enter"
+	step := func(value string) { stage = value; log.Printf("R013Routing: comparison stage=%s begin", stage) }
+	step("enter")
 	started := time.Now()
 	defer func() { log.Printf("R013Routing: comparison stage=%s duration=%s", stage, time.Since(started)) }()
 	ctx, cancel := context.WithTimeout(w.ctx, 90*time.Second)
@@ -223,34 +225,34 @@ func (w *comparisonWorker) scan() {
 	w.owner.observation.comparing.Store(true)
 	defer w.owner.observation.comparing.Store(false)
 	scanErr := w.owner.gate.Candidate(ctx, func(work context.Context, token r013gate.Token) error {
-		stage = "inspect"
+		step("inspect")
 		actual, snapshot, current, err := w.inspect(work, token)
 		if err != nil {
 			return err
 		}
-		stage = "target"
+		step("target")
 		target, err := comparisonTarget(current)
 		if err != nil {
 			return err
 		}
-		stage = "foreign-path-before"
+		step("foreign-path-before")
 		beforePath, err := comparisonForeignPath(winipcfg.LUID(w.owner.native.LUID()))
 		if err != nil {
 			return err
 		}
-		stage = "physical-factory"
+		step("physical-factory")
 		physical, err := r013gate.NewUDPFactory(protectedudp.Physical, actual.Observation.Physical4, actual.Observation.Physical6, token)
 		if err != nil {
 			return err
 		}
 		defer physical.Close(context.Background())
-		stage = "tunnel-factory"
+		step("tunnel-factory")
 		through, err := r013gate.NewUDPFactory(protectedudp.ThroughTunnel, actual.Observation.TunnelIndex, 0, token)
 		if err != nil {
 			return err
 		}
 		defer through.Close(context.Background())
-		stage = "resolver"
+		step("resolver")
 		resolver, err := r013prepare.NewTunnelEndpointResolver(target, through, actual.Observation.Physical6 != 0)
 		if err != nil {
 			return err
@@ -268,7 +270,7 @@ func (w *comparisonWorker) scan() {
 		var candidates []probe.ScanCandidate
 		var members []prepared
 		deadline, _ := ctx.Deadline()
-		stage = "prepare"
+		step("prepare")
 		for offset := 0; offset < snapshot.Count(); offset++ {
 			index := (w.rotation + offset) % snapshot.Count()
 			if time.Until(deadline) < 24*time.Second {
@@ -293,7 +295,7 @@ func (w *comparisonWorker) scan() {
 		if len(candidates) == 0 {
 			return nil
 		}
-		stage = "encrypted-scan"
+		step("encrypted-scan")
 		result, err := probe.Scan(work, probe.ScanRequest{AutoActive: true, Current: probe.CurrentDNSRequest{Target: target, Factory: through, Guard: guard}, Candidates: candidates})
 		if result.NextIndex >= 0 && result.NextIndex < len(members) {
 			w.rotation = members[result.NextIndex].index
@@ -304,12 +306,12 @@ func (w *comparisonWorker) scan() {
 		if err = errors.Join(physical.Close(context.Background()), through.Close(context.Background())); err != nil {
 			return err
 		}
-		stage = "foreign-path-after"
+		step("foreign-path-after")
 		afterPath, err := comparisonForeignPath(winipcfg.LUID(w.owner.native.LUID()))
 		if err != nil || afterPath != beforePath || !token.Valid() {
 			return errBackendUnknown
 		}
-		stage = "vault-recheck"
+		step("vault-recheck")
 		freshVault, err := w.owner.load()
 		if err != nil || freshVault.Revision() != snapshot.Revision() {
 			return errBackendUnknown
@@ -322,7 +324,7 @@ func (w *comparisonWorker) scan() {
 		}
 		w.owner.observation.lastCompared.Store(measured)
 		w.owner.observation.lastComparison.Store(time.Now().UnixNano())
-		stage = "choice"
+		step("choice")
 		if result.Choice != nil {
 			for _, member := range members {
 				if member.fresh.ID == result.Choice.ID {
@@ -337,7 +339,7 @@ func (w *comparisonWorker) scan() {
 		log.Printf("R013Routing: comparison failed stage=%s type=%T", stage, scanErr)
 	}
 	if request != nil && w.ctx.Err() == nil {
-		stage = "submit"
+		step("submit")
 		if err := w.submit(request); err != nil {
 			log.Printf("R013Routing: selection failed type=%T", err)
 		}
