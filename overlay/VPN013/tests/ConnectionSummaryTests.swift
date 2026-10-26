@@ -271,5 +271,32 @@ private final class MessageClock {
                 refresh: { done in done { message, response in calls.append(message[0]); response(data) } }) { if case .success(let value) = $0 { output = value } }
             expect(calls == [3, 5, 3] && output?.data == data, "Auto recovery reads actual-member reply and never falls back to a manual seed")
         }
+        do {
+            let clock = MessageClock(), client = clock.client()
+            var output: Client.Output?; var cancelled = 0; var operations: [UInt8] = []
+            client.read(automatic: false, send: { _, done in done(nil) },
+                refresh: { done in done { _, reply in reply(nil) } },
+                local: { operation, done in
+                    operations.append(operation); done(.success(metrics)); return { cancelled += 1 }
+                }) { if case .success(let value) = $0 { output = value } }
+            expect(operations == [6] && output?.data == metrics, "Authenticated independent transport recovers real parsed manual reply after nil IPC")
+            expect(cancelled == 1, "Synchronous fallback completion releases ownership exactly once")
+        }
+        do {
+            let clock = MessageClock(), client = clock.client()
+            var reply: ((Result<Data, Error>) -> Void)?; var cancelled = 0; var completed = 0
+            client.read(automatic: false, send: { _, done in done(nil) },
+                refresh: { done in done { _, response in response(nil) } },
+                local: { _, done in reply = done; return { cancelled += 1 } }) { _ in completed += 1 }
+            client.invalidate(); reply?(.success(metrics)); clock.advance(7)
+            expect(cancelled == 1 && completed == 0, "Stopping/replacing session cancels local read and rejects its late response")
+        }
+        do {
+            let clock = MessageClock(), client = clock.client(); var issue: VPN013SnapshotIssue?
+            client.read(automatic: false, send: { _, done in done(nil) },
+                refresh: { done in done { _, reply in reply(nil) } },
+                local: { _, done in done(.success(Data("invalid".utf8))); return {} }) { issue = failure($0) }
+            expect(issue == .invalidResponse, "Even authenticated transport cannot invent counters from malformed payload")
+        }
     }
 }

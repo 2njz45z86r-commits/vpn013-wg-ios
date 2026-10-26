@@ -190,6 +190,7 @@ struct VPN013ProviderStatistics: Codable {
 final class VPN013StatisticsMessageClient {
     typealias Sender = (Data, @escaping (Data?) -> Void) throws -> Void
     typealias Refresh = (@escaping (Sender?) -> Void) -> Void
+    typealias LocalRead = (UInt8, @escaping (Result<Data, Error>) -> Void) -> (() -> Void)
     typealias Schedule = (TimeInterval, @escaping () -> Void) -> Void
     enum Format { case manual, legacyManual, automatic }
     struct Output { let data: Data; let format: Format }
@@ -215,6 +216,7 @@ final class VPN013StatisticsMessageClient {
     private var pending: [UUID: PendingReply] = [:]
     private var pendingRefresh: PendingRefresh?
     private var active = false
+    private var cancelLocalRead: (() -> Void)?
     private var retryAfter: TimeInterval = 0
     private var previousIssue: VPN013SnapshotIssue = .emptyResponse
     private(set) var diagnostic = "not-requested"
@@ -226,21 +228,45 @@ final class VPN013StatisticsMessageClient {
     }
 
     func invalidate() {
+        cancelLocalRead?(); cancelLocalRead = nil
         generation = UUID(); active = false; retryAfter = 0
         // Caller only invalidates across a stopped/replaced system connection.
         pending.removeAll(); pendingRefresh?.handler = nil; diagnostic = "connection-changed"
     }
 
     func read(automatic: Bool, send: @escaping Sender, refresh: @escaping Refresh,
+              local: LocalRead? = nil,
               completion: @escaping (Result<Output, VPN013SnapshotIssue>) -> Void) {
         guard !active else { completion(.failure(.transportBusy)); return }
         guard clock() >= retryAfter else { completion(.failure(previousIssue)); return }
         active = true; generation = UUID(); let stamp = generation
         var ended = false
+        let began = clock()
+        var triedLocal = false
         var stages: [String] = []
         func note(_ text: String) { if stages.count < 10 { stages.append(text) }; self.diagnostic = stages.joined(separator: ";") }
         func finish(_ value: Result<Output, VPN013SnapshotIssue>) {
-            guard self.generation == stamp, !ended else { return }; ended = true; self.active = false
+            guard self.generation == stamp, !ended else { return }
+            if case .failure(let issue) = value, !triedLocal, let local = local,
+               self.clock() - began < Self.deadline {
+                triedLocal = true; note("local.begin")
+                let cancel = local(automatic ? 3 : 6) { result in
+                    guard self.generation == stamp, !ended else { return }
+                    switch result {
+                    case .success(let data):
+                        guard !data.isEmpty, data.count <= 32_768 else {
+                            note("local.invalid"); finish(.failure(.invalidResponse)); return
+                        }
+                        note("local.authenticated"); consume(data, legacy: false)
+                    case .failure: note("local.no-reply"); finish(.failure(issue))
+                    }
+                }
+                if ended || self.generation != stamp { cancel() }
+                else { self.cancelLocalRead = cancel }
+                return
+            }
+            ended = true; self.active = false
+            self.cancelLocalRead?(); self.cancelLocalRead = nil
             for reply in self.pending.values where reply.generation == stamp { reply.handler = nil }
             if self.pendingRefresh?.generation == stamp { self.pendingRefresh?.handler = nil }
             if case .failure(let issue) = value { self.previousIssue = issue; self.retryAfter = self.clock() + 10 }

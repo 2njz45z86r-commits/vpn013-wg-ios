@@ -963,6 +963,16 @@ class TunnelContainer: NSObject {
             refresh: { [weak self] done in
                 guard let self = self else { done(nil); return }
                 self.refreshStatisticsSession(completion: done)
+            }, local: { operation, done in
+                guard let envelope = capturedEnvelope,
+                      let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
+                      let credentials = try? VPN013LocalStatisticsCredentials(secret: secret,
+                        id: envelope.id, ciphertext: envelope.ciphertext),
+                      let read = try? VPN013LocalStatisticsRead(credentials: credentials, operation: operation) else {
+                    done(.failure(VPN013LocalStatisticsCredentials.Failure.unavailable)); return {}
+                }
+                read.start(completion: done)
+                return { read.cancel() }
             }) { result in
                     self.recordStatisticsDiagnostic()
                     guard self.status == .active else { self.connectionSnapshotIssue = .notRunning; completion(nil); return }

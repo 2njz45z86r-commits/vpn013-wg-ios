@@ -6,6 +6,7 @@ import NetworkExtension
 import os
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
+    private var localStatistics: VPN013LocalStatisticsServer?
     private var automatic: AutoTunnelController?
     private var automaticStartCompletion: ((Error?) -> Void)?
     private var automaticEpoch = 0
@@ -94,6 +95,19 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        // Independent read-only authenticated transport. It cannot alter the
+        // engine, routes, profiles or keys and never binds a LAN/WAN address.
+        if let envelope = tunnelProviderProtocol.privateEnvelope,
+           let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
+           let credentials = try? VPN013LocalStatisticsCredentials(secret: secret,
+                id: envelope.id, ciphertext: envelope.ciphertext) {
+            let server = VPN013LocalStatisticsServer(credentials: credentials) { [weak self] operation, reply in
+                guard let self = self else { reply(nil); return }
+                self.handleAppMessage(Data([operation]), completionHandler: reply)
+            }
+            localStatistics = server; server.start()
+        }
+
         do {
             if let profile = try AutoTunnelProfile.load(from:tunnelProviderProtocol) {
                 let candidates = try profile.validatedConfigurations()
@@ -153,7 +167,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             pending?(NSError(domain:NSURLErrorDomain,code:NSURLErrorCancelled))
         }
         if Thread.isMainThread { cleanup() } else { DispatchQueue.main.sync(execute:cleanup) }
-        adapter.stop { error in
+        let stopAdapter = {
+        self.adapter.stop { error in
             ErrorNotifier.removeLastErrorFile()
 
             if error != nil {
@@ -168,6 +183,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             exit(0)
             #endif
         }
+        }
+        if let server = localStatistics {
+            localStatistics = nil
+            server.stop(completion: stopAdapter)
+        } else { stopAdapter() }
     }
 
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
