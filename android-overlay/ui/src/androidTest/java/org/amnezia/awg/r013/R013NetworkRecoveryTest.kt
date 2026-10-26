@@ -17,10 +17,11 @@ import org.junit.runner.RunWith
 class R013NetworkRecoveryTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val wifi = Network.fromNetworkHandle((1L shl 32) or 0xcafed00dL)
-    private fun caps(ready: Boolean) = NetworkCapabilities()
+    private fun caps(ready: Boolean) = NetworkCapabilities.Builder()
         .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
         .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         .apply { if (ready) addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) }
+        .build()
 
     private fun callback(state: NetworkState): ConnectivityManager.NetworkCallback {
         val field = NetworkState::class.java.getDeclaredField("networkCallback\$delegate")
