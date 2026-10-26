@@ -347,10 +347,15 @@ func (w *comparisonWorker) scan() {
 // Health is serialized with hourly Scan and uses the same protected current
 // path. A DNS miss alone does not label a previously unmeasured VPN broken.
 func (w *comparisonWorker) health() {
+	stage := "enter"
+	step := func(value string) { stage = value; log.Printf("R013Routing: health stage=%s", stage) }
+	defer func() { log.Printf("R013Routing: health returned stage=%s", stage) }()
+	step("gate")
 	ctx, cancel := context.WithTimeout(w.ctx, 12*time.Second)
 	defer cancel()
 	var request *comparisonSelection
 	_ = w.owner.gate.Candidate(ctx, func(work context.Context, token r013gate.Token) error {
+		step("inspect")
 		actual, snapshot, current, err := w.inspect(work, token)
 		if err != nil {
 			return err
@@ -363,6 +368,7 @@ func (w *comparisonWorker) health() {
 		if err != nil {
 			return err
 		}
+		step("foreign-path")
 		path, err := comparisonForeignPath(winipcfg.LUID(w.owner.native.LUID()))
 		if err != nil {
 			return err
@@ -371,6 +377,7 @@ func (w *comparisonWorker) health() {
 			w.resetHealth(state)
 			w.lastPath = path
 		}
+		step("tunnel-factory")
 		through, err := r013gate.NewUDPFactory(protectedudp.ThroughTunnel, actual.Observation.TunnelIndex, 0, token)
 		if err != nil {
 			return err
@@ -381,12 +388,14 @@ func (w *comparisonWorker) health() {
 			return err
 		}
 		measureCtx, measureCancel := context.WithTimeout(work, 6*time.Second)
+		step("dns")
 		result, probeError := probe.MeasureCurrentDNS(measureCtx, probe.CurrentDNSRequest{Target: target, Factory: through, Guard: guard})
 		measureCancel()
 		if work.Err() != nil {
 			return work.Err()
 		}
 		// Re-read genuine peer traffic after the probe, never an initial saved seed.
+		step("inspect-after")
 		after, freshVault, _, err := w.inspect(work, token)
 		if err != nil || *after.Observation.Member != state || freshVault.Revision() != snapshot.Revision() {
 			return errBackendUnknown
@@ -421,6 +430,7 @@ func (w *comparisonWorker) health() {
 		if decision == r013.Advance {
 			index = (state.Index + 1) % snapshot.Count()
 		}
+		step("physical-factory")
 		physical, err := r013gate.NewUDPFactory(protectedudp.Physical, actual.Observation.Physical4, actual.Observation.Physical6, token)
 		if err != nil {
 			return err
@@ -463,9 +473,11 @@ func (w *comparisonWorker) health() {
 		if err != nil {
 			return err
 		}
+		step("close-factories")
 		if err = errors.Join(physical.Close(context.Background()), through.Close(context.Background())); err != nil {
 			return err
 		}
+		step("foreign-path-after")
 		afterPath, err := comparisonForeignPath(winipcfg.LUID(w.owner.native.LUID()))
 		if err != nil || afterPath != path || !token.Valid() {
 			return errBackendUnknown
