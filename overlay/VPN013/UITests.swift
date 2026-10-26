@@ -345,13 +345,15 @@ final class AutoTunnelUITests:XCTestCase {
 
     func testPingCancellationIsAvailable() {
         let app = XCUIApplication()
-        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2"]
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-hold-ping-for-cancellation"]
         app.launch()
         let button = app.buttons["vpn013.check-ping"]
         XCTAssertTrue(button.waitForExistence(timeout:20))
         button.tap()
         XCTAssertTrue(app.buttons["Остановить проверку"].waitForExistence(timeout:2))
         button.tap()
+        let stopped = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Проверить пинг"), object: button)
+        XCTAssertEqual(XCTWaiter.wait(for: [stopped], timeout: 8), .completed, "Cancellation must restore the idle action")
         XCTAssertEqual(button.label, "Проверить пинг")
         XCTAssertTrue(app.staticTexts["vpn013.ping-explanation"].label.contains("остановлена"))
         capture("16-ping-cancelled")
