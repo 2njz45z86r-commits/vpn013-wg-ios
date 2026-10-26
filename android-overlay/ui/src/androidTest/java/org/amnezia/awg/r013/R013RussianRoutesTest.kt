@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
 package org.amnezia.awg.r013
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
@@ -14,6 +12,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.net.Socket
 import java.net.InetSocketAddress
+import java.io.File
+import java.util.UUID
+import org.json.JSONObject
+import kotlinx.coroutines.delay
 @RunWith(AndroidJUnit4::class)
 class R013RussianRoutesTest {
  private fun echo(ip:String):Boolean = try {
@@ -38,11 +40,24 @@ class R013RussianRoutesTest {
   val before=registry.config(tunnel.name).toAwgQuickString()
   try{
    tunnel.setStateAsync(Tunnel.State.UP)
-   val cm=context.getSystemService(ConnectivityManager::class.java)
-   val vpn=cm.allNetworks.first{cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN)==true}
-   val routes=cm.getLinkProperties(vpn)!!.routes
-   assertEquals("All production RU exclusions must reach Android",10838,routes.count{it.type==9})
-   assertTrue("A narrow IPv6 crypto route must not create foreign cleartext fallback",routes.any{it.type==1 && it.destination.address is java.net.Inet6Address && it.destination.prefixLength==0})
+   // Read the actual full OS route inventory through the hosted shell's
+   // streaming dumpsys. A 10838-route LinkProperties Binder response can
+   // exceed transaction resources; production must not make that request.
+   val backend=Application.getBackend() as GoBackend
+   val actualInterface=backend.actualRouteInterfaceName!!
+   val review=File(context.getExternalFilesDir(null),"review").apply{mkdirs()}
+   val proof=File(review,"russian-route-proof.json").apply{delete()}
+   val nonce=UUID.randomUUID().toString().replace("-","")
+   File(review,"russian-route-request.json").writeText(JSONObject().put("interface",actualInterface).put("nonce",nonce).toString())
+   val deadline=android.os.SystemClock.elapsedRealtime()+60000
+   while(!proof.isFile&&android.os.SystemClock.elapsedRealtime()<deadline)delay(100)
+   assertTrue("Independent full native route readback is required",proof.isFile)
+   val readback=JSONObject(proof.readText())
+   assertEquals(nonce,readback.getString("nonce"))
+   assertEquals(actualInterface,readback.getString("interface"))
+   assertEquals(10838,readback.getInt("exactRussianExclusions"))
+   assertTrue(readback.getBoolean("foreignIPv6Captured"))
+   assertEquals(actualInterface,backend.actualRouteInterfaceName)
    assertTrue("Registered RU destination must bypass VPN",echo("2.56.24.1"))
    assertFalse("Foreign control must not escape via direct network",echo("198.18.0.1"))
    assertEquals(before,registry.config(tunnel.name).toAwgQuickString())

@@ -87,6 +87,19 @@ public final class GoBackend implements Backend {
         }, new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
     @Nullable private volatile java.util.concurrent.Future<Double> pendingProbe;
     @Nullable private volatile VpnService activeService;
+    // Read without the backend monitor: a native socket gate may be draining
+    // while a primary mutation holds that monitor. Identity fences late gates.
+    static final class NativeRouteBinding {
+        final VpnService service;
+        final long revision;
+        final int handle;
+        final String interfaceName;
+        NativeRouteBinding(VpnService service, long revision, int handle, String interfaceName) {
+            this.service = service; this.revision = revision; this.handle = handle; this.interfaceName = interfaceName;
+        }
+    }
+    private final java.util.concurrent.atomic.AtomicReference<NativeRouteBinding> nativeRouteBinding =
+        new java.util.concurrent.atomic.AtomicReference<>();
     @Nullable private volatile Thread hourlyThread;
     @Nullable private volatile HourlyScope hourlyScope;
     @Nullable private volatile String hourlySummary;
@@ -121,6 +134,10 @@ public final class GoBackend implements Backend {
     }
     public void setAutomaticSource(AutomaticSource source) { automaticSource = source; }
     @Nullable public synchronized Config getCurrentConfiguration() { return currentConfig; }
+    @Nullable public String getActualRouteInterfaceName() {
+        final NativeRouteBinding binding = nativeRouteBinding.get();
+        return binding != null && binding.service.routeBinding() == binding ? binding.interfaceName : null;
+    }
     @Nullable public synchronized String getCurrentProfileName() { return currentTunnel == null ? null : currentTunnel.getName(); }
     @Nullable public String getAutomaticMemberName() { AutoMember member = activeMember; return member == null ? null : member.name(); }
     public boolean isAutomaticRunning() { return autoThread != null; }
@@ -735,6 +752,7 @@ public final class GoBackend implements Backend {
         // Drain every candidate before Builder.establish can change routes, not
         // merely before the native engine starts. Unknown active state disables
         // comparisons; it must not disable an otherwise valid manual profile.
+        nativeRouteBinding.set(null);
         invalidateHourly();
         final long ticket = r013PrimaryBegin();
         if (ticket == 0) throw new IllegalStateException("VPN transition is busy");
@@ -744,6 +762,7 @@ public final class GoBackend implements Backend {
 
     private void setStateInternalGuarded(final Tunnel tunnel, @Nullable final Config config, final State state,
                                          final long ticket) throws Exception {
+        nativeRouteBinding.set(null);
         connectionRevision++;
         Log.i(TAG, "Bringing tunnel " + tunnel.getName() + ' ' + state);
 
@@ -879,6 +898,10 @@ public final class GoBackend implements Backend {
             service.protect(awgGetSocketV4(currentTunnelHandle));
             service.protect(awgGetSocketV6(currentTunnelHandle));
 
+            final String actualInterface = awgGetInterfaceName(currentTunnelHandle);
+            if (actualInterface != null && !actualInterface.isEmpty() && actualInterface.length() <= 64)
+                nativeRouteBinding.set(new NativeRouteBinding(service, connectionRevision, currentTunnelHandle, actualInterface));
+
             launchStatusJob();
         } else {
             if (currentTunnelHandle == -1) {
@@ -964,8 +987,10 @@ public final class GoBackend implements Backend {
 
         @Override
         public void onDestroy() {
+            routeRetired = true;
             final GoBackend backend = owner;
             if (backend != null) {
+                invalidateRouteBinding();
                 // DNS/startup may still hold the backend lock. Never block Android's
                 // main service thread, and never close a newer service's tunnel.
                 new Thread(() -> {
@@ -995,6 +1020,8 @@ public final class GoBackend implements Backend {
 
         @Override
         public void onRevoke() {
+            routeRetired = true;
+            invalidateRouteBinding();
             if (owner != null && owner.activeService == this) owner.cancelAutomatic();
             stopSelf();
             super.onRevoke();
@@ -1013,6 +1040,23 @@ public final class GoBackend implements Backend {
 
         public void setOwner(final GoBackend owner) {
             this.owner = owner;
+        }
+
+        private volatile boolean routeRetired;
+
+        @Nullable NativeRouteBinding routeBinding() {
+            final GoBackend backend = owner;
+            if (routeRetired || backend == null || backend.activeService != this) return null;
+            final NativeRouteBinding binding = backend.nativeRouteBinding.get();
+            return binding != null && binding.service == this ? binding : null;
+        }
+
+        private void invalidateRouteBinding() {
+            final GoBackend backend = owner;
+            if (backend == null) return;
+            final NativeRouteBinding binding = backend.nativeRouteBinding.get();
+            if (binding != null && binding.service == this)
+                backend.nativeRouteBinding.compareAndSet(binding, null);
         }
     }
 }

@@ -94,7 +94,11 @@ sudo ip address add 198.18.0.1/32 dev lo
 control_alias_added=yes
 python3 r013-ci/russian-route-echo.py > output/review/russian-route-echo.txt 2>&1 &
 route_echo_pid=$!
-adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013RussianRoutesTest -e syntheticConfig "$fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/russian-routing.txt
+adb shell rm -f /sdcard/Android/data/com.vpn013.awg.debug/files/review/russian-route-request.json /sdcard/Android/data/com.vpn013.awg.debug/files/review/russian-route-proof.json
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013RussianRoutesTest -e syntheticConfig "$fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/russian-routing.txt &
+routing_test_pid=$!
+python3 r013-ci/capture-russian-routes.py
+wait "$routing_test_pid"
 grep -E '^OK \(1 test\)[[:space:]]*$' output/review/russian-routing.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/russian-routing.txt
 unset fixture candidate_fixture
