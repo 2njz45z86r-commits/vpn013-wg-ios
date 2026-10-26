@@ -73,7 +73,7 @@ func (iw *interfaceWatcher) RetireForBackend(ctx context.Context) error { return
 
 func (iw *interfaceWatcher) retire(ctx context.Context,preservePolicy bool) error {
  began:=time.Now()
- trace:=func(phase string){log.Printf("VPN013 watcher-retire phase=%s elapsedMS=%d",phase,time.Since(began).Milliseconds())}
+ trace:=func(phase string){log.Printf("R013Routing: watcher-retire phase=%s elapsedMS=%d",phase,time.Since(began).Milliseconds())}
  trace("retirement-lock")
  iw.retirementMutex.Lock();defer iw.retirementMutex.Unlock()
  trace("cancel-context")
