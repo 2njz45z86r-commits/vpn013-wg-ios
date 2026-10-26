@@ -801,7 +801,9 @@ class TunnelContainer: NSObject {
         }
     #endif
     @objc dynamic var name: String
-    @objc dynamic var status: TunnelStatus
+    @objc dynamic var status: TunnelStatus {
+        didSet { if status != oldValue && status != .active { statisticsMessages.invalidate() } }
+    }
     #if os(iOS)
         @objc dynamic var handshakeState: TunnelHandshakeState = .idle
     #endif
@@ -889,6 +891,49 @@ class TunnelContainer: NSObject {
     }
 
     private(set) var connectionSnapshotIssue: VPN013SnapshotIssue?
+    private let statisticsMessages = VPN013StatisticsMessageClient()
+    private var lastStatisticsDiagnostic = ""
+    private var lastStatisticsDiagnosticAt: TimeInterval = 0
+
+    private func statisticsSender(_ session: NETunnelProviderSession) -> VPN013StatisticsMessageClient.Sender {
+        { message, response in try session.sendProviderMessage(message, responseHandler: response) }
+    }
+
+    /// Refresh only the reference to an exact active encrypted profile. No save/start/stop.
+    private func refreshStatisticsSession(completion: @escaping (VPN013StatisticsMessageClient.Sender?) -> Void) {
+        guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+              let expected = proto.privateEnvelope, let provider = proto.providerBundleIdentifier,
+              status == .active else { completion(nil); return }
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
+            DispatchQueue.main.async {
+                guard let self = self, error == nil, self.status == .active,
+                      let current = self.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+                      current.providerBundleIdentifier == provider,
+                      current.privateEnvelope?.id == expected.id,
+                      current.privateEnvelope?.ciphertext == expected.ciphertext else { completion(nil); return }
+                let exact = (managers ?? []).filter { manager in
+                    guard let value = manager.protocolConfiguration as? NETunnelProviderProtocol,
+                          value.providerBundleIdentifier == provider,
+                          value.privateEnvelope?.id == expected.id,
+                          value.privateEnvelope?.ciphertext == expected.ciphertext else { return false }
+                    return manager.connection.status == .connected || manager.connection.status == .reasserting
+                }
+                guard exact.count == 1, let session = exact[0].connection as? NETunnelProviderSession else {
+                    completion(nil); return
+                }
+                completion(self.statisticsSender(session))
+            }
+        }
+    }
+
+    private func recordStatisticsDiagnostic() {
+        let now = ProcessInfo.processInfo.systemUptime
+        let value = statisticsMessages.diagnostic
+        guard value != lastStatisticsDiagnostic || now - lastStatisticsDiagnosticAt >= 60 else { return }
+        lastStatisticsDiagnostic = value; lastStatisticsDiagnosticAt = now
+        // Only fixed stages and validated version/build numbers. No IDs, keys or endpoints.
+        wg_log(.info, message: "Statistics RPC: " + value)
+    }
 
     func getConnectionSnapshot(completion: @escaping (VPN013ConnectionSnapshot?) -> Void) {
         connectionSnapshotIssue = nil
@@ -911,15 +956,37 @@ class TunnelContainer: NSObject {
         let automatic = isVPN013Automatic
         let manualConfiguration = automatic ? nil : tunnelConfiguration
         let manualName = name
+        let capturedEnvelope = (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope
+        let capturedProvider = (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier
         guard let session = tunnelProvider.connection as? NETunnelProviderSession else { connectionSnapshotIssue = .noSession; completion(nil); return }
-        do {
-            try session.sendProviderMessage(Data([automatic ? 3 : 4])) { data in
-                DispatchQueue.main.async {
+        statisticsMessages.read(automatic: automatic, send: statisticsSender(session),
+            refresh: { [weak self] done in
+                guard let self = self else { done(nil); return }
+                self.refreshStatisticsSession(completion: done)
+            }) { result in
+                    self.recordStatisticsDiagnostic()
                     guard self.status == .active else { self.connectionSnapshotIssue = .notRunning; completion(nil); return }
-                    guard let data = data, !data.isEmpty else { self.connectionSnapshotIssue = .emptyResponse; completion(nil); return }
-                    guard data.count <= 32_768 else { self.connectionSnapshotIssue = .oversizedResponse; completion(nil); return }
+                    guard self.isVPN013Automatic == automatic,
+                          let current = self.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+                          capturedProvider != nil, current.providerBundleIdentifier == capturedProvider,
+                          current.privateEnvelope?.id == capturedEnvelope?.id,
+                          current.privateEnvelope?.ciphertext == capturedEnvelope?.ciphertext else {
+                        self.connectionSnapshotIssue = .invalidResponse; completion(nil); return
+                    }
+                    let output: VPN013StatisticsMessageClient.Output
+                    switch result {
+                    case .failure(let issue): self.connectionSnapshotIssue = issue; completion(nil); return
+                    case .success(let value): output = value
+                    }
+                    let data = output.data
                     if !automatic {
-                        guard let reply = try? JSONDecoder().decode(VPN013RuntimeStatisticsReply.self, from: data), reply.schema == 1 else {
+                        let parsed: VPN013RuntimeStatisticsReply?
+                        switch output.format {
+                        case .manual: parsed = (try? JSONDecoder().decode(VPN013ProviderStatistics.self, from: data))?.sample
+                        case .legacyManual: parsed = try? JSONDecoder().decode(VPN013RuntimeStatisticsReply.self, from: data)
+                        case .automatic: parsed = nil
+                        }
+                        guard let reply = parsed, reply.schema == 1 else {
                             self.connectionSnapshotIssue = .invalidResponse; completion(nil); return
                         }
                         guard reply.hasMeasurements, let statistics = reply.statistics else {
@@ -945,9 +1012,7 @@ class TunnelContainer: NSObject {
                     else { self.connectionSnapshotIssue = .invalidResponse; completion(nil); return }
                     self.connectionSnapshotIssue = nil
                     completion(value)
-                }
-            }
-        } catch { connectionSnapshotIssue = .requestFailed; completion(nil) }
+        }
     }
 
     var onDemandOption: ActivateOnDemandOption {

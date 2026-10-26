@@ -1,3 +1,6 @@
 # These exact manifest bytes are SHA256-pinned before native dependency staging.
 windows/dependencies/go.mod text eol=lf
 windows/dependencies/go.sum text eol=lf
+
+# Release-pinned routing data must retain its hash on Windows checkouts.
+*.cidr text eol=lf

@@ -60,6 +60,7 @@ class R013HomeActivity : AppCompatActivity() {
     private lateinit var rows: LinearLayout
     private lateinit var summaryTitle: TextView
     private lateinit var summaryDetails: TextView
+    private lateinit var routingDetails: TextView
     private lateinit var currentPing: MaterialButton
     private lateinit var allPing: MaterialButton
     private lateinit var countLabel: TextView
@@ -128,7 +129,12 @@ class R013HomeActivity : AppCompatActivity() {
         top.addView(currentPing, LinearLayout.LayoutParams(dp(48), dp(48)))
         inside.addView(top)
         summaryDetails = text("Выберите профиль ниже", 14).apply { setTextColor(color(R.color.r013_secondary)); setPadding(0, dp(4), 0, 0) }
-        inside.addView(summaryDetails); card.addView(inside); content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        inside.addView(summaryDetails)
+        routingDetails = text("Российские IP-сети — напрямую; остальные — через VPN", 12).apply {
+            setTextColor(color(R.color.r013_secondary)); setPadding(0, dp(6), 0, 0)
+        }
+        inside.addView(routingDetails)
+        card.addView(inside); content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         val heading = horizontal().apply { setPadding(0, dp(20), 0, dp(8)) }
         countLabel = text("Профили", 18, true)
         heading.addView(countLabel, LinearLayout.LayoutParams(0, -2, 1f))
@@ -277,6 +283,7 @@ class R013HomeActivity : AppCompatActivity() {
     }
     private suspend fun renderCurrent() {
         val backend = Application.getBackend() as GoBackend
+        routingDetails.text = backend.russianRoutingStatus
         val snapshot = withContext(Dispatchers.IO) {
             val live = backend.connectionView()
             val profile = live.profile(); val config = live.config(); val member = live.member()

@@ -26,6 +26,11 @@ public enum WireGuardAdapterError: Error {
     case startWireGuardBackend(Int32)
 }
 
+/// Internal provider read result. Never serialize the raw runtime configuration.
+public enum WireGuardRuntimeRead {
+    case available(String), stopped, temporarilyOffline, unavailable
+}
+
 /// Enum representing internal state of the `WireGuardAdapter`
 private enum State {
     /// The tunnel is stopped
@@ -200,18 +205,27 @@ public class WireGuardAdapter {
     /// Returns a runtime configuration from WireGuard.
     /// - Parameter completionHandler: completion handler.
     public func getRuntimeConfiguration(completionHandler: @escaping (String?) -> Void) {
-        workQueue.async {
-            guard case .started(let handle, _) = self.state else {
-                self.logHandler(.verbose, "getRuntimeConfiguration: adapter not started (state=\(self.state))")
-                completionHandler(nil)
-                return
-            }
+        readRuntimeConfiguration { result in
+            if case .available(let text) = result { completionHandler(text) }
+            else { completionHandler(nil) }
+        }
+    }
 
+    /// Read on the same queue as lifecycle changes, without acquiring a mutation guard.
+    public func readRuntimeConfiguration(completionHandler: @escaping (WireGuardRuntimeRead) -> Void) {
+        workQueue.async {
+            let handle: Int32
+            switch self.state {
+            case .started(let value, _): handle = value
+            case .stopped: completionHandler(.stopped); return
+            case .temporaryShutdown: completionHandler(.temporarilyOffline); return
+            }
             if let settings = wgGetConfig(handle) {
-                completionHandler(String(cString: settings))
+                let text = String(cString: settings)
                 free(settings)
+                completionHandler(.available(text))
             } else {
-                completionHandler(nil)
+                completionHandler(.unavailable)
             }
         }
     }
@@ -655,3 +669,27 @@ private extension Network.NWPath.Status {
         }
     }
 }
+
+#if targetEnvironment(simulator)
+extension WireGuardAdapter {
+    /// Constructs real NetworkExtension objects; does not claim installation or traffic.
+    public static func russianRoutingSettingsFixture() -> String {
+        let key = PrivateKey()
+        var interface = InterfaceConfiguration(privateKey: key)
+        interface.addresses = [IPAddressRange(from: "10.13.0.2/32")!, IPAddressRange(from: "fd13::2/128")!]
+        var peer = PeerConfiguration(publicKey: key.publicKey)
+        peer.allowedIPs = [IPAddressRange(from: "0.0.0.0/0")!, IPAddressRange(from: "::/0")!]
+        let original = peer.allowedIPs
+        let config = TunnelConfiguration(name: "Local routing fixture", interface: interface, peers: [peer])
+        let generator = PacketTunnelSettingsGenerator(tunnelConfiguration: config, resolvedEndpoints: [nil])
+        let settings = generator.generateNetworkSettings()
+        precondition(settings.ipv4Settings?.excludedRoutes?.count == 8671)
+        precondition(settings.ipv6Settings?.excludedRoutes?.count == 2167)
+        precondition(settings.ipv4Settings?.includedRoutes?.contains(where: {$0.destinationSubnetMask == "0.0.0.0"}) == true)
+        precondition(settings.ipv6Settings?.includedRoutes?.contains(where: {$0.destinationNetworkPrefixLength.intValue == 0}) == true)
+        precondition(settings.ipv4Settings?.excludedRoutes?.contains(where: {$0.destinationAddress == "2.56.24.0" && $0.destinationSubnetMask == "255.255.248.0"}) == true || settings.ipv4Settings?.excludedRoutes?.contains(where: {$0.destinationAddress == "2.56.24.0"}) == true)
+        precondition(config.peers[0].allowedIPs == original)
+        return "8671 IPv4 / 2167 IPv6; original peers retained"
+    }
+}
+#endif

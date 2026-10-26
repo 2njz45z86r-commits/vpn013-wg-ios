@@ -7,3 +7,7 @@ build/
 *.conf
 .env
 .env.*
+
+# Interpreter bytecode is not client source.
+__pycache__/
+*.pyc

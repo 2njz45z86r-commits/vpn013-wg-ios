@@ -1,0 +1,16 @@
+{
+  "atUTC": "2026-10-26T14:27:09.907283+00:00",
+  "source": "https://stat.ripe.net/data/country-resource-list/data.json?resource=RU",
+  "definition": "RIR registered country resources RU; not universal current service geolocation",
+  "sha256": "0b947f48b2053a98616b33d9f5074aa0a8d15d092a7025d9080e3f2c29061679",
+  "counts": {
+    "ipv4": 8671,
+    "ipv6": 2167
+  },
+  "rawCounts": {
+    "ipv4": 11456,
+    "ipv6": 2182
+  },
+  "embeddedOnly": true,
+  "runtimeNetworkUpdates": false
+}

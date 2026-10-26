@@ -113,6 +113,12 @@ public final class GoBackend implements Backend {
             service.stopSelf();
         } catch (Exception ignored) { }
     }
+    public String getRussianRoutingStatus() {
+        if (Build.VERSION.SDK_INT < 33) return "РФ напрямую: требуется Android 13 или новее. Сейчас весь трафик через VPN.";
+        VpnService service = activeService;
+        if (service != null && service.isLockdownEnabled()) return "РФ напрямую заблокирована настройкой Android «Блокировать соединения без VPN».";
+        return "Российские IP-сети — напрямую; остальные — через VPN.";
+    }
     public void setAutomaticSource(AutomaticSource source) { automaticSource = source; }
     @Nullable public synchronized Config getCurrentConfiguration() { return currentConfig; }
     @Nullable public synchronized String getCurrentProfileName() { return currentTunnel == null ? null : currentTunnel.getName(); }
@@ -817,6 +823,22 @@ public final class GoBackend implements Backend {
                         sawDefaultRoute = true;
                     builder.addRoute(addr.getAddress(), addr.getMask());
                 }
+            }
+
+            // Android13+ supports destination exclusions without expanding
+            // routes or changing peer keys/AllowedIPs. Older systems keep the
+            // existing full-VPN behavior and display the compatibility status.
+            if (Build.VERSION.SDK_INT >= 33) {
+                final java.util.List<org.amnezia.awg.r013.RussianIPPolicy.Prefix> ru =
+                    org.amnezia.awg.r013.RussianIPPolicy.get(context.getAssets().open("ru-networks.cidr"));
+                // Keep unmatched IPv6 captured even with an IPv4-only peer:
+                // no implicit cleartext fallback is introduced by exclusions.
+                boolean configuredV6 = false;
+                for (final Peer peer : config.getPeers()) for (final InetNetwork addr : peer.getAllowedIps())
+                    if (addr.getAddress() instanceof java.net.Inet6Address) configuredV6 = true;
+                if (!configuredV6 && sawDefaultRoute) builder.addRoute(InetAddress.getByName("::"), 0);
+                for (final org.amnezia.awg.r013.RussianIPPolicy.Prefix prefix : ru)
+                    builder.excludeRoute(new android.net.IpPrefix(prefix.address(), prefix.bits()));
             }
 
             // "Kill-switch" semantics

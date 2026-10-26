@@ -1,9 +1,14 @@
 # Validation only. Never add signing, release creation, catalogs or deployment.
+# The owner explicitly authorized client-source validation and, on26Oct2026,
+# selected RU IP routing and requested completed new clients on all3platforms.
+# The exact temporary branch below is validation-only; release gates stay intact.
 # While the audit is incomplete, publishing this client source and dispatching
 # this workflow requires the owner's explicit source-publication exception.
 # All existing release workflows retain their original security-review needs.
 name: Validate native clients without publishing releases
 on:
+  push:
+    branches: [russian-ip-routing-20261026]
   workflow_dispatch:
     inputs:
       platform:
@@ -23,7 +28,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   ios:
-    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && (inputs.platform == 'all' || inputs.platform == 'ios')
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && (inputs.validation_authorized == true || (github.event_name == 'push' && github.ref == 'refs/heads/russian-ip-routing-20261026')) && (github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'ios')
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -69,7 +74,7 @@ jobs:
             build/review/flow/**/*.png
 
   android:
-    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && (inputs.platform == 'all' || inputs.platform == 'android')
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && (inputs.validation_authorized == true || (github.event_name == 'push' && github.ref == 'refs/heads/russian-ip-routing-20261026')) && (github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'android')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -155,7 +160,7 @@ jobs:
             android/output/review/screenshots-final/**/*.png
 
   windows:
-    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && (inputs.platform == 'all' || inputs.platform == 'windows')
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && (inputs.validation_authorized == true || (github.event_name == 'push' && github.ref == 'refs/heads/russian-ip-routing-20261026')) && (github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'windows')
     runs-on: windows-2025
     timeout-minutes: 40
     defaults:

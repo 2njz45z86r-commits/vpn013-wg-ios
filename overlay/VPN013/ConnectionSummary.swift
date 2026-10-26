@@ -122,8 +122,9 @@ struct VPN013RuntimeStatisticsReply: Codable, Equatable {
     }
 }
 
-enum VPN013SnapshotIssue {
+enum VPN013SnapshotIssue: Error, Equatable {
     case notRunning, noSession, requestFailed, emptyResponse, oversizedResponse, invalidResponse, timedOut, runtimeUnavailable
+    case backendStopped, backendOffline, transportBusy, sessionRefreshFailed
 
     var explanation: String {
         switch self {
@@ -133,8 +134,205 @@ enum VPN013SnapshotIssue {
         case .emptyResponse: return "VPN-расширение не вернуло данные статистики"
         case .oversizedResponse: return "Ответ VPN-расширения превысил допустимый размер"
         case .invalidResponse: return "Ответ VPN-расширения не прошёл проверку формата"
-        case .timedOut: return "Нет ответа VPN-расширения за 3 секунды"
+        case .timedOut: return "Нет ответа VPN-расширения за 6 секунд"
         case .runtimeUnavailable: return "VPN-движок пока не вернул измеренные счётчики"
+        case .backendStopped: return "VPN-движок не предоставил активный сеанс статистики"
+        case .backendOffline: return "Счётчики временно недоступны при изменении сети"
+        case .transportBusy: return "Предыдущий запрос статистики ещё обрабатывается"
+        case .sessionRefreshFailed: return "Не удалось подтвердить текущий сеанс статистики"
+        }
+    }
+}
+
+/// A capability response does not touch the adapter queue or reopen any profile.
+struct VPN013ProviderIdentity: Codable, Equatable {
+    var schema = 1
+    var statisticsProtocol = 1
+    let version: String
+    let build: String
+    static var current: Self {
+        Self(version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
+             build: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown")
+    }
+    var isValid: Bool {
+        func number(_ text: String) -> Bool {
+            text == "unknown" || (!text.isEmpty && text.utf8.count <= 32 &&
+                text.utf8.allSatisfy { (48...57).contains($0) || $0 == 46 })
+        }
+        return schema == 1 && statisticsProtocol == 1 && number(version) && number(build)
+    }
+    var safeDescription: String { isValid ? version + "/" + build : "invalid" }
+}
+
+/// Only fixed status codes and measured fields cross the provider boundary.
+struct VPN013ProviderStatistics: Codable {
+    enum State: String, Codable { case available, stopped, offline, unavailable, noMeasurements }
+    var schema = 1
+    let provider: VPN013ProviderIdentity
+    let state: State
+    let sample: VPN013RuntimeStatisticsReply?
+    var isValid: Bool {
+        schema == 1 && provider.isValid &&
+            (state == .available ? sample?.hasMeasurements == true : sample == nil)
+    }
+    var issue: VPN013SnapshotIssue? {
+        switch state {
+        case .available: return nil
+        case .stopped: return .backendStopped
+        case .offline: return .backendOffline
+        case .unavailable, .noMeasurements: return .runtimeUnavailable
+        }
+    }
+}
+
+/// Main-thread, read-only RPC recovery. At most two unreturned IPC calls per connection.
+/// A nil reply causes one exact-profile preferences lookup, never stop/start/save.
+final class VPN013StatisticsMessageClient {
+    typealias Sender = (Data, @escaping (Data?) -> Void) throws -> Void
+    typealias Refresh = (@escaping (Sender?) -> Void) -> Void
+    typealias Schedule = (TimeInterval, @escaping () -> Void) -> Void
+    enum Format { case manual, legacyManual, automatic }
+    struct Output { let data: Data; let format: Format }
+    static let deadline: TimeInterval = 6
+    private let schedule: Schedule
+    private let deliver: (@escaping () -> Void) -> Void
+    private let clock: () -> TimeInterval
+    private final class PendingReply {
+        let generation: UUID
+        var handler: ((Result<Data, VPN013SnapshotIssue>) -> Void)?
+        init(_ generation: UUID, handler: @escaping (Result<Data, VPN013SnapshotIssue>) -> Void) {
+            self.generation = generation; self.handler = handler
+        }
+    }
+    private final class PendingRefresh {
+        let generation: UUID
+        var handler: ((Sender?) -> Void)?
+        init(_ generation: UUID, handler: @escaping (Sender?) -> Void) {
+            self.generation = generation; self.handler = handler
+        }
+    }
+    private var generation = UUID()
+    private var pending: [UUID: PendingReply] = [:]
+    private var pendingRefresh: PendingRefresh?
+    private var active = false
+    private var retryAfter: TimeInterval = 0
+    private var previousIssue: VPN013SnapshotIssue = .emptyResponse
+    private(set) var diagnostic = "not-requested"
+
+    init(schedule: @escaping Schedule = { delay, block in DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: block) },
+         deliver: @escaping (@escaping () -> Void) -> Void = { DispatchQueue.main.async(execute: $0) },
+         clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        self.schedule = schedule; self.deliver = deliver; self.clock = clock
+    }
+
+    func invalidate() {
+        generation = UUID(); active = false; retryAfter = 0
+        // Caller only invalidates across a stopped/replaced system connection.
+        pending.removeAll(); pendingRefresh?.handler = nil; diagnostic = "connection-changed"
+    }
+
+    func read(automatic: Bool, send: @escaping Sender, refresh: @escaping Refresh,
+              completion: @escaping (Result<Output, VPN013SnapshotIssue>) -> Void) {
+        guard !active else { completion(.failure(.transportBusy)); return }
+        guard clock() >= retryAfter else { completion(.failure(previousIssue)); return }
+        active = true; generation = UUID(); let stamp = generation
+        var ended = false
+        var stages: [String] = []
+        func note(_ text: String) { if stages.count < 10 { stages.append(text) }; self.diagnostic = stages.joined(separator: ";") }
+        func finish(_ value: Result<Output, VPN013SnapshotIssue>) {
+            guard self.generation == stamp, !ended else { return }; ended = true; self.active = false
+            for reply in self.pending.values where reply.generation == stamp { reply.handler = nil }
+            if self.pendingRefresh?.generation == stamp { self.pendingRefresh?.handler = nil }
+            if case .failure(let issue) = value { self.previousIssue = issue; self.retryAfter = self.clock() + 10 }
+            else { self.retryAfter = 0 }
+            completion(value)
+        }
+        func exchange(_ sender: @escaping Sender, byte: UInt8, timeout: TimeInterval,
+                      done: @escaping (Result<Data, VPN013SnapshotIssue>) -> Void) {
+            guard self.generation == stamp, !ended else { return }
+            guard self.pending.count < 2 else { done(.failure(.transportBusy)); return }
+            let call = UUID(); let waiter = PendingReply(stamp, handler: done); self.pending[call] = waiter
+            let once: (Result<Data, VPN013SnapshotIssue>) -> Void = { [weak self, weak waiter] result in
+                guard let self = self, let waiter = waiter else { return }
+                let callback = waiter.handler; waiter.handler = nil
+                guard self.generation == stamp, !ended else { return }; callback?(result)
+            }
+            self.schedule(timeout) { once(.failure(.timedOut)) }
+            do {
+                try sender(Data([byte])) { [weak self] data in
+                    self?.deliver { [weak self] in
+                        guard let self = self else { return }
+                        // Keep the waiter alive through once(), then release it.
+                        let retained = self.pending.removeValue(forKey: call)
+                        withExtendedLifetime(retained) {
+                            guard let data = data, !data.isEmpty else { once(.failure(.emptyResponse)); return }
+                            guard data.count <= 32_768 else { once(.failure(.oversizedResponse)); return }
+                            once(.success(data))
+                        }
+                    }
+                }
+            } catch {
+                let retained = self.pending.removeValue(forKey: call)
+                withExtendedLifetime(retained) { once(.failure(.requestFailed)) }
+            }
+        }
+        func consume(_ data: Data, legacy: Bool) {
+            if automatic { note("auto.reply"); finish(.success(Output(data: data, format: .automatic))); return }
+            if legacy { note("legacy.reply"); finish(.success(Output(data: data, format: .legacyManual))); return }
+            guard let value = try? JSONDecoder().decode(VPN013ProviderStatistics.self, from: data), value.isValid else {
+                note("metrics.invalid"); finish(.failure(.invalidResponse)); return
+            }
+            note("provider=" + value.provider.safeDescription); note("engine=" + value.state.rawValue)
+            if let issue = value.issue { finish(.failure(issue)); return }
+            finish(.success(Output(data: data, format: .manual)))
+        }
+        func fresh() {
+            guard self.pendingRefresh == nil else {
+                note("preferences.busy"); finish(.failure(.transportBusy)); return
+            }
+            note("preferences.lookup")
+            let waiter = PendingRefresh(stamp) { sender in
+                    guard self.generation == stamp, !ended else { return }
+                    guard let sender = sender else { note("preferences.no-match"); finish(.failure(.sessionRefreshFailed)); return }
+                    note("preferences.exact-match")
+                    exchange(sender, byte: automatic ? 3 : 6, timeout: 1.5) { result in
+                        if case .success(let data) = result { consume(data, legacy: false); return }
+                        guard !automatic else { note("fresh.failed"); finish(result.map { Output(data: $0, format: .automatic) }); return }
+                        note("fresh.failed")
+                        // Compatibility request4 returns parsed metrics only, never raw UAPI0.
+                        exchange(sender, byte: 4, timeout: 1.5) { value in
+                            if case .success(let data) = value { consume(data, legacy: true) }
+                            else { note("legacy.failed"); finish(value.map { Output(data: $0, format: .legacyManual) }) }
+                        }
+                    }
+            }
+            self.pendingRefresh = waiter
+            // The system lookup cannot be cancelled. Keep one ownership slot,
+            // but drop its handler at the deadline so it cannot retain the UI.
+            refresh { [weak self, weak waiter] sender in
+                self?.deliver { [weak self, weak waiter] in
+                    guard let self = self, let waiter = waiter,
+                          self.pendingRefresh === waiter else { return }
+                    self.pendingRefresh = nil
+                    let callback = waiter.handler; waiter.handler = nil
+                    callback?(sender)
+                }
+            }
+        }
+        self.schedule(Self.deadline) {
+            guard self.generation == stamp, !ended else { return }
+            note("request.deadline"); finish(.failure(.timedOut))
+        }
+        exchange(send, byte: automatic ? 3 : 6, timeout: 1.5) { result in
+            if case .success(let data) = result { consume(data, legacy: false); return }
+            note("current.failed")
+            exchange(send, byte: 5, timeout: 0.5) { probe in
+                if case .success(let data) = probe, data.count <= 1024,
+                   let info = try? JSONDecoder().decode(VPN013ProviderIdentity.self, from: data), info.isValid {
+                    note("capability=" + info.safeDescription)
+                } else { note("capability.no-reply") }
+                fresh()
+            }
         }
     }
 }

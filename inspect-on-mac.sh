@@ -61,7 +61,7 @@ if [ "$result" -eq 0 ]; then
 import json
 from pathlib import Path
 s=json.loads(Path('build/review/test-summary.json').read_text())
-assert s['result']=='Passed' and s['passedTests']==30 and s['failedTests']==0 and s['skippedTests']==0,s
+assert s['result']=='Passed' and s['passedTests']==31 and s['failedTests']==0 and s['skippedTests']==0,s
 PY
 fi
 # Keep failure screenshots with a PNG extension; never publish UI hierarchy text.

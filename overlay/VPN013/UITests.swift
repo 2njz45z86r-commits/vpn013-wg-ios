@@ -1,5 +1,14 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testNativeRussianIPRouteObjectsPreserveVPNAndPeers() {
+        let app=XCUIApplication()
+        app.launchArguments=["-AppleLanguages","(ru)","-AppleLocale","ru_RU","--vpn013-test-count","2","--vpn013-test-russian-routes"]
+        app.launch()
+        let policy=app.staticTexts["vpn013.routing-policy"]
+        XCTAssertTrue(policy.waitForExistence(timeout:20))
+        XCTAssertEqual(policy.value as? String,"8671 IPv4 / 2167 IPv6; original peers retained")
+        capture("native-russian-ip-settings-objects-not-physical-traffic")
+    }
     func capture(_ name:String) { let a=XCTAttachment(screenshot:XCUIScreen.main.screenshot());a.name=name;a.lifetime = .keepAlways;add(a) }
     private func assertProfileCount(_ app: XCUIApplication, _ count: Int, file: StaticString = #filePath, line: UInt = #line) {
         // UIKit exposes the same section-header UILabel through both its
@@ -444,18 +453,20 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].label.contains("127.0.0.1"))
         XCTAssertEqual(app.staticTexts["vpn013.current-traffic"].label, "Статистика VPN пока недоступна")
         let explanation = app.staticTexts["vpn013.current-handshake"]
-        XCTAssertTrue(explanation.waitForExistence(timeout:5))
-        XCTAssertEqual(explanation.label, fixture == "--vpn013-test-current-card-timeout"
-            ? "Нет ответа VPN-расширения за 3 секунды" : "VPN-расширение не вернуло данные статистики")
+        let expectedExplanation = fixture == "--vpn013-test-current-card-timeout"
+            ? "Нет ответа VPN-расширения за 6 секунд" : "VPN-расширение не вернуло данные статистики"
+        let matchingExplanation = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label == %@", "vpn013.current-handshake", expectedExplanation)).firstMatch
+        XCTAssertTrue(matchingExplanation.waitForExistence(timeout:10))
+        XCTAssertEqual(explanation.label, expectedExplanation)
         XCTAssertEqual(app.staticTexts["vpn013.current-proof"].label, "Данные рукопожатия пока недоступны")
         ping.tap()
         let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout:10), "Button must perform a real loopback ICMP echo")
         let measured = result.label
-        // Two real three-second app refreshes reproduce both nil and timeout regressions.
+        // Keep the measured Ping across two bounded six-second request windows.
         let refreshes = expectation(description:"Two runtime refresh cycles")
-        DispatchQueue.main.asyncAfter(deadline:.now() + 7) { refreshes.fulfill() }
-        wait(for:[refreshes], timeout:9)
+        DispatchQueue.main.asyncAfter(deadline:.now() + 14) { refreshes.fulfill() }
+        wait(for:[refreshes], timeout:16)
         XCTAssertTrue(ping.isEnabled)
         XCTAssertEqual(app.staticTexts["vpn013.current-ping-result"].label, measured, "Missing runtime must not erase the measured Ping")
         XCTAssertEqual(profile.switches.firstMatch.value as? String, "1", "Ping and refresh must not replace the running VPN")
