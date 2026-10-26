@@ -152,7 +152,8 @@ s=s.replace(anchor,'''        foreignRouteCount++
         if foreignRouteCount>8192{return "",errBackendUnknown}
 '''+anchor,1)
 # Count/duration-only stages expose routing resource costs without configs.
-s=s.replace('"io"','"io"\n "log"',1)
+if '"log"' not in s:
+    s=s.replace('"io"','"io"\n "log"',1)
 a='func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {'
 assert s.count(a)==1
 s=s.replace(a,a+'\n started:=time.Now();defer func(){if r013routing.Enabled(){log.Printf("R013Routing: selection returned after %s",time.Since(started))}}()',1)
