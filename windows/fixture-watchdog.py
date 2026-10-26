@@ -43,12 +43,27 @@ scm = adv.OpenSCManagerW(None,None,4)  # enumerate only, never service control
 assert scm, 'Watchdog SCM census unavailable'
 
 def census():
-    needed,count,resume = W.DWORD(),W.DWORD(),W.DWORD()
-    buffer = C.create_string_buffer(2*1024*1024)
-    ok = adv.EnumServicesStatusExW(scm,0,0x30,3,buffer,len(buffer),C.byref(needed),C.byref(count),C.byref(resume),None)
-    assert ok and count.value<=4096 and resume.value==0, 'Incomplete watchdog census'
-    entries = C.cast(buffer,C.POINTER(Entry))
-    return {entries[i].name:int(entries[i].status.pid) for i in range(count.value)}
+    # Win32 caps each buffer at256KiB; larger buffers are invalid. Follow the
+    # documented resume handle rather than accepting an incomplete first page.
+    result={}
+    resume=W.DWORD()
+    for _ in range(32):
+        needed,count = W.DWORD(),W.DWORD()
+        buffer = C.create_string_buffer(256*1024)
+        ok = adv.EnumServicesStatusExW(scm,0,0x30,3,buffer,len(buffer),C.byref(needed),C.byref(count),C.byref(resume),None)
+        error=C.get_last_error() if not ok else 0
+        if not ok and error!=234:
+            raise OSError(error,'Watchdog service census failed')
+        assert count.value<=4096, 'Watchdog service page bound'
+        entries = C.cast(buffer,C.POINTER(Entry))
+        for i in range(count.value):
+            result[entries[i].name]=int(entries[i].status.pid)
+        assert len(result)<=4096, 'Watchdog service inventory bound'
+        if ok:
+            assert resume.value==0
+            return result
+        assert resume.value!=0 and count.value>0, 'Watchdog census made no progress'
+    raise RuntimeError('Watchdog service pagination bound')
 
 baseline = set(census())
 tracked = {}
