@@ -123,11 +123,14 @@ func flushOwnNetwork(luid winipcfg.LUID) error {
 			for i := range rows {
 				if rows[i].InterfaceLUID == luid {
 					attempted++
-					if attempted == 1 || attempted%2048 == 0 {
+					if attempted <= 8 || attempted%256 == 0 {
 						trace(family, "route-attempt", attempted)
 					}
 					if err = rows[i].Delete(); err != nil {
 						result = errors.Join(result, fmt.Errorf("delete owned route: %w", err))
+					}
+					if attempted <= 8 {
+						trace(family, "route-returned", attempted)
 					}
 				}
 			}
