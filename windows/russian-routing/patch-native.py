@@ -69,6 +69,40 @@ func verifyEffectiveRoutes(luid winipcfg.LUID,configuration *conf.Config)error{
 s=s[:start]+'''    if err:=verifyEffectiveRoutes(luid,configuration);err!=nil{return err}
 '''+s[end:]
 s+=route_readback
+# A table snapshot can contain a route that disappears before Delete. Accept
+# NOT_FOUND only when the same owned interface still exists AND an independent
+# exact route lookup confirms absence. Every other native error stays fatal.
+anchor='''\t\t\t\t\tif err = rows[i].Delete(); err != nil {
+\t\t\t\t\t\tresult = errors.Join(result, fmt.Errorf("delete owned route: %w", err))'''
+assert s.count(anchor)==1
+s=s.replace(anchor,'''                    if err = rows[i].Delete(); err != nil {
+                        if errors.Is(err,windows.ERROR_NOT_FOUND) {
+                            _,interfaceError:=luid.Interface()
+                            _,routeError:=luid.Route(rows[i].DestinationPrefix.IPNet(),rows[i].NextHop.IP())
+                            if interfaceError==nil&&errors.Is(routeError,windows.ERROR_NOT_FOUND){continue}
+                            err=errors.Join(err,interfaceError,routeError)
+                        }
+                        result = errors.Join(result, fmt.Errorf("delete owned route: %w", err))''',1)
+# Confirm every effective split prefix is absent, not merely the original
+# default route that the destination policy deliberately replaced.
+anchor='\tactual, err := luid.DNS()'
+assert s.count(anchor)==1
+s=s.replace(anchor,'''    if r013routing.Enabled()&&!old.Interface.TableOff {
+        rows,err:=winipcfg.GetIPForwardTable2(windows.AF_UNSPEC)
+        if err!=nil{return err}
+        if len(rows)>65536{return errors.New("retired route table bound exceeded")}
+        remaining:=make(map[string]bool)
+        for _,row:=range rows{if row.InterfaceLUID==luid{network:=row.DestinationPrefix.IPNet();remaining[network.String()]=true}}
+        for _,peer:=range old.Peers{for _,prefix:=range peer.AllowedIPs{
+            haveSource:=false
+            for _,address:=range old.Interface.Addresses{if address.Bits()==prefix.Bits(){haveSource=true}}
+            if !haveSource{continue}
+            network:=prefix.IPNet();original,err:=netip.ParsePrefix(network.String());if err!=nil{return err}
+            parts,err:=r013routing.Exclude(original);if err!=nil{return err}
+            for _,part:=range parts{if remaining[part.String()]{return errors.New("retired effective owned route remains")}}
+        }}
+    }
+'''+anchor,1)
 # Retired cleanup already enumerates and deletes all own-LUID rows. Existing
 # specific original-route absence check remains an additional invariant.
 p.write_text(s,encoding='utf-8',newline='\n')
