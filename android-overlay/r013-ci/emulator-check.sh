@@ -80,6 +80,9 @@ adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest
 grep -E '^OK \(11 tests\)[[:space:]]*$' output/review/instrumentation.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/instrumentation.txt
 unset fixture candidate_fixture
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013NetworkRecoveryTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/network-recovery.txt
+grep -E '^OK \(3 tests\)[[:space:]]*$' output/review/network-recovery.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/network-recovery.txt
 adb pull /sdcard/Android/data/com.vpn013.awg.debug/files/review output/review/screenshots
 adb shell settings put system font_scale 1.3
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest#eNativeScreen -e reviewLabel phone-large-type com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/font-scale.txt

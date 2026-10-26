@@ -206,6 +206,7 @@ public final class GoBackend implements Backend {
         final AutoPolicy policy = new AutoPolicy(members.size(), 0);
         automaticPolicy = policy;
         final Thread worker = new Thread(() -> {
+            long nextHealthyLog = 0;
             try {
                 Thread.sleep(2500);
                 while (autoEpoch.get() == epoch && !Thread.currentThread().isInterrupted()) {
@@ -226,9 +227,17 @@ public final class GoBackend implements Backend {
                     synchronized (this) {
                         if (autoEpoch.get() != epoch || currentTunnel != tunnel) break;
                         if (connectionRevision != probeRevision) continue;
-                        boolean healthy = latency != null && getLastHandshake(tunnel) > 0;
+                        boolean handshakePresent = getLastHandshake(tunnel) > 0;
+                        boolean healthy = latency != null && handshakePresent;
                         available = physicalNetworkAvailable();
                         decision = policy.record(healthy, available, latency);
+                        long now = android.os.SystemClock.elapsedRealtime();
+                        if (!healthy || decision.action != AutoPolicy.Action.STAY || now >= nextHealthyLog) {
+                            Log.i(TAG, "Auto health: physical=" + available + " traffic=" + (latency != null) +
+                                " handshake=" + handshakePresent + " action=" + decision.action +
+                                " waitSeconds=" + decision.waitSeconds);
+                            nextHealthyLog = now + 60_000;
+                        }
                         if (decision.action == AutoPolicy.Action.SWITCH) {
                             AutoMember next = members.get(decision.index);
                             replacing = true;
@@ -240,6 +249,7 @@ public final class GoBackend implements Backend {
                             } catch (Exception ignored) {
                                 // Retain logical Auto ownership for a bounded retry; never invent a handshake.
                                 currentTunnel = tunnel; currentConfig = null;
+                                Log.w(TAG, "Auto switch failed; health worker retains retry ownership");
                             } finally { replacing = false; }
                         }
                     }
@@ -247,7 +257,10 @@ public final class GoBackend implements Backend {
                             decision.action == AutoPolicy.Action.SWITCH ? 2500 : 15000);
                 }
             } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-            finally { synchronized (this) { if (autoEpoch.get() == epoch) { autoThread = null; activeMember = null; } } }
+            finally { synchronized (this) {
+                Log.i(TAG, "Auto health worker ended: superseded=" + (autoEpoch.get() != epoch));
+                if (autoEpoch.get() == epoch) { autoThread = null; activeMember = null; }
+            } }
         }, "R013-Auto");
         autoThread = worker; worker.start();
         startHourly(tunnel, members, policy, epoch);
