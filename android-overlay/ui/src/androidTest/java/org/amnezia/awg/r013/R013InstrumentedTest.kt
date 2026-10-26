@@ -251,6 +251,8 @@ class R013InstrumentedTest {
             assertNotNull("Primary traffic lost during candidate scan",EndpointPing.measure("10.13.99.1"))
             // Stop must invalidate old handles and metrics before changing the TUN.
             tunnel.setStateAsync(Tunnel.State.DOWN)
+            assertNull("Stopped native owner must not remain observable",backend.actualRouteInterfaceName)
+            assertFalse("Old interface identity must be rejected even before explicit scope invalidation",routes!!.isCurrent)
             assertNull(org.amnezia.awg.GoBackend.r013ProbePoll(scope,operation))
             assertEquals(0L,org.amnezia.awg.GoBackend.r013ProbeStart(scope,input.toString()))
         } finally {

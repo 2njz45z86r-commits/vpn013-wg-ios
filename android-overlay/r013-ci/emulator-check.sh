@@ -22,12 +22,21 @@ sudo chmod 666 /dev/kvm
 "$ANDROID_HOME/emulator/emulator" -avd R013CI -no-window -no-snapshot -no-audio -gpu swiftshader_indirect -no-boot-anim -memory 3072 -cores 2 > "$RUNNER_TEMP/r013-emulator.log" 2>&1 &
 emulator_pid=$!
 peer_pid=""
+route_echo_pid=""
+ru_alias_added=""
+control_alias_added=""
 finish() {
   timeout 15s adb pull /sdcard/Android/data/com.vpn013.awg.debug/files/review output/review/screenshots-partial >/dev/null 2>&1 || true
   timeout 15s adb logcat -d -t 500 -s AndroidRuntime:E > output/review/runtime-errors.txt 2>/dev/null || true
+  # Only synthetic hosted CI runs here. Preserve bounded system-service crash
+  # diagnostics, never app configuration dumps, when native networking fails.
+  timeout 15s adb logcat -d -t 1200 -s Watchdog:E ActivityManager:E ConnectivityService:E AndroidRuntime:E > output/review/system-service-errors.txt 2>/dev/null || true
   cp "$RUNNER_TEMP/r013-emulator.log" output/review/emulator.log 2>/dev/null || true
   cp "$RUNNER_TEMP/r013-peer.log" output/review/synthetic-peer-build.log 2>/dev/null || true
   if [ -n "$peer_pid" ]; then kill "$peer_pid" 2>/dev/null || true; fi
+  if [ -n "$route_echo_pid" ]; then kill "$route_echo_pid" 2>/dev/null || true; fi
+  if [ "$ru_alias_added" = yes ]; then sudo ip address del 2.56.24.1/32 dev lo 2>/dev/null || true; fi
+  if [ "$control_alias_added" = yes ]; then sudo ip address del 198.18.0.1/32 dev lo 2>/dev/null || true; fi
   kill "$emulator_pid" 2>/dev/null || true
 }
 trap finish EXIT
@@ -79,6 +88,19 @@ candidate_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic-candidate.conf")
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
 grep -E '^OK \(11 tests\)[[:space:]]*$' output/review/instrumentation.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/instrumentation.txt
+sudo ip address add 2.56.24.1/32 dev lo
+ru_alias_added=yes
+sudo ip address add 198.18.0.1/32 dev lo
+control_alias_added=yes
+python3 r013-ci/russian-route-echo.py > output/review/russian-route-echo.txt 2>&1 &
+route_echo_pid=$!
+adb shell rm -f /sdcard/Android/data/com.vpn013.awg.debug/files/review/russian-route-request.json /sdcard/Android/data/com.vpn013.awg.debug/files/review/russian-route-proof.json
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013RussianRoutesTest -e syntheticConfig "$fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/russian-routing.txt &
+routing_test_pid=$!
+python3 r013-ci/capture-russian-routes.py
+wait "$routing_test_pid"
+grep -E '^OK \(1 test\)[[:space:]]*$' output/review/russian-routing.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/russian-routing.txt
 unset fixture candidate_fixture
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013NetworkRecoveryTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/network-recovery.txt
 grep -E '^OK \(3 tests\)[[:space:]]*$' output/review/network-recovery.txt
