@@ -8,7 +8,7 @@ run = os.environ['GITHUB_RUN_ID']
 verification = json.loads(Path('build/review/bundle-verification.json').read_text())
 ipa = Path('build/VPN013AWG-unsigned.ipa')
 summary = json.loads(Path('build/review/test-summary.json').read_text())
-assert ipa.is_file() and summary.get('failedTests') == 0 and summary.get('passedTests') == 30 and summary.get('skippedTests', 0) == 0, 'Do not publish failed or unverified tests'
+assert ipa.is_file() and summary.get('result') == 'Passed' and summary.get('failedTests') == 0 and summary.get('passedTests') == 31 and summary.get('totalTestCount') == 31 and summary.get('skippedTests', 0) == 0 and summary.get('testFailures') == [], 'Do not publish failed or unverified tests'
 with zipfile.ZipFile(ipa) as archive:
     info=plistlib.loads(archive.read('Payload/AmneziaWG.app/Info.plist'))
 assert info['CFBundleShortVersionString'] == verification['version']
