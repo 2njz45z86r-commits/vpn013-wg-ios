@@ -291,7 +291,12 @@ func (f *hourlyFixture) run(ctx context.Context) error {
 	f.receipt.VaultPreserved = string(after) == string(cipher)
 	actual, err := conf.LoadFromName(r013.AutoName)
 	if err != nil || len(actual.Peers) != 1 || actual.Interface.PrivateKey != two.Interface.PrivateKey || actual.Interface.MTU != two.Interface.MTU {
-		return errors.New("selected real working seed not persisted")
+		var logs bytes.Buffer
+        logErr:=ringlogger.DumpTo(&logs,false)
+        var safe []string
+        for _,line:=range strings.Split(logs.String(),"\n"){if strings.Contains(line,"R013Routing:"){safe=append(safe,line)}}
+        detail:=strings.Join(safe,"\n");if len(detail)>12000{detail=detail[len(detail)-12000:]}
+        return fmt.Errorf("selected real working seed not persisted; log=%v\n%s",logErr,detail)
 	}
 	if !f.receipt.Selected || !f.receipt.Compared || !f.receipt.TrafficDuringScan || !f.receipt.SameTUN || !f.receipt.VaultPreserved || f.receipt.Replies < 2 {
 		return errors.New("compiled hourly acceptance incomplete")

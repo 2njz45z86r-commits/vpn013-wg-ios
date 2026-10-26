@@ -43,9 +43,14 @@ p=tunnel/'r013_existing_network.go';s=p.read_text(encoding='utf-8')
 s=s.replace('import (','import (\n "net/netip"\n "github.com/amnezia-vpn/amneziawg-windows-client/r013routing"',1)
 start=s.index('\tif !configuration.Interface.TableOff {',s.index('func verifyOwnNetwork'))
 end=s.index('\n\tdns, err := luid.DNS()',start)
-s=s[:start]+'''    if !configuration.Interface.TableOff {
+route_readback='''
+// Native route-only observation preserves the existing readiness contract.
+// Apply still verifies addresses, explicit MTU and exact chosen DNS separately.
+func verifyEffectiveRoutes(luid winipcfg.LUID,configuration *conf.Config)error{
+    if !configuration.Interface.TableOff {
         rows,err:=winipcfg.GetIPForwardTable2(windows.AF_UNSPEC)
         if err!=nil{return err}
+        if len(rows)>65536{return errors.New("native route table bound exceeded")}
         actual:=make(map[string]bool,len(rows))
         for _,row:=range rows{if row.InterfaceLUID==luid&&row.Metric==0&&row.NextHop.IP().IsUnspecified(){network:=row.DestinationPrefix.IPNet();actual[network.String()]=true}}
         for _,peer:=range configuration.Peers{for _,prefix:=range peer.AllowedIPs{
@@ -58,7 +63,12 @@ s=s[:start]+'''    if !configuration.Interface.TableOff {
             for _,part:=range parts{if !actual[part.String()]{return errors.New("effective split route readback missing or differs")}}
         }}
     }
+    return nil
+}
+'''
+s=s[:start]+'''    if err:=verifyEffectiveRoutes(luid,configuration);err!=nil{return err}
 '''+s[end:]
+s+=route_readback
 # Retired cleanup already enumerates and deletes all own-LUID rows. Existing
 # specific original-route absence check remains an additional invariant.
 p.write_text(s,encoding='utf-8',newline='\n')
@@ -77,7 +87,7 @@ s=s.replace(old,'''        if !r013routing.Enabled() {
         }''',1)
 anchor='\traw, err := dev.IpcGet()';assert s.count(anchor)==1
 s=s.replace(anchor,'''    if r013routing.Enabled() {
-        if verifyOwnNetwork(luid,cfg)!=nil{return out}
+        if verifyEffectiveRoutes(luid,cfg)!=nil{return out}
     }
 '''+anchor,1)
 p.write_text(s,encoding='utf-8',newline='\n')
@@ -96,6 +106,15 @@ anchor='''\t\tinterfaces[row.InterfaceLUID] = true
 s=s.replace(anchor,'''        foreignRouteCount++
         if foreignRouteCount>8192{return "",errBackendUnknown}
 '''+anchor,1)
+# Count/duration-only stages expose routing resource costs without configs.
+s=s.replace('"io"','"io"\n "log"',1)
+a='func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {'
+assert s.count(a)==1
+s=s.replace(a,a+'\n started:=time.Now();defer func(){if r013routing.Enabled(){log.Printf("R013Routing: selection returned after %s",time.Since(started))}}()',1)
+s=s.replace('import (','import (\n "github.com/amnezia-vpn/amneziawg-windows-client/r013routing"',1)
+for a,label in [('applyError := (*o.watcher).RetireForBackend(o.ctx)','retire'),('applyError = o.install(&selected, request.member.UAPI())','install'),('applyError = o.persist(&selected)','persist')]:
+ assert s.count(a)==1
+ s=s.replace(a,a+'\n if r013routing.Enabled(){log.Printf("R013Routing: handover '+label+' ok=%v elapsed=%s",applyError==nil,time.Since(started))}',1)
 p.write_text(s,encoding='utf-8',newline='\n')
 
 p=tunnel/'service.go';s=p.read_text(encoding='utf-8')
