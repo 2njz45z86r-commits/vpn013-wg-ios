@@ -7,6 +7,8 @@ import os
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
     private var localStatistics: VPN013LocalStatisticsServer?
+    // Read and changed only on the main queue. A stopped startup cannot open a listener later.
+    private var localStatisticsEpoch = UUID()
     private var automatic: AutoTunnelController?
     private var automaticStartCompletion: ((Error?) -> Void)?
     private var automaticEpoch = 0
@@ -71,6 +73,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        let statisticsEpoch = UUID()
+        let rememberStatisticsStartup = { self.localStatisticsEpoch = statisticsEpoch }
+        if Thread.isMainThread { rememberStatisticsStartup() }
+        else { DispatchQueue.main.sync(execute: rememberStatisticsStartup) }
         let activationAttemptId = options?["activationAttemptId"] as? String
         let errorNotifier = ErrorNotifier(activationAttemptId: activationAttemptId)
 
@@ -100,6 +106,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let finishStart: (Error?) -> Void = { error in
             guard error == nil else { completionHandler(error); return }
             DispatchQueue.main.async {
+                guard self.localStatisticsEpoch == statisticsEpoch else {
+                    completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return
+                }
                 // Independent read-only authenticated transport. It cannot alter the
                 // engine, routes, profiles or keys and never binds a LAN/WAN address.
                 if let envelope = tunnelProviderProtocol.privateEnvelope,
@@ -170,6 +179,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         wg_log(.info, message: "Stopping tunnel, reason=\(reason.rawValue) (\(reason))")
 
         let cleanup = {
+            self.localStatisticsEpoch = UUID()
             self.automaticEpoch += 1;self.automatic?.stop();self.automatic = nil
             let pending=self.automaticStartCompletion;self.automaticStartCompletion=nil
             pending?(NSError(domain:NSURLErrorDomain,code:NSURLErrorCancelled))
