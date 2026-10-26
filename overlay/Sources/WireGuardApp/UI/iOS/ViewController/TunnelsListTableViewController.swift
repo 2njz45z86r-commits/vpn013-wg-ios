@@ -758,7 +758,7 @@ class TunnelsListTableViewController: UIViewController {
         automaticSummaryRequestInFlight = true
         let requestID = UUID()
         automaticSummaryRequestID = requestID
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + VPN013StatisticsMessageClient.deadline + 0.25) { [weak self] in
             guard let self = self, self.automaticSummaryRequestID == requestID,
                   self.automaticSummaryTunnel === tunnel, tunnel.status == .active,
                   self.automaticSummaryRequestInFlight else { return }

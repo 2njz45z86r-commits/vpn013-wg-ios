@@ -26,6 +26,11 @@ public enum WireGuardAdapterError: Error {
     case startWireGuardBackend(Int32)
 }
 
+/// Internal provider read result. Never serialize the raw runtime configuration.
+public enum WireGuardRuntimeRead {
+    case available(String), stopped, temporarilyOffline, unavailable
+}
+
 /// Enum representing internal state of the `WireGuardAdapter`
 private enum State {
     /// The tunnel is stopped
@@ -200,18 +205,27 @@ public class WireGuardAdapter {
     /// Returns a runtime configuration from WireGuard.
     /// - Parameter completionHandler: completion handler.
     public func getRuntimeConfiguration(completionHandler: @escaping (String?) -> Void) {
-        workQueue.async {
-            guard case .started(let handle, _) = self.state else {
-                self.logHandler(.verbose, "getRuntimeConfiguration: adapter not started (state=\(self.state))")
-                completionHandler(nil)
-                return
-            }
+        readRuntimeConfiguration { result in
+            if case .available(let text) = result { completionHandler(text) }
+            else { completionHandler(nil) }
+        }
+    }
 
+    /// Read on the same queue as lifecycle changes, without acquiring a mutation guard.
+    public func readRuntimeConfiguration(completionHandler: @escaping (WireGuardRuntimeRead) -> Void) {
+        workQueue.async {
+            let handle: Int32
+            switch self.state {
+            case .started(let value, _): handle = value
+            case .stopped: completionHandler(.stopped); return
+            case .temporaryShutdown: completionHandler(.temporarilyOffline); return
+            }
             if let settings = wgGetConfig(handle) {
-                completionHandler(String(cString: settings))
+                let text = String(cString: settings)
                 free(settings)
+                completionHandler(.available(text))
             } else {
-                completionHandler(nil)
+                completionHandler(.unavailable)
             }
         }
     }

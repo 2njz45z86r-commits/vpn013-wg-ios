@@ -173,6 +173,30 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
         guard let completionHandler = completionHandler else { return }
 
+        if messageData == Data([5]) {
+            // Deliberately independent of the engine/main queues and profile storage.
+            completionHandler(try? JSONEncoder().encode(VPN013ProviderIdentity.current))
+            return
+        }
+        if messageData == Data([6]) {
+            adapter.readRuntimeConfiguration { result in
+                let state: VPN013ProviderStatistics.State
+                let sample: VPN013RuntimeStatisticsReply?
+                switch result {
+                case .available(let text):
+                    let parsed = VPN013RuntimeStatisticsReply(runtime: text)
+                    state = parsed.hasMeasurements ? .available : .noMeasurements
+                    sample = parsed.hasMeasurements ? parsed : nil
+                case .stopped: state = .stopped; sample = nil
+                case .temporarilyOffline: state = .offline; sample = nil
+                case .unavailable: state = .unavailable; sample = nil
+                }
+                let reply = VPN013ProviderStatistics(provider: .current, state: state, sample: sample)
+                completionHandler(try? JSONEncoder().encode(reply))
+            }
+            return
+        }
+
         if messageData == Data([4]) {
             // Read the running backend directly. In particular, do not reopen
             // protocolConfiguration/private storage or wait on the main queue.
