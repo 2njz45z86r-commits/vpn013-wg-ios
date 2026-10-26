@@ -262,7 +262,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 }
 
 extension PacketTunnelProvider {
-    private func startAutomatic(candidates:[TunnelConfiguration],completion:@escaping(Error?) -> Void) {
+    private func startAutomatic(candidates:[TunnelConfiguration],completion:@escaping (Error?) -> Void) {
         automaticEpoch += 1;let stamp=automaticEpoch
         automaticStartCompletion=completion
         // Resolve reserves while the physical network is still available. Reusing
