@@ -80,20 +80,42 @@ func verifyEffectiveRoutes(luid winipcfg.LUID,configuration *conf.Config)error{
 s=s[:start]+'''    if err:=verifyEffectiveRoutes(luid,configuration);err!=nil{return err}
 '''+s[end:]
 s+=route_readback
-# A table snapshot can contain a route that disappears before Delete. Accept
-# NOT_FOUND only when the same owned interface still exists AND an independent
-# exact route lookup confirms absence. Every other native error stays fatal.
+# A table snapshot can contain a route that disappears before Delete. Keep
+# every NOT_FOUND provisional until one independent final native table read
+# proves all exact missing entries absent on the still-existing owned LUID.
+# Repeating the individual lookup exhausted the native handover deadline in CI.
+anchor='func flushOwnNetwork(luid winipcfg.LUID) error {'
+assert s.count(anchor)==1
+s=s.replace(anchor,anchor+'\n missingRoutes:=make(map[string]bool)',1)
 anchor='''\t\t\t\t\tif err = rows[i].Delete(); err != nil {
 \t\t\t\t\t\tresult = errors.Join(result, fmt.Errorf("delete owned route: %w", err))'''
 assert s.count(anchor)==1
 s=s.replace(anchor,'''                    if err = rows[i].Delete(); err != nil {
                         if errors.Is(err,windows.ERROR_NOT_FOUND) {
-                            _,interfaceError:=luid.Interface()
-                            _,routeError:=luid.Route(rows[i].DestinationPrefix.IPNet(),rows[i].NextHop.IP())
-                            if interfaceError==nil&&errors.Is(routeError,windows.ERROR_NOT_FOUND){continue}
-                            err=errors.Join(err,interfaceError,routeError)
+                            network:=rows[i].DestinationPrefix.IPNet()
+                            missingRoutes[network.String()+"|"+rows[i].NextHop.IP().String()]=true
+                            continue
                         }
                         result = errors.Join(result, fmt.Errorf("delete owned route: %w", err))''',1)
+start=s.index('func flushOwnNetwork(');end=s.index('\nfunc verifyOwnNetwork(',start)
+flush=s[start:end];anchor='\treturn result\n}'
+assert flush.count(anchor)==1
+flush=flush.replace(anchor,'''    if len(missingRoutes)>0 {
+        _,interfaceError:=luid.Interface()
+        remaining,tableError:=winipcfg.GetIPForwardTable2(windows.AF_UNSPEC)
+        if interfaceError!=nil||tableError!=nil||len(remaining)>65536 {
+            result=errors.Join(result,fmt.Errorf("verify missing owned routes: %w",errors.Join(windows.ERROR_NOT_FOUND,interfaceError,tableError)))
+        } else {
+            for _,row:=range remaining {
+                network:=row.DestinationPrefix.IPNet()
+                if row.InterfaceLUID==luid&&missingRoutes[network.String()+"|"+row.NextHop.IP().String()] {
+                    result=errors.Join(result,errors.New("delete reported missing but exact owned route remains"))
+                }
+            }
+        }
+    }
+'''+anchor,1)
+s=s[:start]+flush+s[end:]
 # Confirm every effective split prefix is absent, not merely the original
 # default route that the destination policy deliberately replaced.
 anchor='\tactual, err := luid.DNS()'
