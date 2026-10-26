@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -143,10 +144,66 @@ func TestRussianRoutingNative(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer service.Close()
-		defer func() { service.Control(svc.Stop); service.Delete() }()
+		// The worker owns a dynamic WFP policy. A failed worker must not leave
+		// that policy blocking the hosted runner's diagnostics. SCM Stop is
+		// not a process deadline: Execute is busy running the test body.
+		defer service.Delete()
 		if err = service.Start(); err != nil {
 			t.Fatal(err)
 		}
+		var worker windows.Handle
+		for until := time.Now().Add(8 * time.Second); time.Now().Before(until); time.Sleep(20 * time.Millisecond) {
+			status, queryErr := service.Query()
+			if queryErr != nil {
+				t.Fatal("query owned fixture", queryErr)
+			}
+			if status.ProcessId == 0 {
+				continue
+			}
+			worker, err = windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.PROCESS_TERMINATE|windows.SYNCHRONIZE, false, status.ProcessId)
+			if err != nil {
+				t.Fatal("open owned fixture process", err)
+			}
+			var image [32768]uint16
+			size := uint32(len(image))
+			if err = windows.QueryFullProcessImageName(worker, 0, &image[0], &size); err != nil || !strings.EqualFold(filepath.Clean(windows.UTF16ToString(image[:size])), filepath.Clean(exe)) {
+				windows.CloseHandle(worker)
+				t.Fatal("owned fixture process image mismatch", err)
+			}
+			break
+		}
+		if worker == 0 {
+			t.Fatal("owned fixture process did not appear")
+		}
+		var deadlineReached atomic.Bool
+		finished, watchdogDone := make(chan struct{}), make(chan struct{})
+		go func() {
+			defer close(watchdogDone)
+			timer := time.NewTimer(110 * time.Second)
+			defer timer.Stop()
+			select {
+			case <-finished:
+			case <-timer.C:
+				deadlineReached.Store(true)
+				// The retained handle pins the exact process created by this
+				// unique SCM service; PID reuse cannot target another process.
+				windows.TerminateProcess(worker, 124)
+			}
+		}()
+		defer func() {
+			close(finished)
+			<-watchdogDone
+			defer windows.CloseHandle(worker)
+			state, waitErr := windows.WaitForSingleObject(worker, 5000)
+			if waitErr != nil || state != windows.WAIT_OBJECT_0 {
+				killErr := windows.TerminateProcess(worker, 125)
+				state, waitErr = windows.WaitForSingleObject(worker, 5000)
+				t.Errorf("owned fixture did not exit naturally: kill=%v wait=%d/%v", killErr, state, waitErr)
+			}
+			if deadlineReached.Load() {
+				t.Error("owned SYSTEM fixture deadline reached; incomplete proof")
+			}
+		}()
 		var out []byte
 		for until := time.Now().Add(90 * time.Second); time.Now().Before(until); time.Sleep(40 * time.Millisecond) {
 			out, _ = os.ReadFile(filepath.Join(directory, "result.txt"))
@@ -163,6 +220,7 @@ func TestRussianRoutingNative(t *testing.T) {
 	if !russianFixtureService {
 		t.Fatal("worker must run in actual SCM service")
 	}
+	fmt.Println("R013_RU_PHASE worker-start")
 	exe, _ := os.Executable()
 	driver, err := os.ReadFile(filepath.Join(filepath.Dir(exe), "wintun.dll"))
 	if err != nil {
@@ -188,6 +246,7 @@ func TestRussianRoutingNative(t *testing.T) {
 		t.Fatal("native Wintun required")
 	}
 	defer native.Close()
+	fmt.Println("R013_RU_PHASE owned-tun-created")
 	luid := winipcfg.LUID(native.LUID())
 	// Match production interface initialization. In particular a synthetic
 	// echo fixture does not implement IPv6 neighbor discovery/router adverts.
@@ -245,6 +304,7 @@ func TestRussianRoutingNative(t *testing.T) {
 		v6, e6 := luid.IPAddress(addresses6[0].IP)
 		t.Fatalf("fixture address not preferred: v4=%+v/%v v6=%+v/%v", v4, e4, v6, e6)
 	}
+	fmt.Println("R013_RU_PHASE addresses-preferred")
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -367,6 +427,7 @@ func TestRussianRoutingNative(t *testing.T) {
 			t.Fatalf("physical fixture control unavailable before WFP: %s", ip)
 		}
 	}
+	fmt.Println("R013_RU_PHASE baseline-echo-complete")
 	r013routing.Enable()
 	if err = elevate.DropAllPrivileges(true); err != nil {
 		t.Fatal(err)
@@ -376,6 +437,7 @@ func TestRussianRoutingNative(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer DisableFirewall()
+	fmt.Println("R013_RU_PHASE restrictive-policy-installed")
 	if err = VerifyFirewall(); err != nil {
 		t.Fatal(err)
 	}
@@ -390,6 +452,7 @@ func TestRussianRoutingNative(t *testing.T) {
 		}
 	}
 	DisableFirewall()
+	fmt.Println("R013_RU_PHASE restrictive-policy-closed")
 	for _, ip := range []string{"2.56.24.2", "198.18.0.2", "2001:640::2", "2001:db8:130::2"} {
 		if !ask(ip) {
 			t.Fatalf("fixture route did not recover after cleanup: %s", ip)
