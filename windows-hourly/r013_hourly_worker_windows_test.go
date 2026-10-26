@@ -4,6 +4,7 @@
 package tunnel
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013winudp"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf/dpapi"
+	"github.com/amnezia-vpn/amneziawg-windows/v3/ringlogger"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
@@ -221,7 +224,20 @@ func (f *hourlyFixture) run(ctx context.Context) error {
 		time.Sleep(40 * time.Millisecond)
 	}
 	if initial.Member == nil || initial.Member.Index != 0 || initial.Member.Generation != 1 {
-		return errors.New("real compiled worker initial exact member unavailable")
+		status, statusErr := service.Query()
+		var logs bytes.Buffer
+		logErr := ringlogger.DumpTo(&logs, false)
+		var safe []string
+		for _, line := range strings.Split(logs.String(), "\n") {
+			if strings.Contains(line, "R013Routing:") || strings.Contains(line, "Startup complete") || strings.Contains(line, "Unable to") || strings.Contains(line, "Firewall error") || strings.Contains(line, "failed") {
+				safe = append(safe, line)
+			}
+		}
+		detail := strings.Join(safe, "\n")
+		if len(detail) > 10000 {
+			detail = detail[len(detail)-10000:]
+		}
+		return fmt.Errorf("real compiled worker initial exact member unavailable: SCM=%+v query=%v log=%v\n%s", status, statusErr, logErr, detail)
 	}
 	factory, err := protectedudp.NewForNetwork(protectedudp.ThroughTunnel, hourlyApplicationSocket{initial.TunnelIndex})
 	if err != nil {

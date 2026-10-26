@@ -28,7 +28,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   ios:
-    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && (inputs.validation_authorized == true || (github.event_name == 'push' && github.ref == 'refs/heads/russian-ip-routing-20261026')) && (github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'ios') && !contains(github.event.head_commit.message, '[android-only]') && !contains(github.event.head_commit.message, '[windows-only]')
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && (inputs.validation_authorized == true || (github.event_name == 'push' && github.ref == 'refs/heads/russian-ip-routing-20261026')) && (github.event_name == 'push' || inputs.platform == 'all' || inputs.platform == 'ios') && !contains(github.event.head_commit.message, '[android-only]') && !contains(github.event.head_commit.message, '[windows-only]') && !contains(github.event.head_commit.message, '[no-ios]')
     runs-on: macos-15-intel
     timeout-minutes: 30
     steps:

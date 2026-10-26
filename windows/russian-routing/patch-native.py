@@ -18,6 +18,13 @@ s=s.replace('routes = append(routes, route)','''original,parseErr:=netip.ParsePr
                 routes = append(routes, copy)
             }''')
 s=s.replace('import (','import (\n "net/netip"\n "github.com/amnezia-vpn/amneziawg-windows-client/r013routing"',1)
+s=s.replace('"sort"','"sort"\n "time"',1)
+anchor='err = luid.SetRoutesForFamily(family, deduplicatedRoutes)'
+assert s.count(anchor)==1
+s=s.replace(anchor,'''started:=time.Now()
+        if r013routing.Enabled(){log.Printf("R013Routing: applying %d effective routes, family %d",len(deduplicatedRoutes),family)}
+        '''+anchor+'''
+        if r013routing.Enabled(){log.Printf("R013Routing: route apply family %d finished in %s (error=%v)",family,time.Since(started),err)}''')
 p.write_text(s,encoding='utf-8',newline='\n')
 p=tunnel/'firewall/blocker.go';s=p.read_text(encoding='utf-8')
 anchor='\t\t\terr = blockAll(session, baseObjects, 0)';assert s.count(anchor)==1

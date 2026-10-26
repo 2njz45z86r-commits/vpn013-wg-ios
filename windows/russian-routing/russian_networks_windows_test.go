@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -17,19 +18,79 @@ import (
 
 	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013routing"
+	"github.com/amnezia-vpn/amneziawg-windows/v3/elevate"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/winipcfg"
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/mgr"
 )
+
+var russianFixtureService bool
+
+// WFP intentionally requires the actual unrestricted service SID. A normal
+// runner process cannot stand in for that production identity.
+func TestMain(m *testing.M) {
+	if len(os.Args) == 4 && os.Args[1] == "--r013-ru-fixture" {
+		name, directory := os.Args[2], os.Args[3]
+		service, err := svc.IsWindowsService()
+		if err != nil || !service || !strings.HasPrefix(name, "R013RussianCI-") || !filepath.IsAbs(directory) {
+			os.Exit(20)
+		}
+		var token windows.Token
+		if windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_QUERY, &token) != nil {
+			os.Exit(21)
+		}
+		user, err := token.GetTokenUser()
+		token.Close()
+		if err != nil || !user.User.Sid.IsWellKnown(windows.WinLocalSystemSid) {
+			os.Exit(22)
+		}
+		f, err := os.Create(filepath.Join(directory, "result.txt"))
+		if err != nil {
+			os.Exit(23)
+		}
+		os.Stdout, os.Stderr = f, f
+		log.SetOutput(f)
+		russianFixtureService = true
+		os.Setenv("R013_RU_NATIVE_MODE", "worker")
+		os.Setenv("R013_RU_NATIVE_SERVICE", name)
+		os.Args = []string{os.Args[0], "-test.run=^TestRussianRoutingNative$", "-test.v", "-test.timeout=85s"}
+		if svc.Run(name, russianRoutingService{m: m, f: f}) != nil {
+			os.Exit(24)
+		}
+		f.Close()
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
+type russianRoutingService struct {
+	m *testing.M
+	f *os.File
+}
+
+func (s russianRoutingService) Execute(_ []string, _ <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
+	changes <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
+	code := s.m.Run()
+	fmt.Fprintf(s.f, "R013_RU_TEST_EXIT_%d\n", code)
+	s.f.Sync()
+	changes <- svc.Status{State: svc.StopPending}
+	return code != 0, uint32(code)
+}
 
 // All adapters and addresses are disposable fixture-owned resources. No WAN,
 // customer configuration or physical interface is read or changed.
 func TestRussianRoutingNative(t *testing.T) {
-	if os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Getenv("RUNNER_OS") != "Windows" || os.Getenv("GITHUB_REPOSITORY") != "2njz45z86r-commits/vpn013-wg-ios" {
+	mode := os.Getenv("R013_RU_NATIVE_MODE")
+	child := mode == "client" && strings.HasPrefix(os.Getenv("R013_RU_NATIVE_SERVICE"), "R013RussianCI-")
+	if !russianFixtureService && !child && (os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Getenv("RUNNER_OS") != "Windows" || os.Getenv("GITHUB_REPOSITORY") != "2njz45z86r-commits/vpn013-wg-ios") {
 		t.Fatal("disposable official hosted Windows runner required")
 	}
-	mode := os.Getenv("R013_RU_NATIVE_MODE")
 	if mode == "client" {
 		target := os.Getenv("R013_RU_NATIVE_TARGET")
+		if target != "2.56.24.2" && target != "198.18.0.2" && target != "2001:640::2" && target != "2001:db8:130::2" {
+			t.Fatal("only owned synthetic targets permitted")
+		}
 		family := "udp4"
 		if strings.Contains(target, ":") {
 			family = "udp6"
@@ -56,22 +117,54 @@ func TestRussianRoutingNative(t *testing.T) {
 		return
 	}
 	if mode != "worker" {
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-		defer cancel()
 		exe, err := os.Executable()
 		if err != nil {
 			t.Fatal(err)
 		}
-		cmd := exec.CommandContext(ctx, exe, "-test.run=^TestRussianRoutingNative$", "-test.v")
-		cmd.Env = append(os.Environ(), "R013_RU_NATIVE_MODE=worker")
-		out, err := cmd.CombinedOutput()
-		if err != nil || !strings.Contains(string(out), "ACTUAL_RU_WFP_ALLOWED_FOREIGN_BLOCKED_CLEANED") {
-			t.Fatalf("isolated native routing fixture failed: %v\n%s", err, out)
+		driver, err := os.ReadFile(os.Getenv("R013_CI_WINTUN_DLL"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fmt.Sprintf("%x", sha256.Sum256(driver)) != "e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce" {
+			t.Fatal("unreviewed driver")
+		}
+		if err = os.WriteFile(filepath.Join(filepath.Dir(exe), "wintun.dll"), driver, 0600); err != nil {
+			t.Fatal(err)
+		}
+		name := fmt.Sprintf("R013RussianCI-%d", time.Now().UnixNano())
+		directory := t.TempDir()
+		scm, err := mgr.Connect()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer scm.Disconnect()
+		service, err := scm.CreateService(name, exe, mgr.Config{StartType: mgr.StartManual, ServiceType: windows.SERVICE_WIN32_OWN_PROCESS, SidType: windows.SERVICE_SID_TYPE_UNRESTRICTED}, "--r013-ru-fixture", name, directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer service.Close()
+		defer func() { service.Control(svc.Stop); service.Delete() }()
+		if err = service.Start(); err != nil {
+			t.Fatal(err)
+		}
+		var out []byte
+		for until := time.Now().Add(90 * time.Second); time.Now().Before(until); time.Sleep(40 * time.Millisecond) {
+			out, _ = os.ReadFile(filepath.Join(directory, "result.txt"))
+			if strings.Contains(string(out), "R013_RU_TEST_EXIT_") {
+				break
+			}
+		}
+		if !strings.Contains(string(out), "R013_RU_TEST_EXIT_0") || !strings.Contains(string(out), "ACTUAL_RU_WFP_ALLOWED_FOREIGN_BLOCKED_CLEANED") {
+			t.Fatalf("isolated actual-SYSTEM routing service failed:\n%s", out)
 		}
 		t.Log(string(out))
 		return
 	}
-	driver, err := os.ReadFile(os.Getenv("R013_CI_WINTUN_DLL"))
+	if !russianFixtureService {
+		t.Fatal("worker must run in actual SCM service")
+	}
+	exe, _ := os.Executable()
+	driver, err := os.ReadFile(filepath.Join(filepath.Dir(exe), "wintun.dll"))
 	if err != nil {
 		t.Fatal("CI Wintun required", err)
 	}
@@ -275,6 +368,9 @@ func TestRussianRoutingNative(t *testing.T) {
 		}
 	}
 	r013routing.Enable()
+	if err = elevate.DropAllPrivileges(true); err != nil {
+		t.Fatal(err)
+	}
 	started := time.Now()
 	if err = EnableFirewall(0, false, nil); err != nil {
 		t.Fatal(err)
