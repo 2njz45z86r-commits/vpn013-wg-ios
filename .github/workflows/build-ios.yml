@@ -73,7 +73,7 @@ jobs:
           test '${{ steps.native.outcome }}' = success
           test -f build/VPN013AWG-unsigned.ipa
           python3 publish-client-release.py --prepare-only
-          shasum -a 256 build/VPN013AWG-unsigned.ipa build/native-review.zip build/client-release.json > build/SHA256SUMS.txt
+          shasum -a 256 build/VPN013-*.ipa build/native-review.zip build/client-release.json > build/SHA256SUMS.txt
       - name: Retain successfully checked IPA before release publication
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -82,7 +82,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           path: |
-            build/VPN013AWG-unsigned.ipa
+            build/VPN013-*.ipa
             build/native-review.zip
             build/client-release.json
             build/SHA256SUMS.txt
@@ -101,7 +101,7 @@ jobs:
         run: |
           set -eu
           gh release create "unsigned-${GITHUB_RUN_ID}" \
-            build/VPN013AWG-unsigned.ipa build/native-review.zip build/SHA256SUMS.txt \
+            build/VPN013-*.ipa build/native-review.zip build/SHA256SUMS.txt \
             --target "$GITHUB_SHA" --prerelease --title "VPN013 unsigned build ${GITHUB_RUN_NUMBER}" \
             --notes 'Requires owner signing and physical iPhone VPN verification. No customer credentials included.'
           python3 publish-client-release.py
