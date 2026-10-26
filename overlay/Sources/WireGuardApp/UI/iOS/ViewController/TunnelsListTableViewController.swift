@@ -307,7 +307,7 @@ class TunnelsListTableViewController: UIViewController {
         routingLabel.accessibilityIdentifier = "vpn013.routing-policy"
         #if targetEnvironment(simulator)
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-russian-routes") {
-            routingLabel.accessibilityValue = WireGuardAdapter.russianRoutingSettingsFixture()
+            routingLabel.accessibilityValue = PacketTunnelSettingsGenerator.russianRoutingSettingsFixture()
         }
         #endif
         summaryProofLabel.accessibilityIdentifier = "vpn013.current-proof"

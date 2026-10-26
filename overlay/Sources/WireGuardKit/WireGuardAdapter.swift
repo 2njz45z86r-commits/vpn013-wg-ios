@@ -674,36 +674,3 @@ private extension Network.NWPath.Status {
     }
 }
 
-#if targetEnvironment(simulator)
-extension WireGuardAdapter {
-    /// Constructs real NetworkExtension objects; does not claim installation or traffic.
-    public static func russianRoutingSettingsFixture() -> String {
-        let key = PrivateKey()
-        var interface = InterfaceConfiguration(privateKey: key)
-        interface.addresses = [IPAddressRange(from: "10.13.0.2/32")!, IPAddressRange(from: "fd13::2/128")!]
-        var peer = PeerConfiguration(publicKey: key.publicKey)
-        peer.allowedIPs = [IPAddressRange(from: "0.0.0.0/0")!, IPAddressRange(from: "::/0")!]
-        let original = peer.allowedIPs
-        let config = TunnelConfiguration(name: "Local routing fixture", interface: interface, peers: [peer])
-        let generator = PacketTunnelSettingsGenerator(tunnelConfiguration: config, resolvedEndpoints: [nil])
-        let settings = generator.generateNetworkSettings()
-        precondition(settings.ipv4Settings?.excludedRoutes?.count == 8671)
-        precondition(settings.ipv6Settings?.excludedRoutes?.count == 2167)
-        precondition(settings.ipv4Settings?.includedRoutes?.contains(where: {$0.destinationSubnetMask == "0.0.0.0"}) == true)
-        precondition(settings.ipv6Settings?.includedRoutes?.contains(where: {$0.destinationNetworkPrefixLength.intValue == 0}) == true)
-        precondition(settings.ipv4Settings?.excludedRoutes?.contains(where: {$0.destinationAddress == "2.56.24.0" && $0.destinationSubnetMask == "255.255.252.0"}) == true)
-        precondition(config.peers[0].allowedIPs == original)
-        var ipv4Only = interface
-        ipv4Only.addresses = [IPAddressRange(from: "10.13.0.2/32")!]
-        var ipv4Peer = peer
-        ipv4Peer.allowedIPs = [IPAddressRange(from: "0.0.0.0/0")!]
-        let ipv4Config = TunnelConfiguration(name: "Local IPv4-only fixture", interface: ipv4Only, peers: [ipv4Peer])
-        let ipv4Settings = PacketTunnelSettingsGenerator(tunnelConfiguration: ipv4Config, resolvedEndpoints: [nil]).generateNetworkSettings()
-        precondition(ipv4Settings.ipv6Settings?.addresses == ["fd00:726f:7574:130::1"])
-        precondition(ipv4Settings.ipv6Settings?.includedRoutes?.contains(where: {$0.destinationNetworkPrefixLength.intValue == 0}) == true)
-        precondition(ipv4Settings.ipv6Settings?.excludedRoutes?.count == 2167)
-        precondition(ipv4Config.interface.addresses.count == 1 && ipv4Config.peers[0].allowedIPs == ipv4Peer.allowedIPs)
-        return "8671 IPv4 / 2167 IPv6; original peers retained"
-    }
-}
-#endif
