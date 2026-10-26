@@ -76,10 +76,16 @@ public final class R013SocketRoutes {
                     !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
             // Filter VPN before asking for LinkProperties, including foreign VPNs.
             LinkProperties link = connectivity.getLinkProperties(network);
-            if (link == null || link.getRoutes().size() > 512 || link.getLinkAddresses().size() > 128) return "";
+            if (link == null || link.getRoutes().size() > 512 || link.getLinkAddresses().size() > 128 ||
+                    link.getDnsServers().size() > 128) return "";
             // Memory-only route identity. It is never logged, returned or saved.
-            values.add(network.getNetworkHandle() + ":" + link.getInterfaceName() + ":" + link.getLinkAddresses() +
-                ":" + link.getRoutes() + ":" + link.getDnsServers() + ":" + link.getMtu());
+            ArrayList<String> parts = new ArrayList<>();
+            for (android.net.LinkAddress address : link.getLinkAddresses()) parts.add("a:" + address);
+            for (android.net.RouteInfo route : link.getRoutes()) parts.add("r:" + route);
+            int dnsRank = 0;
+            for (java.net.InetAddress dns : link.getDnsServers()) parts.add("d:" + dnsRank++ + ":" + dns.getHostAddress());
+            Collections.sort(parts);
+            values.add(network.getNetworkHandle() + ":" + link.getInterfaceName() + ":" + link.getMtu() + ":" + parts);
         }
         Collections.sort(values);
         return String.join("|", values);
