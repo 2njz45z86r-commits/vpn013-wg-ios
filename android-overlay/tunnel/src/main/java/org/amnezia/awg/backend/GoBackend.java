@@ -817,11 +817,13 @@ public final class GoBackend implements Backend {
                 builder.addSearchDomain(dnsSearchDomain);
 
             boolean sawDefaultRoute = false;
+            final java.util.List<org.amnezia.awg.r013.RussianIPPolicy.Prefix> capturedRoutes = new java.util.ArrayList<>();
             for (final Peer peer : config.getPeers()) {
                 for (final InetNetwork addr : peer.getAllowedIps()) {
                     if (addr.getMask() == 0)
                         sawDefaultRoute = true;
                     builder.addRoute(addr.getAddress(), addr.getMask());
+                    capturedRoutes.add(new org.amnezia.awg.r013.RussianIPPolicy.Prefix(addr.getAddress(),addr.getMask()));
                 }
             }
 
@@ -836,9 +838,16 @@ public final class GoBackend implements Backend {
                 boolean configuredV6Default = false;
                 for (final Peer peer : config.getPeers()) for (final InetNetwork addr : peer.getAllowedIps())
                     if (addr.getAddress() instanceof java.net.Inet6Address && addr.getMask() == 0) configuredV6Default = true;
-                if (!configuredV6Default && sawDefaultRoute) builder.addRoute(InetAddress.getByName("::"), 0);
-                for (final org.amnezia.awg.r013.RussianIPPolicy.Prefix prefix : ru)
+                if (!configuredV6Default && sawDefaultRoute) {
+                    final InetAddress zero6=InetAddress.getByName("::");
+                    builder.addRoute(zero6,0);
+                    capturedRoutes.add(new org.amnezia.awg.r013.RussianIPPolicy.Prefix(zero6,0));
+                }
+                final java.util.List<org.amnezia.awg.r013.RussianIPPolicy.Prefix> exclusions =
+                    org.amnezia.awg.r013.RussianIPPolicy.intersections(ru,capturedRoutes);
+                for (final org.amnezia.awg.r013.RussianIPPolicy.Prefix prefix : exclusions)
                     builder.excludeRoute(new android.net.IpPrefix(prefix.address(), prefix.bits()));
+                Log.i(TAG,"Russian IP policy: captured="+capturedRoutes.size()+", exclusions="+exclusions.size());
             }
 
             // "Kill-switch" semantics

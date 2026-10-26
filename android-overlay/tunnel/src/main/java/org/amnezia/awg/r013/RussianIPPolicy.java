@@ -37,4 +37,18 @@ public final class RussianIPPolicy {
  public static synchronized List<Prefix> get(InputStream input)throws IOException {
   if(cached==null)cached=load(input);else input.close();return cached;
  }
+ /** Only exclusions intersecting routes actually captured by this tunnel.
+  * A narrower captured prefix inside RU must itself be excluded, otherwise
+  * Android's longest-prefix match would keep it in the VPN. */
+ public static List<Prefix> intersections(List<Prefix> ru,List<Prefix> captured) {
+  java.util.LinkedHashSet<Prefix> result=new java.util.LinkedHashSet<>();
+  for(Prefix direct:ru)for(Prefix tunnel:captured){
+   if(direct.address().getAddress().length!=tunnel.address().getAddress().length)continue;
+   int bits=Math.min(direct.bits(),tunnel.bits());
+   byte[] a=direct.address().getAddress(),b=tunnel.address().getAddress();boolean same=true;
+   for(int bit=0;bit<bits;bit++)if(((a[bit/8]^b[bit/8])&(1<<(7-bit%8)))!=0){same=false;break;}
+   if(same)result.add(direct.bits()>=tunnel.bits()?direct:tunnel);
+  }
+  return Collections.unmodifiableList(new ArrayList<>(result));
+ }
 }

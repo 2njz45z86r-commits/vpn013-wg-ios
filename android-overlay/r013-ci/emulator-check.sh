@@ -28,6 +28,9 @@ control_alias_added=""
 finish() {
   timeout 15s adb pull /sdcard/Android/data/com.vpn013.awg.debug/files/review output/review/screenshots-partial >/dev/null 2>&1 || true
   timeout 15s adb logcat -d -t 500 -s AndroidRuntime:E > output/review/runtime-errors.txt 2>/dev/null || true
+  # Only synthetic hosted CI runs here. Preserve bounded system-service crash
+  # diagnostics, never app configuration dumps, when native networking fails.
+  timeout 15s adb logcat -d -t 1200 -s Watchdog:E ActivityManager:E ConnectivityService:E AndroidRuntime:E > output/review/system-service-errors.txt 2>/dev/null || true
   cp "$RUNNER_TEMP/r013-emulator.log" output/review/emulator.log 2>/dev/null || true
   cp "$RUNNER_TEMP/r013-peer.log" output/review/synthetic-peer-build.log 2>/dev/null || true
   if [ -n "$peer_pid" ]; then kill "$peer_pid" 2>/dev/null || true; fi
