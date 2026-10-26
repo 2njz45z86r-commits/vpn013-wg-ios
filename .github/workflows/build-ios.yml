@@ -23,7 +23,7 @@ jobs:
     uses: ./.github/workflows/security-review.yml
   build:
     needs: [security-review]
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
