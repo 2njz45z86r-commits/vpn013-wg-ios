@@ -3,6 +3,17 @@ from pathlib import Path
 import shutil,sys
 root=Path(sys.argv[1]);source=Path(__file__).resolve().parent
 tunnel=root/'vendor/github.com/amnezia-vpn/amneziawg-windows/v3/tunnel'
+# SCM starts in System32 (normally C:), while the protected profile store may
+# be on D:. Native FileRenameInfo cannot atomically rename across volumes.
+# Stage the same ACL-protected temporary file beside its final destination.
+# CREATE_NEW also keeps a random-name collision from overwriting any file.
+p=tunnel.parent/'conf/filewriter_windows.go';s=p.read_text(encoding='utf-8')
+assert s.count('tmpDestination := randomFileName()')==1
+s=s.replace('"encoding/hex"','"encoding/hex"\n "path/filepath"',1)
+s=s.replace('tmpDestination := randomFileName()','tmpDestination := filepath.Join(filepath.Dir(destination), randomFileName())',1)
+assert s.count('windows.CREATE_ALWAYS')==1
+s=s.replace('windows.CREATE_ALWAYS','windows.CREATE_NEW',1)
+p.write_text(s,encoding='utf-8',newline='\n')
 p=tunnel/'addressconfig.go';s=p.read_text(encoding='utf-8')
 assert s.count('routes = append(routes, route)')==1
 s=s.replace('routes = append(routes, route)','''original,parseErr:=netip.ParsePrefix(route.Destination.String())
