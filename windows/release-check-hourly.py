@@ -20,6 +20,13 @@ result = subprocess.run(['go', 'test', '-mod=vendor', '-race', '-p=1', '-count=1
 events = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
 bad = [e for e in events if e.get('Action') in ('fail', 'skip')]
 passed = {e['Test'] for e in events if e.get('Action') == 'pass' and 'Test' in e and '/' not in e['Test']}
+if result.returncode or bad or passed != expected:
+    # These are isolated synthetic fixtures, never customer configurations.
+    # Retain bounded per-failing-test output so a red native run is diagnosable.
+    failed = {e.get('Test') for e in bad if e.get('Test')}
+    for name in sorted(failed):
+        detail = ''.join(e.get('Output', '') for e in events if e.get('Test') == name)
+        print(name + '\n' + detail[-12000:], flush=True)
 assert result.returncode == 0 and not bad and passed == expected, {'exit': result.returncode, 'missing': sorted(expected-passed), 'bad': bad}
 assert before == {f: Path(f).read_bytes() for f in before}, 'module files changed'
 vet = subprocess.run(['go', 'vet', '-mod=vendor', './r013probe/...','./r013tun'] + (['./r013winudp','./r013vault','./r013prepare'] if native else []), capture_output=True, text=True)

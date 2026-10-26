@@ -410,30 +410,34 @@ public class WireGuardAdapter {
     /// - Returns: `PacketTunnelSettingsGenerator`.
     private func setNetworkSettings(_ networkSettings: NEPacketTunnelNetworkSettings) throws {
         self.logHandler(.verbose, "setNetworkSettings: applying")
+        guard let provider = self.packetTunnelProvider else {
+            throw WireGuardAdapterError.invalidState
+        }
         var systemError: Error?
+        var completed = false
         let condition = NSCondition()
-
-        // Activate the condition
+        provider.setTunnelNetworkSettings(networkSettings) { error in
+            condition.lock()
+            systemError = error
+            completed = true
+            condition.signal()
+            condition.unlock()
+        }
+        // A completion is required before claiming routes are ready. Waiting
+        // is bounded even when the OS never invokes its completion handler.
+        let deadline = Date().addingTimeInterval(15)
         condition.lock()
         defer { condition.unlock() }
-
-        self.packetTunnelProvider?.setTunnelNetworkSettings(networkSettings) { error in
-            systemError = error
-            condition.signal()
-        }
-
-        // Packet tunnel's `setTunnelNetworkSettings` times out in certain
-        // scenarios & never calls the given callback.
-        let setTunnelNetworkSettingsTimeout: TimeInterval = 5 // seconds
-
-        if condition.wait(until: Date().addingTimeInterval(setTunnelNetworkSettingsTimeout)) {
-            if let systemError = systemError {
-                throw WireGuardAdapterError.setNetworkSettings(systemError)
+        while !completed {
+            if !condition.wait(until: deadline), !completed {
+                self.logHandler(.error, "setTunnelNetworkSettings timed out; routes not confirmed")
+                throw WireGuardAdapterError.setNetworkSettings(NSError(domain: "VPN013.NetworkSettings", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "iOS did not confirm VPN routes in time"]))
             }
-        } else {
-            self.logHandler(.error, "setTunnelNetworkSettings timed out after 5 seconds; proceeding anyway")
         }
-
+        if let systemError = systemError {
+            throw WireGuardAdapterError.setNetworkSettings(systemError)
+        }
         self.lastNetworkSettingsUpdateAt = Date()
     }
 
@@ -687,8 +691,18 @@ extension WireGuardAdapter {
         precondition(settings.ipv6Settings?.excludedRoutes?.count == 2167)
         precondition(settings.ipv4Settings?.includedRoutes?.contains(where: {$0.destinationSubnetMask == "0.0.0.0"}) == true)
         precondition(settings.ipv6Settings?.includedRoutes?.contains(where: {$0.destinationNetworkPrefixLength.intValue == 0}) == true)
-        precondition(settings.ipv4Settings?.excludedRoutes?.contains(where: {$0.destinationAddress == "2.56.24.0" && $0.destinationSubnetMask == "255.255.248.0"}) == true || settings.ipv4Settings?.excludedRoutes?.contains(where: {$0.destinationAddress == "2.56.24.0"}) == true)
+        precondition(settings.ipv4Settings?.excludedRoutes?.contains(where: {$0.destinationAddress == "2.56.24.0" && $0.destinationSubnetMask == "255.255.252.0"}) == true)
         precondition(config.peers[0].allowedIPs == original)
+        var ipv4Only = interface
+        ipv4Only.addresses = [IPAddressRange(from: "10.13.0.2/32")!]
+        var ipv4Peer = peer
+        ipv4Peer.allowedIPs = [IPAddressRange(from: "0.0.0.0/0")!]
+        let ipv4Config = TunnelConfiguration(name: "Local IPv4-only fixture", interface: ipv4Only, peers: [ipv4Peer])
+        let ipv4Settings = PacketTunnelSettingsGenerator(tunnelConfiguration: ipv4Config, resolvedEndpoints: [nil]).generateNetworkSettings()
+        precondition(ipv4Settings.ipv6Settings?.addresses == ["fd00:726f:7574:130::1"])
+        precondition(ipv4Settings.ipv6Settings?.includedRoutes?.contains(where: {$0.destinationNetworkPrefixLength.intValue == 0}) == true)
+        precondition(ipv4Settings.ipv6Settings?.excludedRoutes?.count == 2167)
+        precondition(ipv4Config.interface.addresses.count == 1 && ipv4Config.peers[0].allowedIPs == ipv4Peer.allowedIPs)
         return "8671 IPv4 / 2167 IPv6; original peers retained"
     }
 }

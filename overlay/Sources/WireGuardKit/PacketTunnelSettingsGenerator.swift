@@ -191,8 +191,23 @@ class PacketTunnelSettingsGenerator {
             networkSettings.mtu = NSNumber(value: mtu)
         }
 
-        let (ipv4Addresses, ipv6Addresses) = addresses()
-        let (ipv4IncludedRoutes, ipv6IncludedRoutes) = includedRoutes()
+        let (ipv4Addresses, configuredIPv6Addresses) = addresses()
+        let (ipv4IncludedRoutes, configuredIPv6Routes) = includedRoutes()
+        var ipv6Addresses = configuredIPv6Addresses
+        var ipv6IncludedRoutes = configuredIPv6Routes
+        // An IPv4-only full VPN must not leave foreign IPv6 on the physical
+        // network. Give the local TUN a private address and capture IPv6;
+        // the unchanged crypto peer policy drops unsupported IPv6. Russian
+        // IPv6 exclusions still use the physical interface. Nothing is saved
+        // into the user's profile and no remote peer/key is invented.
+        if ipv4IncludedRoutes.contains(where: { $0.destinationSubnetMask == "0.0.0.0" }) {
+            if ipv6Addresses.isEmpty {
+                ipv6Addresses = [NEIPv6Route(destinationAddress: "fd00:726f:7574:130::1", networkPrefixLength: 128)]
+            }
+            if !ipv6IncludedRoutes.contains(where: { $0.destinationNetworkPrefixLength.intValue == 0 }) {
+                ipv6IncludedRoutes.append(NEIPv6Route.default())
+            }
+        }
         let (ipv4ExcludedRoutes, ipv6ExcludedRoutes) = excludedRoutes()
 
         let ipv4Settings = NEIPv4Settings(addresses: ipv4Addresses.map { $0.destinationAddress }, subnetMasks: ipv4Addresses.map { $0.destinationSubnetMask })
@@ -262,8 +277,7 @@ class PacketTunnelSettingsGenerator {
         for addressRange in RussianIPRouting.networks {
             if addressRange.address is IPv4Address {
                 ipv4ExcludedRoutes.append(NEIPv4Route(destinationAddress: "\(addressRange.address)", subnetMask: "\(addressRange.subnetMask())"))
-            } else if addressRange.address is IPv6Address,
-                      tunnelConfiguration.interface.addresses.contains(where: { $0.address is IPv6Address }) {
+            } else if addressRange.address is IPv6Address {
                 ipv6ExcludedRoutes.append(NEIPv6Route(destinationAddress: "\(addressRange.address)", networkPrefixLength: NSNumber(value: addressRange.networkPrefixLength)))
             }
         }

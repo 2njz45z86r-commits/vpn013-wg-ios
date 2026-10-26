@@ -23,6 +23,8 @@ sudo chmod 666 /dev/kvm
 emulator_pid=$!
 peer_pid=""
 route_echo_pid=""
+ru_alias_added=""
+control_alias_added=""
 finish() {
   timeout 15s adb pull /sdcard/Android/data/com.vpn013.awg.debug/files/review output/review/screenshots-partial >/dev/null 2>&1 || true
   timeout 15s adb logcat -d -t 500 -s AndroidRuntime:E > output/review/runtime-errors.txt 2>/dev/null || true
@@ -30,8 +32,8 @@ finish() {
   cp "$RUNNER_TEMP/r013-peer.log" output/review/synthetic-peer-build.log 2>/dev/null || true
   if [ -n "$peer_pid" ]; then kill "$peer_pid" 2>/dev/null || true; fi
   if [ -n "$route_echo_pid" ]; then kill "$route_echo_pid" 2>/dev/null || true; fi
-  sudo ip address del 2.56.24.1/32 dev lo 2>/dev/null || true
-  sudo ip address del 198.18.0.1/32 dev lo 2>/dev/null || true
+  if [ "$ru_alias_added" = yes ]; then sudo ip address del 2.56.24.1/32 dev lo 2>/dev/null || true; fi
+  if [ "$control_alias_added" = yes ]; then sudo ip address del 198.18.0.1/32 dev lo 2>/dev/null || true; fi
   kill "$emulator_pid" 2>/dev/null || true
 }
 trap finish EXIT
@@ -84,7 +86,9 @@ adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest
 grep -E '^OK \(11 tests\)[[:space:]]*$' output/review/instrumentation.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/instrumentation.txt
 sudo ip address add 2.56.24.1/32 dev lo
+ru_alias_added=yes
 sudo ip address add 198.18.0.1/32 dev lo
+control_alias_added=yes
 python3 r013-ci/russian-route-echo.py > output/review/russian-route-echo.txt 2>&1 &
 route_echo_pid=$!
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013RussianRoutesTest -e syntheticConfig "$fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/russian-routing.txt

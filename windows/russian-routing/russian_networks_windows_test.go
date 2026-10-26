@@ -96,6 +96,19 @@ func TestRussianRoutingNative(t *testing.T) {
 	}
 	defer native.Close()
 	luid := winipcfg.LUID(native.LUID())
+	// Match production interface initialization. In particular a synthetic
+	// echo fixture does not implement IPv6 neighbor discovery/router adverts.
+	for _, family := range []winipcfg.AddressFamily{windows.AF_INET, windows.AF_INET6} {
+		ipif, e := luid.IPInterface(family)
+		if e != nil {
+			t.Fatal("fixture IP interface", family, e)
+		}
+		ipif.DadTransmits = 0
+		ipif.RouterDiscoveryBehavior = winipcfg.RouterDiscoveryDisabled
+		if e = ipif.Set(); e != nil {
+			t.Fatal("fixture initialize IP interface", family, e)
+		}
+	}
 	addresses := []net.IPNet{{IP: net.ParseIP("2.56.24.1").To4(), Mask: net.CIDRMask(32, 32)}, {IP: net.ParseIP("198.18.0.1").To4(), Mask: net.CIDRMask(32, 32)}}
 	if err = luid.SetIPAddressesForFamily(windows.AF_INET, addresses); err != nil {
 		t.Fatal(err)
@@ -135,7 +148,9 @@ func TestRussianRoutingNative(t *testing.T) {
 		}
 	}
 	if !ready {
-		t.Fatal("fixture address not preferred")
+		v4, e4 := luid.IPAddress(addresses[0].IP)
+		v6, e6 := luid.IPAddress(addresses6[0].IP)
+		t.Fatalf("fixture address not preferred: v4=%+v/%v v6=%+v/%v", v4, e4, v6, e6)
 	}
 	done := make(chan struct{})
 	go func() {

@@ -16,7 +16,13 @@ func permitRussianNetworks(session uintptr, bo *baseObjects, weight uint8) error
 	if err != nil {
 		return err
 	}
-	for _, p := range rows {
+	// Stable heap-backed storage survives Go stack growth while the Win32
+	// ABI receives integer addresses. WFP copies each condition synchronously.
+	v4Masks := make([]wtFwpV4AddrAndMask, len(rows))
+	v6Masks := make([]wtFwpV6AddrAndMask, len(rows))
+	defer runtime.KeepAlive(v4Masks)
+	defer runtime.KeepAlive(v6Masks)
+	for i, p := range rows {
 		filter := wtFwpmFilter0{providerKey: &bo.provider, subLayerKey: bo.filters, weight: filterWeight(weight), numFilterConditions: 1, action: wtFwpmAction0{_type: cFWP_ACTION_PERMIT}}
 		display, err := createWtFwpmDisplayData0("VPN013 Russian destination outbound", r013routing.SnapshotSHA256)
 		if err != nil {
@@ -24,19 +30,19 @@ func permitRussianNetworks(session uintptr, bo *baseObjects, weight uint8) error
 		}
 		filter.displayData = *display
 		condition := wtFwpmFilterCondition0{fieldKey: cFWPM_CONDITION_IP_REMOTE_ADDRESS, matchType: cFWP_MATCH_EQUAL}
-		var v4 wtFwpV4AddrAndMask
-		var v6 wtFwpV6AddrAndMask
+		v4 := &v4Masks[i]
+		v6 := &v6Masks[i]
 		if p.Addr().Is4() {
 			a := p.Addr().As4()
 			v4.addr = binary.BigEndian.Uint32(a[:])
 			v4.mask = ^uint32(0) << uint(32-p.Bits())
-			condition.conditionValue = wtFwpConditionValue0{_type: cFWP_V4_ADDR_MASK, value: uintptr(unsafe.Pointer(&v4))}
+			condition.conditionValue = wtFwpConditionValue0{_type: cFWP_V4_ADDR_MASK, value: uintptr(unsafe.Pointer(v4))}
 			filter.layerKey = cFWPM_LAYER_ALE_AUTH_CONNECT_V4
 		} else {
 			a := p.Addr().As16()
 			v6.addr = a
 			v6.prefixLength = uint8(p.Bits())
-			condition.conditionValue = wtFwpConditionValue0{_type: cFWP_V6_ADDR_MASK, value: uintptr(unsafe.Pointer(&v6))}
+			condition.conditionValue = wtFwpConditionValue0{_type: cFWP_V6_ADDR_MASK, value: uintptr(unsafe.Pointer(v6))}
 			filter.layerKey = cFWPM_LAYER_ALE_AUTH_CONNECT_V6
 		}
 		filter.filterCondition = &condition

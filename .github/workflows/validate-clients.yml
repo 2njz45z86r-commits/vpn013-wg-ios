@@ -24,7 +24,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: client-validation-${{ github.ref }}-${{ inputs.platform }}
+  group: client-validation-${{ github.ref }}-${{ github.sha }}-${{ inputs.platform }}
   cancel-in-progress: false
 jobs:
   ios:
@@ -244,12 +244,13 @@ jobs:
           $env:CC='x86_64-w64-mingw32-gcc'
           ./scripts/ci-installer.ps1
       - name: Preserve synthetic acceptance evidence only
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: validation-windows-${{ github.run_id }}
           retention-days: 7
           if-no-files-found: error
           path: |
-            ${{ runner.temp }}/hourly-product-report/verification.json
+            ${{ runner.temp }}/hourly-product-report/*
             ${{ runner.temp }}/r013-ui-*.json
             ${{ runner.temp }}/r013-in-place-upgrade.json
