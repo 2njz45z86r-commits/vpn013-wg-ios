@@ -833,10 +833,10 @@ public final class GoBackend implements Backend {
                     org.amnezia.awg.r013.RussianIPPolicy.get(context.getAssets().open("ru-networks.cidr"));
                 // Keep unmatched IPv6 captured even with an IPv4-only peer:
                 // no implicit cleartext fallback is introduced by exclusions.
-                boolean configuredV6 = false;
+                boolean configuredV6Default = false;
                 for (final Peer peer : config.getPeers()) for (final InetNetwork addr : peer.getAllowedIps())
-                    if (addr.getAddress() instanceof java.net.Inet6Address) configuredV6 = true;
-                if (!configuredV6 && sawDefaultRoute) builder.addRoute(InetAddress.getByName("::"), 0);
+                    if (addr.getAddress() instanceof java.net.Inet6Address && addr.getMask() == 0) configuredV6Default = true;
+                if (!configuredV6Default && sawDefaultRoute) builder.addRoute(InetAddress.getByName("::"), 0);
                 for (final org.amnezia.awg.r013.RussianIPPolicy.Prefix prefix : ru)
                     builder.excludeRoute(new android.net.IpPrefix(prefix.address(), prefix.bits()));
             }
