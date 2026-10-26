@@ -492,10 +492,20 @@ final class AutoTunnelUITests:XCTestCase {
         app.buttons["Создать режим Авто"].tap()
         XCTAssertTrue(app.alerts["Создать режим Авто"].waitForExistence(timeout:5))
         app.alerts.buttons["Создать Авто"].tap()
-        if !app.tables.cells.element(boundBy:0).staticTexts["Авто · 2 сервера"].waitForExistence(timeout:2) {
-            XCTAssertTrue(app.navigationBars["Авто · 2 сервера"].waitForExistence(timeout:6))
-            app.navigationBars.buttons.element(boundBy:0).tap()
-        }
+        // Creation always opens the detail controller. A hidden list element
+        // can still exist in UIKit's accessibility tree; existence is not a
+        // reason to skip the visible Back action.
+        let detail = app.navigationBars["Авто · 2 сервера"]
+        XCTAssertTrue(detail.waitForExistence(timeout:8))
+        capture("25a-auto-created-detail-before-explicit-back")
+        let back = detail.buttons["VPN013"]
+        let backReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in back.exists && back.isHittable }, object:back)
+        XCTAssertEqual(XCTWaiter.wait(for:[backReady], timeout:8), .completed)
+        back.tap()
+        let add = app.buttons["vpn013.add-profile"]
+        let listReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in add.exists && add.isHittable }, object:add)
+        XCTAssertEqual(XCTWaiter.wait(for:[listReady], timeout:8), .completed)
+        capture("25b-visible-profile-list-after-explicit-back")
         let auto = app.tables.cells.element(boundBy:0)
         XCTAssertTrue(auto.staticTexts["Авто · 2 сервера"].waitForExistence(timeout:6))
         auto.switches.firstMatch.tap()

@@ -74,23 +74,6 @@ for path in Path('build/review/flow').glob('*'):
   shutil.copy2(path,path.with_suffix('.png'))
 PY
 if [ "$result" -eq 0 ]; then
- xcrun simctl ui "$device" content_size accessibility-extra-extra-extra-large
- xcrun simctl launch --terminate-running-process "$device" com.vpn013.awg -AppleLanguages '(ru)' -AppleLocale ru_RU --vpn013-test-count 2 --vpn013-test-current-card --vpn013-test-start-current --vpn013-test-ping-loopback
- sleep 3
- xcrun simctl io "$device" screenshot build/review/phone-large-type.png
- xcrun simctl ui "$device" content_size large
- # Observe the ordinary launch path too, without any synthetic app arguments.
- # A simulator launch does not validate a physical Network Extension or VPN traffic.
- xcrun simctl launch --terminate-running-process "$device" com.vpn013.awg -AppleLanguages '(ru)' -AppleLocale ru_RU
- sleep 3
- xcrun simctl io "$device" screenshot build/review/phone-normal-launch-no-fixture.png
- tablet=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;v=json.load(sys.stdin);print(next(x["udid"] for rows in v["devices"].values() for x in rows if x["name"].startswith("iPad")))')
- xcrun simctl boot "$tablet" || true
- xcrun simctl bootstatus "$tablet" -b
- xcrun simctl ui "$tablet" appearance dark
- xcrun simctl install "$tablet" build/SimulatorDerivedData/Build/Products/Debug-iphonesimulator/AmneziaWG.app
- xcrun simctl launch "$tablet" com.vpn013.awg -AppleLanguages '(ru)' -AppleLocale ru_RU --vpn013-test-count 2 --vpn013-test-current-card --vpn013-test-start-current --vpn013-test-ping-loopback
- sleep 3
- xcrun simctl io "$tablet" screenshot build/review/tablet.png
+ python3 capture-ios-simulators.py
 fi
 test "$result" -eq 0
