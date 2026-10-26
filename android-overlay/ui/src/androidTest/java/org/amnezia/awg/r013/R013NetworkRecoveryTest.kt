@@ -4,6 +4,7 @@ package org.amnezia.awg.r013
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.amnezia.awg.util.NetworkState
@@ -16,12 +17,21 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class R013NetworkRecoveryTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
-    private val wifi = Network.fromNetworkHandle((1L shl 32) or 0xcafed00dL)
-    private fun caps(ready: Boolean) = NetworkCapabilities.Builder()
-        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-        .apply { if (ready) addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) }
-        .build()
+    private val manager get() = instrumentation.targetContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    private val physical: Network by lazy {
+        manager.allNetworks.first { network ->
+            val value = manager.getNetworkCapabilities(network)
+            value != null && !value.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                value.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        }
+    }
+    private fun caps(ready: Boolean): NetworkCapabilities = if (ready)
+        NetworkCapabilities(requireNotNull(manager.getNetworkCapabilities(physical))) else NetworkCapabilities()
+    private val physicalType get() = when {
+        caps(true).hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkType.WIFI
+        caps(true).hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkType.CELLULAR
+        else -> NetworkType.OTHER
+    }
 
     private fun callback(state: NetworkState): ConnectivityManager.NetworkCallback {
         val field = NetworkState::class.java.getDeclaredField("networkCallback\$delegate")
@@ -33,24 +43,24 @@ class R013NetworkRecoveryTest {
         val events = mutableListOf<Pair<NetworkType, NetworkType>>()
         val state = NetworkState(instrumentation.targetContext) { old, new -> events.add(old to new) }
         val cb = callback(state)
-        cb.onCapabilitiesChanged(wifi, caps(true)); instrumentation.waitForIdleSync()
+        cb.onCapabilitiesChanged(physical, caps(true)); instrumentation.waitForIdleSync()
         assertTrue(events.isEmpty())
-        cb.onLost(wifi); instrumentation.waitForIdleSync()
-        cb.onCapabilitiesChanged(wifi, caps(true)); instrumentation.waitForIdleSync()
-        assertEquals(listOf(NetworkType.WIFI to NetworkType.NONE, NetworkType.NONE to NetworkType.WIFI), events)
+        cb.onLost(physical); instrumentation.waitForIdleSync()
+        cb.onCapabilitiesChanged(physical, caps(true)); instrumentation.waitForIdleSync()
+        assertEquals(listOf(physicalType to NetworkType.NONE, NetworkType.NONE to physicalType), events)
         assertTrue(state.isConnected())
     }
 
-    @Test fun sameNetworkCanLoseAndRecoverValidation() {
+    @Test fun unknownCapabilitiesClearValidationAndThenRecover() {
         val events = mutableListOf<Pair<NetworkType, NetworkType>>()
         val state = NetworkState(instrumentation.targetContext) { old, new -> events.add(old to new) }
         val cb = callback(state)
-        cb.onCapabilitiesChanged(wifi, caps(true)); instrumentation.waitForIdleSync()
-        cb.onCapabilitiesChanged(wifi, caps(false)); instrumentation.waitForIdleSync()
+        cb.onCapabilitiesChanged(physical, caps(true)); instrumentation.waitForIdleSync()
+        cb.onCapabilitiesChanged(physical, caps(false)); instrumentation.waitForIdleSync()
         assertFalse(state.isConnected())
-        cb.onCapabilitiesChanged(wifi, caps(true)); instrumentation.waitForIdleSync()
-        cb.onCapabilitiesChanged(wifi, caps(true)); instrumentation.waitForIdleSync()
-        assertEquals(listOf(NetworkType.WIFI to NetworkType.WIFI), events)
+        cb.onCapabilitiesChanged(physical, caps(true)); instrumentation.waitForIdleSync()
+        cb.onCapabilitiesChanged(physical, caps(true)); instrumentation.waitForIdleSync()
+        assertEquals(listOf(NetworkType.OTHER to physicalType), events)
     }
 
     @Test fun queuedOldLossCannotOverwriteReturnedNetwork() {
@@ -58,11 +68,11 @@ class R013NetworkRecoveryTest {
         val state = NetworkState(instrumentation.targetContext) { old, new -> events.add(old to new) }
         val cb = callback(state)
         instrumentation.runOnMainSync {
-            cb.onCapabilitiesChanged(wifi, caps(true))
-            cb.onLost(wifi)
-            cb.onCapabilitiesChanged(wifi, caps(true))
+            cb.onCapabilitiesChanged(physical, caps(true))
+            cb.onLost(physical)
+            cb.onCapabilitiesChanged(physical, caps(true))
         }
         instrumentation.waitForIdleSync()
-        assertEquals(listOf(NetworkType.NONE to NetworkType.WIFI), events)
+        assertEquals(listOf(NetworkType.NONE to physicalType), events)
     }
 }
