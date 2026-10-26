@@ -64,6 +64,40 @@ s=s[:start]+'''    if !configuration.Interface.TableOff {
 p.write_text(s,encoding='utf-8',newline='\n')
 print('Russian OS routes and WFP exceptions staged; native validation required')
 
+# Observation must read the effective OS routes instead of the deliberately
+# removed default. Keep every existing identity, watcher and barrier check.
+p=tunnel/'r013_observation.go';s=p.read_text(encoding='utf-8')
+s=s.replace('import (','import (\n "github.com/amnezia-vpn/amneziawg-windows-client/r013routing"',1)
+old='''\t\tif _, err = luid.Route(prefix.IPNet(), net.IPv4zero); err != nil {
+\t\t\treturn out
+\t\t}'''
+assert s.count(old)==1
+s=s.replace(old,'''        if !r013routing.Enabled() {
+            if _,err=luid.Route(prefix.IPNet(),net.IPv4zero);err!=nil{return out}
+        }''',1)
+anchor='\traw, err := dev.IpcGet()';assert s.count(anchor)==1
+s=s.replace(anchor,'''    if r013routing.Enabled() {
+        if verifyOwnNetwork(luid,cfg)!=nil{return out}
+    }
+'''+anchor,1)
+p.write_text(s,encoding='utf-8',newline='\n')
+
+# Internal split routes belong to the owned TUN. Bound the whole native table,
+# but retain the original 8192-row budget for ALL foreign routes, after only
+# own-LUID exclusion. External route/interface fingerprints remain unchanged.
+p=tunnel/'r013_backend_owner.go';s=p.read_text(encoding='utf-8')
+anchor='if err != nil || len(routes) > 8192 {';assert s.count(anchor)==1
+s=s.replace(anchor,'if err != nil || len(routes) > 65536 {',1)
+start=s.index('func comparisonForeignPath(')
+anchor='\tfor _, row := range routes {';pos=s.index(anchor,start)
+s=s[:pos]+'\tforeignRouteCount := 0\n'+s[pos:]
+anchor='''\t\tinterfaces[row.InterfaceLUID] = true
+\t\tparts = append(parts, fmt.Sprintf("r:''';assert s.count(anchor)==1
+s=s.replace(anchor,'''        foreignRouteCount++
+        if foreignRouteCount>8192{return "",errBackendUnknown}
+'''+anchor,1)
+p.write_text(s,encoding='utf-8',newline='\n')
+
 p=tunnel/'service.go';s=p.read_text(encoding='utf-8')
 s=s.replace('import (','import (\n "github.com/amnezia-vpn/amneziawg-windows-client/r013routing"',1)
 anchor='\tchanges <- svc.Status{State: svc.StartPending}';assert s.count(anchor)==1
