@@ -115,6 +115,10 @@ s=s.replace('import (','import (\n "github.com/amnezia-vpn/amneziawg-windows-cli
 for a,label in [('applyError := (*o.watcher).RetireForBackend(o.ctx)','retire'),('applyError = o.install(&selected, request.member.UAPI())','install'),('applyError = o.persist(&selected)','persist')]:
  assert s.count(a)==1
  s=s.replace(a,a+'\n if r013routing.Enabled(){log.Printf("R013Routing: handover '+label+' ok=%v elapsed=%s",applyError==nil,time.Since(started))}',1)
+ if label=='retire':
+  # This error path contains only subscription/native cleanup status and
+  # fixed readback messages. No runtime config or peer material is logged.
+  s=s.replace(a,a+'\n if applyError!=nil&&r013routing.Enabled(){detail:=applyError.Error();if len(detail)>2048{detail=detail[:2048]};log.Printf("R013Routing: retirement detail: %s",detail)}',1)
 p.write_text(s,encoding='utf-8',newline='\n')
 
 p=tunnel/'service.go';s=p.read_text(encoding='utf-8')
