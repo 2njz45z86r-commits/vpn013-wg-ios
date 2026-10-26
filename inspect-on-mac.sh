@@ -39,6 +39,7 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCurrentPowerButtonControlsAutoWithoutRuntime \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCurrentPowerButtonEmptyAndLargeType \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCurrentPowerButtonDisabledDuringTransition \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeRussianIPRouteObjectsPreserveVPNAndPeers \
  -derivedDataPath ../SimulatorDerivedData -resultBundlePath ../AutoTunnel.xcresult CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= \
  test > ../simulator-test.log 2>&1
 result=$?
@@ -61,7 +62,7 @@ if [ "$result" -eq 0 ]; then
 import json
 from pathlib import Path
 s=json.loads(Path('build/review/test-summary.json').read_text())
-assert s['result']=='Passed' and s['passedTests']==30 and s['failedTests']==0 and s['skippedTests']==0,s
+assert s['result']=='Passed' and s['passedTests']==31 and s['failedTests']==0 and s['skippedTests']==0,s
 PY
 fi
 # Keep failure screenshots with a PNG extension; never publish UI hierarchy text.

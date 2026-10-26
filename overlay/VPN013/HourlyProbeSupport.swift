@@ -65,7 +65,7 @@ final class HourlyProbeSupport {
         summary = "Сравнение \(snapshots.count) VPN: первая проверка через 30 сек, затем раз в час"
         coordinator.startHourly(input: {
             guard current() != nil else { return nil }
-            return R013ProbeInput(auto_active: true, resolver: resolver + ":53", start_index: 0, candidates: snapshots)
+            return R013ProbeInput(autoActive: true, resolver: resolver + ":53", startIndex: 0, candidates: snapshots)
         }, apply: { [weak self] snapshot, permit, done in
             guard current() != nil, let index = Int(snapshot.id), candidates.indices.contains(index) else {
                 _ = permit.commit(.unknown); done(); return

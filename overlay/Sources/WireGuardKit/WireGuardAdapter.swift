@@ -410,30 +410,34 @@ public class WireGuardAdapter {
     /// - Returns: `PacketTunnelSettingsGenerator`.
     private func setNetworkSettings(_ networkSettings: NEPacketTunnelNetworkSettings) throws {
         self.logHandler(.verbose, "setNetworkSettings: applying")
+        guard let provider = self.packetTunnelProvider else {
+            throw WireGuardAdapterError.invalidState
+        }
         var systemError: Error?
+        var completed = false
         let condition = NSCondition()
-
-        // Activate the condition
+        provider.setTunnelNetworkSettings(networkSettings) { error in
+            condition.lock()
+            systemError = error
+            completed = true
+            condition.signal()
+            condition.unlock()
+        }
+        // A completion is required before claiming routes are ready. Waiting
+        // is bounded even when the OS never invokes its completion handler.
+        let deadline = Date().addingTimeInterval(15)
         condition.lock()
         defer { condition.unlock() }
-
-        self.packetTunnelProvider?.setTunnelNetworkSettings(networkSettings) { error in
-            systemError = error
-            condition.signal()
-        }
-
-        // Packet tunnel's `setTunnelNetworkSettings` times out in certain
-        // scenarios & never calls the given callback.
-        let setTunnelNetworkSettingsTimeout: TimeInterval = 5 // seconds
-
-        if condition.wait(until: Date().addingTimeInterval(setTunnelNetworkSettingsTimeout)) {
-            if let systemError = systemError {
-                throw WireGuardAdapterError.setNetworkSettings(systemError)
+        while !completed {
+            if !condition.wait(until: deadline), !completed {
+                self.logHandler(.error, "setTunnelNetworkSettings timed out; routes not confirmed")
+                throw WireGuardAdapterError.setNetworkSettings(NSError(domain: "VPN013.NetworkSettings", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "iOS did not confirm VPN routes in time"]))
             }
-        } else {
-            self.logHandler(.error, "setTunnelNetworkSettings timed out after 5 seconds; proceeding anyway")
         }
-
+        if let systemError = systemError {
+            throw WireGuardAdapterError.setNetworkSettings(systemError)
+        }
         self.lastNetworkSettingsUpdateAt = Date()
     }
 
@@ -669,3 +673,4 @@ private extension Network.NWPath.Status {
         }
     }
 }
+

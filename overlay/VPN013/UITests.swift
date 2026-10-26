@@ -1,5 +1,14 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testNativeRussianIPRouteObjectsPreserveVPNAndPeers() {
+        let app=XCUIApplication()
+        app.launchArguments=["-AppleLanguages","(ru)","-AppleLocale","ru_RU","--vpn013-test-count","2","--vpn013-test-russian-routes"]
+        app.launch()
+        let policy=app.staticTexts["vpn013.routing-policy"]
+        XCTAssertTrue(policy.waitForExistence(timeout:20))
+        XCTAssertEqual(policy.value as? String,"8671 IPv4 / 2167 IPv6; original peers retained")
+        capture("native-russian-ip-settings-objects-not-physical-traffic")
+    }
     func capture(_ name:String) { let a=XCTAttachment(screenshot:XCUIScreen.main.screenshot());a.name=name;a.lifetime = .keepAlways;add(a) }
     private func assertProfileCount(_ app: XCUIApplication, _ count: Int, file: StaticString = #filePath, line: UInt = #line) {
         // UIKit exposes the same section-header UILabel through both its

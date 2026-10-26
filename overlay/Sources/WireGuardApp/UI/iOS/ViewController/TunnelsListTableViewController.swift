@@ -66,6 +66,7 @@ class TunnelsListTableViewController: UIViewController {
     private let summaryProofLabel = TunnelsListTableViewController.makeLabel(style: .footnote, color: VPN013Theme.secondaryText)
     private let summaryEndpointLabel = TunnelsListTableViewController.makeLabel(style: .footnote, color: VPN013Theme.secondaryText)
     private let summaryTrafficLabel = TunnelsListTableViewController.makeLabel(style: .caption1, color: VPN013Theme.secondaryText)
+    private let routingLabel = TunnelsListTableViewController.makeLabel(style: .caption1, color: VPN013Theme.secondaryText)
     private let summaryHandshakeLabel = TunnelsListTableViewController.makeLabel(style: .caption1, color: VPN013Theme.secondaryText)
     private let currentPingLabel = TunnelsListTableViewController.makeLabel(style: .subheadline)
     private let currentPingButton = UIButton(type: .system)
@@ -302,6 +303,13 @@ class TunnelsListTableViewController: UIViewController {
         summaryEndpointLabel.accessibilityIdentifier = "vpn013.current-endpoint"
         summaryTrafficLabel.accessibilityIdentifier = "vpn013.current-traffic"
         summaryHandshakeLabel.accessibilityIdentifier = "vpn013.current-handshake"
+        routingLabel.text = "Российские IP-сети — напрямую; остальные — через VPN"
+        routingLabel.accessibilityIdentifier = "vpn013.routing-policy"
+        #if targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-russian-routes") {
+            routingLabel.accessibilityValue = PacketTunnelSettingsGenerator.russianRoutingSettingsFixture()
+        }
+        #endif
         summaryProofLabel.accessibilityIdentifier = "vpn013.current-proof"
         currentPingLabel.accessibilityIdentifier = "vpn013.current-ping-result"
         currentPingLabel.text = "Пинг адреса · —"
@@ -353,7 +361,7 @@ class TunnelsListTableViewController: UIViewController {
             powerColumn.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
         ])
         let details = UIStackView(arrangedSubviews: [summaryModeLabel, summaryProofLabel,
-            summaryEndpointLabel, summaryTrafficLabel, summaryHandshakeLabel])
+            summaryEndpointLabel, summaryTrafficLabel, summaryHandshakeLabel, routingLabel])
         details.axis = .vertical
         details.spacing = 5
         details.setContentHuggingPriority(.defaultLow, for: .horizontal)
