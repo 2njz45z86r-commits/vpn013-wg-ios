@@ -207,6 +207,7 @@ jobs:
           python "$env:GITHUB_WORKSPACE/scripts/check_go_security.py" "$PWD" --level symbol
           if ($LASTEXITCODE -ne 0) {throw 'Private Go dependency review required'}
       - name: Verify actual hourly product and complete native safety inventory
+        timeout-minutes: 25
         working-directory: vpn013-wg-windows
         run: |
           $env:GOTOOLCHAIN='local'
