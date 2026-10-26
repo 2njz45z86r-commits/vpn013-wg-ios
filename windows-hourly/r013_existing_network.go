@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -107,20 +108,32 @@ func networkNeedsFamily(configuration *conf.Config, family winipcfg.AddressFamil
 // FlushIPAddresses in the pinned SDK ignores each Delete result. Handover must
 // instead collect the actual per-row errors, then independently read back.
 func flushOwnNetwork(luid winipcfg.LUID) error {
+	began := time.Now()
+	trace := func(family winipcfg.AddressFamily, stage string, count int) {
+		log.Printf("R013Routing: flush family=%d stage=%s count=%d elapsedMS=%d", family, stage, count, time.Since(began).Milliseconds())
+	}
 	var result error
 	for _, family := range []winipcfg.AddressFamily{windows.AF_INET, windows.AF_INET6} {
+		trace(family, "routes-read", 0)
 		rows, err := winipcfg.GetIPForwardTable2(family)
 		if err != nil {
 			result = errors.Join(result, fmt.Errorf("read owned routes: %w", err))
 		} else {
+			attempted := 0
 			for i := range rows {
 				if rows[i].InterfaceLUID == luid {
+					attempted++
+					if attempted == 1 || attempted%2048 == 0 {
+						trace(family, "route-attempt", attempted)
+					}
 					if err = rows[i].Delete(); err != nil {
 						result = errors.Join(result, fmt.Errorf("delete owned route: %w", err))
 					}
 				}
 			}
+			trace(family, "routes-finished", attempted)
 		}
+		trace(family, "addresses-read", 0)
 		addresses, err := winipcfg.GetUnicastIPAddressTable(family)
 		if err != nil {
 			result = errors.Join(result, fmt.Errorf("read owned addresses: %w", err))
@@ -133,6 +146,7 @@ func flushOwnNetwork(luid winipcfg.LUID) error {
 				}
 			}
 		}
+		trace(family, "interface-read", 0)
 		if _, err = luid.IPInterface(family); err != nil {
 			if errors.Is(err, windows.ERROR_NOT_FOUND) || errors.Is(err, windows.ERROR_NOT_SUPPORTED) {
 				continue
@@ -140,9 +154,11 @@ func flushOwnNetwork(luid winipcfg.LUID) error {
 			result = errors.Join(result, err)
 			continue
 		}
+		trace(family, "dns-clear", 0)
 		if err = luid.FlushDNS(family); err != nil {
 			result = errors.Join(result, fmt.Errorf("clear owned DNS: %w", err))
 		}
+		trace(family, "family-finished", 0)
 	}
 	return result
 }
