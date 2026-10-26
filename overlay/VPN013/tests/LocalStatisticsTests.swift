@@ -57,6 +57,33 @@ import Network
         server.start()
         // Only native loopback transport; fixture values are explicitly test data.
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        var invalidClosed = false
+        let invalid = NWConnection(host: .ipv4(.loopback),
+            port: NWEndpoint.Port(rawValue: key.ports[0])!, using: .tcp)
+        let invalidQueue = DispatchQueue(label: "vpn013.fixture.unauthorized")
+        var invalidFrame = request; invalidFrame[45] ^= 1
+        invalid.stateUpdateHandler = { state in
+            if case .ready = state {
+                invalid.send(content: invalidFrame, completion: .contentProcessed { _ in
+                    invalid.receive(minimumIncompleteLength: 1, maximumLength: 1) { data, _, complete, error in
+                        DispatchQueue.main.async {
+                            expect(data == nil || data!.isEmpty, "unauthorized socket receives no data")
+                            invalidClosed = complete || error != nil
+                        }
+                    }
+                })
+            }
+        }
+        invalid.start(queue: invalidQueue); wait { invalidClosed }; invalid.cancel()
+        lock.lock(); let unauthorizedReads = reads; lock.unlock()
+        expect(unauthorizedReads == 0, "unauthenticated real socket never reads the engine")
+
+        var cancelledCallback = false
+        let cancelled = try VPN013LocalStatisticsRead(credentials: key, operation: 6)
+        cancelled.cancel()
+        cancelled.start { _ in cancelledCallback = true }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        expect(!cancelledCallback, "cancelled reader cannot report a later result")
         var result: Result<Data, Error>?
         let client = try VPN013LocalStatisticsRead(credentials: key, operation: 6)
         client.start { result = $0 }

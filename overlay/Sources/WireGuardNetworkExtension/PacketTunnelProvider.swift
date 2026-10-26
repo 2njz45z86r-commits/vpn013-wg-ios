@@ -95,26 +95,34 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // Independent read-only authenticated transport. It cannot alter the
-        // engine, routes, profiles or keys and never binds a LAN/WAN address.
-        if let envelope = tunnelProviderProtocol.privateEnvelope,
-           let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
-           let credentials = try? VPN013LocalStatisticsCredentials(secret: secret,
-                id: envelope.id, ciphertext: envelope.ciphertext) {
-            let server = VPN013LocalStatisticsServer(credentials: credentials) { [weak self] operation, reply in
-                guard let self = self else { reply(nil); return }
-                self.handleAppMessage(Data([operation]), completionHandler: reply)
+        // Own the listener only after the tunnel starts successfully. Failed
+        // starts must not leave an authenticated socket or profile key alive.
+        let finishStart: (Error?) -> Void = { error in
+            guard error == nil else { completionHandler(error); return }
+            DispatchQueue.main.async {
+                // Independent read-only authenticated transport. It cannot alter the
+                // engine, routes, profiles or keys and never binds a LAN/WAN address.
+                if let envelope = tunnelProviderProtocol.privateEnvelope,
+                   let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
+                   let credentials = try? VPN013LocalStatisticsCredentials(secret: secret,
+                        id: envelope.id, ciphertext: envelope.ciphertext) {
+                    let server = VPN013LocalStatisticsServer(credentials: credentials) { [weak self] operation, reply in
+                        guard let self = self else { reply(nil); return }
+                        self.handleAppMessage(Data([operation]), completionHandler: reply)
+                    }
+                    self.localStatistics = server; server.start()
+                }
+                completionHandler(nil)
             }
-            localStatistics = server; server.start()
         }
 
         do {
             if let profile = try AutoTunnelProfile.load(from:tunnelProviderProtocol) {
                 let candidates = try profile.validatedConfigurations()
-                DispatchQueue.main.async { self.startAutomatic(candidates:candidates, completion:completionHandler) }
+                DispatchQueue.main.async { self.startAutomatic(candidates:candidates, completion:finishStart) }
                 return
             }
-        } catch { completionHandler(error); return }
+        } catch { finishStart(error); return }
 
         logTunnelConfigurationSummary(tunnelConfiguration)
 
@@ -125,7 +133,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 wg_log(.info, message: "Tunnel interface is \(interfaceName)")
 
-                completionHandler(nil)
+                finishStart(nil)
                 return
             }
 
@@ -133,22 +141,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             case .cannotLocateTunnelFileDescriptor:
                 wg_log(.error, staticMessage: "Starting tunnel failed: could not determine file descriptor")
                 errorNotifier.notify(PacketTunnelProviderError.couldNotDetermineFileDescriptor)
-                completionHandler(PacketTunnelProviderError.couldNotDetermineFileDescriptor)
+                finishStart(PacketTunnelProviderError.couldNotDetermineFileDescriptor)
 
             case .dnsResolution(let dnsErrors):
                 wg_log(.error, message: "DNS resolution failed; endpointCount=\(dnsErrors.count)")
                 errorNotifier.notify(PacketTunnelProviderError.dnsResolutionFailure)
-                completionHandler(PacketTunnelProviderError.dnsResolutionFailure)
+                finishStart(PacketTunnelProviderError.dnsResolutionFailure)
 
             case .setNetworkSettings:
                 wg_log(.error, staticMessage: "Starting tunnel failed: could not apply network settings")
                 errorNotifier.notify(PacketTunnelProviderError.couldNotSetNetworkSettings)
-                completionHandler(PacketTunnelProviderError.couldNotSetNetworkSettings)
+                finishStart(PacketTunnelProviderError.couldNotSetNetworkSettings)
 
             case .startWireGuardBackend(let errorCode):
                 wg_log(.error, message: "Starting tunnel failed with wgTurnOn returning \(errorCode)")
                 errorNotifier.notify(PacketTunnelProviderError.couldNotStartBackend)
-                completionHandler(PacketTunnelProviderError.couldNotStartBackend)
+                finishStart(PacketTunnelProviderError.couldNotStartBackend)
 
             case .invalidState:
                 // Must never happen
