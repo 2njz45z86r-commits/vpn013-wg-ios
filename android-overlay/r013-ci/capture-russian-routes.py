@@ -18,7 +18,8 @@ def verify_dump(text, interface, expected):
                re.search(r'InterfaceName:\s+' + re.escape(interface) + r'\s', line)]
     assert len(records) == 1, 'Actual active VPN route record missing or ambiguous'
     record = records[0]
-    assert re.search(r'Transports:\s+VPN\b', record), 'Actual record is not a VPN'
+    transports = re.search(r'Transports:\s+([A-Z0-9_|]+)', record)
+    assert transports and 'VPN' in transports[1].split('|'), 'Actual record is not a VPN'
     match = re.search(r'Routes:\s*\[([^\]]*)\]', record)
     assert match, 'Actual OS routes missing'
     throw, v6_default = set(), False
