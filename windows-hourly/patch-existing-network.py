@@ -11,7 +11,7 @@ for name,want in expected.items():
  assert actual==want,(name,actual,'Unknown source; no watcher patch')
  records[name]={'before':actual}
 p=base/'interfacewatcher.go';s=p.read_text()
-s=s.replace('"context"','"context"\n"errors"\n"fmt"',1)
+s=s.replace('"context"','"context"\n"errors"\n"fmt"\n"time"',1)
 s=s.replace('setupMutex              sync.Mutex','retirementMutex sync.Mutex\nexistingBackend bool\nsetupMutex              sync.Mutex',1)
 start=s.index('func (iw *interfaceWatcher) setup(')
 end=s.index('func watchInterface(',start)
@@ -72,8 +72,13 @@ s=s[:start]+'''func (iw *interfaceWatcher) Configure(binder conn.BindSocketToInt
 func (iw *interfaceWatcher) RetireForBackend(ctx context.Context) error { return iw.retire(ctx,true) }
 
 func (iw *interfaceWatcher) retire(ctx context.Context,preservePolicy bool) error {
+ began:=time.Now()
+ trace:=func(phase string){log.Printf("R013Routing: watcher-retire phase=%s elapsedMS=%d",phase,time.Since(began).Milliseconds())}
+ trace("retirement-lock")
  iw.retirementMutex.Lock();defer iw.retirementMutex.Unlock()
+ trace("cancel-context")
  iw.comparisonStop();iw.comparisonGate.NotifyChange()
+ trace("detach-lock")
  iw.setupMutex.Lock()
  callbacks:=append([]winipcfg.ChangeCallback{},iw.changeCallbacks4...)
  callbacks=append(callbacks,iw.changeCallbacks6...)
@@ -82,17 +87,29 @@ func (iw *interfaceWatcher) retire(ctx context.Context,preservePolicy bool) erro
  iw.setupMutex.Unlock()
  var failed []winipcfg.ChangeCallback
  var drainError error
- for _,cb:=range callbacks{if err:=cb.Unregister();err!=nil{failed=append(failed,cb);drainError=errors.Join(drainError,err)}}
+ for i,cb:=range callbacks{
+  trace(fmt.Sprintf("callback-%d-begin",i))
+  if err:=cb.Unregister();err!=nil{failed=append(failed,cb);drainError=errors.Join(drainError,err)}
+  trace(fmt.Sprintf("callback-%d-done",i))
+ }
  if len(failed)!=0{
   iw.setupMutex.Lock();iw.changeCallbacks4=failed;iw.setupMutex.Unlock()
   return fmt.Errorf("watcher subscriptions did not retire: %w",drainError)
  }
+ trace("primary-barrier")
  return iw.comparisonGate.Primary(ctx,r013gate.Stamp{},func(context.Context)error{
+  trace("primary-owned")
   iw.setupMutex.Lock();defer iw.setupMutex.Unlock()
+  trace("setup-owned")
   if !preservePolicy{firewall.DisableFirewall()}
   if iw.tun==nil{return nil}
   luid:=winipcfg.LUID(iw.tun.LUID())
-  return errors.Join(flushOwnNetwork(luid),verifyRetiredNetwork(luid,iw.conf))
+  trace("flush-network")
+  flushErr:=flushOwnNetwork(luid)
+  trace("verify-retired")
+  verifyErr:=verifyRetiredNetwork(luid,iw.conf)
+  trace("network-retired")
+  return errors.Join(flushErr,verifyErr)
  })
 }
 
