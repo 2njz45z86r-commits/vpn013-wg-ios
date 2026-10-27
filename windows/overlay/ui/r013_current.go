@@ -16,6 +16,9 @@ type r013CurrentSnapshot struct {
 	name, detail string
 	target       r013.CurrentPingTarget
 	active       bool
+	controlName  string
+	controlState manager.TunnelState
+	controlKnown bool
 }
 
 type r013CurrentCard struct {
@@ -24,6 +27,10 @@ type r013CurrentCard struct {
 	detail             *walk.TextLabel
 	result             *walk.Label
 	button             *walk.PushButton
+	power              *walk.PushButton
+	powerError         *walk.TextLabel
+	powerBusy          bool
+	powerRefreshing    bool
 	current            r013CurrentSnapshot
 	cancel, pingCancel context.CancelFunc
 	refresh            chan struct{}
@@ -42,15 +49,24 @@ func addR013CurrentCard(owner *ManageTunnelsWindow) (*r013CurrentCard, error) {
 		return nil, err
 	}
 	c.group.SetTitle("Текущее подключение · Не подключено")
-	layout := walk.NewVBoxLayout()
+	layout := walk.NewHBoxLayout()
 	layout.SetMargins(walk.Margins{HNear: 12, VNear: 6, HFar: 12, VFar: 8})
 	c.group.SetLayout(layout)
-	if c.detail, err = walk.NewTextLabel(c.group); err != nil {
+	content, err := walk.NewComposite(c.group)
+	if err != nil {
+		c.group.Dispose()
+		return nil, err
+	}
+	contentLayout := walk.NewVBoxLayout()
+	contentLayout.SetMargins(walk.Margins{})
+	content.SetLayout(contentLayout)
+	layout.SetStretchFactor(content, 1)
+	if c.detail, err = walk.NewTextLabel(content); err != nil {
 		c.group.Dispose()
 		return nil, err
 	}
 	c.detail.SetText("Включите профиль или Авто. Выбор строки не меняет эту карточку.")
-	row, err := walk.NewComposite(c.group)
+	row, err := walk.NewComposite(content)
 	if err != nil {
 		c.group.Dispose()
 		return nil, err
@@ -72,6 +88,15 @@ func addR013CurrentCard(owner *ManageTunnelsWindow) (*r013CurrentCard, error) {
 	c.button.SetMinMaxSize(walk.Size{Width: 130, Height: 30}, walk.Size{Width: 130, Height: 30})
 	c.button.SetEnabled(false)
 	c.button.Clicked().Attach(c.ping)
+	if c.powerError, err = walk.NewTextLabel(content); err != nil {
+		c.group.Dispose()
+		return nil, err
+	}
+	c.powerError.SetVisible(false)
+	if err = c.addPowerButton(); err != nil {
+		c.group.Dispose()
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -104,9 +129,20 @@ func readR013Current(ctx context.Context) r013CurrentSnapshot {
 		}
 	}
 	if active == nil {
+		global, e := manager.IPCClientGlobalState()
+		if e == nil {
+			none.controlState = global
+			none.controlKnown = global == manager.TunnelStopped || global == manager.TunnelStarting || global == manager.TunnelStopping
+			if global == manager.TunnelStarting {
+				none.detail = "VPN включается…"
+			}
+			if global == manager.TunnelStopping {
+				none.detail = "VPN выключается…"
+			}
+		}
 		return none
 	}
-	shot := r013CurrentSnapshot{name: active.Name, active: true}
+	shot := r013CurrentSnapshot{name: active.Name, active: true, controlName: active.Name, controlState: manager.TunnelStarted, controlKnown: true}
 	if shot.name == r013.AutoName {
 		shot.name = "Авто"
 	}
@@ -144,6 +180,7 @@ func readR013Current(ctx context.Context) r013CurrentSnapshot {
 }
 
 func (c *r013CurrentCard) start() {
+	c.owner.tunnelsPage.listView.CurrentIndexChanged().Attach(c.updatePowerButton)
 	ctx, cancel := context.WithCancel(context.Background())
 	c.cancel = cancel
 	c.changes = manager.IPCClientRegisterTunnelChange(func(_ *manager.Tunnel, _, _ manager.TunnelState, _ error) {
@@ -190,6 +227,7 @@ func (c *r013CurrentCard) apply(shot r013CurrentSnapshot, revision uint64) {
 	}
 	c.displayRevision = revision
 	c.current = shot
+	c.powerRefreshing = false
 	title := "Текущее подключение · Не подключено"
 	if shot.active {
 		title = "Текущее подключение · " + shot.name
@@ -197,6 +235,7 @@ func (c *r013CurrentCard) apply(shot r013CurrentSnapshot, revision uint64) {
 	c.group.SetTitle(title)
 	c.detail.SetText(shot.detail)
 	c.button.SetEnabled(shot.active && shot.target.Host != "" && (c.pingCancel != nil || !c.pingInFlight.Load()))
+	c.updatePowerButton()
 }
 
 func (c *r013CurrentCard) ping() {

@@ -6,15 +6,22 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/amnezia-vpn/amneziawg-windows-client/manager"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013"
 	"github.com/amnezia-vpn/amneziawg-windows-client/version"
 	"github.com/lxn/walk"
+	"github.com/lxn/win"
 )
+
+// This audit seam exists only in the separately tagged in-memory preview.
+var R013PreviewPowerAudit func() (starts, stops int, lastStart, lastStop string)
 
 func EnableR013Preview() { r013Preview = true; IsAdmin = true }
 
@@ -54,6 +61,9 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 		}
 		if scenario == "auto-no-stats" {
 			minimum = 3
+		}
+		if scenario == "power" {
+			minimum = 10
 		}
 		if len(checks) < minimum && failure == "" {
 			failure = "Required UI checks did not execute"
@@ -123,6 +133,156 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 	}
 	if !ready {
 		failure = "Current fixture did not become active"
+		return
+	}
+	if scenario == "power" {
+		check := func(ok bool, message string) bool {
+			if !ok {
+				failure = message
+				return false
+			}
+			checks = append(checks, message)
+			return true
+		}
+		capture := func(name string) {
+			bitmap, err := walk.NewBitmapFromWindow(window)
+			if err != nil {
+				failure = "Native capture failed"
+				return
+			}
+			defer bitmap.Dispose()
+			image, err := bitmap.ToImage()
+			if err != nil {
+				failure = "Native image conversion failed"
+				return
+			}
+			file, err := os.Create(filepath.Join(filepath.Dir(destination), "r013-power-"+name+".png"))
+			if err != nil {
+				failure = "Native capture file failed"
+				return
+			}
+			defer file.Close()
+			if png.Encode(file, image) != nil {
+				failure = "Native PNG encoding failed"
+			}
+		}
+		wait := func(active bool, name string) bool {
+			until := time.Now().Add(10 * time.Second)
+			for time.Now().Before(until) {
+				ok := false
+				syncUI(func() {
+					c := window.currentCard
+					ok = !c.powerBusy && !c.powerRefreshing && c.current.controlKnown && c.current.active == active && (!active || c.current.controlName == name)
+				})
+				if ok {
+					return true
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			failure = "Power action did not settle"
+			return false
+		}
+		syncUI(func() {
+			c := window.currentCard
+			window.tunnelsPage.listView.selectTunnel("Germany")
+			if !check(c.power.Visible() && c.power.Enabled() && c.power.Text() == "ВЫКЛ" && c.current.controlName == "Finland", "Native OFF button follows active Finland while Germany is selected") {
+				return
+			}
+			c.power.SetFocus()
+			if !check(win.GetFocus() == c.power.Handle(), "Power control receives native keyboard focus") {
+				return
+			}
+			capture("connected")
+			c.power.SendMessage(win.BM_CLICK, 0, 0)
+			c.power.SendMessage(win.BM_CLICK, 0, 0)
+		})
+		if failure != "" || !wait(false, "") {
+			return
+		}
+		syncUI(func() {
+			c := window.currentCard
+			a, b, _, last := R013PreviewPowerAudit()
+			if !check(a == 0 && b == 1 && last == "Finland" && c.power.Enabled() && c.power.Text() == "ВКЛ", "Double click sends exactly one STOP for actual active profile") {
+				return
+			}
+			capture("disconnected")
+			c.power.SendMessage(win.BM_CLICK, 0, 0)
+		})
+		if failure != "" || !wait(false, "") {
+			return
+		}
+		syncUI(func() {
+			c := window.currentCard
+			a, b, last, _ := R013PreviewPowerAudit()
+			if !check(a == 1 && b == 1 && last == "Germany" && c.powerError.Visible() && c.power.Enabled(), "Failed START restores an actionable button and reports failure without claiming connection") {
+				return
+			}
+			c.power.SendMessage(win.BM_CLICK, 0, 0)
+		})
+		if failure != "" || !wait(true, "Germany") {
+			return
+		}
+		syncUI(func() {
+			c := window.currentCard
+			a, b, last, _ := R013PreviewPowerAudit()
+			if !check(a == 2 && b == 1 && last == "Germany" && c.power.Text() == "ВЫКЛ" && !c.powerError.Visible(), "Retry START activates exactly selected Germany and clears prior error") {
+				return
+			}
+			window.tunnelsPage.listView.selectTunnel("Netherlands")
+			c.power.SendMessage(win.BM_CLICK, 0, 0)
+		})
+		if failure != "" || !wait(false, "") {
+			return
+		}
+		syncUI(func() {
+			c := window.currentCard
+			_, b, _, last := R013PreviewPowerAudit()
+			if !check(b == 2 && last == "Germany", "OFF after a selection change still stops Germany rather than starting Netherlands") {
+				return
+			}
+			window.tunnelsPage.listView.selectTunnel(r013.AutoName)
+			c.power.SendMessage(win.BM_CLICK, 0, 0)
+		})
+		if failure != "" || !wait(true, r013.AutoName) {
+			return
+		}
+		syncUI(func() {
+			c := window.currentCard
+			a, _, last, _ := R013PreviewPowerAudit()
+			if !check(a == 3 && last == r013.AutoName && c.power.Text() == "ВЫКЛ", "Power control starts Auto through the same manager path") {
+				return
+			}
+			capture("auto")
+			c.power.SendMessage(win.BM_CLICK, 0, 0)
+		})
+		if failure != "" || !wait(false, "") {
+			return
+		}
+		syncUI(func() {
+			c := window.currentCard
+			_, b, _, last := R013PreviewPowerAudit()
+			if !check(b == 3 && last == r013.AutoName, "Power control stops the actual Auto session") {
+				return
+			}
+			for _, state := range []manager.TunnelState{manager.TunnelStarting, manager.TunnelStopping, manager.TunnelUnknown} {
+				c.apply(r013CurrentSnapshot{controlKnown: state != manager.TunnelUnknown, controlState: state}, c.revision.Load())
+				if c.power.Enabled() {
+					failure = "Transient or unknown manager state is actionable"
+					return
+				}
+			}
+			if !check(true, "Starting, stopping and unknown manager states disable power actions") {
+				return
+			}
+			window.tunnelsPage.listView.SetCurrentIndex(-1)
+			c.apply(r013CurrentSnapshot{controlKnown: true, controlState: manager.TunnelStopped}, c.revision.Load())
+			a, finalStops, _, _ := R013PreviewPowerAudit()
+			check(!c.power.Enabled() && a == 3 && finalStops == 3, "Empty selection cannot issue a command and state-only checks never change VPN")
+			window.SetSize(walk.Size{Width: 820, Height: 560})
+			window.tunnelsPage.listView.selectTunnel("Germany")
+			c.apply(r013CurrentSnapshot{controlKnown: true, controlState: manager.TunnelStopped, detail: "VPN не подключён"}, c.revision.Load())
+			capture("minimum-window")
+		})
 		return
 	}
 	syncUI(func() {
