@@ -1,205 +1,181 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-25T22:36:58.562148+00:00",
-  "source_sha256": "efb3bd26f3ac8a437edcf514bf24055bb4800504d05f3ede008ab0d4dc4f24f1",
-  "source_commit_reviewed": "0e8b009f9bc031f7ffdcec11536196e998ea2d47",
+  "reviewed_at": "2026-10-27T03:27:49.791236+00:00",
+  "source_sha256": "d69df78eb7448dad61d0b805512f86b977b2e1ac8303454ef074bd30e4042ff4",
+  "source_commit_reviewed": "1e38bb1118eab84d297ebb76bfd096d4fffa6080",
   "scope_complete": true,
-  "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day",
+  "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review",
   "baseline_only": false,
   "checks": [
     {
       "id": "1.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/1.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/1.1"
     },
     {
       "id": "1.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/1.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/1.2"
     },
     {
       "id": "1.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/1.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/1.3"
     },
     {
       "id": "1.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/1.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/1.4"
     },
     {
       "id": "2.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/2.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/2.1"
     },
     {
       "id": "2.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/2.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/2.2"
     },
     {
       "id": "2.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/2.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/2.3"
     },
     {
       "id": "2.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/2.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/2.4"
     },
     {
       "id": "2.5",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/2.5"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/2.5"
     },
     {
       "id": "3.1",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/3.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/3.1"
     },
     {
       "id": "3.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/3.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/3.2"
     },
     {
       "id": "3.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/3.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/3.3"
     },
     {
       "id": "3.4",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/3.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/3.4"
     },
     {
       "id": "4.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.1"
     },
     {
       "id": "4.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.2"
     },
     {
       "id": "4.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.3"
     },
     {
       "id": "4.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.4"
     },
     {
       "id": "4.5",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.5"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.5"
     },
     {
       "id": "4.6",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.6"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.6"
     },
     {
       "id": "4.7",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.7"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.7"
     },
     {
       "id": "4.8",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.8"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.8"
     },
     {
       "id": "4.9",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.9"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.9"
     },
     {
       "id": "4.10",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.10"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.10"
     },
     {
       "id": "4.11",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/4.11"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/4.11"
     },
     {
       "id": "5.1",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/5.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/5.1"
     },
     {
       "id": "5.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/5.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/5.2"
     },
     {
       "id": "5.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/5.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/5.3"
     },
     {
       "id": "6.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/6.1"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/6.1"
     },
     {
       "id": "6.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/6.2"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/6.2"
     },
     {
       "id": "6.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/6.3"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/6.3"
     },
     {
       "id": "6.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/6.4"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/6.4"
     },
     {
       "id": "6.5",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/6.5"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/6.5"
     },
     {
       "id": "6.6",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/6.6"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/6.6"
     },
     {
       "id": "6.7",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/inapp-hour/security-review-three-day/6.7"
+      "evidence_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review/6.7"
     }
-  ],
-  "baseline_report_ref": "private-local:vpn013-bot-migration-20261025/baseline",
-  "review_note": "Exact three-day source/runtime delta audited with current native and private tests. Final files require separate artifact, signature, download and delivery verification. No physical device claim.",
-  "validation_only_authorization": {
-    "source": "explicit owner reply in current task",
-    "scope": "Public client source and free validation while audit is incomplete",
-    "release_approved": false
-  },
-  "platform_functional_acceptance": {
-    "ios": {
-      "run": 40215533930,
-      "uiTests": 23,
-      "fail": 0,
-      "skip": 0,
-      "freshPackagingRequired": true,
-      "avatarOnlyDelta": true,
-      "codeEntriesCompared": 78
-    },
-    "android": {
-      "newUpgradeAcceptanceComplete": false
-    },
-    "windows": {
-      "newUpgradeAcceptanceComplete": false
-    }
-  }
+  ]
 }
