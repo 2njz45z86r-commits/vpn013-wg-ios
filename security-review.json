@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-27T07:19:41.656002+00:00",
-  "source_sha256": "e5ec37096fe757e27891e9e4c6182669e4282c9d21207a6e04a58ea2cca4ffd6",
-  "source_commit_reviewed": "1b23ee4415182354035497aae9a20e3458be42a4",
+  "reviewed_at": "2026-10-27T07:30:40.536946+00:00",
+  "source_sha256": "051c599c6933be3f26f945d61cf142a1260651b1c3f5c44479293a43ba39f52e",
+  "source_commit_reviewed": "af3213faeded782225dd165120896f7bd8e73612",
   "scope_complete": true,
   "private_report_ref": "private-local:vpn013/subscription-roster-20261027/source-review",
   "baseline_only": false,

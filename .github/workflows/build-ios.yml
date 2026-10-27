@@ -11,6 +11,8 @@ on:
       - 'overlay/**'
       - 'build-on-mac.sh'
       - 'publish-client-release.py'
+      - 'capture-ios-simulators.py'
+      - 'reuse-passed-ios159-tests.py'
       - '.github/workflows/build-ios.yml'
 permissions:
   contents: write
