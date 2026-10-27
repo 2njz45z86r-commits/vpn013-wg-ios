@@ -26,6 +26,11 @@ public enum WireGuardAdapterError: Error {
     case startWireGuardBackend(Int32)
 }
 
+/// Internal provider read result. Never serialize the raw runtime configuration.
+public enum WireGuardRuntimeRead {
+    case available(String), stopped, temporarilyOffline, unavailable
+}
+
 /// Enum representing internal state of the `WireGuardAdapter`
 private enum State {
     /// The tunnel is stopped
@@ -200,18 +205,27 @@ public class WireGuardAdapter {
     /// Returns a runtime configuration from WireGuard.
     /// - Parameter completionHandler: completion handler.
     public func getRuntimeConfiguration(completionHandler: @escaping (String?) -> Void) {
-        workQueue.async {
-            guard case .started(let handle, _) = self.state else {
-                self.logHandler(.verbose, "getRuntimeConfiguration: adapter not started (state=\(self.state))")
-                completionHandler(nil)
-                return
-            }
+        readRuntimeConfiguration { result in
+            if case .available(let text) = result { completionHandler(text) }
+            else { completionHandler(nil) }
+        }
+    }
 
+    /// Read on the same queue as lifecycle changes, without acquiring a mutation guard.
+    public func readRuntimeConfiguration(completionHandler: @escaping (WireGuardRuntimeRead) -> Void) {
+        workQueue.async {
+            let handle: Int32
+            switch self.state {
+            case .started(let value, _): handle = value
+            case .stopped: completionHandler(.stopped); return
+            case .temporaryShutdown: completionHandler(.temporarilyOffline); return
+            }
             if let settings = wgGetConfig(handle) {
-                completionHandler(String(cString: settings))
+                let text = String(cString: settings)
                 free(settings)
+                completionHandler(.available(text))
             } else {
-                completionHandler(nil)
+                completionHandler(.unavailable)
             }
         }
     }
@@ -396,30 +410,34 @@ public class WireGuardAdapter {
     /// - Returns: `PacketTunnelSettingsGenerator`.
     private func setNetworkSettings(_ networkSettings: NEPacketTunnelNetworkSettings) throws {
         self.logHandler(.verbose, "setNetworkSettings: applying")
+        guard let provider = self.packetTunnelProvider else {
+            throw WireGuardAdapterError.invalidState
+        }
         var systemError: Error?
+        var completed = false
         let condition = NSCondition()
-
-        // Activate the condition
+        provider.setTunnelNetworkSettings(networkSettings) { error in
+            condition.lock()
+            systemError = error
+            completed = true
+            condition.signal()
+            condition.unlock()
+        }
+        // A completion is required before claiming routes are ready. Waiting
+        // is bounded even when the OS never invokes its completion handler.
+        let deadline = Date().addingTimeInterval(15)
         condition.lock()
         defer { condition.unlock() }
-
-        self.packetTunnelProvider?.setTunnelNetworkSettings(networkSettings) { error in
-            systemError = error
-            condition.signal()
-        }
-
-        // Packet tunnel's `setTunnelNetworkSettings` times out in certain
-        // scenarios & never calls the given callback.
-        let setTunnelNetworkSettingsTimeout: TimeInterval = 5 // seconds
-
-        if condition.wait(until: Date().addingTimeInterval(setTunnelNetworkSettingsTimeout)) {
-            if let systemError = systemError {
-                throw WireGuardAdapterError.setNetworkSettings(systemError)
+        while !completed {
+            if !condition.wait(until: deadline), !completed {
+                self.logHandler(.error, "setTunnelNetworkSettings timed out; routes not confirmed")
+                throw WireGuardAdapterError.setNetworkSettings(NSError(domain: "VPN013.NetworkSettings", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "iOS did not confirm VPN routes in time"]))
             }
-        } else {
-            self.logHandler(.error, "setTunnelNetworkSettings timed out after 5 seconds; proceeding anyway")
         }
-
+        if let systemError = systemError {
+            throw WireGuardAdapterError.setNetworkSettings(systemError)
+        }
         self.lastNetworkSettingsUpdateAt = Date()
     }
 
@@ -655,3 +673,4 @@ private extension Network.NWPath.Status {
         }
     }
 }
+

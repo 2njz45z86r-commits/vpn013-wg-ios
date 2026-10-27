@@ -185,6 +185,18 @@ final class EndpointPingCoordinator {
         for host in unique {
             queue.addOperation { [weak self] in
                 guard !token.isCancelled else { return }
+                #if DEBUG && targetEnvironment(simulator)
+                // Keep only the explicit cancellation UI fixture pending. A
+                // fast ICMP rejection must not finish before XCTest can tap
+                // Stop. No measurement is invented; release builds omit this.
+                if ProcessInfo.processInfo.arguments.contains("--vpn013-test-hold-ping-for-cancellation") {
+                    let until = ProcessInfo.processInfo.systemUptime + 40
+                    while !token.isCancelled && ProcessInfo.processInfo.systemUptime < until {
+                        Thread.sleep(forTimeInterval: 0.02)
+                    }
+                    guard !token.isCancelled else { return }
+                }
+                #endif
                 let result = EndpointPingProbe.measure(host: host, cancellation: token)
                 DispatchQueue.main.async {
                     guard self?.generation == stamp else { return }

@@ -70,6 +70,7 @@ final class ClientUpdateCoordinator {
     private var loadingError: Error?
     private var attemptedAt: Date?
     private var lastPendingAttempt: Date?
+    private var subscriptionMessages: [String] = []
     weak var presenter: UIViewController?
 
     private init() {
@@ -120,7 +121,7 @@ final class ClientUpdateCoordinator {
     func check(manager: TunnelsManager, manual: Bool) {
         guard !busy else { return }
         guard loadingError == nil else { publish("Защищённое хранилище недоступно. Прежние профили сохранены."); return }
-        busy = true; attemptedAt = Date(); publish("Проверяем обновления…")
+        busy = true; attemptedAt = Date(); subscriptionMessages = []; publish("Проверяем обновления…")
         ClientHTTPTask.request(path: "/client/releases/vpn013-wg/ios") { [weak self] result in
             guard let self = self else { return }
             var appMessage: String
@@ -137,9 +138,9 @@ final class ClientUpdateCoordinator {
             case .failure: appMessage = ClientUpdateError.network.localizedDescription
             }
             let orders = Array(self.registry.bindings.keys).sorted()
-            self.fetch(orders: orders, index: 0, errors: []) { errors in
+            self.fetch(orders: orders, index: 0, errors: [], manager: manager) { errors in
                 self.busy = false
-                self.publish(appMessage + (errors.isEmpty ? "" : "\n\n" + errors.joined(separator: "\n")))
+                self.publish(([appMessage] + self.subscriptionMessages + errors).joined(separator: "\n\n"))
                 self.applyPending(manager: manager) { applyError in
                     if let applyError = applyError { self.publish(self.status + "\n\n" + applyError.localizedDescription) }
                     if manual || self.release != nil { self.showResult() }
@@ -147,7 +148,7 @@ final class ClientUpdateCoordinator {
             }
         }
     }
-    private func fetch(orders: [String], index: Int, errors: [String], completion: @escaping ([String]) -> Void) {
+    private func fetch(orders: [String], index: Int, errors: [String], manager: TunnelsManager, completion: @escaping ([String]) -> Void) {
         guard index < orders.count else { completion(errors); return }
         let order = orders[index]
         guard let binding = registry.bindings[order] else { completion(errors); return }
@@ -161,16 +162,20 @@ final class ClientUpdateCoordinator {
                 guard snapshot.expiry > Int64(Date().timeIntervalSince1970 * 1000) else { throw ClientUpdateError.accessEnded }
                 _ = try self.configurations(snapshot)
                 self.registry.bindings[order]?.lastCheck = Date()
-                if snapshot.revision != binding.document.snapshot.revision || snapshot.expiry != binding.document.snapshot.expiry || !self.mappingComplete(binding, snapshot: snapshot) {
+                if snapshot.revision != binding.document.snapshot.revision || snapshot.expiry != binding.document.snapshot.expiry || !self.mappingComplete(binding, snapshot: snapshot, manager: manager) {
                     self.registry.bindings[order]?.pending = snapshot
                 }
+                let formatter = DateFormatter(); formatter.dateStyle = .short; formatter.timeStyle = .short
+                let expiry = formatter.string(from: Date(timeIntervalSince1970: Double(snapshot.expiry) / 1000))
+                self.subscriptionMessages.append("Подписка №\(order): \(snapshot.servers.count) серверов. Действует до \(expiry).")
                 try self.save()
             } catch { failures.append("Заявка №" + order + ": " + (error as? ClientUpdateError ?? .network).localizedDescription) }
-            self.fetch(orders: orders, index: index + 1, errors: failures, completion: completion)
+            self.fetch(orders: orders, index: index + 1, errors: failures, manager: manager, completion: completion)
         }
     }
-    private func mappingComplete(_ binding: ClientBinding, snapshot: ClientSnapshot) -> Bool {
-        Set(binding.profileIDs.keys) == Set(snapshot.servers.map { $0.id })
+    private func mappingComplete(_ binding: ClientBinding, snapshot: ClientSnapshot, manager: TunnelsManager) -> Bool {
+        let available = Set(manager.mapTunnels { $0.persistentProfileIdentifier }.compactMap { $0 })
+        return ClientRosterPlan.mappingComplete(binding.profileIDs, snapshot: snapshot, availableProfileIDs: available)
     }
     private func configurations(_ snapshot: ClientSnapshot) throws -> [String: TunnelConfiguration] {
         try snapshot.validate()
@@ -291,7 +296,6 @@ final class ClientUpdateCoordinator {
             } }
         }
         func updateAutos() {
-            let removed = Set(plan.removedIDs.compactMap { registry.bindings[order]?.profileIDs[$0] })
             let newMembers = snapshot.servers.compactMap { registry.bindings[order]?.profileIDs[$0.id] }
             let relevant = registry.automatic.indices.filter { !Set(registry.automatic[$0].sources).isDisjoint(with: oldIDs) }
             func nextAuto(_ index: Int) {
@@ -300,7 +304,8 @@ final class ClientUpdateCoordinator {
                 let record = registry.automatic[recordIndex]
                 let all = manager.mapTunnels { $0 }
                 guard let tunnel = all.first(where: { $0.persistentProfileIdentifier == record.profileID }) else { nextAuto(index + 1); return }
-                var sourceIDs = record.sources.filter { !removed.contains($0) }
+                // Replace this order's complete contribution, including locally deleted IDs.
+                var sourceIDs = record.sources.filter { !oldIDs.contains($0) }
                 for id in newMembers where !sourceIDs.contains(id) { sourceIDs.append(id) }
                 let members = sourceIDs.compactMap { id in all.first { $0.persistentProfileIdentifier == id }?.tunnelConfiguration }
                 do {
@@ -365,7 +370,7 @@ final class ClientUpdateCoordinator {
     func refreshRenewal(order: String, manager: TunnelsManager, completion: @escaping () -> Void) {
         guard !busy, registry.bindings[order] != nil else { completion(); return }
         busy = true
-        fetch(orders: [order], index: 0, errors: []) { _ in
+        fetch(orders: [order], index: 0, errors: [], manager: manager) { _ in
             self.busy = false
             let binding = self.registry.bindings[order]
             let expiry = binding?.pending?.expiry ?? binding?.document.snapshot.expiry ?? 0

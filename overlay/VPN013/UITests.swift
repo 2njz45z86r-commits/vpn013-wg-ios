@@ -1,5 +1,14 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testNativeRussianIPRouteObjectsPreserveVPNAndPeers() {
+        let app=XCUIApplication()
+        app.launchArguments=["-AppleLanguages","(ru)","-AppleLocale","ru_RU","--vpn013-test-count","2","--vpn013-test-russian-routes"]
+        app.launch()
+        let policy=app.staticTexts["vpn013.routing-policy"]
+        XCTAssertTrue(policy.waitForExistence(timeout:20))
+        XCTAssertEqual(policy.value as? String,"8671 IPv4 / 2167 IPv6; original peers retained")
+        capture("native-russian-ip-settings-objects-not-physical-traffic")
+    }
     func capture(_ name:String) { let a=XCTAttachment(screenshot:XCUIScreen.main.screenshot());a.name=name;a.lifetime = .keepAlways;add(a) }
     private func assertProfileCount(_ app: XCUIApplication, _ count: Int, file: StaticString = #filePath, line: UInt = #line) {
         // UIKit exposes the same section-header UILabel through both its
@@ -336,13 +345,15 @@ final class AutoTunnelUITests:XCTestCase {
 
     func testPingCancellationIsAvailable() {
         let app = XCUIApplication()
-        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2"]
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-hold-ping-for-cancellation"]
         app.launch()
         let button = app.buttons["vpn013.check-ping"]
         XCTAssertTrue(button.waitForExistence(timeout:20))
         button.tap()
         XCTAssertTrue(app.buttons["Остановить проверку"].waitForExistence(timeout:2))
         button.tap()
+        let stopped = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Проверить пинг"), object: button)
+        XCTAssertEqual(XCTWaiter.wait(for: [stopped], timeout: 8), .completed, "Cancellation must restore the idle action")
         XCTAssertEqual(button.label, "Проверить пинг")
         XCTAssertTrue(app.staticTexts["vpn013.ping-explanation"].label.contains("остановлена"))
         capture("16-ping-cancelled")
@@ -444,18 +455,20 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].label.contains("127.0.0.1"))
         XCTAssertEqual(app.staticTexts["vpn013.current-traffic"].label, "Статистика VPN пока недоступна")
         let explanation = app.staticTexts["vpn013.current-handshake"]
-        XCTAssertTrue(explanation.waitForExistence(timeout:5))
-        XCTAssertEqual(explanation.label, fixture == "--vpn013-test-current-card-timeout"
-            ? "Нет ответа VPN-расширения за 3 секунды" : "VPN-расширение не вернуло данные статистики")
+        let expectedExplanation = fixture == "--vpn013-test-current-card-timeout"
+            ? "Нет ответа VPN-расширения за 6 секунд" : "VPN-расширение не вернуло данные статистики"
+        let matchingExplanation = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label == %@", "vpn013.current-handshake", expectedExplanation)).firstMatch
+        XCTAssertTrue(matchingExplanation.waitForExistence(timeout:10))
+        XCTAssertEqual(explanation.label, expectedExplanation)
         XCTAssertEqual(app.staticTexts["vpn013.current-proof"].label, "Данные рукопожатия пока недоступны")
         ping.tap()
         let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout:10), "Button must perform a real loopback ICMP echo")
         let measured = result.label
-        // Two real three-second app refreshes reproduce both nil and timeout regressions.
+        // Keep the measured Ping across two bounded six-second request windows.
         let refreshes = expectation(description:"Two runtime refresh cycles")
-        DispatchQueue.main.asyncAfter(deadline:.now() + 7) { refreshes.fulfill() }
-        wait(for:[refreshes], timeout:9)
+        DispatchQueue.main.asyncAfter(deadline:.now() + 14) { refreshes.fulfill() }
+        wait(for:[refreshes], timeout:16)
         XCTAssertTrue(ping.isEnabled)
         XCTAssertEqual(app.staticTexts["vpn013.current-ping-result"].label, measured, "Missing runtime must not erase the measured Ping")
         XCTAssertEqual(profile.switches.firstMatch.value as? String, "1", "Ping and refresh must not replace the running VPN")
@@ -481,10 +494,20 @@ final class AutoTunnelUITests:XCTestCase {
         app.buttons["Создать режим Авто"].tap()
         XCTAssertTrue(app.alerts["Создать режим Авто"].waitForExistence(timeout:5))
         app.alerts.buttons["Создать Авто"].tap()
-        if !app.tables.cells.element(boundBy:0).staticTexts["Авто · 2 сервера"].waitForExistence(timeout:2) {
-            XCTAssertTrue(app.navigationBars["Авто · 2 сервера"].waitForExistence(timeout:6))
-            app.navigationBars.buttons.element(boundBy:0).tap()
-        }
+        // Creation always opens the detail controller. A hidden list element
+        // can still exist in UIKit's accessibility tree; existence is not a
+        // reason to skip the visible Back action.
+        let detail = app.navigationBars["Авто · 2 сервера"]
+        XCTAssertTrue(detail.waitForExistence(timeout:8))
+        capture("25a-auto-created-detail-before-explicit-back")
+        let back = detail.buttons["VPN013"]
+        let backReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in back.exists && back.isHittable }, object:back)
+        XCTAssertEqual(XCTWaiter.wait(for:[backReady], timeout:8), .completed)
+        back.tap()
+        let add = app.buttons["vpn013.add-profile"]
+        let listReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in add.exists && add.isHittable }, object:add)
+        XCTAssertEqual(XCTWaiter.wait(for:[listReady], timeout:8), .completed)
+        capture("25b-visible-profile-list-after-explicit-back")
         let auto = app.tables.cells.element(boundBy:0)
         XCTAssertTrue(auto.staticTexts["Авто · 2 сервера"].waitForExistence(timeout:6))
         auto.switches.firstMatch.tap()

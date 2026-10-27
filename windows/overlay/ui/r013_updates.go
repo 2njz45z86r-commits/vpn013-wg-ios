@@ -143,21 +143,26 @@ func (tp *TunnelsPage) checkR013Updates(visible bool) {
 		if syncErr != nil {
 			message += "\n\n" + syncErr.Error()
 		} else {
-			message += fmt.Sprintf("\nОбновлено заявок: %d", count)
+			message += fmt.Sprintf("\nОбновлено подписок: %d", count)
+			clientStateLock.Lock()
+			state, stateErr := readClientState()
+			clientStateLock.Unlock()
+			if stateErr == nil {
+				message += "\n" + r013SubscriptionSummary(state)
+			}
 		}
 		if err != nil {
 			message += "\n\n" + err.Error()
 		} else {
 			message += "\nПоследний выпуск: " + release.Version + "\n\n" + release.Notes
 		}
-		available := err == nil && release.Newer(version.Number, r013.CurrentBuild)
 		tp.Synchronize(func() {
 			if err == nil {
 				tp.showR013Upgrade(release)
 			}
 			// A discovered release exposes an Install button. A background or
 			// manual version check never installs software on its own.
-			if visible && !available {
+			if visible {
 				walk.MsgBox(tp.Form(), "Обновления VPN013", message, walk.MsgBoxIconInformation)
 			}
 		})

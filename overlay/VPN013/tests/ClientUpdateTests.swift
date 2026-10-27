@@ -12,6 +12,14 @@ import Foundation
         let a = ClientServer(id:"germany",name:"Germany",config:"synthetic-fixture-configuration-A")
         let b = ClientServer(id:"finland",name:"Finland",config:"synthetic-fixture-configuration-B")
         let valid = snapshot([a,b])
+        let mapped = ["germany":"profile-a", "finland":"profile-b"]
+        try check(ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: ["profile-a","profile-b","unrelated"]))
+        try check(!ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: ["profile-b"]))
+        try check(!ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: []))
+        try check(!ClientRosterPlan.mappingComplete([:], snapshot: valid, availableProfileIDs: ["unrelated"]))
+        try check(!ClientRosterPlan.mappingComplete(["germany":"profile-a"], snapshot: valid, availableProfileIDs: ["profile-a"]))
+        try check(!ClientRosterPlan.mappingComplete(["germany":"profile-a","finland":"profile-a"], snapshot: valid, availableProfileIDs: ["profile-a"]))
+        try check(!ClientRosterPlan.mappingComplete(mapped, snapshot: snapshot([a]), availableProfileIDs: ["profile-a","profile-b"]))
         try valid.validate()
         try check(valid.revision == "9f0f12eb4cfeb200bd29ce6650d12c6c6addf0ed3fb477c4c1a63d8eb3cf51c4") // Python server interoperability fixture.
         try check(ClientUpdateProtocol.validToken(String(repeating:"A",count:43)))

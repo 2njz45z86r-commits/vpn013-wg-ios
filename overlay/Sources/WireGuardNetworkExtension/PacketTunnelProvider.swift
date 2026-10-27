@@ -6,6 +6,9 @@ import NetworkExtension
 import os
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
+    private var localStatistics: VPN013LocalStatisticsServer?
+    // Read and changed only on the main queue. A stopped startup cannot open a listener later.
+    private var localStatisticsEpoch = UUID()
     private var automatic: AutoTunnelController?
     private var automaticStartCompletion: ((Error?) -> Void)?
     private var automaticEpoch = 0
@@ -70,6 +73,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        let statisticsEpoch = UUID()
+        let rememberStatisticsStartup = { self.localStatisticsEpoch = statisticsEpoch }
+        if Thread.isMainThread { rememberStatisticsStartup() }
+        else { DispatchQueue.main.sync(execute: rememberStatisticsStartup) }
         let activationAttemptId = options?["activationAttemptId"] as? String
         let errorNotifier = ErrorNotifier(activationAttemptId: activationAttemptId)
 
@@ -94,13 +101,37 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        // Own the listener only after the tunnel starts successfully. Failed
+        // starts must not leave an authenticated socket or profile key alive.
+        let finishStart: (Error?) -> Void = { error in
+            guard error == nil else { completionHandler(error); return }
+            DispatchQueue.main.async {
+                guard self.localStatisticsEpoch == statisticsEpoch else {
+                    completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return
+                }
+                // Independent read-only authenticated transport. It cannot alter the
+                // engine, routes, profiles or keys and never binds a LAN/WAN address.
+                if let envelope = tunnelProviderProtocol.privateEnvelope,
+                   let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
+                   let credentials = try? VPN013LocalStatisticsCredentials(secret: secret,
+                        id: envelope.id, ciphertext: envelope.ciphertext) {
+                    let server = VPN013LocalStatisticsServer(credentials: credentials) { [weak self] operation, reply in
+                        guard let self = self else { reply(nil); return }
+                        self.handleAppMessage(Data([operation]), completionHandler: reply)
+                    }
+                    self.localStatistics = server; server.start()
+                }
+                completionHandler(nil)
+            }
+        }
+
         do {
             if let profile = try AutoTunnelProfile.load(from:tunnelProviderProtocol) {
                 let candidates = try profile.validatedConfigurations()
-                DispatchQueue.main.async { self.startAutomatic(candidates:candidates, completion:completionHandler) }
+                DispatchQueue.main.async { self.startAutomatic(candidates:candidates, completion:finishStart) }
                 return
             }
-        } catch { completionHandler(error); return }
+        } catch { finishStart(error); return }
 
         logTunnelConfigurationSummary(tunnelConfiguration)
 
@@ -111,7 +142,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 wg_log(.info, message: "Tunnel interface is \(interfaceName)")
 
-                completionHandler(nil)
+                finishStart(nil)
                 return
             }
 
@@ -119,22 +150,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             case .cannotLocateTunnelFileDescriptor:
                 wg_log(.error, staticMessage: "Starting tunnel failed: could not determine file descriptor")
                 errorNotifier.notify(PacketTunnelProviderError.couldNotDetermineFileDescriptor)
-                completionHandler(PacketTunnelProviderError.couldNotDetermineFileDescriptor)
+                finishStart(PacketTunnelProviderError.couldNotDetermineFileDescriptor)
 
             case .dnsResolution(let dnsErrors):
                 wg_log(.error, message: "DNS resolution failed; endpointCount=\(dnsErrors.count)")
                 errorNotifier.notify(PacketTunnelProviderError.dnsResolutionFailure)
-                completionHandler(PacketTunnelProviderError.dnsResolutionFailure)
+                finishStart(PacketTunnelProviderError.dnsResolutionFailure)
 
             case .setNetworkSettings:
                 wg_log(.error, staticMessage: "Starting tunnel failed: could not apply network settings")
                 errorNotifier.notify(PacketTunnelProviderError.couldNotSetNetworkSettings)
-                completionHandler(PacketTunnelProviderError.couldNotSetNetworkSettings)
+                finishStart(PacketTunnelProviderError.couldNotSetNetworkSettings)
 
             case .startWireGuardBackend(let errorCode):
                 wg_log(.error, message: "Starting tunnel failed with wgTurnOn returning \(errorCode)")
                 errorNotifier.notify(PacketTunnelProviderError.couldNotStartBackend)
-                completionHandler(PacketTunnelProviderError.couldNotStartBackend)
+                finishStart(PacketTunnelProviderError.couldNotStartBackend)
 
             case .invalidState:
                 // Must never happen
@@ -148,12 +179,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         wg_log(.info, message: "Stopping tunnel, reason=\(reason.rawValue) (\(reason))")
 
         let cleanup = {
+            self.localStatisticsEpoch = UUID()
             self.automaticEpoch += 1;self.automatic?.stop();self.automatic = nil
             let pending=self.automaticStartCompletion;self.automaticStartCompletion=nil
             pending?(NSError(domain:NSURLErrorDomain,code:NSURLErrorCancelled))
         }
         if Thread.isMainThread { cleanup() } else { DispatchQueue.main.sync(execute:cleanup) }
-        adapter.stop { error in
+        let stopAdapter = {
+        self.adapter.stop { error in
             ErrorNotifier.removeLastErrorFile()
 
             if error != nil {
@@ -168,10 +201,39 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             exit(0)
             #endif
         }
+        }
+        if let server = localStatistics {
+            localStatistics = nil
+            server.stop(completion: stopAdapter)
+        } else { stopAdapter() }
     }
 
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
         guard let completionHandler = completionHandler else { return }
+
+        if messageData == Data([5]) {
+            // Deliberately independent of the engine/main queues and profile storage.
+            completionHandler(try? JSONEncoder().encode(VPN013ProviderIdentity.current))
+            return
+        }
+        if messageData == Data([6]) {
+            adapter.readRuntimeConfiguration { result in
+                let state: VPN013ProviderStatistics.State
+                let sample: VPN013RuntimeStatisticsReply?
+                switch result {
+                case .available(let text):
+                    let parsed = VPN013RuntimeStatisticsReply(runtime: text)
+                    state = parsed.hasMeasurements ? .available : .noMeasurements
+                    sample = parsed.hasMeasurements ? parsed : nil
+                case .stopped: state = .stopped; sample = nil
+                case .temporarilyOffline: state = .offline; sample = nil
+                case .unavailable: state = .unavailable; sample = nil
+                }
+                let reply = VPN013ProviderStatistics(provider: .current, state: state, sample: sample)
+                completionHandler(try? JSONEncoder().encode(reply))
+            }
+            return
+        }
 
         if messageData == Data([4]) {
             // Read the running backend directly. In particular, do not reopen
@@ -238,7 +300,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 }
 
 extension PacketTunnelProvider {
-    private func startAutomatic(candidates:[TunnelConfiguration],completion:@escaping(Error?) -> Void) {
+    private func startAutomatic(candidates:[TunnelConfiguration],completion:@escaping (Error?) -> Void) {
         automaticEpoch += 1;let stamp=automaticEpoch
         automaticStartCompletion=completion
         // Resolve reserves while the physical network is still available. Reusing

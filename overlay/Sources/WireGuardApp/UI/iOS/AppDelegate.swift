@@ -45,8 +45,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-import") {
             // Exercise the same incoming-file handler as iOS Open In / Share.
-            let fixture = try! MockTunnels.sharedArchiveFixture()
-            DispatchQueue.main.async { _ = self.application(application, open: fixture) }
+            do {
+                let fixture = try MockTunnels.sharedArchiveFixture()
+                DispatchQueue.main.async { _ = self.application(application, open: fixture) }
+            } catch {
+                wg_log(.error, message: "Unable to prepare local simulator import fixture")
+            }
         }
         #endif
 

@@ -62,6 +62,14 @@ object ClientProtocol {
         }
         require(ProfileRegistry.digest(digest.toString()) == s.getString("revision")) { "Не совпадает контрольная сумма списка" }
     }
+    fun mappingComplete(mapping: JSONObject, snapshot: JSONObject, profiles: JSONObject): Boolean {
+        val servers = snapshot.getJSONArray("servers")
+        val expected = (0 until servers.length()).map { servers.getJSONObject(it).getString("id") }.toSet()
+        val keys = mapping.keys().asSequence().toSet()
+        if (keys != expected) return false
+        val ids = keys.map { mapping.getJSONObject(it).getString("profileID") }
+        return ids.toSet().size == ids.size && ids.all { profiles.has(it) }
+    }
     /** All ownership, local-edit checks and replacements commit in ONE atomic document. */
     fun apply(registry: ProfileRegistry, document: JSONObject): Int {
         val checked = access(document.toString()); val snapshot = checked.getJSONObject("snapshot")

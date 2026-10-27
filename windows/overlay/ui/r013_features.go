@@ -82,7 +82,7 @@ func addR013Header(mtw *ManageTunnelsWindow) {
 	updates.SetMinMaxSize(walk.Size{110, 34}, walk.Size{110, 34})
 	updates.Clicked().Attach(func() { mtw.tunnelsPage.onR013Updates() })
 	note, _ := walk.NewLabel(mtw)
-	note.SetText("Пинг измеряется по текущему маршруту. Проверка не переключает VPN.")
+	note.SetText("Российские IP-сети — напрямую; остальные — через VPN. Пинг по текущему маршруту.")
 	note.SetTextColor(muted)
 	if r013Preview {
 		note.SetText("Предпросмотр · синтетические профили · VPN не запускается")

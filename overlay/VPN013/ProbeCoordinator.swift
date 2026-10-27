@@ -8,9 +8,14 @@ struct R013ProbeSnapshot: Codable, Equatable {
     let source: String
 }
 struct R013ProbeInput: Codable {
-    let auto_active: Bool
+    enum CodingKeys: String, CodingKey {
+        case autoActive = "auto_active"
+        case resolver, candidates
+        case startIndex = "start_index"
+    }
+    let autoActive: Bool
     let resolver: String
-    let start_index: Int
+    let startIndex: Int
     let candidates: [R013ProbeSnapshot]
 }
 struct R013ProbeMetric: Decodable {
@@ -26,13 +31,18 @@ struct R013ProbeRow: Decodable {
     let metric: R013ProbeMetric?
 }
 struct R013ProbeStatus: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case status, before, after, rows, incomplete
+        case choiceID = "choice_id"
+        case nextIndex = "next_index"
+    }
     let status: String
     let before: R013ProbeMetric?
     let after: R013ProbeMetric?
     let rows: [R013ProbeRow]?
-    let choice_id: String?
+    let choiceID: String?
     let incomplete: Bool
-    let next_index: Int
+    let nextIndex: Int
 }
 
 enum R013ActualPrimary {
@@ -164,10 +174,10 @@ final class R013ProbeCoordinator {
     private func run() {
         requireMain()
         due = .now() + 3600
-        guard autoActive, !stopped, operation == 0, let input = currentInput?(), input.auto_active,
+        guard autoActive, !stopped, operation == 0, let input = currentInput?(), input.autoActive,
               !input.candidates.isEmpty, input.candidates.count <= 30 else { scheduleHour(); return }
-        let rotated = R013ProbeInput(auto_active: true, resolver: input.resolver,
-                                    start_index: nextIndex % input.candidates.count, candidates: input.candidates)
+        let rotated = R013ProbeInput(autoActive: true, resolver: input.resolver,
+                                    startIndex: nextIndex % input.candidates.count, candidates: input.candidates)
         guard let data = try? JSONEncoder().encode(rotated), data.count <= 4 * 1024 * 1024 else { scheduleHour(); return }
         let stamp = generation
         work.async { [self, data] in
@@ -203,19 +213,19 @@ final class R013ProbeCoordinator {
                 guard let status = status, status.status == "complete" else { scheduleHour(); return }
                 // A profile can be edited/deleted without changing the active
                 // engine. Do not label fresh UI rows with old snapshot metrics.
-                guard let fresh = currentInput?(), fresh.auto_active, fresh.resolver == input.resolver,
+                guard let fresh = currentInput?(), fresh.autoActive, fresh.resolver == input.resolver,
                       fresh.candidates == input.candidates else { scheduleHour(); return }
-                nextIndex = status.next_index
+                nextIndex = status.nextIndex
                 metrics?(status)
-                guard generation == stamp, autoActive, !stopped, let chosen = status.choice_id,
-                      let latest = currentInput?(), latest.auto_active,
+                guard generation == stamp, autoActive, !stopped, let chosen = status.choiceID,
+                      let latest = currentInput?(), latest.autoActive,
                       let snapshot = latest.candidates.first(where: { $0.id == chosen }), let apply = apply else { scheduleHour(); return }
                 authorizeChoice(id: id, stamp: stamp, snapshot: snapshot, resolver: latest.resolver, apply: apply)
             }
         }
     }
     private func authorizeChoice(id: UInt64, stamp: UInt64, snapshot: R013ProbeSnapshot, resolver: String, apply: @escaping Apply) {
-        let input = R013ProbeInput(auto_active: true, resolver: resolver, start_index: 0, candidates: [snapshot])
+        let input = R013ProbeInput(autoActive: true, resolver: resolver, startIndex: 0, candidates: [snapshot])
         guard let data = try? JSONEncoder().encode(input), data.count <= 4 * 1024 * 1024 else { scheduleHour(); return }
         work.async { [self] in
             var owned = data

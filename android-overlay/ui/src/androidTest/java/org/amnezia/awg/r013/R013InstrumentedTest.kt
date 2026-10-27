@@ -113,6 +113,49 @@ class R013InstrumentedTest {
         assertFalse(ClientUpdates.applyPending())
         assertArrayEquals("Rejected pending update was repeatedly rewritten",diskAfterFailure,File(context.filesDir,"r013-vault.bin").readBytes())
     }
+    @Test fun bSubscriptionRefreshRestoresDeletedAndReconcilesTenTwentyFifteen() = runBlocking {
+        val oid = "001122334455"
+        OfflineChanges.apply { registry.create("Unrelated",ProfileRegistry.parse(config())) }
+        val foreign = registry.record("Unrelated").toString()
+        val all = (1..20).map { "node$it" to config() }
+        val access = document(oid,all.take(10))
+        OfflineChanges.apply { ClientProtocol.apply(registry,access); registry.createAuto() }
+        var authoritative = access.getJSONObject("snapshot")
+        val cap = access.getString("capability")
+        ClientProtocol.installNativeTrialDebugFixture { path,auth ->
+            assertEquals("/client/awg/$oid/android",path); assertEquals(cap,auth)
+            JSONObject(authoritative.toString())
+        }
+        fun checkRoster(count: Int) {
+            val profiles = registry.records()
+            assertEquals(count+2,profiles.size)
+            val auto = profiles.single { it.has("members") }.getString("name")
+            assertEquals(count+1,registry.members(auto).size)
+            assertEquals(foreign,registry.record("Unrelated").toString())
+            all.take(count).forEach { (id,text) ->
+                assertEquals(ProfileRegistry.parse(text).toAwgQuickString(),registry.config("Server-$id").toAwgQuickString())
+            }
+        }
+        try {
+            OfflineChanges.apply { registry.delete("Server-node1") }
+            assertTrue(ClientUpdates.refreshOrders().contains("восстановлен")); checkRoster(10)
+            OfflineChanges.apply { all.take(10).forEach { registry.delete("Server-${it.first}") } }
+            assertTrue(ClientUpdates.refreshOrders().contains("восстановлен")); checkRoster(10)
+            authoritative = document(oid,all).getJSONObject("snapshot")
+            ClientUpdates.refreshOrders(); checkRoster(20)
+            // A vendor-retired member may also already have been deleted locally.
+            OfflineChanges.apply { registry.delete("Server-node20") }
+            authoritative = document(oid,all.take(15)).getJSONObject("snapshot")
+            val message = ClientUpdates.refreshOrders(); checkRoster(15)
+            assertTrue(message.contains("15 серверов")); assertTrue(message.contains("Действует до"))
+            val stable = registry.vault.read().toString()
+            assertTrue(ClientUpdates.refreshOrders().contains("актуален")); checkRoster(15)
+            assertEquals(stable,registry.vault.read().toString())
+            authoritative.put("complete",false)
+            try { ClientUpdates.refreshOrders(); fail("Partial roster accepted") } catch (_: IllegalArgumentException) { }
+            assertEquals(stable,registry.vault.read().toString())
+        } finally { ClientProtocol.installNativeTrialDebugFixture(null) }
+    }
     @Test fun cAutoSnapshotAndOrdering() = runBlocking {
         val items = (1..30).map { "Server$it" to ProfileRegistry.parse(config()) }
         OfflineChanges.apply { registry.importOrdinary(items); registry.createAuto() }
@@ -251,6 +294,8 @@ class R013InstrumentedTest {
             assertNotNull("Primary traffic lost during candidate scan",EndpointPing.measure("10.13.99.1"))
             // Stop must invalidate old handles and metrics before changing the TUN.
             tunnel.setStateAsync(Tunnel.State.DOWN)
+            assertNull("Stopped native owner must not remain observable",backend.actualRouteInterfaceName)
+            assertFalse("Old interface identity must be rejected even before explicit scope invalidation",routes!!.isCurrent)
             assertNull(org.amnezia.awg.GoBackend.r013ProbePoll(scope,operation))
             assertEquals(0L,org.amnezia.awg.GoBackend.r013ProbeStart(scope,input.toString()))
         } finally {
