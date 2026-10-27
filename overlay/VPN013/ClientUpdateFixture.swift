@@ -63,7 +63,7 @@ enum ClientUpdateFixture {
                         }
                         func eraseManaged(_ ids: [String], _ done: @escaping () -> Void) {
                             guard let first = ids.first else { done(); return }
-                            guard let item = manager.mapTunnels({ $0 }).first(where:{ $0.persistentProfileIdentifier == first }) else { completion("Deletion fixture missing"); return }
+                            guard let item = manager.mapTunnels(transform: { $0 }).first(where:{ $0.persistentProfileIdentifier == first }) else { completion("Deletion fixture missing"); return }
                             manager.remove(tunnel:item) { error in
                                 guard error == nil else { completion("Deletion failed"); return }
                                 eraseManaged(Array(ids.dropFirst()),done)

@@ -243,7 +243,7 @@ func importManaged(profiles []r013.Profile, document *r013.AccessDocument) error
 	return resolvePending(state)
 }
 func refreshOrders(ctx context.Context) (int, error) { return refreshBoundOrders(ctx, "") }
-func boundRosterPresent(binding orderBinding, snapshot r013.Snapshot, available map[string]bool) bool {
+func boundRosterPresent(binding orderBinding, snapshot *r013.Snapshot, available map[string]bool) bool {
 	if len(binding.Members) != len(snapshot.Servers) {
 		return false
 	}
