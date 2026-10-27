@@ -1,206 +1,181 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-27T03:53:32.390537+00:00",
-  "source_sha256": "1d2d1b771d8b732394581fa973fefca8d4c520687ef4e8d6bb3fe6ebe86132c2",
-  "source_commit_reviewed": "708858df58bfcc0cfb6617f6b38f177e1c1925ab",
+  "reviewed_at": "2026-10-27T05:14:38.825998+00:00",
+  "source_sha256": "608b2613e451b645d4717f99258b3d1e35932170644403f9a1ae7fa4acb83c8b",
+  "source_commit_reviewed": "d0c734666e0a824513c580214569972e29f92e7b",
   "scope_complete": true,
-  "private_report_ref": "private-local:vpn013-windows154/main-catalog-review",
+  "private_report_ref": "private-local:vpn013/subscription-roster-20261027/source-review",
   "baseline_only": false,
   "checks": [
     {
       "id": "1.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/1.1"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/1.1"
     },
     {
       "id": "1.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/1.2"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/1.2"
     },
     {
       "id": "1.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/1.3"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/1.3"
     },
     {
       "id": "1.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/1.4"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/1.4"
     },
     {
       "id": "2.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/2.1"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/2.1"
     },
     {
       "id": "2.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/2.2"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/2.2"
     },
     {
       "id": "2.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/2.3"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/2.3"
     },
     {
       "id": "2.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/2.4"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/2.4"
     },
     {
       "id": "2.5",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/2.5"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/2.5"
     },
     {
       "id": "3.1",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/3.1"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/3.1"
     },
     {
       "id": "3.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/3.2"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/3.2"
     },
     {
       "id": "3.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/3.3"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/3.3"
     },
     {
       "id": "3.4",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/3.4"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/3.4"
     },
     {
       "id": "4.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.1"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.1"
     },
     {
       "id": "4.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.2"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.2"
     },
     {
       "id": "4.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.3"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.3"
     },
     {
       "id": "4.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.4"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.4"
     },
     {
       "id": "4.5",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.5"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.5"
     },
     {
       "id": "4.6",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.6"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.6"
     },
     {
       "id": "4.7",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.7"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.7"
     },
     {
       "id": "4.8",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.8"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.8"
     },
     {
       "id": "4.9",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.9"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.9"
     },
     {
       "id": "4.10",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.10"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.10"
     },
     {
       "id": "4.11",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/4.11"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/4.11"
     },
     {
       "id": "5.1",
       "status": "not_applicable",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/5.1"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/5.1"
     },
     {
       "id": "5.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/5.2"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/5.2"
     },
     {
       "id": "5.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/5.3"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/5.3"
     },
     {
       "id": "6.1",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/6.1"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/6.1"
     },
     {
       "id": "6.2",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/6.2"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/6.2"
     },
     {
       "id": "6.3",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/6.3"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/6.3"
     },
     {
       "id": "6.4",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/6.4"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/6.4"
     },
     {
       "id": "6.5",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/6.5"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/6.5"
     },
     {
       "id": "6.6",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/6.6"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/6.6"
     },
     {
       "id": "6.7",
       "status": "pass",
-      "evidence_ref": "private-local:vpn013-windows154/main-catalog-review/6.7"
+      "evidence_ref": "private-local:vpn013/subscription-roster-20261027/source-review/6.7"
     }
-  ],
-  "baseline_report_ref": "private-local:vpn013-bot-migration-20261025/baseline",
-  "review_note": "Only public Android154 metadata updated. All client runtime source, iOS157 and Windows153 catalogs unchanged. Exact published APK, same signer, full native validation and bot registration independently verified; detailed34delta retained privately.",
-  "validation_only_authorization": {
-    "source": "explicit owner reply in current task",
-    "scope": "Public client source and free validation while audit is incomplete",
-    "release_approved": false
-  },
-  "platform_functional_acceptance": {
-    "ios": {
-      "run": 40377719429,
-      "source": "bda55cdc7332c78b4bf6e7c841df5b8e033f63d6",
-      "uiTests": 31,
-      "fail": 0,
-      "skip": 0,
-      "requiresOwnerSigning": true,
-      "physicalIPhoneTested": false
-    },
-    "android": {
-      "newUpgradeAcceptanceComplete": false
-    },
-    "windows": {
-      "newUpgradeAcceptanceComplete": false
-    }
-  },
-  "reviewed_commit": "21f6ec72344735d31bb9725eccbcbf9cc1d47b0f"
+  ]
 }
