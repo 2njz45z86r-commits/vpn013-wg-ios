@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/netip"
 	"os"
 	"strings"
@@ -41,7 +42,7 @@ type comparisonWorker struct {
 	rotation    int
 	policy      r013.HealthPolicy
 	seen        r013gate.ConfirmedMember
- lastPath string
+	lastPath    string
 	lastRx      conf.Bytes
 	probeWorked bool
 	goodAt      time.Time
@@ -64,7 +65,7 @@ func newComparisonWorker(parent context.Context, owner *comparisonBackendOwner) 
 	ctx, cancel := context.WithCancel(parent)
 	w := &comparisonWorker{ctx: ctx, cancel: cancel, done: make(chan struct{}), owner: owner, image: image, started: time.Now(), cache: make(map[string]cachedComparisonMember)}
 	owner.observation.workerStarted.Store(w.started.UnixNano())
- owner.observation.healthOwned.Store(true)
+	owner.observation.healthOwned.Store(true)
 	go w.run()
 	return w, nil
 }
@@ -213,34 +214,45 @@ func (w *comparisonWorker) prepare(ctx context.Context, snapshot r013vault.Snaps
 }
 
 func (w *comparisonWorker) scan() {
+	stage := "enter"
+	step := func(value string) { stage = value; log.Printf("R013Routing: comparison stage=%s begin", stage) }
+	step("enter")
+	started := time.Now()
+	defer func() { log.Printf("R013Routing: comparison stage=%s duration=%s", stage, time.Since(started)) }()
 	ctx, cancel := context.WithTimeout(w.ctx, 90*time.Second)
 	defer cancel()
 	var request *comparisonSelection
 	w.owner.observation.comparing.Store(true)
 	defer w.owner.observation.comparing.Store(false)
-	_ = w.owner.gate.Candidate(ctx, func(work context.Context, token r013gate.Token) error {
+	scanErr := w.owner.gate.Candidate(ctx, func(work context.Context, token r013gate.Token) error {
+		step("inspect")
 		actual, snapshot, current, err := w.inspect(work, token)
 		if err != nil {
 			return err
 		}
+		step("target")
 		target, err := comparisonTarget(current)
 		if err != nil {
 			return err
 		}
+		step("foreign-path-before")
 		beforePath, err := comparisonForeignPath(winipcfg.LUID(w.owner.native.LUID()))
 		if err != nil {
 			return err
 		}
+		step("physical-factory")
 		physical, err := r013gate.NewUDPFactory(protectedudp.Physical, actual.Observation.Physical4, actual.Observation.Physical6, token)
 		if err != nil {
 			return err
 		}
 		defer physical.Close(context.Background())
+		step("tunnel-factory")
 		through, err := r013gate.NewUDPFactory(protectedudp.ThroughTunnel, actual.Observation.TunnelIndex, 0, token)
 		if err != nil {
 			return err
 		}
 		defer through.Close(context.Background())
+		step("resolver")
 		resolver, err := r013prepare.NewTunnelEndpointResolver(target, through, actual.Observation.Physical6 != 0)
 		if err != nil {
 			return err
@@ -258,6 +270,7 @@ func (w *comparisonWorker) scan() {
 		var candidates []probe.ScanCandidate
 		var members []prepared
 		deadline, _ := ctx.Deadline()
+		step("prepare")
 		for offset := 0; offset < snapshot.Count(); offset++ {
 			index := (w.rotation + offset) % snapshot.Count()
 			if time.Until(deadline) < 24*time.Second {
@@ -282,6 +295,7 @@ func (w *comparisonWorker) scan() {
 		if len(candidates) == 0 {
 			return nil
 		}
+		step("encrypted-scan")
 		result, err := probe.Scan(work, probe.ScanRequest{AutoActive: true, Current: probe.CurrentDNSRequest{Target: target, Factory: through, Guard: guard}, Candidates: candidates})
 		if result.NextIndex >= 0 && result.NextIndex < len(members) {
 			w.rotation = members[result.NextIndex].index
@@ -292,18 +306,25 @@ func (w *comparisonWorker) scan() {
 		if err = errors.Join(physical.Close(context.Background()), through.Close(context.Background())); err != nil {
 			return err
 		}
+		step("foreign-path-after")
 		afterPath, err := comparisonForeignPath(winipcfg.LUID(w.owner.native.LUID()))
 		if err != nil || afterPath != beforePath || !token.Valid() {
 			return errBackendUnknown
 		}
+		step("vault-recheck")
 		freshVault, err := w.owner.load()
 		if err != nil || freshVault.Revision() != snapshot.Revision() {
 			return errBackendUnknown
 		}
-		measured:=int64(0)
- for _,row:=range result.Measurements{if row.Status=="measured"{measured++}}
- w.owner.observation.lastCompared.Store(measured)
+		measured := int64(0)
+		for _, row := range result.Measurements {
+			if row.Status == "measured" {
+				measured++
+			}
+		}
+		w.owner.observation.lastCompared.Store(measured)
 		w.owner.observation.lastComparison.Store(time.Now().UnixNano())
+		step("choice")
 		if result.Choice != nil {
 			for _, member := range members {
 				if member.fresh.ID == result.Choice.ID {
@@ -314,18 +335,29 @@ func (w *comparisonWorker) scan() {
 		}
 		return nil
 	})
+	if scanErr != nil {
+		log.Printf("R013Routing: comparison failed stage=%s type=%T", stage, scanErr)
+	}
 	if request != nil && w.ctx.Err() == nil {
-		_ = w.submit(request)
+		step("submit")
+		if err := w.submit(request); err != nil {
+			log.Printf("R013Routing: selection failed type=%T", err)
+		}
 	}
 }
 
 // Health is serialized with hourly Scan and uses the same protected current
 // path. A DNS miss alone does not label a previously unmeasured VPN broken.
 func (w *comparisonWorker) health() {
+	stage := "enter"
+	step := func(value string) { stage = value; log.Printf("R013Routing: health stage=%s", stage) }
+	defer func() { log.Printf("R013Routing: health returned stage=%s", stage) }()
+	step("gate")
 	ctx, cancel := context.WithTimeout(w.ctx, 12*time.Second)
 	defer cancel()
 	var request *comparisonSelection
 	_ = w.owner.gate.Candidate(ctx, func(work context.Context, token r013gate.Token) error {
+		step("inspect")
 		actual, snapshot, current, err := w.inspect(work, token)
 		if err != nil {
 			return err
@@ -338,9 +370,16 @@ func (w *comparisonWorker) health() {
 		if err != nil {
 			return err
 		}
+		step("foreign-path")
 		path, err := comparisonForeignPath(winipcfg.LUID(w.owner.native.LUID()))
-        if err != nil {return err}
-        if path!=w.lastPath {w.resetHealth(state);w.lastPath=path}
+		if err != nil {
+			return err
+		}
+		if path != w.lastPath {
+			w.resetHealth(state)
+			w.lastPath = path
+		}
+		step("tunnel-factory")
 		through, err := r013gate.NewUDPFactory(protectedudp.ThroughTunnel, actual.Observation.TunnelIndex, 0, token)
 		if err != nil {
 			return err
@@ -351,12 +390,14 @@ func (w *comparisonWorker) health() {
 			return err
 		}
 		measureCtx, measureCancel := context.WithTimeout(work, 6*time.Second)
+		step("dns")
 		result, probeError := probe.MeasureCurrentDNS(measureCtx, probe.CurrentDNSRequest{Target: target, Factory: through, Guard: guard})
 		measureCancel()
 		if work.Err() != nil {
 			return work.Err()
 		}
 		// Re-read genuine peer traffic after the probe, never an initial saved seed.
+		step("inspect-after")
 		after, freshVault, _, err := w.inspect(work, token)
 		if err != nil || *after.Observation.Member != state || freshVault.Revision() != snapshot.Revision() {
 			return errBackendUnknown
@@ -391,6 +432,7 @@ func (w *comparisonWorker) health() {
 		if decision == r013.Advance {
 			index = (state.Index + 1) % snapshot.Count()
 		}
+		step("physical-factory")
 		physical, err := r013gate.NewUDPFactory(protectedudp.Physical, actual.Observation.Physical4, actual.Observation.Physical6, token)
 		if err != nil {
 			return err
@@ -433,9 +475,11 @@ func (w *comparisonWorker) health() {
 		if err != nil {
 			return err
 		}
+		step("close-factories")
 		if err = errors.Join(physical.Close(context.Background()), through.Close(context.Background())); err != nil {
 			return err
 		}
+		step("foreign-path-after")
 		afterPath, err := comparisonForeignPath(winipcfg.LUID(w.owner.native.LUID()))
 		if err != nil || afterPath != path || !token.Valid() {
 			return errBackendUnknown

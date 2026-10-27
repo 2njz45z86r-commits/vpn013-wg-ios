@@ -4,6 +4,7 @@
 package tunnel
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013winudp"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf/dpapi"
+	"github.com/amnezia-vpn/amneziawg-windows/v3/ringlogger"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
@@ -74,7 +77,7 @@ type hourlyFixture struct {
 
 func (f *hourlyFixture) Execute(_ []string, requests <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
 	changes <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	done := make(chan struct{})
 	defer close(done)
@@ -221,7 +224,20 @@ func (f *hourlyFixture) run(ctx context.Context) error {
 		time.Sleep(40 * time.Millisecond)
 	}
 	if initial.Member == nil || initial.Member.Index != 0 || initial.Member.Generation != 1 {
-		return errors.New("real compiled worker initial exact member unavailable")
+		status, statusErr := service.Query()
+		var logs bytes.Buffer
+		logErr := ringlogger.DumpTo(&logs, false)
+		var safe []string
+		for _, line := range strings.Split(logs.String(), "\n") {
+			if strings.Contains(line, "R013Routing:") || strings.Contains(line, "Startup complete") || strings.Contains(line, "Unable to") || strings.Contains(line, "Firewall error") || strings.Contains(line, "failed") {
+				safe = append(safe, line)
+			}
+		}
+		detail := strings.Join(safe, "\n")
+		if len(detail) > 10000 {
+			detail = detail[len(detail)-10000:]
+		}
+		return fmt.Errorf("real compiled worker initial exact member unavailable: SCM=%+v query=%v log=%v\n%s", status, statusErr, logErr, detail)
 	}
 	factory, err := protectedudp.NewForNetwork(protectedudp.ThroughTunnel, hourlyApplicationSocket{initial.TunnelIndex})
 	if err != nil {
@@ -235,7 +251,9 @@ func (f *hourlyFixture) run(ctx context.Context) error {
 	}()
 	defer func() { stopStream(); <-streamDone; factory.Close(context.Background()) }()
 	f.receipt.Phase = "real30s-census-scan-selection"
-	until = time.Now().Add(65 * time.Second)
+	// Allow the production30s cadence plus its full unchanged90s scan budget.
+	// The earlier65s fixture cutoff canceled a legal in-flight scan.
+	until = time.Now().Add(130 * time.Second)
 	var scanBefore uint32
 	for time.Now().Before(until) && ctx.Err() == nil {
 		value, e := r013gate.ReadObservation(ctx, r013.AutoName)
@@ -275,7 +293,19 @@ func (f *hourlyFixture) run(ctx context.Context) error {
 	f.receipt.VaultPreserved = string(after) == string(cipher)
 	actual, err := conf.LoadFromName(r013.AutoName)
 	if err != nil || len(actual.Peers) != 1 || actual.Interface.PrivateKey != two.Interface.PrivateKey || actual.Interface.MTU != two.Interface.MTU {
-		return errors.New("selected real working seed not persisted")
+		var logs bytes.Buffer
+		logErr := ringlogger.DumpTo(&logs, false)
+		var safe []string
+		for _, line := range strings.Split(logs.String(), "\n") {
+			if strings.Contains(line, "R013Routing:") {
+				safe = append(safe, line)
+			}
+		}
+		detail := strings.Join(safe, "\n")
+		if len(detail) > 12000 {
+			detail = detail[len(detail)-12000:]
+		}
+		return fmt.Errorf("selected real working seed not persisted; log=%v\n%s", logErr, detail)
 	}
 	if !f.receipt.Selected || !f.receipt.Compared || !f.receipt.TrafficDuringScan || !f.receipt.SameTUN || !f.receipt.VaultPreserved || f.receipt.Replies < 2 {
 		return errors.New("compiled hourly acceptance incomplete")
@@ -312,7 +342,7 @@ func TestCompiledAutoServiceRunsReal30sScanWithoutStoppingPrimary(t *testing.T) 
 		t.Fatal(err)
 	}
 	var receipt hourlyReceipt
-	until := time.Now().Add(110 * time.Second)
+	until := time.Now().Add(190 * time.Second)
 	for time.Now().Before(until) {
 		if raw, e := os.ReadFile(filepath.Join(directory, "hourly-receipt.json")); e == nil && json.Unmarshal(raw, &receipt) == nil {
 			break

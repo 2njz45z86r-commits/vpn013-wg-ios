@@ -1,3 +1,6 @@
 # These exact manifest bytes are SHA256-pinned before native dependency staging.
 windows/dependencies/go.mod text eol=lf
 windows/dependencies/go.sum text eol=lf
+
+# Preserve the exact cross-platform RU policy bytes in Windows checkouts.
+windows/overlay/r013routing/networks.cidr text eol=lf
