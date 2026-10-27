@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/netip"
 	"sort"
 	"strings"
@@ -101,6 +102,10 @@ func (a *comparisonDeviceAccess) IpcSet(body string) error {
 }
 
 func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
+	stage := "received"
+	step := func(value string) { stage = value; log.Printf("R013Routing: backend stage=%s", stage) }
+	defer func() { log.Printf("R013Routing: backend returned stage=%s", stage) }()
+	step("received")
 	if request == nil || request.member == nil || !request.current.Valid() || o.ctx.Err() != nil || !comparisonRequestFresh(request.created) {
 		return errBackendUnknown
 	}
@@ -117,6 +122,7 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 	if err != nil || !r013vault.EligibleForComparison(old) {
 		return errBackendUnknown
 	}
+	step("runtime-before")
 	raw, err := (*o.engine).IpcGet()
 	if err != nil {
 		return errBackendUnknown
@@ -143,6 +149,7 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 		return errBackendUnknown
 	}
 	var transition *probe.ActiveTransition
+	step("choice-transition")
 	if request.health != nil {
 		if request.choice != nil || !request.health.valid(request.index, request.current) {
 			return errBackendUnknown
@@ -155,7 +162,9 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 		return err
 	}
 	defer transition.Abort()
+	step("slot-swap")
 	return o.slot.Swap(request.stamp, func(current r013gate.PrimaryUAPIDevice) (r013gate.PrimaryUAPIDevice, error) {
+		step("slot-owned")
 		if current != *o.engine || o.ctx.Err() != nil || !comparisonRequestFresh(request.created) || (request.health != nil && !request.health.valid(request.index, request.current)) {
 			return current, errBackendUnknown
 		}
@@ -187,6 +196,7 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 		if e != nil || currentIndex != known.Index || currentDigest != known.Digest || known.Revision != snapshot.Revision() {
 			return current, errBackendUnknown
 		}
+		step("runtime-fenced")
 		now, e := (*o.engine).IpcGet()
 		if e != nil {
 			return current, errBackendUnknown
@@ -199,6 +209,7 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 		if e != nil || len(nowActual.Peers) != 1 || nowActual.Peers[0].Endpoint != rollback.Peers[0].Endpoint {
 			return current, errBackendUnknown
 		}
+		step("path-fenced")
 		path, e := comparisonForeignPath(winipcfg.LUID(o.native.LUID()))
 		if e != nil || path != request.path {
 			return current, errBackendUnknown
@@ -206,13 +217,16 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 		o.observation.ready.Store(false)
 		o.observation.member.Store(nil)
 		// From here every failure must restore exact old state or stop unavailable.
+		step("retire-watcher")
 		applyError := (*o.watcher).RetireForBackend(o.ctx)
 		if applyError == nil {
+			step("close-engine")
 			(*o.engine).Close()
 			<-(*o.engine).Wait()
 			*o.engine = nil
 		}
 		if applyError == nil {
+			step("install-engine")
 			applyError = o.install(&selected, request.member.UAPI())
 		}
 		if applyError == nil {
@@ -222,6 +236,7 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 			}
 		}
 		if applyError == nil {
+			step("persist-working")
 			applyError = o.persist(&selected)
 		}
 		if applyError == nil && o.ctx.Err() == nil {

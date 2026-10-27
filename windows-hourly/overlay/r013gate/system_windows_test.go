@@ -264,6 +264,11 @@ func (f *systemFixture) run(ctx context.Context) error {
 		f.receipt.StreamBefore = before
 		f.receipt.StreamAfter = after
 	}
+	drainedEvent, err := windows.OpenEvent(windows.EVENT_MODIFY_STATE, false, windows.StringToUTF16Ptr(f.object+"-Drained"))
+	if err != nil {
+		return fmt.Errorf("open CI drain acknowledgement: %w", err)
+	}
+	defer windows.CloseHandle(drainedEvent)
 	return gate.Candidate(ctx, func(work context.Context, token Token) error {
 		var index uint32
 		interfaces, err := net.Interfaces()
@@ -331,6 +336,12 @@ func (f *systemFixture) run(ctx context.Context) error {
 		if err = factory.Close(context.Background()); err != nil {
 			return err
 		}
+		// A kernel event records the actual close before releasing Candidate.
+		// The parent must observe it without waiting inside Primary; an atomic
+		// JSON-file replacement is not the synchronization primitive under test.
+		if err = windows.SetEvent(drainedEvent); err != nil {
+			return err
+		}
 		f.receipt.Drained = true
 		return f.write() // true close acknowledgement is visible before mutex release
 	})
@@ -343,6 +354,17 @@ func runSystemFixtureTest(t *testing.T, native bool) {
 	nonce := strings.TrimPrefix(local, `Local\VPN013-Probe-CI-`)
 	name := "R013ProbeCI-" + nonce
 	object := `Global\VPN013-Probe-CI-` + nonce
+	sd, err := windows.SecurityDescriptorFromString(objectACL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sa := windows.SecurityAttributes{SecurityDescriptor: sd}
+	sa.Length = uint32(unsafe.Sizeof(sa))
+	drainedEvent, err := windows.CreateEvent(&sa, 1, 0, windows.StringToUTF16Ptr(object+"-Drained"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer windows.CloseHandle(drainedEvent)
 	directory := t.TempDir()
 	exe, err := os.Executable()
 	if err != nil {
@@ -427,7 +449,11 @@ func runSystemFixtureTest(t *testing.T, native bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err = gate.Primary(ctx, Stamp{}, func(context.Context) error {
-		if !read().Drained {
+		state, waitErr := windows.WaitForSingleObject(drainedEvent, 0)
+		if waitErr != nil {
+			return waitErr
+		}
+		if state != windows.WAIT_OBJECT_0 {
 			return errors.New("primary entered before SYSTEM socket drain")
 		}
 		return nil

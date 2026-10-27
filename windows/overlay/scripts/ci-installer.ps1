@@ -9,9 +9,9 @@ $releaseVersion=$Matches[1]
 $msi=Join-Path $projectRoot ("installer\dist\VPN013WG-$releaseVersion-amd64.msi")
 $installRoot=Join-Path $env:ProgramFiles 'VPN013 WG'
 $stockSentinel=Join-Path $env:ProgramFiles 'AmneziaWG\vpn013-ci-preserve.txt'
-$oldMsi=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.5.0-amd64.msi'
-curl.exe --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --output $oldMsi 'https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/windows-1.5.0/VPN013WG-1.5.0-amd64.msi'
-if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $oldMsi -Algorithm SHA256).Hash.ToLower() -ne '5104783edd81f90bd54fd106cff3cbcbd188482872101ab3f59b0e39d7268df5') {throw 'Previous released MSI did not match the pinned artifact'}
+$oldMsi=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.5.3-amd64.msi'
+curl.exe --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --output $oldMsi 'https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/windows-1.5.3/VPN013WG-1.5.3-amd64.msi'
+if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $oldMsi -Algorithm SHA256).Hash.ToLower() -ne '723a0a0666dfaeabf12fdb13288dd69b7e22c18dd72797282ef22a75a5919c3e') {throw 'Previous released MSI did not match the pinned artifact'}
 # Read MSI metadata without running any custom action.
 function Read-MsiProperty([string]$path,[string]$property) {
   $installer=New-Object -ComObject WindowsInstaller.Installer
@@ -36,7 +36,7 @@ $newCode=Read-MsiProperty $msi 'ProductCode'
 $oldUpgrade=Read-MsiProperty $oldMsi 'UpgradeCode'
 $newUpgrade=Read-MsiProperty $msi 'UpgradeCode'
 if ($oldUpgrade -ne $newUpgrade -or $newUpgrade.Trim('{}') -ine '7669e7d6-2d96-51ef-b972-dce59d214438' -or $oldCode -eq $newCode) {throw 'MSI update identity is not preserved'}
-if ((Read-MsiProperty $oldMsi 'ProductVersion') -ne '1.5.0' -or (Read-MsiProperty $msi 'ProductVersion') -ne $releaseVersion) {throw 'Unexpected old/new MSI version'}
+if ((Read-MsiProperty $oldMsi 'ProductVersion') -ne '1.5.3' -or (Read-MsiProperty $msi 'ProductVersion') -ne $releaseVersion) {throw 'Unexpected old/new MSI version'}
 New-Item -ItemType Directory -Path (Split-Path $stockSentinel) -Force | Out-Null
 [System.IO.File]::WriteAllText($stockSentinel,'stock app sentinel')
 # Install the exact shipped version first. There is intentionally NO uninstall
@@ -44,7 +44,7 @@ New-Item -ItemType Directory -Path (Split-Path $stockSentinel) -Force | Out-Null
 $process=Start-Process msiexec.exe -ArgumentList @('/i',('"'+$oldMsi+'"'),'/qn','/norestart','DO_NOT_LAUNCH=1') -Wait -PassThru -WindowStyle Hidden
 if ($process.ExitCode -notin @(0,3010)) {throw 'Previous released MSI install failed'}
 $oldProducts=@(Registered-Products)
-if ($oldProducts.Count -ne 1 -or $oldProducts[0].DisplayVersion -ne '1.5.0') {throw 'Previous installation registration missing'}
+if ($oldProducts.Count -ne 1 -or $oldProducts[0].DisplayVersion -ne '1.5.3') {throw 'Previous installation registration missing'}
 $dataSentinel=Join-Path $installRoot 'Data\vpn013-ci-preserve.txt'
 New-Item -ItemType Directory -Path (Split-Path $dataSentinel) -Force | Out-Null
 [System.IO.File]::WriteAllText($dataSentinel,'owned data sentinel')
@@ -67,7 +67,7 @@ function Assert-PreservedData {
   if ([Convert]::ToBase64String($decoded) -ne [Convert]::ToBase64String($plain)) {throw 'Existing protected data no longer decrypts'}
 }
 Assert-PreservedData
-[ordered]@{from='1.5.0';to=$releaseVersion;oldMSISHA256='5104783edd81f90bd54fd106cff3cbcbd188482872101ab3f59b0e39d7268df5';sameUpgradeCode=$true;singleInstalledProduct=$true;withoutUninstall=$true;existingDataBytesPreserved=$true;syntheticDPAPIDecrypts=$true;customerDataUsed=$false;hostedRunnerOnly=$true} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'r013-in-place-upgrade.json') -Encoding utf8
+[ordered]@{from='1.5.3';to=$releaseVersion;oldMSISHA256='723a0a0666dfaeabf12fdb13288dd69b7e22c18dd72797282ef22a75a5919c3e';sameUpgradeCode=$true;singleInstalledProduct=$true;withoutUninstall=$true;existingDataBytesPreserved=$true;syntheticDPAPIDecrypts=$true;customerDataUsed=$false;hostedRunnerOnly=$true} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'r013-in-place-upgrade.json') -Encoding utf8
 try {
   & (Join-Path $projectRoot '.deps\go\bin\go.exe') run -mod=vendor (Join-Path $PSScriptRoot 'ci-vpn-smoke.go')
   if ($LASTEXITCODE -ne 0) {throw 'Native VPN smoke test failed'}
@@ -85,4 +85,4 @@ try {
 Assert-PreservedData
 if ([System.IO.File]::ReadAllText($stockSentinel) -ne 'stock app sentinel') {throw 'Installer changed stock app data'}
 if (Get-Service -Name 'VPN013WGTunnel$R013CISmoke' -ErrorAction SilentlyContinue) {throw 'Synthetic tunnel service was not removed'}
-Write-Output 'PASS: exact released1.5.0 in-place upgrade, one installed product, DPAPI/data preservation, native VPN test, repair, uninstall, and stock preservation'
+Write-Output 'PASS: exact released1.5.3 in-place upgrade, one installed product, DPAPI/data preservation, native VPN test, repair, uninstall, and stock preservation'

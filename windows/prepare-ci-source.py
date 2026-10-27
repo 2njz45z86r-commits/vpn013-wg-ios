@@ -20,7 +20,7 @@ if overlays.is_dir():
         assert not path.is_symlink()
         relative = path.relative_to(overlays)
         assert not any(part in ('.git', '.deps', 'output') for part in relative.parts)
-        assert path.suffix in ('.ps1', '.py', '.go', '.wxs', '.c', '.h', '.txt', '.md', '.ico', '.png')
+        assert path.suffix in ('.ps1', '.py', '.go', '.wxs', '.c', '.h', '.txt', '.md', '.ico', '.png', '.cidr')
         target = root / relative
         assert target.resolve().is_relative_to(root)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -98,6 +98,7 @@ assert 'go1.25.14' not in build_source
 build_script.write_text(build_source, encoding='utf-8', newline='\n')
 subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/stage-hourly-into-existing.py'),str(workspace),str(root)],check=True)
 subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/refresh-go-dependencies.py'),str(workspace),str(root)],check=True)
+subprocess.run([sys.executable,str(workspace/'windows/russian-routing/patch-native.py'),str(root)],check=True)
 manifest = []
 files = []
 for path in sorted(root.rglob('*')):
