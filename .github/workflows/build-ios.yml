@@ -51,7 +51,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$(git rev-parse HEAD:overlay)" = "e1011585812b85d7b6292a6816085a18eed139d2" ]; then
+          if [ "$(git rev-parse HEAD:overlay)" = "7831fa62836b83a3b4abe2dd3e5dd21cdfe4847d" ] && [ "$(git rev-parse HEAD:build-on-mac.sh)" = "d526fbb1a457c3683747e2c23347153b747749fa" ] && [ "$(git rev-parse HEAD:inspect-on-mac.sh)" = "4deaae0abd6399f249a2af4842d596eb3219533a" ] && [ "$(git rev-parse HEAD:publish-client-release.py)" = "af5bd9febff562a1898585b825e8bdd386facd3b" ]; then
+            python3 reuse-passed-ios159-tests.py
+          elif [ "$(git rev-parse HEAD:overlay)" = "e1011585812b85d7b6292a6816085a18eed139d2" ]; then
             python3 reuse-complete-routing-review.py
           elif [ "$(git rev-parse HEAD:overlay)" = "3827104e3a60539a4cd8e4eff7b1f3a7828bfbcd" ] && [ "$(git rev-parse HEAD:build-on-mac.sh)" = "bb14b80743baf457674855b2286e8cbe0c03da04" ] && [ "$(git rev-parse HEAD:inspect-on-mac.sh)" = "a35ee4de8dc5244e15cf62a2d7589c6f75bf64f5" ]; then
             if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi

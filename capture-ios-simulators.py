@@ -8,7 +8,7 @@ def main():
     root=Path.cwd().resolve();review=root/"build/review"
     app=root/"build/SimulatorDerivedData/Build/Products/Debug-iphonesimulator/AmneziaWG.app"
     meta=plistlib.loads((app/"Info.plist").read_bytes())
-    assert meta["CFBundleIdentifier"]=="com.vpn013.awg" and meta["CFBundleShortVersionString"]=="1.5.8"
+    assert meta["CFBundleIdentifier"]=="com.vpn013.awg" and meta["CFBundleShortVersionString"]=="1.5.9" and str(meta["CFBundleVersion"])=="21"
     assert (app/meta["CFBundleExecutable"]).is_file()
     def call(*args,limit=90):
         return subprocess.check_output(["xcrun","simctl",*args],text=True,timeout=limit,stderr=subprocess.STDOUT)
