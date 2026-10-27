@@ -7,6 +7,8 @@ import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.os.ParcelFileDescriptor;
+import android.os.Build;
+import android.os.Process;
 import androidx.annotation.Keep;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,6 +24,8 @@ public final class R013SocketRoutes {
     private final ConnectivityManager connectivity;
     private final Network vpn;
     private final String interfaceName;
+    private final int interfaceIndex;
+    private final GoBackend.NativeRouteBinding nativeBinding;
     private final String physicalFingerprint;
     private final AtomicBoolean closed = new AtomicBoolean();
 
@@ -31,13 +35,19 @@ public final class R013SocketRoutes {
         this.context = context.getApplicationContext();
         this.service = service;
         this.interfaceName = interfaceName;
+        nativeBinding = service.routeBinding();
+        if (nativeBinding == null || !interfaceName.equals(nativeBinding.interfaceName))
+            throw new IllegalStateException("Actual native VPN owner unavailable");
+        try {
+            java.net.NetworkInterface actual = java.net.NetworkInterface.getByName(interfaceName);
+            if (actual == null || !actual.isUp()) throw new IllegalStateException("Actual VPN interface unavailable");
+            interfaceIndex = actual.getIndex();
+        } catch (java.net.SocketException error) { throw new IllegalStateException("Actual VPN interface unavailable"); }
         connectivity = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         Network found = null;
         for (Network network : connectivity.getAllNetworks()) {
             NetworkCapabilities caps = connectivity.getNetworkCapabilities(network);
-            LinkProperties link = connectivity.getLinkProperties(network);
-            if (caps == null || !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) || link == null ||
-                    !interfaceName.equals(link.getInterfaceName())) continue;
+            if (!isOwnedVPN(network, caps)) continue;
             if (found != null) throw new IllegalStateException("Ambiguous VPN interface");
             found = network;
         }
@@ -47,26 +57,48 @@ public final class R013SocketRoutes {
         if (physicalFingerprint.isEmpty()) throw new IllegalStateException("Physical network unavailable");
     }
 
+    private boolean isOwnedVPN(Network network, NetworkCapabilities caps) {
+        if (caps == null || !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return false;
+        // On Android 11+ the owner UID is exposed to the VPN owner. Avoid
+        // transferring thousands of VPN routes in a single Binder response.
+        if (Build.VERSION.SDK_INT >= 30) return caps.getOwnerUid() == Process.myUid();
+        LinkProperties link = connectivity.getLinkProperties(network);
+        return link != null && interfaceName.equals(link.getInterfaceName());
+    }
+
     private String physicalFingerprint() {
         ArrayList<String> values = new ArrayList<>();
-        for (Network network : connectivity.getAllNetworks()) {
+        Network[] networks = connectivity.getAllNetworks();
+        if (networks.length > 64) return "";
+        for (Network network : networks) {
             NetworkCapabilities caps = connectivity.getNetworkCapabilities(network);
-            LinkProperties link = connectivity.getLinkProperties(network);
             if (caps == null || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
-                    !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) || link == null) continue;
+                    !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
+            // Filter VPN before asking for LinkProperties, including foreign VPNs.
+            LinkProperties link = connectivity.getLinkProperties(network);
+            if (link == null || link.getRoutes().size() > 512 || link.getLinkAddresses().size() > 128 ||
+                    link.getDnsServers().size() > 128) return "";
             // Memory-only route identity. It is never logged, returned or saved.
-            values.add(network.getNetworkHandle() + ":" + link.getInterfaceName() + ":" + link.getLinkAddresses());
+            ArrayList<String> parts = new ArrayList<>();
+            for (android.net.LinkAddress address : link.getLinkAddresses()) parts.add("a:" + address);
+            for (android.net.RouteInfo route : link.getRoutes()) parts.add("r:" + route);
+            int dnsRank = 0;
+            for (java.net.InetAddress dns : link.getDnsServers()) parts.add("d:" + dnsRank++ + ":" + dns.getHostAddress());
+            Collections.sort(parts);
+            values.add(network.getNetworkHandle() + ":" + link.getInterfaceName() + ":" + link.getMtu() + ":" + parts);
         }
         Collections.sort(values);
         return String.join("|", values);
     }
 
     public boolean isCurrent() {
-        if (closed.get() || android.net.VpnService.prepare(context) != null) return false;
-        NetworkCapabilities caps = connectivity.getNetworkCapabilities(vpn);
-        LinkProperties link = connectivity.getLinkProperties(vpn);
-        return caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && link != null &&
-                interfaceName.equals(link.getInterfaceName()) && physicalFingerprint.equals(physicalFingerprint());
+        try {
+            if (closed.get() || nativeBinding != service.routeBinding() || android.net.VpnService.prepare(context) != null) return false;
+            java.net.NetworkInterface actual = java.net.NetworkInterface.getByName(interfaceName);
+            if (actual == null || !actual.isUp() || actual.getIndex() != interfaceIndex) return false;
+            NetworkCapabilities caps = connectivity.getNetworkCapabilities(vpn);
+            return isOwnedVPN(vpn, caps) && physicalFingerprint.equals(physicalFingerprint());
+        } catch (Exception ignored) { return false; }
     }
 
     @Keep

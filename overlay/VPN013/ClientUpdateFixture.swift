@@ -40,7 +40,48 @@ enum ClientUpdateFixture {
                               all.first(where:{ $0.isVPN013Automatic })?.automaticServerCount == 3 else {
                             completion("Synchronization invariant failed"); return
                         }
-                        completion("Проверено: добавление, удаление, ключи, сторонний профиль и Авто · 3 сервера")
+                        // Exercise actual manager deletion with the same server revision,
+                        // then supplier growth/shrink while keeping foreign and Auto members.
+                        let servers = (1...20).map { index in
+                            ClientServer(id:"node\(index)",name:"Managed \(index)",config:generated[index % generated.count].asWgQuickConfig())
+                        }
+                        func assertRoster(_ count: Int) -> Bool {
+                            let actual = manager.mapTunnels { $0 }
+                            guard let binding = coordinator.registry.bindings["012345abcdef"],
+                                  binding.profileIDs.count == count,
+                                  actual.count == count + 2,
+                                  actual.first(where:{ $0.persistentProfileIdentifier == foreignID })?.tunnelConfiguration?.asWgQuickConfig() == foreign.asWgQuickConfig(),
+                                  actual.first(where:{ $0.isVPN013Automatic })?.automaticServerCount == count+1 else { return false }
+                            return ClientRosterPlan.mappingComplete(binding.profileIDs,snapshot:binding.document.snapshot,
+                                availableProfileIDs:Set(actual.compactMap { $0.persistentProfileIdentifier }))
+                        }
+                        func apply(_ count: Int, _ done: @escaping () -> Void) {
+                            coordinator.importDocument(document(Array(servers.prefix(count))),manager:manager) { error in
+                                guard error == nil, assertRoster(count) else { completion("Roster \(count) failed: " + (error?.localizedDescription ?? "invariant")); return }
+                                done()
+                            }
+                        }
+                        func eraseManaged(_ ids: [String], _ done: @escaping () -> Void) {
+                            guard let first = ids.first else { done(); return }
+                            guard let item = manager.mapTunnels({ $0 }).first(where:{ $0.persistentProfileIdentifier == first }) else { completion("Deletion fixture missing"); return }
+                            manager.remove(tunnel:item) { error in
+                                guard error == nil else { completion("Deletion failed"); return }
+                                eraseManaged(Array(ids.dropFirst()),done)
+                            }
+                        }
+                        apply(10) {
+                            let first = coordinator.registry.bindings["012345abcdef"]!.profileIDs.values.sorted().first!
+                            eraseManaged([first]) {
+                                apply(10) {
+                                    let ids = Array(coordinator.registry.bindings["012345abcdef"]!.profileIDs.values)
+                                    eraseManaged(ids) {
+                                        apply(10) { apply(20) { apply(15) { apply(15) {
+                                            completion("Проверено: добавление, удаление, ключи, сторонний профиль и Авто · 3 сервера; восстановление удалённых, 10→20→15, Авто · 16 серверов")
+                                        } } } }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             } catch { completion(error.localizedDescription) }

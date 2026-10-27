@@ -40,6 +40,7 @@ object ClientUpdates {
         val registry = ProfileRegistry.get(Application.get())
         val orders = withContext(Dispatchers.IO) { registry.vault.read().getJSONObject("orders") }
         if (orders.length() == 0) return "Нет привязанных заявок. Импортируйте ZIP с документом VPN013-Access.json."
+        val subscriptions = mutableListOf<String>()
         for (order in orders.keys()) {
             if (onlyOrder != null && order != onlyOrder) continue
             val document = orders.getJSONObject(order).getJSONObject("document")
@@ -52,16 +53,19 @@ object ClientUpdates {
                     val current = binding.getJSONObject("document").getJSONObject("snapshot")
                     val map = binding.getJSONObject("mapping")
                     val profiles = root.getJSONObject("profiles")
-                    val complete = map.keys().asSequence().all { profiles.has(map.getJSONObject(it).getString("profileID")) }
+                    val complete = ClientProtocol.mappingComplete(map, snapshot, profiles)
                     if (current.getString("revision") != snapshot.getString("revision") || current.getLong("expiry") != snapshot.getLong("expiry") || !complete)
                         binding.put("pending",snapshot)
                 }
             }
             failedPending.remove(order)
+            val expiry = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.SHORT)
+                .format(java.util.Date(snapshot.getLong("expiry")))
+            subscriptions.add("Подписка №$order: ${snapshot.getJSONArray("servers").length()} серверов. Действует до $expiry.")
         }
-        if (applyPending()) return "Конфигурации проверены и обновлены"
+        if (applyPending()) return (listOf("Состав серверов восстановлен и обновлён.") + subscriptions).joinToString("\n\n")
         val pending = withContext(Dispatchers.IO) { registry.vault.read().getJSONObject("orders").let { current -> current.keys().asSequence().any { current.getJSONObject(it).has("pending") } } }
-        return if (pending) "Обновления загружены. Они применятся при открытом приложении после отключения VPN." else "Конфигурации проверены. Обновлений нет."
+        return (listOf(if (pending) "Обновления загружены. Они применятся при открытом приложении после отключения VPN." else "Конфигурации проверены. Состав серверов актуален.") + subscriptions).joinToString("\n\n")
         } finally { refreshing = false }
     }
     suspend fun applyPending(): Boolean {

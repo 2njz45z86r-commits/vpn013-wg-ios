@@ -149,6 +149,11 @@ struct ClientRosterPlan {
     let added: [ClientServer]
     let retained: [ClientServer]
     let removedIDs: [String]
+    static func mappingComplete(_ profileIDs: [String: String], snapshot: ClientSnapshot, availableProfileIDs: Set<String>) -> Bool {
+        let expected = Set(snapshot.servers.map { $0.id })
+        let actual = Set(profileIDs.values)
+        return Set(profileIDs.keys) == expected && actual.count == profileIDs.count && actual.isSubset(of: availableProfileIDs)
+    }
     init(previousIDs: Set<String>, snapshot: ClientSnapshot) throws {
         try snapshot.validate()
         let current = Set(snapshot.servers.map { $0.id })

@@ -22,7 +22,8 @@ class MockTunnels {
     static func sharedArchiveFixture() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("vpn013-import-fixture-" + UUID().uuidString + ".zip")
         let files = createMockTunnels().flatMap { manager -> [(fileName: String, contents: Data)] in
-            let config = (manager.protocolConfiguration as! NETunnelProviderProtocol).asTunnelConfiguration(called: manager.localizedDescription)!
+            guard let tunnelProtocol = manager.protocolConfiguration as? NETunnelProviderProtocol,
+                  let config = tunnelProtocol.asTunnelConfiguration(called: manager.localizedDescription) else { return [] }
             var raw = config.asWgQuickConfig()
             let extras = "Jc = 4\nJmin = 40\nJmax = 70\nS1 = 0\nS2 = 0\nS3 = 0\nS4 = 0\nH1 = 1\nH2 = 2\nH3 = 3\nH4 = 4\nI1 = <b 0x00>\nHeaderProtectionKey = \(PrivateKey().base64Key)\nContentPaddingAddition = 0\nRekeyAfterTime = 120\nRekeyTimeout = 5\nRejectAfterTime = 180\nKeepaliveTimeout = 10\nMaxHandshakeAttempts = 20\nRandomTrailers = false\nDisableCookies = false\n"
             raw = raw.replacingOccurrences(of: "[Peer]", with: extras + "\n[Peer]")

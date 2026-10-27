@@ -26,7 +26,7 @@ python3 - <<'PY'
 from pathlib import Path
 source=Path('../../overlay')
 files=[p for p in source.rglob('*') if p.is_file()]
-assert len(files)==84, 'Unexpected source overlay'
+assert len(files)==87, 'Unexpected source overlay'
 for p in files:
  assert not p.is_symlink(), 'Source overlay must not contain symbolic links'
  target=Path(p.relative_to(source)); target.parent.mkdir(parents=True,exist_ok=True)
@@ -36,17 +36,26 @@ python3 VPN013/prepare_hourly_project.py
 python3 VPN013/add_uitest_target.py
 mkdir -p ../../build/review
 swiftc VPN013/AutoFailoverPolicy.swift VPN013/tests/main.swift -o ../../build/test-auto-policy
-../../build/test-auto-policy | tee ../../build/review/policy-tests.txt
+../../build/test-auto-policy > ../../build/review/policy-tests.txt
+cat ../../build/review/policy-tests.txt
 swiftc -D R013_AUTO_LIFECYCLE_TESTING VPN013/AutoFailoverPolicy.swift VPN013/AutoTunnelController.swift ../../tests/AutoControllerLifecycleTests.swift -o ../../build/test-auto-controller-lifecycle
-../../build/test-auto-controller-lifecycle | tee ../../build/review/auto-controller-lifecycle-tests.txt
+../../build/test-auto-controller-lifecycle > ../../build/review/auto-controller-lifecycle-tests.txt
+cat ../../build/review/auto-controller-lifecycle-tests.txt
 swiftc VPN013/PrivateTunnelStore.swift VPN013/tests/PrivateStorageTests.swift -o ../../build/test-private-storage
-../../build/test-private-storage | tee ../../build/review/private-storage-tests.txt
+../../build/test-private-storage > ../../build/review/private-storage-tests.txt
+cat ../../build/review/private-storage-tests.txt
 swiftc VPN013/EndpointPing.swift VPN013/tests/EndpointPingTests.swift -o ../../build/test-endpoint-ping
-../../build/test-endpoint-ping | tee ../../build/review/endpoint-ping-tests.txt
+../../build/test-endpoint-ping > ../../build/review/endpoint-ping-tests.txt
+cat ../../build/review/endpoint-ping-tests.txt
 swiftc VPN013/PrivateTunnelStore.swift VPN013/ClientUpdateProtocol.swift VPN013/ClientSubscriptions.swift VPN013/tests/ClientUpdateTests.swift -o ../../build/test-client-updates
-../../build/test-client-updates | tee ../../build/review/client-update-tests.txt
+../../build/test-client-updates > ../../build/review/client-update-tests.txt
+cat ../../build/review/client-update-tests.txt
 swiftc VPN013/ConnectionSummary.swift VPN013/tests/ConnectionSummaryTests.swift -o ../../build/test-connection-summary
-../../build/test-connection-summary | tee ../../build/review/connection-summary-tests.txt
+../../build/test-connection-summary > ../../build/review/connection-summary-tests.txt
+cat ../../build/review/connection-summary-tests.txt
+swiftc VPN013/LocalStatistics.swift VPN013/tests/LocalStatisticsTests.swift -o ../../build/test-local-statistics
+../../build/test-local-statistics > ../../build/review/local-statistics-tests.txt
+cat ../../build/review/local-statistics-tests.txt
 xcodebuild -project WireGuard.xcodeproj -target WireGuardiOS -configuration Release -sdk iphoneos -arch arm64 \
  CONFIGURATION_BUILD_DIR="$PWD/../device" CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= \
  > ../device-build.log 2>&1 || { grep -n 'error:' ../device-build.log | head -80; tail -20 ../device-build.log; exit 1; }

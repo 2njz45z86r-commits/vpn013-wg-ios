@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,6 +46,23 @@ type clientState struct {
 }
 
 var clientStateLock sync.Mutex
+
+func r013SubscriptionSummary(state *clientState) string {
+	if len(state.Bindings) == 0 {
+		return "Нет привязанных подписок. Импортируйте ZIP из своей заявки в боте."
+	}
+	ids := make([]string, 0, len(state.Bindings))
+	for id := range state.Bindings {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	lines := make([]string, 0, len(ids))
+	for _, id := range ids {
+		binding := state.Bindings[id]
+		lines = append(lines, fmt.Sprintf("Подписка №%s: %d серверов. Срок до %s.", id, len(binding.Members), time.UnixMilli(binding.Expiry).Local().Format("02.01.2006 15:04")))
+	}
+	return strings.Join(lines, "\n")
+}
 
 func clientStatePath() (string, error) {
 	root, err := os.UserConfigDir()
@@ -144,7 +164,7 @@ func resolvePending(state *clientState) error {
 		if change.Expected == "" {
 			previous = previous && !exists
 		} else {
-			previous = previous && exists && r013.Digest(current.ToWgQuick()) == change.Expected
+			previous = previous && ((!exists && change.AllowMissing) || (exists && r013.Digest(current.ToWgQuick()) == change.Expected))
 		}
 	}
 	if applied {
@@ -223,6 +243,21 @@ func importManaged(profiles []r013.Profile, document *r013.AccessDocument) error
 	return resolvePending(state)
 }
 func refreshOrders(ctx context.Context) (int, error) { return refreshBoundOrders(ctx, "") }
+func boundRosterPresent(binding orderBinding, snapshot r013.Snapshot, available map[string]bool) bool {
+	if len(binding.Members) != len(snapshot.Servers) {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, server := range snapshot.Servers {
+		member, ok := binding.Members[server.ID]
+		name := strings.ToLower(member.Name)
+		if !ok || !available[name] || seen[name] {
+			return false
+		}
+		seen[name] = true
+	}
+	return true
+}
 func refreshBoundOrders(ctx context.Context, only string) (int, error) {
 	clientStateLock.Lock()
 	defer clientStateLock.Unlock()
@@ -232,6 +267,14 @@ func refreshBoundOrders(ctx context.Context, only string) (int, error) {
 	}
 	if err = resolvePending(state); err != nil {
 		return 0, err
+	}
+	tunnels, err := manager.IPCClientTunnels()
+	if err != nil {
+		return 0, err
+	}
+	available := map[string]bool{}
+	for _, tunnel := range tunnels {
+		available[strings.ToLower(tunnel.Name)] = true
 	}
 	updated := 0
 	for id, binding := range state.Bindings {
@@ -245,7 +288,7 @@ func refreshBoundOrders(ctx context.Context, only string) (int, error) {
 		if !snapshot.Active(time.Now()) {
 			return updated, r013.ErrAccessEnded
 		}
-		if snapshot.Revision == binding.Revision {
+		if snapshot.Revision == binding.Revision && boundRosterPresent(binding, snapshot, available) {
 			binding.Expiry = snapshot.Expiry
 			state.Bindings[id] = binding
 			continue
@@ -265,12 +308,12 @@ func refreshBoundOrders(ctx context.Context, only string) (int, error) {
 			if e != nil {
 				return updated, e
 			}
-			changes = append(changes, r013.Change{Name: name, Expected: expected, Config: c.ToWgQuick()})
+			changes = append(changes, r013.Change{Name: name, Expected: expected, Config: c.ToWgQuick(), AllowMissing: exists && !available[strings.ToLower(name)]})
 			next.Members[server.ID] = boundProfile{name, r013.Digest(c.ToWgQuick())}
 		}
 		for serverID, old := range binding.Members {
 			if !currentIDs[serverID] {
-				changes = append(changes, r013.Change{Name: old.Name, Expected: old.Digest, Remove: true})
+				changes = append(changes, r013.Change{Name: old.Name, Expected: old.Digest, Remove: true, AllowMissing: !available[strings.ToLower(old.Name)]})
 			}
 		}
 		state.Pending = &pendingBinding{next, changes}
