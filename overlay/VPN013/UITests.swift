@@ -645,7 +645,7 @@ final class AutoTunnelUITests:XCTestCase {
         for _ in 0..<5 { if fixture.isHittable { break }; app.tables.firstMatch.swipeUp() }
         XCTAssertTrue(fixture.isHittable)
         fixture.tap()
-        let passed = app.staticTexts["Проверено: добавление, удаление, ключи, сторонний профиль и Авто · 3 сервера; восстановление удалённых, 10→20→15, Авто · 16 серверов"]
+        let passed = app.staticTexts.matching(NSPredicate(format: "label == %@", "Проверено: добавление, удаление, ключи, сторонний профиль и Авто · 3 сервера; восстановление удалённых, 10→20→15, Авто · 16 серверов")).firstMatch
         XCTAssertTrue(passed.waitForExistence(timeout:15))
         capture("18-order-sync-invariants-passed-synthetic")
         app.navigationBars["Обновления"].buttons["Готово"].tap()
