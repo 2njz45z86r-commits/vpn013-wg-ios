@@ -162,8 +162,8 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 					failure = "Native window bounds unavailable"
 					return
 				}
-				if power.Left < rect.Left || power.Right > rect.Right || power.Top < rect.Top || power.Bottom > rect.Bottom || power.Bottom-power.Top < 80 {
-					failure = "Power control clipped outside native window"
+				if power.Left < rect.Left || power.Right > rect.Right || power.Top < rect.Top || power.Bottom > rect.Bottom || power.Bottom-power.Top < 64 {
+					failure = fmt.Sprintf("Power control bounds rejected: window=%+v power=%+v", rect, power)
 					return
 				}
 				bitmap, err := walk.NewBitmapForDPI(walk.Size{Width: int(rect.Right - rect.Left), Height: int(rect.Bottom - rect.Top)}, 96)

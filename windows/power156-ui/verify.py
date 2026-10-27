@@ -33,7 +33,12 @@ subprocess.run(['python','scripts/bootstrap.py'],cwd=root,env=environment,check=
 subprocess.run(['pwsh','-NoProfile','-File','scripts/bootstrap-driver.ps1'],cwd=root,env=environment,check=True)
 subprocess.run(['pwsh','-NoProfile','-File','scripts/build-r013.ps1'],cwd=root,env=environment,check=True)
 environment['GOPATH']=str(root/'.deps/gopath');environment['CGO_ENABLED']='1';environment['CC']='x86_64-w64-mingw32-gcc';environment['PATH']=str(root/'.deps/go/bin')+os.pathsep+str(root/'.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+os.pathsep+environment['PATH']
-subprocess.run(['pwsh','-NoProfile','-File','scripts/ci-ui.ps1'],cwd=root,env=environment,check=True)
+(out/'context.json').write_text(json.dumps({'nativeRun':RUN,'nativeSource':SOURCE,'productionPins':pins,'capture':'actual hosted desktop; native fully visible button floor64px'},indent=2)+'\n')
+try:
+ subprocess.run(['pwsh','-NoProfile','-File','scripts/ci-ui.ps1'],cwd=root,env=environment,check=True)
+finally:
+ for path in list(temp.glob('r013-ui-*.json'))+list(temp.glob('r013-power-*.png')):
+  shutil.copyfile(path,out/path.name)
 for n,h in pins.items():assert sha((root/n).read_bytes().replace(b'\r\n',b'\n'))==h
 expected={'manual-no-stats':5,'auto':5,'auto-no-stats':3,'update-offer':6,'power':10}
 for name,count in expected.items():
