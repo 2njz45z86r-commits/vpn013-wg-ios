@@ -16,6 +16,10 @@ def api(path):return json.loads(subprocess.check_output(['gh','api',f'repos/{REP
 def call(*args,timeout=240):return subprocess.check_output(args,text=True,timeout=timeout,stderr=subprocess.STDOUT)
 def main():
  assert os.environ.get('GITHUB_ACTIONS')=='true' and os.environ.get('GITHUB_REPOSITORY')==REPO
+ toolchain=Path('build/toolchain/go/bin').resolve()
+ if toolchain.is_dir():os.environ['PATH']=str(toolchain)+os.pathsep+os.environ['PATH']
+ assert call('go','version').strip()=='go version go1.26.10 darwin/arm64'
+ assert call('xcodebuild','-version').strip()=='Xcode 16.4\nBuild version 16F6'
  for path,digest in EXPECTED.items():assert call('git','rev-parse','HEAD:'+path).strip()==digest
  run=api(f'actions/runs/{RUN}');assert run['head_sha']==SOURCE and run['status']=='completed' and run['conclusion']=='failure'
  assert run['path']=='.github/workflows/build-ios.yml'
@@ -52,13 +56,19 @@ def main():
     out=Path('build').joinpath(*rel.parts).resolve();assert out.is_relative_to(review.resolve())
     out.parent.mkdir(parents=True,exist_ok=True);out.write_bytes(z.read(entry))
  (review/'native-test-provenance.json').write_text(json.dumps({'testsFromRun':RUN,'testsSourceCommit':SOURCE,'testsPassed':31,'testsFailed':0,'testsSkipped':0,'priorWholeWorkflowConclusion':'failure','priorPostTestFailure':'capture script required version1.5.8 after31 passed tests on1.5.9','exactSourceObjects':EXPECTED,'currentRun':os.environ['GITHUB_RUN_ID'],'capturesRerunFresh':True},indent=2))
- command=['xcodebuild','-project','WireGuard.xcodeproj','-scheme','VPN013Auto','-configuration','Debug','-sdk','iphonesimulator','-destination','generic/platform=iOS Simulator','-derivedDataPath','../SimulatorDerivedData','CODE_SIGNING_ALLOWED=NO','DEVELOPMENT_TEAM=','build']
- with Path('build/reused-tests-simulator-build.log').open('wb') as log:subprocess.run(command,cwd='build/awg',stdout=log,stderr=subprocess.STDOUT,timeout=600,check=True)
- app=Path('build/SimulatorDerivedData/Build/Products/Debug-iphonesimulator/AmneziaWG.app').resolve();meta=plistlib.loads((app/'Info.plist').read_bytes());assert meta['CFBundleShortVersionString']=='1.5.9' and str(meta['CFBundleVersion'])=='21'
  devices=json.loads(call('xcrun','simctl','list','devices','available','-j'))
  phone=next(d for rows in devices['devices'].values() for d in rows if d['name']=='iPhone 16 Pro')
  if phone['state']!='Booted':call('xcrun','simctl','boot',phone['udid'],timeout=45)
  call('xcrun','simctl','bootstatus',phone['udid'],'-b',timeout=180)
+ command=['xcodebuild','-project','WireGuard.xcodeproj','-scheme','VPN013Auto','-configuration','Debug','-sdk','iphonesimulator','-destination','platform=iOS Simulator,id='+phone['udid'],'-parallel-testing-enabled','NO','-derivedDataPath','../SimulatorDerivedData','CODE_SIGNING_ALLOWED=NO','DEVELOPMENT_TEAM=','build-for-testing']
+ build_log=Path('build/reused-tests-simulator-build.log')
+ with build_log.open('wb') as log:result=subprocess.run(command,cwd='build/awg',stdout=log,stderr=subprocess.STDOUT,timeout=600)
+ if result.returncode:
+  errors=[line for line in build_log.read_text(errors='replace').splitlines() if 'error:' in line.lower()][-20:]
+  (review/'simulator-build-failure.json').write_text(json.dumps({'exitCode':result.returncode,'errors':errors},indent=2))
+  print('\n'.join(errors),flush=True)
+  raise RuntimeError('Fresh simulator compilation failed; see bounded error evidence')
+ app=Path('build/SimulatorDerivedData/Build/Products/Debug-iphonesimulator/AmneziaWG.app').resolve();meta=plistlib.loads((app/'Info.plist').read_bytes());assert meta['CFBundleShortVersionString']=='1.5.9' and str(meta['CFBundleVersion'])=='21'
  call('xcrun','simctl','install',phone['udid'],str(app),timeout=90)
  subprocess.run(['python3','capture-ios-simulators.py'],check=True,timeout=600)
  completed=json.loads((review/'simulator-capture-completion.json').read_text());assert completed['version']=='1.5.9' and str(completed['build'])=='21' and all(completed[k] for k in ['freshPhoneLargeType','freshPhoneOrdinaryLaunch','freshTablet','sequentialSimulators'])
