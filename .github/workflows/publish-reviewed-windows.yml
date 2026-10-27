@@ -1,0 +1,26 @@
+name: Publish exact reviewed Windows files
+on:
+  push:
+    paths:
+      - '.github/release-publication/windows-1.5.5/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security-review:
+    uses: ./.github/workflows/security-review.yml
+  publish:
+    needs: security-review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify native source, exact artifact bytes and original public signature
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B scripts/publish_reviewed_windows.py

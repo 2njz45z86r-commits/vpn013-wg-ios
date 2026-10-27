@@ -1,0 +1,37 @@
+{
+  "source": "aee39f578236abfa1551cc88ba23b5a86653d3ad",
+  "run": 40456261848,
+  "tag": "windows-1.5.5",
+  "assets": [
+    {
+      "name": "SHA256SUMS-Windows.txt",
+      "sha256": "86f82317ef1d9e6e6de40ffcf6febccd27922537888631f531170820165e10f8",
+      "origin": "reviewed-public-metadata"
+    },
+    {
+      "name": "VPN013WG-1.5.5-amd64.msi",
+      "sha256": "db25874547111563b9f8fde7f43486db3eed7c3d1a9c89977838d212e8c4f470",
+      "origin": "native-artifact"
+    },
+    {
+      "name": "VPN013WG-1.5.5-windows-source.zip",
+      "sha256": "5152912a3ce2f700afbd8cec5263c7fcb83728e6746884b46a04f02a0e0381a2",
+      "origin": "native-artifact"
+    },
+    {
+      "name": "client-release-windows-public.json",
+      "sha256": "b8087fd01b5dba95d9a67a76f496aa82693f1813ad2dce21f511463c28105f30",
+      "origin": "reviewed-public-metadata"
+    },
+    {
+      "name": "client-release-windows.json",
+      "sha256": "7b08128ace86973b43b848657244f3506d7d13a336c825c10209f970999617b1",
+      "origin": "reviewed-public-metadata"
+    },
+    {
+      "name": "windows-build-provenance.json",
+      "sha256": "fec6d02e49eaf46c6ab4226b99000e194d4c4c54ab21ac2e83793b3040534064",
+      "origin": "native-artifact"
+    }
+  ]
+}
