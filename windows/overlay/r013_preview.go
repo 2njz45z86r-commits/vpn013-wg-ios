@@ -12,6 +12,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 func runR013Preview() bool {
@@ -25,6 +26,14 @@ func runR013Preview() bool {
 	clientRead, serverWrite, _ := os.Pipe()
 	serverRead, clientWrite, _ := os.Pipe()
 	eventsRead, eventsWrite, _ := os.Pipe()
+	var auditMu sync.Mutex
+	var starts, stops int
+	var lastStart, lastStop string
+	ui.R013PreviewPowerAudit = func() (int, int, string, string) {
+		auditMu.Lock()
+		defer auditMu.Unlock()
+		return starts, stops, lastStart, lastStop
+	}
 	go func() {
 		defer clientRead.Close()
 		defer serverWrite.Close()
@@ -36,7 +45,7 @@ func runR013Preview() bool {
 		profiles := []manager.Tunnel{{Name: "+Первый"}, {Name: "Finland"}, {Name: "Germany"}, {Name: "Netherlands"}, {Name: "R013-Auto"}, {Name: "Дом"}}
 		scenario := os.Getenv("VPN013_PREVIEW_SCENARIO")
 		activeName := ""
-		if scenario == "manual" || scenario == "manual-no-stats" {
+		if scenario == "manual" || scenario == "manual-no-stats" || scenario == "power" {
 			activeName = "Finland"
 		}
 		if scenario == "auto" || scenario == "auto-no-stats" {
@@ -82,6 +91,34 @@ func runR013Preview() bool {
 					state = manager.TunnelStarted
 				}
 				encoder.Encode(state)
+			case manager.StartMethodType, manager.StopMethodType:
+				var name string
+				decoder.Decode(&name)
+				if scenario != "power" {
+					encoder.Encode("Предпросмотр: VPN и службы не запускаются.")
+					continue
+				}
+				auditMu.Lock()
+				message := ""
+				if method == manager.StopMethodType {
+					stops++
+					lastStop = name
+					if activeName == name {
+						activeName = ""
+					} else {
+						message = "Wrong active fixture"
+					}
+				} else {
+					starts++
+					lastStart = name
+					if starts == 1 {
+						message = "Synthetic start failure"
+					} else {
+						activeName = name
+					}
+				}
+				auditMu.Unlock()
+				encoder.Encode(message)
 			case manager.UpdateStateMethodType:
 				encoder.Encode(manager.UpdateStateUnknown)
 			case manager.QuitMethodType:
