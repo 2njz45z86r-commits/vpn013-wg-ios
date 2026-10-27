@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-27T03:27:49.791236+00:00",
-  "source_sha256": "d69df78eb7448dad61d0b805512f86b977b2e1ac8303454ef074bd30e4042ff4",
-  "source_commit_reviewed": "1e38bb1118eab84d297ebb76bfd096d4fffa6080",
+  "reviewed_at": "2026-10-27T03:40:59.952518+00:00",
+  "source_sha256": "4a0e7feb6705f5105dac768feab4f67144bdf061feabb411333d0750941af91f",
+  "source_commit_reviewed": "5552ee67b9db260917884524a6a8c521bac36845",
   "scope_complete": true,
   "private_report_ref": "private-local:vpn013-bot-migration-20261025/completion/windows-russian-154/source-review",
   "baseline_only": false,
