@@ -1,0 +1,5 @@
+4b3e1e94ad2c2df1fd441a5857693a6b1eefb4cd5cc808e8da606b1eb3d1d68c  VPN013WG-1.5.6-amd64.msi
+0a08987ef52ea134a8104793ecf2693284c4ee7df71671be7580d9cf8061183d  VPN013WG-1.5.6-windows-source.zip
+5a2917dc1fe034a8811ab10c71e29a4d820b7fae75eeb5137eb067df22547737  windows-build-provenance.json
+806fc878ed8b8d6bead952de22f364e5fbcd6d019fb3b28f0e1c08a7aab4cbd5  client-release-windows-public.json
+b53575d186e63f96b8a13221bad42f7b21c62bff1b581b1c9a60a96f6ead6064  client-release-windows.json
