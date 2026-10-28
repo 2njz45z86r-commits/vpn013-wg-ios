@@ -1,6 +1,11 @@
 name: Check experimental inactive probe
 on:
   workflow_dispatch:
+    inputs:
+      models_only:
+        description: Run only socket-free Swift model checks; never a native release
+        type: boolean
+        default: false
   push:
     paths:
       - 'experiments/inactive-probe/**'
@@ -10,10 +15,21 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: vpn013-experimental-probe
+  group: vpn013-experimental-${{ inputs.models_only == true && 'models' || 'probe' }}
   cancel-in-progress: false
 jobs:
+  models:
+    if: inputs.models_only == true
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile and run socket-free models and actual encrypted storage
+        run: sh scripts/check_proxy_models.sh
   check:
+    if: inputs.models_only != true
     strategy:
       fail-fast: false
       matrix:
