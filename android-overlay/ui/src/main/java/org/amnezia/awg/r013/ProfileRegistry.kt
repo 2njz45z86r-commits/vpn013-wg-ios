@@ -23,6 +23,28 @@ class ProfileRegistry private constructor(context: Context) {
         val members = record(name).optJSONArray("members") ?: return emptyList()
         return (0 until members.length()).map { members.getJSONObject(it).let { it.getString("name") to parse(it.getString("config")) } }
     }
+    fun automaticEnabled(): Boolean = vault.read().optBoolean("automaticEnabled", true)
+    fun setAutomaticEnabled(enabled: Boolean) { vault.edit { it.put("automaticEnabled", enabled) }; Unit }
+    /** Keep imported profiles intact. The selected profile remains index zero;
+     * only compatible ordinary profiles with the same per-app policy may follow. */
+    fun automaticMembers(name: String): List<Pair<String, Config>> {
+        val snapshot = records()
+        val selected = snapshot.single { it.getString("name") == name }
+        if (selected.has("members")) return members(name)
+        val primary = parse(selected.getString("config"))
+        if (!eligible(primary)) {
+            check(!automaticEnabled()) { "Для Авто нужен полный IPv4-туннель и доступ VPN013 через VPN. Выключите Авто для этого профиля." }
+            return emptyList()
+        }
+        val others = snapshot.filter { !it.has("members") && it.getString("id") != selected.getString("id") }
+            .sortedBy { it.getString("name") }.map { it.getString("name") to parse(it.getString("config")) }
+            .filter { (_, config) -> eligible(config) &&
+                config.`interface`.includedApplications == primary.`interface`.includedApplications &&
+                config.`interface`.excludedApplications == primary.`interface`.excludedApplications }
+        val result = listOf(name to primary) + others
+        check(result.size <= 30 || !automaticEnabled()) { "Для Авто доступно до 30 совместимых серверов. Выключите Авто для ручного подключения." }
+        return if (result.size <= 30) result else listOf(name to primary)
+    }
     fun create(name: String, config: Config) { vault.edit { d -> add(d.getJSONObject("profiles"), name, config) } }
     fun delete(name: String) { vault.edit { d -> val p = d.getJSONObject("profiles"); p.remove(find(p, name).getString("id")) }; Unit }
     fun rename(name: String, replacement: String) { vault.edit { d -> val p = d.getJSONObject("profiles")

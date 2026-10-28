@@ -66,8 +66,9 @@ class Application : android.app.Application() {
 
     private suspend fun determineBackend(): Backend {
         val backend = GoBackend(applicationContext)
+        backend.setAutomaticEnabled(org.amnezia.awg.r013.ProfileRegistry.get(this).automaticEnabled())
         backend.setAutomaticSource { name ->
-            org.amnezia.awg.r013.ProfileRegistry.get(this).members(name).map { (title, config) ->
+            org.amnezia.awg.r013.ProfileRegistry.get(this).automaticMembers(name).map { (title, config) ->
                 GoBackend.AutoMember(title, config)
             }
         }

@@ -39,6 +39,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.amnezia.awg.Application
 import org.amnezia.awg.R
@@ -64,6 +65,9 @@ class R013HomeActivity : AppCompatActivity() {
     private lateinit var currentPing: MaterialButton
     private lateinit var allPing: MaterialButton
     private lateinit var countLabel: TextView
+    private lateinit var automaticToggle: MaterialSwitch
+    private var applyingAutomatic = false
+    private var automaticReady = false
     private var listSignature = ""
     private var currentIdentity = ""
     private var currentHost: String? = null
@@ -117,6 +121,27 @@ class R013HomeActivity : AppCompatActivity() {
             setOnMenuItemClickListener { addMenu(); true }
         }
         content.addView(toolbar, LinearLayout.LayoutParams(-1, dp(64)))
+        val automaticRow = horizontal().apply { setPadding(0, dp(8), 0, dp(12)); gravity = Gravity.CENTER_VERTICAL }
+        val automaticLabels = vertical().apply {
+            addView(text("Режим Авто", 18, true))
+            addView(text("Сравнение каждые 5 минут. Выключите, чтобы оставаться на выбранном сервере.", 12).apply {
+                setTextColor(color(R.color.r013_secondary)); setPadding(0, dp(4), dp(12), 0)
+            })
+        }
+        automaticRow.addView(automaticLabels, LinearLayout.LayoutParams(0, -2, 1f))
+        automaticToggle = MaterialSwitch(this).apply {
+            contentDescription = "Режим Авто"; minimumHeight = dp(48); isEnabled = false
+            setOnCheckedChangeListener { _, value ->
+                if (!automaticReady || applyingAutomatic) return@setOnCheckedChangeListener
+                applyAutomatic(value)
+            }
+        }
+        automaticRow.addView(automaticToggle, LinearLayout.LayoutParams(-2, dp(48)))
+        content.addView(automaticRow)
+        lifecycleScope.launch {
+            try { automaticToggle.isChecked = withContext(Dispatchers.IO) { registry.automaticEnabled() }; automaticReady = true; automaticToggle.isEnabled = true }
+            catch (_: Exception) { feedback("Не удалось прочитать настройку Авто. Откройте настройки и повторите.") }
+        }
         val card = MaterialCardView(this).apply {
             radius = dp(14).toFloat(); cardElevation = 0f; strokeWidth = dp(1); strokeColor = color(R.color.r013_separator)
             setCardBackgroundColor(color(R.color.r013_background))
@@ -215,7 +240,7 @@ class R013HomeActivity : AppCompatActivity() {
     } }
     private suspend fun renderRows(force: Boolean = false) {
         val tunnels = Application.getTunnelManager().getTunnels().toList()
-        val signature = tunnels.joinToString { it.name + it.state.toString() + it.connectionStatus.toString() } + connecting + pings.toString()
+        val signature = tunnels.joinToString { it.name + it.state.toString() + it.connectionStatus.toString() } + connecting + applyingAutomatic + pings.toString()
         if (!force && signature == listSignature) return
         listSignature = signature; rows.removeAllViews(); countLabel.text = "Профили · ${tunnels.size}"
         allPing.isEnabled = tunnels.isNotEmpty() && batchJob?.isActive != true
@@ -239,7 +264,7 @@ class R013HomeActivity : AppCompatActivity() {
             val ping = text(if (measured == null) "—" else measured.second?.let { "$it мс" } ?: "н/д", 14).apply { gravity = Gravity.CENTER; minWidth = dp(56); setTextColor(color(R.color.r013_secondary)); contentDescription = "Пинг адреса ${tunnel.name}: $text" }
             row.addView(ping, LinearLayout.LayoutParams(-2, dp(48)).apply { marginStart = dp(8); marginEnd = dp(8) })
             val toggle = MaterialSwitch(this).apply {
-                isChecked = tunnel.state == Tunnel.State.UP; isEnabled = !connecting; minimumWidth = dp(48); minimumHeight = dp(48)
+                isChecked = tunnel.state == Tunnel.State.UP; isEnabled = !connecting && !applyingAutomatic; minimumWidth = dp(48); minimumHeight = dp(48)
                 val states = arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf(android.R.attr.state_checked), intArrayOf())
                 thumbTintList = ColorStateList(states, intArrayOf(color(R.color.r013_switch_disabled), color(R.color.r013_background), color(R.color.r013_text)))
                 trackTintList = ColorStateList(states, intArrayOf(color(R.color.r013_separator), color(R.color.r013_accent), color(R.color.r013_selected)))
@@ -272,13 +297,30 @@ class R013HomeActivity : AppCompatActivity() {
         dialog.setOnShowListener { dialog.getButton(-1).setOnClickListener { val name = input.text.toString().trim(); if (!ProfileRegistry.validName(name)) wrapper.error = "От 1 до 64 букв, цифр, пробелов и обычных знаков" else { dialog.dismiss(); accept(name) } } }; dialog.show()
     }
     private fun connect(tunnel: ObservableTunnel, up: Boolean) {
-        if (connecting) return
+        if (connecting || applyingAutomatic) return
         if (up) { val prepare = GoBackend.VpnService.prepare(this); if (prepare != null) { pendingTunnel = tunnel; permissionResult.launch(prepare); return } }
         connecting = true
+        automaticToggle.isEnabled = false
         lifecycleScope.launch {
             try { renderRows(true); tunnel.setStateAsync(if (up) Tunnel.State.UP else Tunnel.State.DOWN) }
             catch (e: Exception) { feedback(e.message ?: "Не удалось изменить подключение") }
-            finally { connecting = false; listSignature = ""; renderCurrent(); renderRows() }
+            finally { connecting = false; automaticToggle.isEnabled = true; listSignature = ""; renderCurrent(); renderRows() }
+        }
+    }
+    private fun applyAutomatic(enabled: Boolean) {
+        if (connecting || applyingAutomatic) return
+        applyingAutomatic = true; automaticToggle.isEnabled = false
+        lifecycleScope.launch {
+            try {
+                val backend = Application.getBackend() as GoBackend
+                OfflineChanges.lock.withLock {
+                    withContext(Dispatchers.IO) { registry.setAutomaticEnabled(enabled); backend.setAutomaticEnabled(enabled) }
+                }
+                listSignature = ""; renderCurrent(); renderRows()
+            } catch (_: Exception) {
+                feedback("Не удалось применить Авто. Повторите действие; активный VPN сохранён.")
+                try { automaticToggle.isChecked = withContext(Dispatchers.IO) { registry.automaticEnabled() } } catch (_: Exception) { }
+            } finally { applyingAutomatic = false; automaticToggle.isEnabled = !connecting }
         }
     }
     private suspend fun renderCurrent() {

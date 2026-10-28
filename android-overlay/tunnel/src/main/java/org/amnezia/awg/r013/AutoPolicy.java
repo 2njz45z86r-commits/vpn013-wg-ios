@@ -21,6 +21,7 @@ public final class AutoPolicy {
     private int failures;
     private final Set<Integer> visited = new HashSet<>();
     private boolean running = true;
+    private boolean enabled = true;
 
     public AutoPolicy(int count, int initialIndex) {
         if (count < 1 || count > 30 || initialIndex < 0 || initialIndex >= count)
@@ -28,15 +29,23 @@ public final class AutoPolicy {
         this.count = count; current = initialIndex; visited.add(current);
     }
     public int current() { return current; }
+    /** Pause selection without changing the installed member or reviving a
+     * stopped connection. The backend must serialize this with primary changes. */
+    public void setEnabled(boolean value) {
+        if (!running) return;
+        enabled = value; failures = 0; visited.clear(); visited.add(current);
+    }
+    public boolean isEnabled() { return running && enabled; }
     /** Owner must serialize this with record and the actual backend transition. */
     public void selectMeasuredCandidate(int index) {
-        if (!running || index < 0 || index >= count) throw new IllegalStateException("Invalid measured selection");
+        if (!running || !enabled || index < 0 || index >= count) throw new IllegalStateException("Invalid measured selection");
         current = index; failures = 0; visited.clear(); visited.add(current);
     }
     public void stop() { running = false; }
     private Decision decision(Action action, int wait) { return new Decision(action, current, wait); }
     public Decision record(boolean healthy, boolean networkAvailable, Double latencyMs) {
         if (!running) return decision(Action.STOPPED, 0);
+        if (!enabled) return decision(Action.WAIT, 15);
         if (!networkAvailable) { failures = 0; return decision(Action.WAIT, 15); }
         if (healthy && latencyMs != null && !latencyMs.isNaN() && !latencyMs.isInfinite()
                 && latencyMs > MAXIMUM_LATENCY_MS) {

@@ -32,6 +32,17 @@ public final class AutoPolicyTest {
                         "Loss of physical network is not a failed server attempt");
             }
             expect(offline.record(false, true, null).waitSeconds == 5, "Offline state does not consume an attempt");
+            AutoPolicy paused = new AutoPolicy(count, initial);
+            paused.record(false, true, null);
+            paused.setEnabled(false);
+            expect(!paused.isEnabled() && paused.current() == initial, "Pause preserves selected primary");
+            for (int i = 0; i < 3; i++) expect(paused.record(false, true, 5000.0).action == AutoPolicy.Action.WAIT && paused.current() == initial, "Paused failures cannot rotate");
+            try { paused.selectMeasuredCandidate(initial); throw new AssertionError("Late measured selection applied after pause"); }
+            catch (IllegalStateException expected) { checks++; }
+            paused.setEnabled(true);
+            expect(paused.isEnabled() && paused.record(false, true, null).waitSeconds == 5, "Resume starts a fresh failure window");
+            paused.stop(); paused.setEnabled(true);
+            expect(!paused.isEnabled() && paused.record(false, true, null).action == AutoPolicy.Action.STOPPED, "Mode toggle cannot revive explicit stop");
             AutoPolicy exhausted = new AutoPolicy(count, initial);
             for (int i = 0; i < count; i++) {
                 expect(exhausted.record(false, true, null).waitSeconds == 5, "Exactly two attempts per member");

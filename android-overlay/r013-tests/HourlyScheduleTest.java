@@ -8,10 +8,10 @@ public final class HourlyScheduleTest {
         HourlySchedule schedule = new HourlySchedule(100_000);
         expect(schedule.remaining(100_000) == 30_000);
         expect(!schedule.take(129_999)); expect(schedule.take(130_000));
-        expect(!schedule.take(130_000)); expect(schedule.remaining(130_000) == 3_600_000);
-        expect(!schedule.take(3_729_999)); expect(schedule.take(3_730_000));
+        expect(!schedule.take(130_000)); expect(schedule.remaining(130_000) == 300_000);
+        expect(!schedule.take(429_999)); expect(schedule.take(430_000));
         expect(schedule.take(30_000_000)); expect(!schedule.take(30_000_000));
-        expect(schedule.remaining(30_000_000) == 3_600_000);
+        expect(schedule.remaining(30_000_000) == 300_000);
         for (int count = 1; count <= 30; count++) for (int index = 0; index < count; index++) {
             AutoPolicy policy = new AutoPolicy(count,0);
             policy.record(false,true,null); // Selection resets the first failure.

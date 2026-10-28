@@ -42,10 +42,14 @@ class R013InstrumentedTest {
         check(BuildConfig.DEBUG && context.packageName == "com.vpn013.awg.debug")
         Application.getTunnelManager().getTunnels()
         stopAll()
-        OfflineChanges.apply { registry.vault.write(JSONObject().put("schema",1).put("profiles",JSONObject()).put("orders",JSONObject())) }
+        OfflineChanges.apply { registry.vault.write(JSONObject().put("schema",1).put("profiles",JSONObject()).put("orders",JSONObject()).put("automaticEnabled",false)) }
+        (Application.getBackend() as GoBackend).setAutomaticEnabled(false)
     }
     @After fun finish() = runBlocking { stopAll(); instrumentation.runOnMainSync { activity?.finish() }; Unit }
     private suspend fun stopAll() { for (t in Application.getTunnelManager().getTunnels().toList()) if (t.state == Tunnel.State.UP) t.setStateAsync(Tunnel.State.DOWN) }
+    private suspend fun automaticMode(enabled: Boolean) = withContext(Dispatchers.IO) {
+        registry.setAutomaticEnabled(enabled); (Application.getBackend() as GoBackend).setAutomaticEnabled(enabled)
+    }
     private fun config(name: String = "unused"): String {
         val client = KeyPair(); val server = KeyPair()
         return "[Interface]\nPrivateKey = ${client.privateKey.toBase64()}\nAddress = 10.13.99.2/32\nDNS = 1.1.1.1\nJc = 3\nJmin = 40\nJmax = 70\nS1 = 20\nS2 = 30\nH1 = 1001\nH2 = 1002\nH3 = 1003\nH4 = 1004\n[Peer]\nPublicKey = ${server.publicKey.toBase64()}\nEndpoint = 127.0.0.1:51820\nAllowedIPs = 0.0.0.0/0\nPersistentKeepalive = 15\n"
@@ -57,6 +61,17 @@ class R013InstrumentedTest {
         return JSONObject().put("schema",1).put("kind","vpn013-access").put("capability",token).put("snapshot",JSONObject()
             .put("schema",1).put("kind","vpn013-awg").put("orderID",order).put("expiry",System.currentTimeMillis()+86_400_000)
             .put("revision",ProfileRegistry.digest(digest.toString())).put("complete",true).put("servers",servers))
+    }
+    @Test fun aAutomaticPreferenceAndOrdinaryRosterStayPrivate() = runBlocking {
+        OfflineChanges.apply { registry.vault.edit { it.remove("automaticEnabled") } }
+        assertTrue(registry.automaticEnabled())
+        OfflineChanges.apply { registry.create("Two",ProfileRegistry.parse(config())); registry.create("One",ProfileRegistry.parse(config())) }
+        val before = registry.config("One").toAwgQuickString()
+        assertEquals(listOf("One","Two"), registry.automaticMembers("One").map { it.first })
+        OfflineChanges.apply { registry.setAutomaticEnabled(false) }
+        assertFalse(PrivateVault(context).read().getBoolean("automaticEnabled"))
+        assertEquals(before,registry.config("One").toAwgQuickString())
+        assertEquals(listOf("One","Two"), registry.automaticMembers("One").map { it.first })
     }
     @Test fun aEncryptedAtomicVault() = runBlocking {
         val text = config(); OfflineChanges.apply { registry.create("Дом", ProfileRegistry.parse(text)) }
@@ -222,14 +237,29 @@ class R013InstrumentedTest {
         val bad = good.replace(Regex("Endpoint = [^\\n]+"),"Endpoint = 10.0.2.2:9")
         OfflineChanges.apply { registry.importOrdinary(listOf("A Unavailable" to ProfileRegistry.parse(bad),"B Responder" to ProfileRegistry.parse(good))); registry.createAuto() }
         startHome(); val manager = Application.getTunnelManager(); val auto = manager.getTunnels().first(); val backend = Application.getBackend() as GoBackend
+        automaticMode(true)
         auto.setStateAsync(Tunnel.State.UP)
         waitFor(100000) { backend.automaticMemberName == "B Responder" }
         waitFor(20000) { EndpointPing.measure("10.13.99.1") != null }
         assertTrue(backend.getLastHandshake(auto) > 0); assertTrue(backend.isAutomaticRunning)
         screenshot("auto-vpn")
+        val selectedRevision = backend.connectionRevision
+        val selectedInterface = backend.actualRouteInterfaceName
+        backend.setAutomaticEnabled(false)
+        Thread.sleep(1200)
+        assertFalse(backend.isAutomaticRunning)
+        assertEquals("B Responder", backend.automaticMemberName)
+        assertEquals(selectedRevision, backend.connectionRevision)
+        assertEquals(selectedInterface, backend.actualRouteInterfaceName)
+        assertNotNull(EndpointPing.measure("10.13.99.1"))
+        screenshot("auto-paused-current-vpn-kept")
+        backend.setAutomaticEnabled(true)
+        assertTrue(backend.isAutomaticRunning)
+        assertEquals(selectedRevision, backend.connectionRevision)
         auto.setStateAsync(Tunnel.State.DOWN); Thread.sleep(7000)
         assertFalse(backend.isAutomaticRunning); assertNull(backend.currentProfileName)
         auto.setStateAsync(Tunnel.State.UP)
+        automaticMode(false) // Explicit manual mode replaces legacy manual-selection semantics.
         manager.getTunnels()["B Responder"]!!.setStateAsync(Tunnel.State.UP)
         waitFor(20000) { EndpointPing.measure("10.13.99.1") != null }
         Thread.sleep(7000)
@@ -310,6 +340,7 @@ class R013InstrumentedTest {
         startHome(); val manager = Application.getTunnelManager(); val auto = manager.getTunnels().first()
         val backend = Application.getBackend() as GoBackend
         val started = android.os.SystemClock.elapsedRealtime()
+        automaticMode(true)
         auto.setStateAsync(Tunnel.State.UP)
         // A one-member Auto cannot rotate because these isolated peers don't
         // implement public HTTPS origins. Real second-peer routing is tested
@@ -328,6 +359,7 @@ class R013InstrumentedTest {
         assertTrue(backend.getStatistics(auto).totalRx() > rx)
         assertNotNull(EndpointPing.measure("10.13.99.1"))
         screenshot("hourly-real-vpn")
+        automaticMode(false)
         manager.getTunnels()["A Timer Fixture"]!!.setStateAsync(Tunnel.State.UP)
         assertFalse(backend.isAutomaticRunning)
         assertNull(backend.connectionView().hourlySummary())
@@ -344,6 +376,7 @@ class R013InstrumentedTest {
         OfflineChanges.apply { registry.importOrdinary(listOf("A Slow Fixture" to ProfileRegistry.parse(slow),"B Fast Fixture" to ProfileRegistry.parse(fast))); registry.createAuto() }
         startHome(); val manager = Application.getTunnelManager(); val auto = manager.getTunnels().first()
         val backend = Application.getBackend() as GoBackend
+        automaticMode(true)
         auto.setStateAsync(Tunnel.State.UP)
         waitFor(20000) { EndpointPing.measure("10.13.99.1") != null }
         assertEquals("A Slow Fixture",backend.automaticMemberName)

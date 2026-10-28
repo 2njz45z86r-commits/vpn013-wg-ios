@@ -75,6 +75,9 @@ public final class GoBackend implements Backend {
     public record AutoMember(String name, Config config) { }
     public interface AutomaticSource { List<AutoMember> members(String profileName); }
     private AutomaticSource automaticSource = name -> Collections.emptyList();
+    private volatile boolean automaticModeEnabled = true;
+    private final AtomicLong automaticModeRevision = new AtomicLong();
+    private List<AutoMember> automaticMembers = Collections.emptyList();
     private final AtomicLong autoEpoch = new AtomicLong();
     private final AtomicLong physicalPathRevision = new AtomicLong();
     @Nullable private volatile Thread autoThread;
@@ -85,7 +88,8 @@ public final class GoBackend implements Backend {
         1, 1, 30, TimeUnit.SECONDS, new java.util.concurrent.ArrayBlockingQueue<>(1), task -> {
             Thread thread = new Thread(task, "R013-Traffic-Probe"); thread.setDaemon(true); return thread;
         }, new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
-    @Nullable private volatile java.util.concurrent.Future<Double> pendingProbe;
+    private record HealthSample(double milliseconds, boolean slowConfirmed) { }
+    @Nullable private volatile java.util.concurrent.Future<HealthSample> pendingProbe;
     @Nullable private volatile VpnService activeService;
     // Read without the backend monitor: a native socket gate may be draining
     // while a primary mutation holds that monitor. Identity fences late gates.
@@ -140,7 +144,27 @@ public final class GoBackend implements Backend {
     }
     @Nullable public synchronized String getCurrentProfileName() { return currentTunnel == null ? null : currentTunnel.getName(); }
     @Nullable public String getAutomaticMemberName() { AutoMember member = activeMember; return member == null ? null : member.name(); }
-    public boolean isAutomaticRunning() { return autoThread != null; }
+    public boolean isAutomaticRunning() { return automaticModeEnabled && autoThread != null; }
+    /** Serialize with an already committed primary transition. Pausing does
+     * not stop that VPN or replace its actual current member with the seed. */
+    public synchronized void setAutomaticEnabled(boolean enabled) {
+        if (automaticModeEnabled != enabled) automaticModeRevision.incrementAndGet();
+        automaticModeEnabled = enabled;
+        if (automaticPolicy == null || autoThread == null) return;
+        automaticPolicy.setEnabled(enabled);
+        if (!enabled) {
+            invalidateHourly();
+            Thread comparison = hourlyThread; hourlyThread = null;
+            if (comparison != null) comparison.interrupt();
+            java.util.concurrent.Future<HealthSample> probe = pendingProbe;
+            if (probe != null) probe.cancel(true);
+            HttpURLConnection connection = healthConnection;
+            if (connection != null) connection.disconnect();
+            hourlySummary = "Авто выключено; текущий сервер сохранён";
+        } else if (currentTunnel != null && hourlyThread == null) {
+            startHourly(currentTunnel, automaticMembers, automaticPolicy, autoEpoch.get());
+        }
+    }
     /** Nonblocking path notification, before any delayed reconnect callback. */
     public void onPhysicalPathChanged() { physicalPathRevision.incrementAndGet(); invalidateHourly(); }
     private void cancelAutomatic() {
@@ -150,7 +174,8 @@ public final class GoBackend implements Backend {
         if (hourly != null) hourly.interrupt();
         Thread worker = autoThread; autoThread = null; activeMember = null;
         automaticPolicy = null;
-        java.util.concurrent.Future<Double> future = pendingProbe; if (future != null) future.cancel(true);
+        automaticMembers = Collections.emptyList();
+        java.util.concurrent.Future<HealthSample> future = pendingProbe; if (future != null) future.cancel(true);
         probeExecutor.purge();
         HttpURLConnection probe = healthConnection; if (probe != null) probe.disconnect();
         if (worker != null) worker.interrupt();
@@ -183,7 +208,7 @@ public final class GoBackend implements Backend {
         }
         return false;
     }
-    @Nullable private Double trafficProbe() {
+    @Nullable private HealthSample trafficProbe() {
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         Network vpn = null;
         for (Network network : cm.getAllNetworks()) {
@@ -211,15 +236,15 @@ public final class GoBackend implements Backend {
                 }
                 if (!ok) continue;
                 double millis = (android.os.SystemClock.elapsedRealtimeNanos() - before) / 1_000_000.0;
-                if (millis <= 1200) return millis;
-                if (first != null) return Math.min(first, millis);
+                if (millis <= 1200) return new HealthSample(millis, false);
+                if (first != null) return new HealthSample(Math.min(first, millis), true);
                 first = millis; // A slow origin alone must not force a server switch.
             } catch (Exception ignored) {
                 // No keys, configuration, response body or capability goes to logs.
             } finally { if (connection != null) connection.disconnect(); healthConnection = null; }
         }
         // One successful slow origin is insufficient evidence to switch a healthy peer.
-        return first == null ? null : 1200.0;
+        return first == null ? null : new HealthSample(first, false);
     }
     private void startAutomatic(final Tunnel tunnel, final List<AutoMember> members) {
         if (members.isEmpty()) return;
@@ -227,19 +252,23 @@ public final class GoBackend implements Backend {
         final long epoch = autoEpoch.incrementAndGet();
         activeMember = members.get(0);
         final AutoPolicy policy = new AutoPolicy(members.size(), 0);
+        policy.setEnabled(automaticModeEnabled);
         automaticPolicy = policy;
+        automaticMembers = Collections.unmodifiableList(new java.util.ArrayList<>(members));
         final Thread worker = new Thread(() -> {
             long nextHealthyLog = 0;
             try {
                 Thread.sleep(2500);
                 while (autoEpoch.get() == epoch && !Thread.currentThread().isInterrupted()) {
+                    if (!automaticModeEnabled) { Thread.sleep(1000); continue; }
+                    final long probeMode = automaticModeRevision.get();
                     final long probeRevision = getConnectionRevision();
                     boolean available = physicalNetworkAvailable();
-                    Double latency = null;
+                    HealthSample sample = null;
                     if (available) {
                         try {
                             pendingProbe = probeExecutor.submit(this::trafficProbe);
-                            latency = pendingProbe.get(11, TimeUnit.SECONDS);
+                            sample = pendingProbe.get(11, TimeUnit.SECONDS);
                         } catch (java.util.concurrent.TimeoutException | java.util.concurrent.ExecutionException | java.util.concurrent.RejectedExecutionException | java.util.concurrent.CancellationException ignored) {
                             if (pendingProbe != null) pendingProbe.cancel(true);
                             HttpURLConnection connection = healthConnection; if (connection != null) connection.disconnect();
@@ -249,14 +278,15 @@ public final class GoBackend implements Backend {
                     final AutoPolicy.Decision decision;
                     synchronized (this) {
                         if (autoEpoch.get() != epoch || currentTunnel != tunnel) break;
+                        if (automaticModeRevision.get() != probeMode) continue;
                         if (connectionRevision != probeRevision) continue;
                         boolean handshakePresent = getLastHandshake(tunnel) > 0;
-                        boolean healthy = latency != null && handshakePresent;
+                        boolean healthy = sample != null && handshakePresent;
                         available = physicalNetworkAvailable();
-                        decision = policy.record(healthy, available, latency);
+                        decision = policy.record(healthy, available, sample != null && sample.slowConfirmed() ? sample.milliseconds() : null);
                         long now = android.os.SystemClock.elapsedRealtime();
                         if (!healthy || decision.action != AutoPolicy.Action.STAY || now >= nextHealthyLog) {
-                            Log.i(TAG, "Auto health: physical=" + available + " traffic=" + (latency != null) +
+                            Log.i(TAG, "Auto health: physical=" + available + " traffic=" + (sample != null) +
                                 " handshake=" + handshakePresent + " action=" + decision.action +
                                 " waitSeconds=" + decision.waitSeconds);
                             nextHealthyLog = now + 60_000;
@@ -286,7 +316,7 @@ public final class GoBackend implements Backend {
             } }
         }, "R013-Auto");
         autoThread = worker; worker.start();
-        startHourly(tunnel, members, policy, epoch);
+        if (automaticModeEnabled) startHourly(tunnel, members, policy, epoch);
     }
 
     private record HourlyScope(long handle, R013SocketRoutes routes) { }
@@ -319,7 +349,7 @@ public final class GoBackend implements Backend {
         return true;
     }
     private boolean sameHourly(Tunnel tunnel, List<AutoMember> members, long epoch, HourlySnapshot snapshot) {
-        return autoEpoch.get() == epoch && autoThread != null && currentTunnel == tunnel &&
+        return automaticModeEnabled && autoEpoch.get() == epoch && autoThread != null && currentTunnel == tunnel &&
             currentTunnelHandle == snapshot.handle() && currentConfig == snapshot.config() &&
             activeService == snapshot.service() && connectionRevision == snapshot.revision() && physicalPathRevision.get() == snapshot.pathRevision() &&
             sameMembers(members, automaticSource.members(tunnel.getName()));
@@ -351,7 +381,7 @@ public final class GoBackend implements Backend {
             } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
             finally { synchronized (this) { if (hourlyThread == Thread.currentThread()) hourlyThread = null; } }
         },"R013-Hourly");
-        hourlySummary = "Авто: сравнение VPN через 30 секунд, затем раз в час";
+        hourlySummary = "Авто: сравнение VPN через 30 секунд, затем каждые 5 минут";
         hourlyThread = worker; worker.setDaemon(true); worker.start();
     }
     private int compareHourly(Tunnel tunnel, List<AutoMember> members, AutoPolicy policy, long epoch, int cursor)
@@ -411,7 +441,7 @@ public final class GoBackend implements Backend {
                 double baseline = status.getJSONObject("after").getDouble("milliseconds");
                 int measured = 0; JSONArray rows = status.getJSONArray("rows");
                 for (int i = 0; i < rows.length(); i++) if (rows.getJSONObject(i).getString("status").equals("measured")) measured++;
-                hourlySummary = String.format(java.util.Locale.ROOT,"Авто: DNS %.0f мс · сравнено %d · следующая проверка через час",baseline,measured);
+                hourlySummary = String.format(java.util.Locale.ROOT,"Авто: DNS %.0f мс · сравнено %d · следующая проверка через 5 минут",baseline,measured);
                 String choice = status.optString("choice_id","");
                 if (choice.isEmpty()) return cursor;
                 int index = Integer.parseInt(choice);
@@ -427,7 +457,7 @@ public final class GoBackend implements Backend {
                 try {
                     if (!sameHourly(tunnel,members,epoch,snapshot) || !scope.routes().isCurrent() ||
                             Thread.currentThread().isInterrupted()) return cursor;
-                    java.util.concurrent.Future<Double> health = pendingProbe; if (health != null) health.cancel(true);
+                    java.util.concurrent.Future<HealthSample> health = pendingProbe; if (health != null) health.cancel(true);
                     HttpURLConnection connection = healthConnection; if (connection != null) connection.disconnect();
                     invalidateHourly();
                     setStateInternalGuarded(tunnel,null,State.DOWN,ticket);
@@ -717,9 +747,10 @@ public final class GoBackend implements Backend {
         if (state == originalState && tunnel == currentTunnel && config == currentConfig)
             return originalState;
         if (state == State.DOWN && tunnel != currentTunnel) return originalState;
-        cancelAutomatic();
         final List<AutoMember> autoMembers = state == State.UP ? Collections.unmodifiableList(new java.util.ArrayList<>(automaticSource.members(tunnel.getName()))) : Collections.emptyList();
         if (autoMembers.size() > 30) throw new IllegalArgumentException("Invalid Auto membership");
+        // Validate a replacement before invalidating the working Auto owner.
+        cancelAutomatic();
         if (state == State.UP) {
             final Config originalConfig = currentConfig;
             final Tunnel originalTunnel = currentTunnel;

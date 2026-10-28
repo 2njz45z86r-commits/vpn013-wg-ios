@@ -1,6 +1,11 @@
 name: Inspect R013 Android
 on:
   workflow_dispatch:
+    inputs:
+      development_check:
+        description: Compile development sources without retaining or publishing an APK
+        type: boolean
+        default: false
   push:
     paths:
       - 'android-overlay/**'
@@ -12,8 +17,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   security-review:
+    if: inputs.development_check != true
     uses: ./.github/workflows/security-review.yml
   compile:
+    if: inputs.development_check != true
     needs: [security-review]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -111,3 +118,8 @@ jobs:
             android/output/VPN013WG-Android-unsigned.apk
             android/output/SHA256SUMS-Android.txt
             VPN013WG-Android-source.tar.gz
+  development:
+    if: github.event_name == 'workflow_dispatch' && inputs.development_check == true
+    permissions:
+      contents: read
+    uses: ./.github/workflows/native-android-check.yml

@@ -1,0 +1,66 @@
+name: Compile Android development source without publication
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Prepare pinned upstream and owned overlays
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = '2njz45z86r-commits/vpn013-wg-ios'
+          git clone --filter=blob:none --no-checkout https://github.com/amnezia-vpn/amneziawg-android.git android
+          git -C android checkout ff15093bf3856fea0947923474870b86efb682f0
+          git -C android submodule update --init --recursive
+          test "$(git -C android/tunnel/tools/amneziawg-tools rev-parse HEAD)" = ee0f0a9aa34ff0a0da4b3433b9512781cfe02843
+          test "$(git -C android/tunnel/tools/elf-cleaner rev-parse HEAD)" = 7efc05090675ec6161b7def862728086a26c3b1f
+          cp -a android-overlay/. android/
+      - name: Check pause, selection and five-minute schedule
+        run: |
+          set -euo pipefail
+          cd android
+          mkdir -p output/models
+          javac -encoding UTF-8 -d output/models tunnel/src/main/java/org/amnezia/awg/r013/AutoPolicy.java tunnel/src/main/java/org/amnezia/awg/r013/HourlySchedule.java r013-tests/AutoPolicyTest.java r013-tests/HourlyScheduleTest.java
+          java -cp output/models AutoPolicyTest
+          java -cp output/models HourlyScheduleTest
+      - name: Compile Android backend, UI and instrumented scenarios
+        id: compile
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;26.1.10909125' 'cmake;3.22.1'
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain :ui:compileDebugKotlin :ui:compileDebugJavaWithJavac :ui:compileDebugAndroidTestKotlin > ../android-development.log 2>&1 || {
+            grep -E '^e:|error:|FAILURE:|Execution failed|^> ' ../android-development.log | head -60 || true
+            exit 1
+          }
+      - name: Record bounded compilation evidence only
+        if: always()
+        env:
+          COMPILE_OUTCOME: ${{ steps.compile.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          lines = Path('android-development.log').read_text(errors='replace').splitlines() if Path('android-development.log').exists() else []
+          selected = [s for s in lines if s.startswith('e:') or 'error:' in s or 'BUILD SUCCESSFUL' in s or 'BUILD FAILED' in s]
+          Path('android-development-review.json').write_text(json.dumps({'source':os.environ['GITHUB_SHA'],'compile':os.environ['COMPILE_OUTCOME'],'errors':selected[-60:],'deviceTestsExecuted':False,'published':False}))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: android-development-${{ github.run_id }}
+          retention-days: 7
+          path: android-development-review.json
