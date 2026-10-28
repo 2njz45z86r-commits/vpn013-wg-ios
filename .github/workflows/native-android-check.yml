@@ -78,6 +78,7 @@ jobs:
           cd android
           bash r013-ci/emulator-check.sh
       - name: Inspect reachable native Android dependencies
+        if: always() && steps.compile.outcome == 'success'
         run: |
           set -euo pipefail
           export GOOS=android GOARCH=arm64 CGO_ENABLED=1 GOFLAGS=-mod=readonly
@@ -96,7 +97,7 @@ jobs:
           for path in list(base.rglob('*')):
               if path.is_file() and path.suffix not in ('.png','.json','.xml'):
                   text=path.read_text(errors='replace')
-                  selected=[s for s in text.splitlines() if s.startswith('OK (') or 'FAILURES' in s or 'test=' in s or 'INSTRUMENTATION_FAILED' in s or 'AssertionError' in s or 'Process crashed' in s]
+                  selected=[s for s in text.splitlines() if s.startswith('OK (') or 'FAILURES' in s or 'test=' in s or 'INSTRUMENTATION_FAILED' in s or 'AssertionError' in s or 'Process crashed' in s or 'R013InstrumentedTest.kt:' in s or s.startswith('INSTRUMENTATION_STATUS_CODE:')]
                   path.with_suffix(path.suffix+'.summary.json').write_text(json.dumps(selected[-80:]))
           (base/'development-summary.json').write_text(json.dumps({'source':os.environ['GITHUB_SHA'],'emulatorOutcome':os.environ['EMULATOR_OUTCOME'],'physicalDeviceVerified':False,'published':False}))
           PY

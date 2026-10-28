@@ -410,13 +410,15 @@ class R013InstrumentedTest {
         val revision = backend.connectionRevision; val interfaceName = backend.actualRouteInterfaceName
         val toggle = allViews().first { it.contentDescription == "Режим Авто" }
         waitFor { toggle.isEnabled }
-        instrumentation.runOnMainSync { assertTrue(toggle.performClick()) }
+        // CompoundButton's return value describes OnClickListener delivery,
+        // not a successful checked-state change. Assert the real mode below.
+        instrumentation.runOnMainSync { toggle.performClick() }
         waitFor { !registry.automaticEnabled() && !backend.isAutomaticRunning && toggle.isEnabled }
         assertEquals(revision,backend.connectionRevision); assertEquals(interfaceName,backend.actualRouteInterfaceName)
         assertEquals("Built-in Auto Fixture",backend.automaticMemberName)
         assertNotNull(EndpointPing.measure("10.13.99.1"))
         screenshot("built-in-auto-paused-real-disposable-vpn")
-        instrumentation.runOnMainSync { assertTrue(toggle.performClick()) }
+        instrumentation.runOnMainSync { toggle.performClick() }
         waitFor { registry.automaticEnabled() && backend.isAutomaticRunning && toggle.isEnabled }
         assertEquals(revision,backend.connectionRevision)
         assertTrue(backend.getLastHandshake(tunnel) > 0)

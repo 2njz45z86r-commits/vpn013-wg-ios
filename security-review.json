@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-28T22:17:52.384096+00:00",
-  "source_sha256": "4c16de16c932420394c66e6e58e57e54a6eec2e5635cfe986ab7587415f5711a",
+  "reviewed_at": "2026-10-28T22:31:31.747049+00:00",
+  "source_sha256": "42e35264a3657ffd46a6c339c6e1c728de32539d92c6a6dd7fd525821fddd0c0",
   "source_commit_reviewed": "development snapshot, not release approved",
   "scope_complete": false,
   "private_report_ref": "private:VPN013-Android-unified-20261029",
