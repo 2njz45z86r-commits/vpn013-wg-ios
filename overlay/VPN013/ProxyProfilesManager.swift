@@ -319,13 +319,15 @@ final class ProxyProfilesManager {
         do { entry.manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old) }
         catch { completion(error); return }
         working = true
+        var answered = false
+        let finish: (Error?) -> Void = { error in
+            guard !answered else { return }; answered = true
+            self.working = false; self.changed?(); completion(error)
+        }
         persist(entry.manager) { error in
-            self.working = false
-            guard error == nil else { entry.manager.protocolConfiguration = old; completion(error); return }
+            guard error == nil else { entry.manager.protocolConfiguration = old; finish(error); return }
             if let index = self.entries.firstIndex(where: { $0.value.profile.id == value.profile.id }) { self.entries[index].value = value }
-            guard let session = entry.manager.connection as? NETunnelProviderSession else { completion(ProxyOperationError.system); return }
-            var answered = false
-            let finish: (Error?) -> Void = { error in guard !answered else { return }; answered = true; completion(error) }
+            guard let session = entry.manager.connection as? NETunnelProviderSession else { finish(ProxyOperationError.system); return }
             do { try session.sendProviderMessage(Data([7, value.automaticEnabled == true ? 1 : 0])) { data in DispatchQueue.main.async { finish(data == Data([1]) ? nil : ProxyOperationError.system) } } }
             catch { finish(ProxyOperationError.system) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { finish(ProxyOperationError.system) }
