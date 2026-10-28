@@ -279,6 +279,16 @@ private enum ProxyXHTTPOptions {
             if parts.count == 1 { return true }
             guard let last = Int(parts[1]) else { return false }; return last >= first && last <= 1_000_000_000 && String(last) == parts[1]
         }
+        func upper(_ value: Any) -> Int {
+            if let number = value as? NSNumber { return number.intValue }
+            return Int((value as? String ?? "").split(separator: "-").last ?? "") ?? Int.max
+        }
+        // Local iOS resource budgets, not changes to provider settings. Refuse
+        // excessive requests rather than clamping them or allocating unbounded
+        // padding, buffers or simultaneous connections in the VPN extension.
+        let limits = ["xPaddingBytes": 65_536, "scMaxEachPostBytes": 4_194_304, "scMinPostsIntervalMs": 600_000,
+                      "scStreamUpServerSecs": 3_600, "uplinkChunkSize": 1_048_576, "sessionIDLength": 256,
+                      "scMaxBufferedPosts": 256, "serverMaxHeaderBytes": 65_536]
         func text(_ value: Any, maximum: Int = 1024) -> Bool {
             guard let value = value as? String else { return false }
             return value.utf8.count <= maximum && !value.contains { $0.isNewline || $0.asciiValue.map { $0 < 32 || $0 == 127 } == true }
@@ -286,6 +296,7 @@ private enum ProxyXHTTPOptions {
         for (key, value) in input {
             if ranges.contains(key) { guard range(value) else { throw ProxyProfileError.invalid } }
             if numbers.contains(key) { guard integer(value) else { throw ProxyProfileError.invalid } }
+            if let limit = limits[key], upper(value) > limit { throw ProxyProfileError.unsupported }
             if strings.contains(key) { guard text(value) else { throw ProxyProfileError.invalid } }
             if flags.contains(key) { guard let value = value as? NSNumber, CFGetTypeID(value) == CFBooleanGetTypeID() else { throw ProxyProfileError.invalid } }
             if key == "headers" {
@@ -295,6 +306,8 @@ private enum ProxyXHTTPOptions {
             if key == "xmux" {
                 guard let xmux = value as? [String: Any], Set(xmux.keys).isSubset(of: ["maxConcurrency", "maxConnections", "cMaxReuseTimes", "hMaxRequestTimes", "hMaxReusableSecs", "hKeepAlivePeriod"]),
                       xmux.allSatisfy({ $0.key == "hKeepAlivePeriod" ? integer($0.value, signed: true) : range($0.value) }) else { throw ProxyProfileError.invalid }
+                let budgets = ["maxConcurrency": 1_024, "maxConnections": 64, "cMaxReuseTimes": 1_000_000, "hMaxRequestTimes": 1_000_000, "hMaxReusableSecs": 86_400, "hKeepAlivePeriod": 3_600]
+                guard xmux.allSatisfy({ upper($0.value) <= (budgets[$0.key] ?? 0) }) else { throw ProxyProfileError.unsupported }
             }
         }
         if let post = input["scMaxEachPostBytes"] {

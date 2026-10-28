@@ -93,6 +93,9 @@ import Foundation
         rejects("invalid pinned-core download transport cannot panic extension") { _ = try ProxyProfile.fromURI(unsafeURL.string!, source: .happ) }
         rejects("unknown transport options not silently dropped") { _ = try ProxyProfile.fromURI(websocket.replacingOccurrences(of: "#WebSocket", with: "&unknownTransport=1#WebSocket"), source: .happ) }
         rejects("TLS bypass alias") { _ = try ProxyProfile.fromURI(websocket.replacingOccurrences(of: "#WebSocket", with: "&skipTLSVerify=true#WebSocket"), source: .happ) }
+        var excessive = components
+        excessive.queryItems = components.queryItems!.filter { !["extra", "x_padding_bytes"].contains($0.name) } + [URLQueryItem(name: "x_padding_bytes", value: "1000000000")]
+        rejects("provider cannot request gigabyte padding") { _ = try ProxyProfile.fromURI(excessive.string!, source: .happ) }
         let ipv6 = try ProxyProfile.fromURI(websocket.replacingOccurrences(of: "@ws.example.invalid:443", with: "@[2001:db8::1]:443"), source: .happ)
         check(ipv6.endpoint == "[2001:db8::1]:443", "IPv6 endpoint")
         let normalizedDomain = try ProxyRoutingPolicy.domain(" YouTube.COM ")
