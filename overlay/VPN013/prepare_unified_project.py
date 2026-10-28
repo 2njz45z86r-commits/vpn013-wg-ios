@@ -17,6 +17,8 @@ sources = {
     'ProxyProfilesManager.swift': [app],
     'UnifiedClientUI.swift': [app],
     'ProxyImportUI.swift': [app],
+    'SubscriptionRequest.swift': [app],
+    'ProxySubscriptionDownload.swift': [app],
 }
 for name, anchors in sources.items():
     fid = hashlib.sha256(('unified-' + name).encode()).hexdigest()[:24].upper()

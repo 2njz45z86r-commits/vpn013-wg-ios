@@ -61,6 +61,38 @@ import Foundation
         check(ws.transport == .ws && ws.path == "/socket" && ws.httpHost == "cdn.example.invalid", "WebSocket fields")
         let http = try ProxyProfile.fromURI(websocket.replacingOccurrences(of: "type=ws", with: "type=xhttp&mode=packet-up"), source: .incy)
         check(http.transport == .xhttp && http.mode == "packet-up", "XHTTP fields")
+        let grpc = try ProxyProfile.fromURI("vless://00000000-0000-4000-8000-000000000001@grpc.example.invalid:443?type=grpc&security=tls&sni=grpc.example.invalid&serviceName=vpn_service-1&authority=front.example.invalid:8443&mode=multi&alpn=h2,http%2F1.1#GRPC", source: .incy)
+        let grpcStream = try grpc.outbound()["streamSettings"] as! [String: Any]
+        let grpcSettings = grpcStream["grpcSettings"] as! [String: Any]
+        check(grpcSettings["authority"] as? String == "front.example.invalid:8443" && grpcSettings["multiMode"] as? Bool == true, "gRPC authority and multi mode preserved")
+        let grpcRoundTrip = try ProxyProfile.fromOutbound(grpc.outbound(), name: grpc.name, source: .incy)
+        check(grpcRoundTrip.grpcAuthority == grpc.grpcAuthority && grpcRoundTrip.grpcMultiMode == true, "gRPC JSON round trip")
+        let download: [String: Any] = ["address": "download.example.invalid", "port": 8443, "network": "xhttp", "security": "tls", "tlsSettings": ["serverName": "download-sni.example.invalid", "allowInsecure": false], "xhttpSettings": ["path": "/down", "mode": "stream-up"]]
+        let extra: [String: Any] = ["downloadSettings": download, "scMaxEachPostBytes": "1000000-2000000", "noGRPCHeader": true, "xmux": ["maxConcurrency": "16-32", "hKeepAlivePeriod": -1]]
+        var components = URLComponents(string: websocket.replacingOccurrences(of: "type=ws", with: "type=xhttp&mode=stream-up"))!
+        components.queryItems! += [URLQueryItem(name: "extra", value: String(data: try JSONSerialization.data(withJSONObject: extra), encoding: .utf8)!), URLQueryItem(name: "x_padding_bytes", value: "100-1000")]
+        let split = try ProxyProfile.fromURI(components.string!, source: .happ)
+        check(split.additionalEndpoints.count == 1 && split.additionalEndpoints[0].host == "download.example.invalid", "secondary endpoint retained")
+        let splitPayload = ProxyTunnelPayload(profile: split)
+        rejects("unresolved secondary endpoint") { _ = try splitPayload.configuration(resolvedHost: "192.0.2.10") }
+        let splitJSON = try JSONSerialization.jsonObject(with: splitPayload.configuration(resolvedHost: "192.0.2.10", additionalHosts: ["download.example.invalid": "192.0.2.11"])) as! [String: Any]
+        let splitOutbound = (splitJSON["outbounds"] as! [[String: Any]])[0]
+        let splitHTTP = (splitOutbound["streamSettings"] as! [String: Any])["xhttpSettings"] as! [String: Any]
+        let resolvedDownload = splitHTTP["downloadSettings"] as! [String: Any]
+        check(splitHTTP["noGRPCHeader"] as? Bool == true && splitHTTP["xPaddingBytes"] as? String == "100-1000" && splitHTTP["scMaxEachPostBytes"] as? String == "1000000-2000000", "full XHTTP extras preserved")
+        check(resolvedDownload["address"] as? String == "192.0.2.11" && (resolvedDownload["tlsSettings"] as! [String: Any])["serverName"] as? String == "download-sni.example.invalid", "bootstrap numeric download address preserves SNI")
+        let splitRoundTrip = try ProxyProfile.fromOutbound(split.outbound(), name: split.name, source: .happ)
+        check(splitRoundTrip.xhttpOptions == split.xhttpOptions, "canonical XHTTP JSON round trip")
+        var unsafe = download; unsafe["tlsSettings"] = ["allowInsecure": true]
+        var unsafeExtra = extra; unsafeExtra["downloadSettings"] = unsafe
+        var unsafeURL = components
+        unsafeURL.queryItems = components.queryItems!.filter { $0.name != "extra" } + [URLQueryItem(name: "extra", value: String(data: try JSONSerialization.data(withJSONObject: unsafeExtra), encoding: .utf8)!)]
+        rejects("nested TLS bypass") { _ = try ProxyProfile.fromURI(unsafeURL.string!, source: .happ) }
+        var noNetwork = download; noNetwork.removeValue(forKey: "network"); unsafeExtra["downloadSettings"] = noNetwork
+        unsafeURL.queryItems = components.queryItems!.filter { $0.name != "extra" } + [URLQueryItem(name: "extra", value: String(data: try JSONSerialization.data(withJSONObject: unsafeExtra), encoding: .utf8)!)]
+        rejects("invalid pinned-core download transport cannot panic extension") { _ = try ProxyProfile.fromURI(unsafeURL.string!, source: .happ) }
+        rejects("unknown transport options not silently dropped") { _ = try ProxyProfile.fromURI(websocket.replacingOccurrences(of: "#WebSocket", with: "&unknownTransport=1#WebSocket"), source: .happ) }
+        rejects("TLS bypass alias") { _ = try ProxyProfile.fromURI(websocket.replacingOccurrences(of: "#WebSocket", with: "&skipTLSVerify=true#WebSocket"), source: .happ) }
         let ipv6 = try ProxyProfile.fromURI(websocket.replacingOccurrences(of: "@ws.example.invalid:443", with: "@[2001:db8::1]:443"), source: .happ)
         check(ipv6.endpoint == "[2001:db8::1]:443", "IPv6 endpoint")
         let normalizedDomain = try ProxyRoutingPolicy.domain(" YouTube.COM ")
@@ -96,6 +128,36 @@ import Foundation
         let probe = try JSONSerialization.jsonObject(with: payload.probeConfiguration(resolvedHost: "192.0.2.10")) as! [String: Any]
         check((probe["inbounds"] as? [Any])?.isEmpty == true && (probe["outbounds"] as? [Any])?.count == 1 && probe["routing"] == nil, "probe has no listener or direct routing fallback")
         rejects("unresolved probe endpoint") { _ = try payload.probeConfiguration(resolvedHost: "example.invalid") }
+        let sources: [ProxyProfile] = (0..<19).map { index in
+            var value = ws; value.id = UUID(); value.host = "node\(index).example.invalid"; value.name = "Country \(index)"; return value
+        }
+        var full: [[String: Any]] = []
+        let padding = String(repeating: "x", count: 520_000)
+        for selected in 0..<18 {
+            let order = [selected] + sources.indices.filter { $0 != selected }
+            let nodes = try order.enumerated().map { position, index -> [String: Any] in
+                var node = try sources[index].outbound(); node["tag"] = position == 0 ? sources[index].name : "backup-\(index)"; return node
+            }
+            full.append(["remarks": sources[selected].name, "inbounds": [], "outbounds": nodes,
+                         "routing": ["ignored": padding, "quoted": "brace } bracket ] quote \" escape \\" ]])
+        }
+        var auto = full[0]; auto["remarks"] = "Авто · минимальный пинг"
+        auto["outbounds"] = try sources.enumerated().map { index, profile -> [String: Any] in var node = try profile.outbound(); node["tag"] = "auto-\(index)"; return node }
+        full.insert(auto, at: 0)
+        let large = try JSONSerialization.data(withJSONObject: full)
+        check(large.count > 1_048_576 && large.count < ProxyImport.maximumBytes, "actual full-subscription size category")
+        let largeImported = try ProxyImport.profiles(large, source: .happ)
+        check(largeImported.count == 18, "361 outbound copies become the eighteen visible server entries")
+        check(Set(largeImported.map { $0.name }) == Set(sources.prefix(18).map { $0.name }), "prefer each primary's original display name")
+        check(!largeImported.contains(where: { $0.host == sources[18].host }), "internal reserve not invented as another visible server")
+        let single = try JSONSerialization.data(withJSONObject: auto)
+        let standalone = try ProxyImport.profiles(single, source: .happ)
+        check(standalone.count == 19, "standalone multi-outbound config retains distinct candidates")
+        rejects("JSON trailing comma") { _ = try ProxyImport.profiles(Data("[{\"outbounds\":[]},]".utf8), source: .happ) }
+        rejects("JSON trailing content") { _ = try ProxyImport.profiles(Data("[{\"outbounds\":[]}]garbage".utf8), source: .happ) }
+        var oversizedObject = auto; oversizedObject["ignored"] = String(repeating: "x", count: 1_048_577)
+        let oversizedJSON = try JSONSerialization.data(withJSONObject: [oversizedObject])
+        rejects("single JSON object resource bound") { _ = try ProxyImport.profiles(oversizedJSON, source: .happ) }
         print("Proxy profile checks: \(checks) passed (synthetic imports only; no VPN traffic claim)")
     }
 }

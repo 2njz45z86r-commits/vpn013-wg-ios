@@ -9,6 +9,16 @@ import Foundation
         precondition(configuration.withCString { R013ProxyValidate($0) } == 0, "Generated TUN/VLESS config must parse in the actual pinned core")
         let probe = String(data: try payload.probeConfiguration(resolvedHost: "192.0.2.10"), encoding: .utf8)!
         precondition(probe.withCString { R013ProxyValidate($0) } == 0, "No-listener probe must parse in the pinned core")
+        let extra: [String: Any] = ["noGRPCHeader": true, "xPaddingBytes": "100-1000", "scMaxEachPostBytes": "1000000-2000000", "downloadSettings": ["address": "download.example.invalid", "port": 443, "network": "xhttp", "security": "tls", "tlsSettings": ["serverName": "download.example.invalid"], "xhttpSettings": ["path": "/down", "mode": "stream-up"]]]
+        var components = URLComponents(string: uri.replacingOccurrences(of: "type=ws", with: "type=xhttp&mode=stream-up"))!
+        components.queryItems!.append(URLQueryItem(name: "extra", value: String(data: try JSONSerialization.data(withJSONObject: extra), encoding: .utf8)!))
+        let split = try ProxyProfile.fromURI(components.string!, source: .happ)
+        let splitPayload = ProxyTunnelPayload(profile: split)
+        let splitConfig = String(data: try splitPayload.configuration(resolvedHost: "192.0.2.10", additionalHosts: ["download.example.invalid": "192.0.2.11"]), encoding: .utf8)!
+        precondition(splitConfig.withCString { R013ProxyValidate($0) } == 0, "XHTTP upload/download and extras parse in actual pinned core without network")
+        let grpc = try ProxyProfile.fromURI("vless://00000000-0000-4000-8000-000000000001@grpc.example.invalid:443?type=grpc&security=tls&sni=grpc.example.invalid&serviceName=service&authority=front.example.invalid&mode=multi&alpn=h2#GRPC", source: .incy)
+        let grpcConfig = String(data: try ProxyTunnelPayload(profile: grpc).configuration(resolvedHost: "192.0.2.10"), encoding: .utf8)!
+        precondition(grpcConfig.withCString { R013ProxyValidate($0) } == 0, "gRPC authority and multi mode parse in pinned core")
         let stale = R013ProxyProbeReset(); _ = R013ProxyProbeReset()
         precondition(probe.withCString { R013ProxyProbe($0, stale) } < 0, "Cancelled generation cannot start a probe")
         precondition(configuration.withCString { R013ProxyProbe($0, R013ProxyProbeReset()) } < 0, "Probe rejects a TUN/listener config before any network action")

@@ -59,17 +59,26 @@ struct ProxyTunnelPayload: Codable, Equatable {
     func selecting(_ index: Int) -> Self {
         var value = self; value.profile = candidates[index]; return value
     }
-    func probeConfiguration(resolvedHost: String) throws -> Data {
+    private func checkAdditional(_ hosts: [String: String]) throws {
+        for endpoint in profile.additionalEndpoints {
+            guard let host = hosts[endpoint.host] else { throw ProxyProfileError.invalid }
+            var v4 = in_addr(); var v6 = in6_addr()
+            guard inet_pton(AF_INET, host, &v4) == 1 || inet_pton(AF_INET6, host, &v6) == 1 else { throw ProxyProfileError.invalid }
+        }
+    }
+    func probeConfiguration(resolvedHost: String, additionalHosts: [String: String] = [:]) throws -> Data {
         try validate()
+        try checkAdditional(additionalHosts)
         var v4 = in_addr(); var v6 = in6_addr()
         guard inet_pton(AF_INET, resolvedHost, &v4) == 1 || inet_pton(AF_INET6, resolvedHost, &v6) == 1 else { throw ProxyProfileError.invalid }
-        return try JSONSerialization.data(withJSONObject: ["log": ["loglevel": "none"], "inbounds": [], "outbounds": [try profile.outbound(resolvedHost: resolvedHost)]], options: [.sortedKeys])
+        return try JSONSerialization.data(withJSONObject: ["log": ["loglevel": "none"], "inbounds": [], "outbounds": [try profile.outbound(resolvedHost: resolvedHost, additionalHosts: additionalHosts)]], options: [.sortedKeys])
     }
 
     /// Construct our own bounded TUN configuration. Imported top-level JSON never
     /// becomes executable core configuration or a filesystem/log/API instruction.
-    func configuration(resolvedHost: String) throws -> Data {
+    func configuration(resolvedHost: String, additionalHosts: [String: String] = [:]) throws -> Data {
         try validate()
+        try checkAdditional(additionalHosts)
         var v4 = in_addr(); var v6 = in6_addr()
         guard inet_pton(AF_INET, resolvedHost, &v4) == 1 || inet_pton(AF_INET6, resolvedHost, &v6) == 1 else { throw ProxyProfileError.invalid }
         var rules: [[String: Any]] = [["type": "field", "port": "53", "outboundTag": "vpn013-proxy"]]
@@ -84,7 +93,7 @@ struct ProxyTunnelPayload: Codable, Equatable {
             "policy": ["system": ["statsInboundUplink": true, "statsInboundDownlink": true], "levels": ["0": ["bufferSize": 64, "connIdle": 120]]],
             "inbounds": [["tag": "vpn013-tun", "protocol": "tun", "settings": ["name": "utun", "MTU": 1280, "userLevel": 0],
                           "sniffing": ["enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true]]],
-            "outbounds": [try profile.outbound(resolvedHost: resolvedHost), ["tag": "vpn013-direct", "protocol": "freedom", "settings": [:]]],
+            "outbounds": [try profile.outbound(resolvedHost: resolvedHost, additionalHosts: additionalHosts), ["tag": "vpn013-direct", "protocol": "freedom", "settings": [:]]],
             "routing": ["domainStrategy": "AsIs", "rules": rules]
         ]
         return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])

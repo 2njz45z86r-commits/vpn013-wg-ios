@@ -17,7 +17,7 @@ final class ProxySinglePacketAdapter {
     var exclusions: [String] = []
     init(provider: NEPacketTunnelProvider) { Self.latest = self }
     static func resolve(_ host: String, port: UInt16) -> String? { host == "one.example.invalid" ? "192.0.2.1" : "192.0.2.2" }
-    func start(_ value: ProxyTunnelPayload, resolvedHost: String?, excludedHosts: [String], completion: @escaping (Error?) -> Void) {
+    func start(_ value: ProxyTunnelPayload, resolvedHost: String?, additionalHosts: [String: String], excludedHosts: [String], completion: @escaping (Error?) -> Void) {
         starts += 1; exclusions = excludedHosts; startDone = completion
     }
     func stop(completion: @escaping () -> Void) { stops += 1; stopDone = completion }

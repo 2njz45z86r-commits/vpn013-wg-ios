@@ -14,7 +14,7 @@ final class ProxySinglePacketAdapter {
     private var pending: ((Error?) -> Void)?
     init(provider: NEPacketTunnelProvider) { self.provider = provider }
 
-    func start(_ payload: ProxyTunnelPayload, resolvedHost: String? = nil, excludedHosts: [String] = [], completion: @escaping (Error?) -> Void) {
+    func start(_ payload: ProxyTunnelPayload, resolvedHost: String? = nil, additionalHosts: [String: String] = [:], excludedHosts: [String] = [], completion: @escaping (Error?) -> Void) {
         dispatchPrecondition(condition: .onQueue(.main))
         let token = UUID(); epoch = token; pending = completion
         let timeout = DispatchWorkItem { [weak self] in
@@ -31,7 +31,7 @@ final class ProxySinglePacketAdapter {
                 let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: host)
                 let ipv4 = NEIPv4Settings(addresses: ["172.29.13.2"], subnetMasks: ["255.255.255.255"])
                 ipv4.includedRoutes = [NEIPv4Route.default()]
-                let physicalHosts = Set(excludedHosts + [host])
+                let physicalHosts = Set(excludedHosts + [host] + Array(additionalHosts.values))
                 ipv4.excludedRoutes = physicalHosts.filter { !$0.contains(":") }.map { NEIPv4Route(destinationAddress: $0, subnetMask: "255.255.255.255") }
                 settings.ipv4Settings = ipv4
                 let ipv6 = NEIPv6Settings(addresses: ["fd13:13:13::2"], networkPrefixLengths: [128])
@@ -44,7 +44,7 @@ final class ProxySinglePacketAdapter {
                     DispatchQueue.main.async {
                         guard self.epoch == token else { return }
                         guard error == nil else { self.finish(PacketTunnelProviderError.couldNotSetNetworkSettings); return }
-                        guard let fd = Self.tunnelDescriptor(), let data = try? payload.configuration(resolvedHost: host),
+                        guard let fd = Self.tunnelDescriptor(), let data = try? payload.configuration(resolvedHost: host, additionalHosts: additionalHosts),
                               let configuration = String(data: data, encoding: .utf8) else {
                             self.finish(PacketTunnelProviderError.couldNotDetermineFileDescriptor); return
                         }

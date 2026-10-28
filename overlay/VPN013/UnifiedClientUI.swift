@@ -24,6 +24,10 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
         super.viewDidLoad(); delegate = self
+        AutomaticModeRow.canChange = { [weak self] in
+            guard let self = self else { return true }
+            return !self.profiles.working && !self.profiles.entries.contains(where: { [.connecting, .reasserting, .disconnecting].contains($0.status) }) && self.awg.tunnelsManager?.automaticModeBusy != true
+        }
         view.backgroundColor = VPN013Theme.background; tabBar.tintColor = VPN013Theme.accent
         let appearance = UITabBarAppearance(); appearance.configureWithOpaqueBackground(); appearance.backgroundColor = VPN013Theme.background
         appearance.stackedLayoutAppearance.normal.iconColor = VPN013Theme.secondaryText

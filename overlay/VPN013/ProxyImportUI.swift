@@ -2,49 +2,6 @@
 import UIKit
 import UniformTypeIdentifiers
 
-final class ProxySubscriptionDownload: NSObject, URLSessionDataDelegate {
-    private var session: URLSession?
-    private var received = Data()
-    private var original: URL?
-    private var completion: ((Data?) -> Void)?
-    func start(_ url: URL, completion: @escaping (Data?) -> Void) {
-        cancel()
-        guard url.scheme?.lowercased() == "https", url.host != nil, url.user == nil, url.password == nil else { completion(nil); return }
-        original = url; self.completion = completion; received = Data()
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 20; config.timeoutIntervalForResource = 25
-        config.httpCookieStorage = nil; config.httpShouldSetCookies = false; config.urlCredentialStorage = nil; config.urlCache = nil
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        let session = URLSession(configuration: config, delegate: self, delegateQueue: .main); self.session = session
-        session.dataTask(with: url).resume()
-    }
-    func cancel() { completion = nil; session?.invalidateAndCancel(); session = nil; received = Data() }
-    private func finish(_ data: Data?) {
-        let callback = completion; completion = nil; session?.invalidateAndCancel(); session = nil
-        received = Data(); callback?(data)
-    }
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        guard session === self.session else { completionHandler(.cancel); return }
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
-              response.expectedContentLength <= Int64(ProxyImport.maximumBytes) else { completionHandler(.cancel); finish(nil); return }
-        completionHandler(.allow)
-    }
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard session === self.session else { return }
-        guard received.count + data.count <= ProxyImport.maximumBytes else { finish(nil); return }; received.append(data)
-    }
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard session === self.session else { return }; finish(error == nil ? received : nil)
-    }
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
-        guard session === self.session else { completionHandler(nil); return }
-        guard let original = original, let next = request.url, next.scheme?.lowercased() == "https",
-              next.host?.lowercased() == original.host?.lowercased(), (next.port ?? 443) == (original.port ?? 443),
-              next.user == nil, next.password == nil else { completionHandler(nil); finish(nil); return }
-        completionHandler(request)
-    }
-}
-
 final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegate {
     private let kind: VPN013ConnectionKind
     private let input = UITextView()
@@ -53,6 +10,7 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
     private let downloader = ProxySubscriptionDownload()
     private var initialText: String?
     private var isBusy = false
+    private var previewGeneration = UUID()
     init(kind: VPN013ConnectionKind, text: String? = nil) { self.kind = kind; initialText = text; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     deinit { downloader.cancel() }
@@ -78,6 +36,17 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") {
             input.text = "vless://00000000-0000-4000-8000-000000000001@demo.example.invalid:443?type=ws&security=tls&sni=demo.example.invalid&path=%2Fvpn#Demo%20server"
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified-json"), let prototype = try? ProxyProfile.fromURI(input.text, source: kind) {
+                let profiles = (0..<4).map { index -> ProxyProfile in var value = prototype; value.id = UUID(); value.host = "node\(index).example.invalid"; value.name = "Country \(index)"; return value }
+                var configurations: [[String: Any]] = (0..<3).map { primary in
+                    let order = [primary] + profiles.indices.filter { $0 != primary }
+                    let outbounds = order.enumerated().map { position, index -> [String: Any] in var value = try! profiles[index].outbound(); value["tag"] = position == 0 ? profiles[index].name : "backup-\(index)"; return value }
+                    return ["remarks": profiles[primary].name, "inbounds": [], "outbounds": outbounds]
+                }
+                let automatic: [String: Any] = ["remarks": "Авто", "inbounds": [], "outbounds": profiles.enumerated().map { index, profile -> [String: Any] in var value = try! profile.outbound(); value["tag"] = "auto-\(index)"; return value }]
+                configurations.insert(automatic, at: 0)
+                input.text = String(decoding: try! JSONSerialization.data(withJSONObject: configurations, options: [.sortedKeys]), as: UTF8.self)
+            }
         }
         #endif
     }
@@ -102,7 +71,8 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
             let data = try file.read(upToCount: ProxyImport.maximumBytes + 1) ?? Data()
             guard data.count <= ProxyImport.maximumBytes else { throw ProxyProfileError.tooLarge }
             guard let text = String(data: data, encoding: .utf8) else { throw ProxyProfileError.invalid }
-            input.text = text
+            if data.count > 131_072 { input.text = ""; preview(data) }
+            else { input.text = text }
         } catch { show(error is ProxyProfileError ? error : ProxyProfileError.invalid) }
     }
     @objc private func validateInput() {
@@ -111,19 +81,40 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         let text = (input.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.utf8.count <= ProxyImport.maximumBytes else { show(ProxyProfileError.tooLarge); return }
         if let url = URL(string: text), url.scheme?.lowercased() == "https" {
-            let alert = UIAlertController(title: "Загрузить подписку?", message: "VPN013 запросит конфигурации у \(url.host ?? "сервиса"). Ссылка не будет передана другим сайтам.", preferredStyle: .alert)
+            guard VPN013SubscriptionRequest.isSecure(url) else { show(ProxyProfileError.invalid); return }
+            let alert = UIAlertController(title: "Загрузить подписку?", message: "VPN013 запросит конфигурации у \(url.host ?? "сервиса") и передаст постоянный случайный идентификатор этой установки для данного сервиса — для проверки привязки устройства. У других VPN-приложений свои идентификаторы. Для привязанной к ним ссылки может понадобиться отдельное устройство в кабинете провайдера.", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "Загрузить", style: .default) { [weak self] _ in
                 guard let self = self else { return }; self.busy(true)
-                self.downloader.start(url) { [weak self] data in
+                let identity: String
+                do { identity = try VPN013SubscriptionIdentity.identifier(for: url.host!, directory: PrivateTunnelStore.defaultDirectory) }
+                catch { self.busy(false); self.show(ProxySubscriptionError.identity); return }
+                self.downloader.start(url, kind: self.kind, identifier: identity) { [weak self] result in
                     guard let self = self else { return }; self.busy(false)
-                    guard let data = data else { self.show(ProxyOperationError.system); return }; self.preview(data)
+                    switch result {
+                    case .success(let data): self.preview(data)
+                    case .failure(let error): self.show(error)
+                    }
                 }
             }); alert.addAction(UIAlertAction(title: "Отмена", style: .cancel)); present(alert, animated: true)
         } else { preview(Data(text.utf8)) }
     }
     private func preview(_ data: Data) {
-        do {
-            let values = try ProxyImport.profiles(data, source: kind)
+        let generation = UUID(); previewGeneration = generation; let source = kind
+        busy(true)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = Result { try ProxyImport.profiles(data, source: source) }
+            DispatchQueue.main.async {
+            guard let self = self, self.previewGeneration == generation else { return }
+            self.busy(false)
+            guard self.viewIfLoaded?.window != nil else { return }
+            switch result {
+            case .success(let values): self.showPreview(values)
+            case .failure(let error): self.show(error is ProxyProfileError ? error : ProxyProfileError.invalid)
+            }
+            }
+        }
+    }
+    private func showPreview(_ values: [ProxyProfile]) {
             let names = values.prefix(8).map { $0.name }.joined(separator: "\n")
             let alert = UIAlertController(title: "Серверов: \(values.count)", message: names + (values.count > 8 ? "\n…" : "") + "\n\nДобавить в раздел \(kind.title)?", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "Добавить", style: .default) { [weak self] _ in
@@ -133,7 +124,6 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
                     if let error = error { self.show(error) } else { self.input.text = ""; self.navigationController?.popToRootViewController(animated: true) }
                 }
             }); alert.addAction(UIAlertAction(title: "Отмена", style: .cancel)); present(alert, animated: true)
-        } catch { show(error is ProxyProfileError ? error : ProxyProfileError.invalid) }
     }
     private func busy(_ value: Bool) { isBusy = value; submit.isEnabled = !value; input.isEditable = !value; value ? progress.startAnimating() : progress.stopAnimating() }
     private func show(_ error: Error) {

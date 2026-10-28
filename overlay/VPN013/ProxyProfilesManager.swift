@@ -27,7 +27,9 @@ final class ProxyProfilesManager {
     private(set) var entries: [Entry] = []
     var changed: (() -> Void)?
     var reportError: ((Error) -> Void)?
-    private(set) var working = false
+    private(set) var working = false {
+        didSet { NotificationCenter.default.post(name: AutomaticModeRow.availabilityChanged, object: nil) }
+    }
     private var activation: UUID?
     private var switchingTimer: Timer?
     private var statusObserver: NSObjectProtocol?

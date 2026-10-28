@@ -56,6 +56,8 @@ jobs:
           "$RUNNER_TEMP/r013-automatic-check"
           xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROXY_AUTO_TESTING "$GITHUB_WORKSPACE/overlay/VPN013/AutomaticMode.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyAutomaticAdapter.swift" "$GITHUB_WORKSPACE/tests/ProxyAutoLifecycleTests.swift" -o "$RUNNER_TEMP/r013-proxy-auto-lifecycle"
           "$RUNNER_TEMP/r013-proxy-auto-lifecycle"
+          xcrun swiftc -parse-as-library -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/SubscriptionRequest.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxySubscriptionDownload.swift" "$GITHUB_WORKSPACE/tests/SubscriptionRequestTests.swift" -o "$RUNNER_TEMP/r013-subscription-check"
+          "$RUNNER_TEMP/r013-subscription-check"
       - name: Build experimental native callback archive
         if: runner.os == 'macOS'
         run: |

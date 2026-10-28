@@ -714,6 +714,20 @@ final class AutoTunnelUITests:XCTestCase {
         capture("automatic-restored-and-enabled-blacktemple-no-vpn-synthetic")
     }
 
+    func testFullJSONImportsVisibleRosterWithoutBackupDuplicates() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-unified-json"]
+        app.launch(); app.tabBars.buttons["vpn013.kind.happ"].tap(); app.buttons["vpn013.proxy.add"].tap()
+        app.buttons["vpn013.proxy.import.check"].tap()
+        XCTAssertTrue(app.alerts["Серверов: 3"].waitForExistence(timeout: 8))
+        capture("full-json-three-visible-servers-without-backup-copies-synthetic")
+        app.alerts.buttons["Добавить"].tap()
+        for index in 0..<3 { XCTAssertTrue(app.tables.cells.staticTexts["Country \(index)"].waitForExistence(timeout: 8)) }
+        XCTAssertFalse(app.tables.cells.staticTexts["node3.example.invalid"].exists)
+        app.tabBars.buttons["vpn013.kind.incy"].tap()
+        XCTAssertFalse(app.tables.cells.staticTexts["Country 0"].exists)
+    }
+
     func testUpdatesScreenAndOrderSynchronization() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]

@@ -685,9 +685,15 @@ class TunnelsManager {
     }
 
     #if os(iOS)
+    var automaticModeBusy: Bool {
+        builtinPreparing || tunnels.contains { ![.inactive, .active].contains($0.status) }
+    }
     private var builtinPreparing: Bool {
         get { automaticPreparationInProgress }
-        set { automaticPreparationInProgress = newValue }
+        set {
+            automaticPreparationInProgress = newValue
+            NotificationCenter.default.post(name: AutomaticModeRow.availabilityChanged, object: nil)
+        }
     }
     private func prepareBuiltinAutomatic(_ tunnel: TunnelContainer, completion: @escaping (Error?) -> Void) {
         guard !builtinPreparing else { completion(ProxyOperationError.busy); return }
@@ -731,20 +737,23 @@ class TunnelsManager {
     }
 
     func applyAutomaticPreference(completion: @escaping (Error?) -> Void) {
+        guard !builtinPreparing else { completion(ProxyOperationError.busy); return }
         guard let tunnel = tunnelInOperation(), tunnel.status == .active,
               let proto = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
               let old = proto.copy() as? NETunnelProviderProtocol else { completion(nil); return }
         do {
             let enabled = VPN013AutomaticMode.enabled()
             try proto.setBuiltinAutomatic(try AutoTunnelProfile.load(from: proto), enabled: enabled)
+            builtinPreparing = true
+            var answered = false
+            let finish: (Error?) -> Void = { error in
+                guard !answered else { return }; answered = true
+                self.builtinPreparing = false; completion(error)
+            }
             tunnel.tunnelProvider.saveToPreferences { error in
                 DispatchQueue.main.async {
-                    guard error == nil else { tunnel.tunnelProvider.protocolConfiguration = old; completion(error); return }
-                    guard let session = tunnel.tunnelProvider.connection as? NETunnelProviderSession else { completion(ProxyOperationError.system); return }
-                    var answered = false
-                    let finish: (Error?) -> Void = { error in
-                        guard !answered else { return }; answered = true; completion(error)
-                    }
+                    guard error == nil else { tunnel.tunnelProvider.protocolConfiguration = old; finish(error); return }
+                    guard let session = tunnel.tunnelProvider.connection as? NETunnelProviderSession else { finish(ProxyOperationError.system); return }
                     do { try session.sendProviderMessage(Data([7, enabled ? 1 : 0])) { reply in
                         DispatchQueue.main.async { finish(reply == Data([1]) ? nil : ProxyOperationError.system) }
                     } } catch { finish(ProxyOperationError.system) }

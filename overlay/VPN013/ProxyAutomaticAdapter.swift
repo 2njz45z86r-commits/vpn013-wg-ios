@@ -17,6 +17,7 @@ final class ProxyPacketAdapter {
     private var startupPing: EndpointPingCoordinator?
     private var payload: ProxyTunnelPayload?
     private var resolved: [String?] = []
+    private var additional: [[String: String]] = []
     private var selected = 0
     private var enabled = false
     private var applying = false
@@ -39,10 +40,19 @@ final class ProxyPacketAdapter {
         }
         deadline = timeout; DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: timeout)
         resolver.async {
-            let addresses = value.candidates.map { ProxySinglePacketAdapter.resolve($0.host, port: $0.port) }
+            var secondary: [[String: String]] = []
+            let addresses = value.candidates.map { profile -> String? in
+                var hosts: [String: String] = [:]
+                for endpoint in profile.additionalEndpoints {
+                    if let host = ProxySinglePacketAdapter.resolve(endpoint.host, port: endpoint.port) { hosts[endpoint.host] = host }
+                }
+                secondary.append(hosts)
+                guard hosts.count == profile.additionalEndpoints.count else { return nil }
+                return ProxySinglePacketAdapter.resolve(profile.host, port: profile.port)
+            }
             DispatchQueue.main.async {
-                guard self.epoch == token else { return }; self.resolved = addresses
-                guard self.enabled else { self.install(0, token: token) { self.finish($0) }; return }
+                guard self.epoch == token else { return }; self.resolved = addresses; self.additional = secondary
+                guard self.enabled else { self.install(value.candidates.firstIndex(where: { $0.id == value.profile.id }) ?? 0, token: token) { self.finish($0) }; return }
                 let ping = EndpointPingCoordinator(maxConcurrent: 6, probeTimeout: 1.5, batchTimeout: 8)
                 self.startupPing = ping; var measured: [String: EndpointPingResult] = [:]
                 ping.start(hosts: value.candidates.map { $0.host }, update: { host, result in measured[host] = result }, completion: {
@@ -60,7 +70,7 @@ final class ProxyPacketAdapter {
     private func install(_ index: Int, token: UUID, completion: @escaping (Error?) -> Void) {
         guard epoch == token, let value = payload, resolved.indices.contains(index), let host = resolved[index] else { completion(PacketTunnelProviderError.dnsResolutionFailure); return }
         applying = true
-        primary.start(value.selecting(index), resolvedHost: host, excludedHosts: resolved.compactMap { $0 }) { error in
+        primary.start(value.selecting(index), resolvedHost: host, additionalHosts: additional[index], excludedHosts: resolved.compactMap { $0 } + additional.flatMap { $0.values }) { error in
             guard self.epoch == token else { return }; self.applying = false
             if error == nil {
                 self.selected = index; self.failures = 0; self.latency = nil
@@ -87,7 +97,7 @@ final class ProxyPacketAdapter {
         let compare = comparisonDue || failures >= 1
         let order = [current] + (compare ? value.candidates.indices.filter { $0 != current } : [])
         let configurations: [(Int, String)] = order.compactMap { index in
-            guard let host = resolved[index], let data = try? value.selecting(index).probeConfiguration(resolvedHost: host), let text = String(data: data, encoding: .utf8) else { return nil }; return (index, text)
+            guard let host = resolved[index], let data = try? value.selecting(index).probeConfiguration(resolvedHost: host, additionalHosts: additional[index]), let text = String(data: data, encoding: .utf8) else { return nil }; return (index, text)
         }
         let probeEpoch = R013ProxyProbeReset()
         let generation = UUID(); probeGeneration = generation
