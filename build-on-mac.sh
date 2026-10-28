@@ -26,7 +26,7 @@ python3 - <<'PY'
 from pathlib import Path
 source=Path('../../overlay')
 files=[p for p in source.rglob('*') if p.is_file()]
-assert len(files)==98, 'Unexpected source overlay'
+assert len(files)==100, 'Unexpected source overlay'
 for p in files:
  assert not p.is_symlink(), 'Source overlay must not contain symbolic links'
  target=Path(p.relative_to(source)); target.parent.mkdir(parents=True,exist_ok=True)
