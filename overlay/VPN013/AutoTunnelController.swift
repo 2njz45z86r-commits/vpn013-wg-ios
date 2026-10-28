@@ -18,6 +18,8 @@ final class AutoTunnelController {
     private var networkAvailable = true
     private var installedIndex: Int
     private var applying = false
+    private var enabled = true
+    private var pausePending = false
     private(set) var phase = "Проверка соединения"
     var activeName: String { configuredCandidates[installedIndex].name ?? "Сервер" }
     var currentConfiguration: TunnelConfiguration? { applying ? nil : configuredCandidates[installedIndex] }
@@ -36,7 +38,7 @@ final class AutoTunnelController {
         dispatchPrecondition(condition: .onQueue(.main))
         let monitor = NWPathMonitor(); pathMonitor = monitor
         monitor.pathUpdateHandler = { [weak self] path in
-            guard let self = self, self.policy.running else { return }
+            guard let self = self, self.policy.running, self.enabled else { return }
             let available = path.status == .satisfied
             if available != self.networkAvailable {
                 self.networkAvailable = available
@@ -48,7 +50,7 @@ final class AutoTunnelController {
         }
         monitor.start(queue: .main)
         hourly?.start(candidates: candidates, current: { [weak self] in
-            guard let self = self, self.policy.running, self.networkAvailable else { return nil }
+            guard let self = self, self.policy.running, self.enabled, self.networkAvailable else { return nil }
             return self.currentConfiguration
         }, apply: { [weak self] index, permit, done in
             guard let self = self, self.policy.running, !self.applying else {
@@ -57,6 +59,23 @@ final class AutoTunnelController {
             self.applyCandidate(index, probePermit: permit, hourlyDone: done)
         })
         schedule(after: 8)
+    }
+    /// Pause checks without stopping the installed backend. If a replacement is
+    /// already committed, let it finish before draining probes; never cancel a
+    /// restart between stop and start.
+    func setEnabled(_ value: Bool) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        enabled = value
+        if applying { pausePending = !value; return }
+        pausePending = false
+        if value {
+            guard pathMonitor == nil else { return }
+            phase = "Проверка соединения"; start()
+        } else {
+            epoch += 1; timer?.cancel(); timer = nil; hourly?.stop()
+            probe?.cancel(); probe = nil; pathMonitor?.cancel(); pathMonitor = nil
+            phase = "Авто выключено · выбранный сервер"
+        }
     }
     func stop() {
         dispatchPrecondition(condition: .onQueue(.main))
@@ -67,7 +86,7 @@ final class AutoTunnelController {
     private func schedule(after seconds: TimeInterval) {
         timer?.cancel()
         timer = nil
-        guard policy.running, !applying else { return }
+        guard policy.running, enabled, !applying else { return }
         let scheduledEpoch = epoch
         let item = DispatchWorkItem { [weak self] in
             guard let self = self, self.epoch == scheduledEpoch, !self.applying else { return }
@@ -77,13 +96,13 @@ final class AutoTunnelController {
         timer = item; DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: item)
     }
     private func check() {
-        guard policy.running, !applying, let provider = provider else { return }
+        guard policy.running, enabled, !applying, let provider = provider else { return }
         guard networkAvailable else { phase = "Ожидание сети"; schedule(after: 15); return }
         if installedIndex != policy.current { applyCandidate(policy.current); return }
         let stamp = epoch
         probe = TunnelHTTPSProbe(provider: provider)
         probe?.run { [weak self] healthy, latency in
-            guard let self = self, self.policy.running, self.epoch == stamp else { return }
+            guard let self = self, self.policy.running, self.enabled, self.epoch == stamp else { return }
             self.probe = nil
             switch self.policy.record(healthy: healthy, networkAvailable: self.networkAvailable, latencyMilliseconds: latency) {
             case .stay:
@@ -99,7 +118,7 @@ final class AutoTunnelController {
         }
     }
     private func applyCandidate(_ index: Int, probePermit: R013PrimaryPermit? = nil, hourlyDone: (() -> Void)? = nil) {
-        guard policy.running, !applying, candidates.indices.contains(index) else {
+        guard policy.running, enabled, !applying, candidates.indices.contains(index) else {
             if let permit = probePermit { _ = permit.commit(.unknown) }
             hourlyDone?(); return
         }
@@ -122,6 +141,7 @@ final class AutoTunnelController {
                 guard stopError == nil else {
                     self.applying = false; self.provider?.reasserting = false
                     self.phase = "Переключение отложено. Повторная проверка"
+                    if self.pausePending { self.setEnabled(false) }
                     self.schedule(after: 5); hourlyDone?(); return
                 }
                 self.adapter.start(tunnelConfiguration: self.candidates[index]) { [weak self] error in
@@ -139,6 +159,7 @@ final class AutoTunnelController {
                             }
                         }
                         hourlyDone?()
+                        if self.pausePending { self.setEnabled(false) }
                     }
                 }
             }

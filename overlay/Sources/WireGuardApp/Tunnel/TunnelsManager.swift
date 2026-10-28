@@ -52,6 +52,9 @@ class TunnelsManager {
     private var waiteeObservationToken: NSKeyValueObservation?
     private var configurationsObservationToken: NotificationToken?
     private var managedUpdateInProgress = false
+    #if os(iOS)
+    private var automaticPreparationInProgress = false
+    #endif
 
     func beginManagedUpdate() {
         managedUpdateInProgress = true
@@ -617,7 +620,7 @@ class TunnelsManager {
         return tunnels.first { $0.status != .inactive }
     }
 
-    func startActivation(of tunnel: TunnelContainer) {
+    func startActivation(of tunnel: TunnelContainer, automaticPrepared: Bool = false) {
         guard !managedUpdateInProgress else { return }
         guard tunnels.contains(tunnel) else { return }  // Ensure it's not deleted
         guard tunnel.status == .inactive else {
@@ -625,6 +628,18 @@ class TunnelsManager {
                 tunnel: tunnel, error: .tunnelIsNotInactive)
             return
         }
+
+        #if os(iOS)
+        if !automaticPrepared {
+            prepareBuiltinAutomatic(tunnel) { [weak self, weak tunnel] error in
+                guard let self = self, let tunnel = tunnel, self.tunnels.contains(tunnel) else { return }
+                if let error = error {
+                    self.activationDelegate?.tunnelActivationAttemptFailed(tunnel: tunnel, error: .failedWhileSaving(systemError: error))
+                } else { self.startActivation(of: tunnel, automaticPrepared: true) }
+            }
+            return
+        }
+        #endif
 
         if let alreadyWaitingTunnel = tunnels.first(where: { $0.status == .waiting }) {
             alreadyWaitingTunnel.status = .inactive
@@ -668,6 +683,77 @@ class TunnelsManager {
             RecentTunnelsTracker.handleTunnelActivated(tunnelName: tunnel.name)
         #endif
     }
+
+    #if os(iOS)
+    private var builtinPreparing: Bool {
+        get { automaticPreparationInProgress }
+        set { automaticPreparationInProgress = newValue }
+    }
+    private func prepareBuiltinAutomatic(_ tunnel: TunnelContainer, completion: @escaping (Error?) -> Void) {
+        guard !builtinPreparing else { completion(ProxyOperationError.busy); return }
+        guard let proto = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+              let old = proto.copy() as? NETunnelProviderProtocol else { completion(AutoTunnelError.keychain); return }
+        do {
+            let stored = try proto.privatePayload()
+            let group: AutoTunnelProfile?
+            if stored?.automatic != nil && stored?.builtinAutomatic == nil {
+                group = try AutoTunnelProfile.load(from: proto)!
+            } else {
+                let sources = [tunnel] + tunnels.filter { $0 !== tunnel }
+                var names = Set<String>()
+                let configurations = sources.compactMap { item -> TunnelConfiguration? in
+                    let value = try? (item.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.privatePayload()
+                    guard value?.automatic == nil, let config = item.tunnelConfiguration,
+                          let name = config.name, !names.contains(name),
+                          (try? AutoTunnelProfile(configurations: [config])) != nil else { return nil }
+                    names.insert(name); return config
+                }
+                if VPN013AutomaticMode.enabled() {
+                    guard configurations.first?.name == tunnel.name else { throw AutoTunnelError.incompatible(tunnel.name) }
+                    group = try AutoTunnelProfile(configurations: configurations)
+                } else { group = try? AutoTunnelProfile(configurations: configurations) }
+            }
+            try proto.setBuiltinAutomatic(group, enabled: VPN013AutomaticMode.enabled())
+            builtinPreparing = true
+            let done: (Error?) -> Void = { error in
+                DispatchQueue.main.async {
+                    self.builtinPreparing = false
+                    if error != nil { tunnel.tunnelProvider.protocolConfiguration = old }
+                    completion(error)
+                }
+            }
+            #if targetEnvironment(simulator)
+            done(nil)
+            #else
+            tunnel.tunnelProvider.saveToPreferences(completionHandler: done)
+            #endif
+        } catch { tunnel.tunnelProvider.protocolConfiguration = old; completion(error) }
+    }
+
+    func applyAutomaticPreference(completion: @escaping (Error?) -> Void) {
+        guard let tunnel = tunnelInOperation(), tunnel.status == .active,
+              let proto = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+              let old = proto.copy() as? NETunnelProviderProtocol else { completion(nil); return }
+        do {
+            let enabled = VPN013AutomaticMode.enabled()
+            try proto.setBuiltinAutomatic(try AutoTunnelProfile.load(from: proto), enabled: enabled)
+            tunnel.tunnelProvider.saveToPreferences { error in
+                DispatchQueue.main.async {
+                    guard error == nil else { tunnel.tunnelProvider.protocolConfiguration = old; completion(error); return }
+                    guard let session = tunnel.tunnelProvider.connection as? NETunnelProviderSession else { completion(ProxyOperationError.system); return }
+                    var answered = false
+                    let finish: (Error?) -> Void = { error in
+                        guard !answered else { return }; answered = true; completion(error)
+                    }
+                    do { try session.sendProviderMessage(Data([7, enabled ? 1 : 0])) { reply in
+                        DispatchQueue.main.async { finish(reply == Data([1]) ? nil : ProxyOperationError.system) }
+                    } } catch { finish(ProxyOperationError.system) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { finish(ProxyOperationError.system) }
+                }
+            }
+        } catch { tunnel.tunnelProvider.protocolConfiguration = old; completion(error) }
+    }
+    #endif
 
     func startDeactivation(of tunnel: TunnelContainer) {
         tunnel.isAttemptingActivation = false

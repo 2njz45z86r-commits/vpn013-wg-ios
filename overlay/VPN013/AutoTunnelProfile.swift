@@ -32,7 +32,8 @@ struct AutoTunnelProfile: Codable {
     static func load(from proto: NETunnelProviderProtocol) throws -> AutoTunnelProfile? {
         #if os(iOS)
         if proto.privateEnvelope != nil {
-            let value = try proto.privatePayload()?.automatic
+            let payload = try proto.privatePayload()
+            let value = payload?.builtinAutomatic ?? payload?.automatic
             if let value = value { _ = try value.validatedConfigurations() }
             return value
         }
@@ -64,7 +65,10 @@ enum AutoTunnelError: LocalizedError {
 extension NETunnelProviderProtocol {
     var isVPN013Automatic: Bool {
         #if os(iOS)
-        if privateEnvelope != nil { return (try? privatePayload()?.automatic) != nil }
+        if privateEnvelope != nil {
+            guard let value = try? privatePayload() else { return false }
+            return value.automatic != nil || (value.builtinAutomatic != nil && value.automaticEnabled != false)
+        }
         #endif
         #if targetEnvironment(simulator)
         if providerConfiguration?["VPN013SimulatorAutoJSON"] != nil { return true }
@@ -78,6 +82,8 @@ struct PrivateTunnelPayload: Codable {
     let configuration: String
     let automatic: AutoTunnelProfile?
     var proxy: Data? = nil
+    var builtinAutomatic: AutoTunnelProfile? = nil
+    var automaticEnabled: Bool? = nil
 }
 
 extension NETunnelProviderProtocol {
@@ -95,6 +101,12 @@ extension NETunnelProviderProtocol {
     func setPrivateAutomatic(_ automatic: AutoTunnelProfile) throws {
         guard let envelope = privateEnvelope, let old = try privatePayload() else { throw PrivateStoreError.invalidEnvelope }
         let payload = PrivateTunnelPayload(version: 1, configuration: old.configuration, automatic: automatic)
+        let next = try PrivateTunnelStore.current.seal(JSONEncoder().encode(payload), reusing: envelope.id)
+        providerConfiguration = [PrivateTunnelStore.idKey: next.id, PrivateTunnelStore.dataKey: next.ciphertext]
+    }
+    func setBuiltinAutomatic(_ group: AutoTunnelProfile?, enabled: Bool) throws {
+        guard let envelope = privateEnvelope, var payload = try privatePayload() else { throw PrivateStoreError.invalidEnvelope }
+        payload.builtinAutomatic = group; payload.automaticEnabled = enabled
         let next = try PrivateTunnelStore.current.seal(JSONEncoder().encode(payload), reusing: envelope.id)
         providerConfiguration = [PrivateTunnelStore.idKey: next.id, PrivateTunnelStore.dataKey: next.ciphertext]
     }

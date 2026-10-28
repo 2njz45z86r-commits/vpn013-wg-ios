@@ -147,7 +147,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         do {
             if let profile = try AutoTunnelProfile.load(from:tunnelProviderProtocol) {
                 let candidates = try profile.validatedConfigurations()
-                DispatchQueue.main.async { self.startAutomatic(candidates:candidates, completion:finishStart) }
+                let enabled = (try? tunnelProviderProtocol.privatePayload()?.automaticEnabled) ?? true
+                DispatchQueue.main.async { self.startAutomatic(candidates:candidates, enabled: enabled, completion:finishStart) }
                 return
             }
         } catch { finishStart(error); return }
@@ -239,6 +240,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
         guard let completionHandler = completionHandler else { return }
+        if messageData.count == 2, messageData[0] == 7, messageData[1] <= 1 {
+            DispatchQueue.main.async {
+                let enabled = messageData[1] == 1
+                if let proxy = self.proxyAdapter { proxy.setAutomaticEnabled(enabled); completionHandler(Data([1])) }
+                else if let automatic = self.automatic { automatic.setEnabled(enabled); completionHandler(Data([1])) }
+                else { completionHandler(nil) }
+            }; return
+        }
         if (protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Proxy == true {
             guard messageData == Data([0x53, 0x50, 1]), let proxy = proxyAdapter else { completionHandler(nil); return }
             proxy.statistics(completion: completionHandler)
@@ -334,7 +343,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 }
 
 extension PacketTunnelProvider {
-    private func startAutomatic(candidates:[TunnelConfiguration],completion:@escaping (Error?) -> Void) {
+    private func startAutomatic(candidates:[TunnelConfiguration],enabled:Bool = true,completion:@escaping (Error?) -> Void) {
         automaticEpoch += 1;let stamp=automaticEpoch
         automaticStartupPing?.cancel();automaticStartupPing=nil
         automaticStartCompletion=completion
@@ -351,7 +360,7 @@ extension PacketTunnelProvider {
         func begin() {
             guard !started,self.automaticEpoch==stamp else { return };started=true
             self.automaticStartupPing?.cancel();self.automaticStartupPing=nil
-            let order=EndpointPingRanking.order(hosts:hosts,measurements:measurements)
+            let order=enabled ? EndpointPingRanking.order(hosts:hosts,measurements:measurements) : Array(candidates.indices)
             let resolved=resolvedCandidates ?? candidates
             bootstrapCandidates=order.map { resolved[$0] }
             configuredCandidates=order.map { candidates[$0] }
@@ -377,7 +386,7 @@ extension PacketTunnelProvider {
                     let done=self.automaticStartCompletion;self.automaticStartCompletion=nil
                     if let error=error { done?(error);return }
                     let controller=AutoTunnelController(provider:self,adapter:self.adapter,candidates:bootstrapCandidates,initialIndex:index,hourly:self.hourlySupport,configuredCandidates:configuredCandidates)
-                    self.automatic=controller;controller.start();done?(nil)
+                    self.automatic=controller;controller.start();controller.setEnabled(enabled);done?(nil)
                 }
             }
         }

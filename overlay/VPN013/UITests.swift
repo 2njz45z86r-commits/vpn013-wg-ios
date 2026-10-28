@@ -691,6 +691,29 @@ final class AutoTunnelUITests:XCTestCase {
         capture("unified-selected-section-restored-synthetic")
     }
 
+    func testAutomaticModeDefaultSharedAndPersistent() {
+        let app = XCUIApplication()
+        let arguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-automatic"]
+        app.launchArguments = arguments + ["--vpn013-test-auto-reset"]
+        app.launch(); app.tabBars.buttons["vpn013.kind.happ"].tap()
+        let toggle = app.switches["vpn013.automatic-mode"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10)); XCTAssertEqual(toggle.value as? String, "1")
+        capture("automatic-default-on-happ-empty-no-vpn-synthetic")
+        toggle.tap(); XCTAssertEqual(toggle.value as? String, "0")
+        for kind in ["incy", "blacktemple", "amneziawg"] {
+            app.tabBars.buttons["vpn013.kind." + kind].tap()
+            let shared = app.switches["vpn013.automatic-mode"]
+            XCTAssertTrue(shared.waitForExistence(timeout: 6)); XCTAssertEqual(shared.value as? String, "0")
+        }
+        app.terminate(); app.launchArguments = arguments; app.launch()
+        app.tabBars.buttons["vpn013.kind.blacktemple"].tap()
+        XCTAssertTrue(app.switches["vpn013.automatic-mode"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.switches["vpn013.automatic-mode"].value as? String, "0")
+        app.switches["vpn013.automatic-mode"].tap()
+        XCTAssertEqual(app.switches["vpn013.automatic-mode"].value as? String, "1")
+        capture("automatic-restored-and-enabled-blacktemple-no-vpn-synthetic")
+    }
+
     func testUpdatesScreenAndOrderSynchronization() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]

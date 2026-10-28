@@ -138,6 +138,16 @@ final class ProxyProfilesManager {
         guard !working else { reportError?(ProxyOperationError.busy); return }
         if simulator { reportError?(ProxyOperationError.system); return }
         let token = UUID(); activation = token; working = true; changed?()
+        do {
+            var value = entry.value
+            let sources = [entry.value.profile] + entries.filter { $0.value.profile.id != entry.value.profile.id && $0.value.profile.source == entry.value.profile.source }.map { $0.value.profile }
+            if VPN013AutomaticMode.enabled(), sources.count > 30 { throw ProxyProfileError.tooLarge }
+            value.automaticCandidates = sources.count <= 30 ? sources : [entry.value.profile]
+            value.automaticEnabled = VPN013AutomaticMode.enabled()
+            let previous = entry.manager.protocolConfiguration as? NETunnelProviderProtocol
+            entry.manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: previous)
+            if let index = entries.firstIndex(where: { $0.value.profile.id == entry.value.profile.id }) { entries[index].value = value }
+        } catch { activationFailed(token, error: error); return }
         NETunnelProviderManager.loadAllFromPreferences { managers, error in
             DispatchQueue.main.async {
                 guard self.activation == token else { return }
@@ -191,9 +201,29 @@ final class ProxyProfilesManager {
         guard entry.status == .connected, let session = entry.manager.connection as? NETunnelProviderSession else { completion(nil); return }
         do {
             try session.sendProviderMessage(Data([0x53, 0x50, 1])) { data in
-                let value = data.flatMap { $0.count < 1024 ? try? JSONDecoder().decode(ProxyTraffic.self, from: $0) : nil }
+                let value = data.flatMap { $0.count < 4096 ? try? JSONDecoder().decode(ProxyTraffic.self, from: $0) : nil }
                 DispatchQueue.main.async { completion(value) }
             }
         } catch { completion(nil) }
+    }
+    func applyAutomaticPreference(completion: @escaping (Error?) -> Void) {
+        guard let index = entries.firstIndex(where: { $0.status == .connected }) else { completion(nil); return }
+        guard !working else { completion(ProxyOperationError.busy); return }
+        let entry = entries[index]; let old = entry.manager.protocolConfiguration as? NETunnelProviderProtocol
+        var value = entry.value; value.automaticEnabled = VPN013AutomaticMode.enabled()
+        do { entry.manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old) }
+        catch { completion(error); return }
+        working = true
+        persist(entry.manager) { error in
+            self.working = false
+            guard error == nil else { entry.manager.protocolConfiguration = old; completion(error); return }
+            if let index = self.entries.firstIndex(where: { $0.value.profile.id == value.profile.id }) { self.entries[index].value = value }
+            guard let session = entry.manager.connection as? NETunnelProviderSession else { completion(ProxyOperationError.system); return }
+            var answered = false
+            let finish: (Error?) -> Void = { error in guard !answered else { return }; answered = true; completion(error) }
+            do { try session.sendProviderMessage(Data([7, value.automaticEnabled == true ? 1 : 0])) { data in DispatchQueue.main.async { finish(data == Data([1]) ? nil : ProxyOperationError.system) } } }
+            catch { finish(ProxyOperationError.system) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { finish(ProxyOperationError.system) }
+        }
     }
 }

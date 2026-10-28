@@ -75,13 +75,37 @@ final class WireGuardAdapter {
                     expect(controller.installedForTesting == 1 && !controller.applyingForTesting)
                     expect(controller.activeName == "Domain Two" && controller.currentConfiguration?.name == "Domain Two")
                     expect(controller.pendingHealthForTesting && !provider.reasserting)
+                    controller.setEnabled(false)
+                    expect(!controller.pendingHealthForTesting && adapter.stops == 1 && adapter.starts == 1)
+                    expect(controller.currentConfiguration?.name == "Domain Two")
+                    let paused = R013PrimaryPermit()
+                    controller.applyForTesting(0, permit: paused)
+                    expect(paused.rejected && adapter.stops == 1)
+                    controller.setEnabled(true)
+                    expect(controller.pendingHealthForTesting)
                     controller.stop()
                     expect(!controller.pendingHealthForTesting)
-                    testStopWins()
+                    testPauseDuringTransition()
                 }
             }
         }
         dispatchMain()
+    }
+    static func testPauseDuringTransition() {
+        let adapter = WireGuardAdapter(), provider = NEPacketTunnelProvider()
+        let controller = make(adapter, provider)
+        controller.applyForTesting(1)
+        controller.setEnabled(false)
+        expect(controller.applyingForTesting && adapter.stops == 1)
+        adapter.stopDone?(nil)
+        DispatchQueue.main.async {
+            expect(adapter.starts == 1)
+            adapter.startDone?(nil)
+            DispatchQueue.main.async {
+                expect(controller.currentConfiguration?.name == "Domain Two" && !controller.pendingHealthForTesting && !provider.reasserting)
+                controller.stop(); testStopWins()
+            }
+        }
     }
     static func testStopWins() {
         let adapter = WireGuardAdapter(), provider = NEPacketTunnelProvider()

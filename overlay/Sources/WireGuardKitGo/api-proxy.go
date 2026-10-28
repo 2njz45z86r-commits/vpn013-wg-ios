@@ -10,13 +10,20 @@ package main
 import "C"
 
 import (
+	"bufio"
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"runtime/debug"
 	"strconv"
 	"sync"
+	"time"
 
+	xnet "github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/features/stats"
 	"github.com/xtls/xray-core/infra/conf/serial"
@@ -137,6 +144,7 @@ func R013ProxyStart(raw *C.char, fd C.int) (result C.int) {
 
 //export R013ProxyStop
 func R013ProxyStop() {
+	R013ProxyProbeReset()
 	r013Proxy.Lock()
 	defer r013Proxy.Unlock()
 	if r013Proxy.instance != nil {
@@ -145,6 +153,109 @@ func R013ProxyStop() {
 		r013Proxy.instance = nil
 		debug.SetMemoryLimit(r013Proxy.previousMemoryLimit)
 	}
+}
+
+// Probe instances have no TUN, listeners, direct fallback, cookies or user
+// requests. Their one fixed HTTPS request is explicitly dialled THROUGH the
+// candidate's validated VLESS outbound. Never relabel this duration as ICMP.
+var r013Probe struct {
+	sync.Mutex
+	epoch  uint64
+	cancel context.CancelFunc
+}
+
+//export R013ProxyProbeReset
+func R013ProxyProbeReset() C.uint64_t {
+	r013Probe.Lock()
+	defer r013Probe.Unlock()
+	if r013Probe.cancel != nil {
+		r013Probe.cancel()
+		r013Probe.cancel = nil
+	}
+	r013Probe.epoch++
+	return C.uint64_t(r013Probe.epoch)
+}
+
+//export R013ProxyProbe
+func R013ProxyProbe(raw *C.char, epoch C.uint64_t) (result C.double) {
+	result = -1
+	defer func() {
+		if recover() != nil {
+			result = -1
+		}
+	}()
+	if raw == nil {
+		return
+	}
+	text := C.GoString(raw)
+	if len(text) == 0 || len(text) > 65536 {
+		return
+	}
+	var bounded struct {
+		Inbounds  []json.RawMessage `json:"inbounds"`
+		Outbounds []struct {
+			Protocol string `json:"protocol"`
+		} `json:"outbounds"`
+	}
+	if json.Unmarshal([]byte(text), &bounded) != nil || len(bounded.Inbounds) != 0 || len(bounded.Outbounds) != 1 || bounded.Outbounds[0].Protocol != "vless" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	r013Probe.Lock()
+	if uint64(epoch) != r013Probe.epoch || r013Probe.cancel != nil {
+		r013Probe.Unlock()
+		cancel()
+		return
+	}
+	r013Probe.cancel = cancel
+	r013Probe.Unlock()
+	defer func() {
+		cancel()
+		r013Probe.Lock()
+		if uint64(epoch) == r013Probe.epoch {
+			r013Probe.cancel = nil
+		}
+		r013Probe.Unlock()
+	}()
+	configuration, err := serial.LoadJSONConfig(bytes.NewReader([]byte(text)))
+	if err != nil || ctx.Err() != nil {
+		return
+	}
+	instance, err := core.New(configuration)
+	if instance != nil {
+		defer instance.Close()
+	}
+	if err != nil || instance.Start() != nil || ctx.Err() != nil {
+		return
+	}
+	started := time.Now()
+	conn, err := core.Dial(ctx, instance, xnet.TCPDestination(xnet.ParseAddress("1.1.1.1"), 443))
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	// Xray's net.Conn may not implement SetDeadline. Closing on context expiry
+	// bounds HTTP reads as well as TLS and dispatch, including cancellation.
+	closeOnCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer closeOnCancel()
+	secured := tls.Client(conn, &tls.Config{ServerName: "one.one.one.one", MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"}})
+	if secured.HandshakeContext(ctx) != nil {
+		return
+	}
+	request, _ := http.NewRequestWithContext(ctx, http.MethodHead, "https://one.one.one.one/cdn-cgi/trace", nil)
+	request.Close = true
+	if request.Write(secured) != nil {
+		return
+	}
+	response, err := http.ReadResponse(bufio.NewReaderSize(io.LimitReader(secured, 8192), 4096), request)
+	if err != nil {
+		return
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK || ctx.Err() != nil {
+		return
+	}
+	return C.double(float64(time.Since(started)) / float64(time.Millisecond))
 }
 
 //export R013ProxyStatistics

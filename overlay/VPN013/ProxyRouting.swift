@@ -47,7 +47,24 @@ struct ProxyRoutingPolicy: Codable, Equatable {
 struct ProxyTunnelPayload: Codable, Equatable {
     var profile: ProxyProfile
     var routing: ProxyRoutingPolicy = ProxyRoutingPolicy()
-    func validate() throws { try profile.validate(); try routing.validate() }
+    var automaticCandidates: [ProxyProfile]? = nil
+    var automaticEnabled: Bool? = nil
+    var candidates: [ProxyProfile] { automaticCandidates ?? [profile] }
+    func validate() throws {
+        try profile.validate(); try routing.validate()
+        guard (1...30).contains(candidates.count), Set(candidates.map { $0.id }).count == candidates.count,
+              candidates.contains(where: { $0.id == profile.id }), candidates.allSatisfy({ $0.source == profile.source }) else { throw ProxyProfileError.invalid }
+        for candidate in candidates { try candidate.validate() }
+    }
+    func selecting(_ index: Int) -> Self {
+        var value = self; value.profile = candidates[index]; return value
+    }
+    func probeConfiguration(resolvedHost: String) throws -> Data {
+        try validate()
+        var v4 = in_addr(); var v6 = in6_addr()
+        guard inet_pton(AF_INET, resolvedHost, &v4) == 1 || inet_pton(AF_INET6, resolvedHost, &v6) == 1 else { throw ProxyProfileError.invalid }
+        return try JSONSerialization.data(withJSONObject: ["log": ["loglevel": "none"], "inbounds": [], "outbounds": [try profile.outbound(resolvedHost: resolvedHost)]], options: [.sortedKeys])
+    }
 
     /// Construct our own bounded TUN configuration. Imported top-level JSON never
     /// becomes executable core configuration or a filesystem/log/API instruction.
@@ -78,4 +95,8 @@ struct ProxyTraffic: Codable {
     let running: Bool
     let rx: Int64
     let tx: Int64
+    var selectedName: String? = nil
+    var selectedEndpoint: String? = nil
+    var automatic: Bool? = nil
+    var httpsMilliseconds: Double? = nil
 }

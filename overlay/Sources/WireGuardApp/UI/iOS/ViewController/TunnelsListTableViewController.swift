@@ -430,7 +430,7 @@ class TunnelsListTableViewController: UIViewController {
         let pingStack = UIStackView(arrangedSubviews: [checkAllButton, pingExplanationLabel])
         pingStack.axis = .vertical
         pingStack.spacing = 8
-        let stack = UIStackView(arrangedSubviews: [summary, pingStack, emptyStateContainer])
+        let stack = UIStackView(arrangedSubviews: [AutomaticModeRow(), summary, pingStack, emptyStateContainer])
         stack.axis = .vertical
         stack.spacing = 16
         stack.translatesAutoresizingMaskIntoConstraints = false

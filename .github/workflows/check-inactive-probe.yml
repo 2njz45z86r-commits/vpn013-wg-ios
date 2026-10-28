@@ -52,6 +52,8 @@ jobs:
         run: |
           xcrun swiftc -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/tests/ProxyProfileTests.swift" -o "$RUNNER_TEMP/r013-profile-check"
           "$RUNNER_TEMP/r013-profile-check"
+          xcrun swiftc -parse-as-library -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/AutomaticMode.swift" "$GITHUB_WORKSPACE/tests/AutomaticModeTests.swift" -o "$RUNNER_TEMP/r013-automatic-check"
+          "$RUNNER_TEMP/r013-automatic-check"
       - name: Build experimental native callback archive
         if: runner.os == 'macOS'
         run: |

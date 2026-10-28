@@ -24,6 +24,8 @@ extern int R013ProxyStart(const char *configuration, int32_t tun_fd);
 extern int R013ProxyValidate(const char *configuration);
 extern void R013ProxyStop(void);
 extern char *R013ProxyStatistics(void);
+extern uint64_t R013ProxyProbeReset(void);
+extern double R013ProxyProbe(const char *configuration, uint64_t epoch);
 
 typedef void (*libxray_sockcallback)(uintptr_t fd, void* ctx);
 extern char *LibXrayCutGeoData(const char *datDir, const char *dstDir, const char *cutCodePath);

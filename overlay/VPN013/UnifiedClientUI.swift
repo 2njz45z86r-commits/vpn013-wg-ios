@@ -19,6 +19,7 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
     private let awg: MainViewController
     private let profiles = ProxyProfilesManager.shared
     private let kinds = VPN013ConnectionKind.allCases
+    private var automaticObserver: NSObjectProtocol?
     init(awg: MainViewController) { self.awg = awg; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
@@ -40,6 +41,12 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
         selectedIndex = kinds.firstIndex(where: { $0.rawValue == remembered }) ?? 2
         #if targetEnvironment(simulator) && DEBUG
         let args = ProcessInfo.processInfo.arguments
+        if args.contains("--vpn013-test-auto-reset") { UserDefaults.standard.removeObject(forKey: VPN013AutomaticMode.preferenceKey) }
+        else if !args.contains("--vpn013-test-automatic"), args.contains(where: { $0.hasPrefix("--vpn013-test-") }) {
+            // Legacy manual-connection scenarios explicitly exercise manual
+            // mode. The separate automatic scenario checks the shipping default.
+            VPN013AutomaticMode.setEnabled(false)
+        }
         if !args.contains("--vpn013-test-unified"), args.contains(where: { $0.hasPrefix("--vpn013-test-") }) { selectedIndex = 2 }
         #endif
         profiles.changed = { [weak self] in
@@ -51,7 +58,16 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             proxyError(error, from: self)
         }
         profiles.reload()
+        automaticObserver = NotificationCenter.default.addObserver(forName: VPN013AutomaticMode.changed, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else { return }
+            let finished: (Error?) -> Void = { [weak self] error in
+                guard let self = self, let error = error, self.presentedViewController == nil else { return }; proxyError(error, from: self)
+            }
+            self.profiles.applyAutomaticPreference(completion: finished)
+            self.awg.tunnelsManager?.applyAutomaticPreference(completion: finished)
+        }
     }
+    deinit { if let token = automaticObserver { NotificationCenter.default.removeObserver(token) } }
     func refresh() {
         awg.refreshTunnelConnectionStatuses(); profiles.reload(); showActiveSection()
     }
@@ -95,6 +111,7 @@ final class ProxyListViewController: UITableViewController {
     private let kind: VPN013ConnectionKind
     private let manager = ProxyProfilesManager.shared
     private var observer: NSObjectProtocol?
+    private let automaticHeader = AutomaticModeRow()
     private var rows: [ProxyProfilesManager.Entry] { manager.entries.filter { $0.value.profile.source == kind } }
     init(kind: VPN013ConnectionKind) { self.kind = kind; super.init(style: .insetGrouped) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -104,6 +121,9 @@ final class ProxyListViewController: UITableViewController {
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") { navigationItem.prompt = "Тестовые данные · VPN не запускается" }
         #endif
         tableView.backgroundColor = VPN013Theme.background; tableView.separatorColor = VPN013Theme.separator
+        let container = UIView(); automaticHeader.translatesAutoresizingMaskIntoConstraints = false; container.addSubview(automaticHeader)
+        NSLayoutConstraint.activate([automaticHeader.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20), automaticHeader.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20), automaticHeader.topAnchor.constraint(equalTo: container.topAnchor), automaticHeader.bottomAnchor.constraint(equalTo: container.bottomAnchor)])
+        tableView.tableHeaderView = container
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(importTapped))
         navigationItem.rightBarButtonItem?.accessibilityLabel = "Добавить конфигурацию " + kind.title
         navigationItem.rightBarButtonItem?.accessibilityIdentifier = "vpn013.proxy.add"
@@ -116,6 +136,13 @@ final class ProxyListViewController: UITableViewController {
     }
     deinit { if let token = observer { NotificationCenter.default.removeObserver(token) } }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); tableView.reloadData() }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard let header = tableView.tableHeaderView else { return }
+        let width = tableView.bounds.width
+        let size = header.systemLayoutSizeFitting(CGSize(width: width, height: UIView.layoutFittingCompressedSize.height), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        if abs(header.frame.height - size.height) > 0.5 || header.frame.width != width { header.frame = CGRect(x: 0, y: 0, width: width, height: size.height); tableView.tableHeaderView = header }
+    }
     @objc private func refreshProfiles() { manager.reload(); refreshControl?.endRefreshing() }
     @objc private func importTapped() { navigationController?.pushViewController(ProxyImportViewController(kind: kind), animated: true) }
     override func numberOfSections(in tableView: UITableView) -> Int { 1 }
@@ -201,7 +228,10 @@ final class ProxyDetailViewController: UITableViewController {
             cell.textLabel?.text = entry.inOperation ? "Выключить VPN" : "Включить VPN"
             cell.textLabel?.textColor = VPN013Theme.accent; cell.imageView?.image = UIImage(systemName: "power"); cell.imageView?.tintColor = VPN013Theme.accent
             cell.accessibilityIdentifier = "vpn013.proxy.power"
-        case 2: cell.textLabel?.text = "Сервер"; cell.detailTextLabel?.text = entry.value.profile.endpoint
+        case 2:
+            cell.textLabel?.text = entry.status == .connected ? (traffic?.selectedName ?? "Сервер") : "Сервер"
+            cell.detailTextLabel?.text = entry.status == .connected ? (traffic?.selectedEndpoint ?? entry.value.profile.endpoint) : entry.value.profile.endpoint
+        if let milliseconds = traffic?.httpsMilliseconds, entry.status == .connected { cell.detailTextLabel?.text?.append("\nHTTPS через VPN: \(Int(milliseconds)) мс") }
         case 3:
             cell.textLabel?.text = "Трафик"
             if entry.status == .connected, let value = traffic, value.running {

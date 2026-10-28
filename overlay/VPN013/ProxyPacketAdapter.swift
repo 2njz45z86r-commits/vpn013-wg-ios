@@ -5,7 +5,7 @@ import Darwin
 
 /// Main-queue lifecycle, serialized core ownership. A cancelled resolution cannot
 /// apply settings or start a core after stop. Never owns the system TUN fd.
-final class ProxyPacketAdapter {
+final class ProxySinglePacketAdapter {
     private weak var provider: NEPacketTunnelProvider?
     private let engine = DispatchQueue(label: "VPN013.proxy.engine")
     private let resolver = DispatchQueue(label: "VPN013.proxy.resolve")
@@ -14,7 +14,7 @@ final class ProxyPacketAdapter {
     private var pending: ((Error?) -> Void)?
     init(provider: NEPacketTunnelProvider) { self.provider = provider }
 
-    func start(_ payload: ProxyTunnelPayload, completion: @escaping (Error?) -> Void) {
+    func start(_ payload: ProxyTunnelPayload, resolvedHost: String? = nil, excludedHosts: [String] = [], completion: @escaping (Error?) -> Void) {
         dispatchPrecondition(condition: .onQueue(.main))
         let token = UUID(); epoch = token; pending = completion
         let timeout = DispatchWorkItem { [weak self] in
@@ -24,18 +24,19 @@ final class ProxyPacketAdapter {
         }
         deadline = timeout; DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
         resolver.async { [weak self] in
-            let host = Self.resolve(payload.profile.host, port: payload.profile.port)
+            let host = resolvedHost ?? Self.resolve(payload.profile.host, port: payload.profile.port)
             DispatchQueue.main.async {
                 guard let self = self, self.epoch == token else { return }
                 guard let host = host, let provider = self.provider else { self.finish(PacketTunnelProviderError.dnsResolutionFailure); return }
                 let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: host)
                 let ipv4 = NEIPv4Settings(addresses: ["172.29.13.2"], subnetMasks: ["255.255.255.255"])
                 ipv4.includedRoutes = [NEIPv4Route.default()]
-                if !host.contains(":") { ipv4.excludedRoutes = [NEIPv4Route(destinationAddress: host, subnetMask: "255.255.255.255")] }
+                let physicalHosts = Set(excludedHosts + [host])
+                ipv4.excludedRoutes = physicalHosts.filter { !$0.contains(":") }.map { NEIPv4Route(destinationAddress: $0, subnetMask: "255.255.255.255") }
                 settings.ipv4Settings = ipv4
                 let ipv6 = NEIPv6Settings(addresses: ["fd13:13:13::2"], networkPrefixLengths: [128])
                 ipv6.includedRoutes = [NEIPv6Route.default()]
-                if host.contains(":") { ipv6.excludedRoutes = [NEIPv6Route(destinationAddress: host, networkPrefixLength: 128)] }
+                ipv6.excludedRoutes = physicalHosts.filter { $0.contains(":") }.map { NEIPv6Route(destinationAddress: $0, networkPrefixLength: 128) }
                 settings.ipv6Settings = ipv6
                 let dns = NEDNSSettings(servers: ["1.1.1.1", "2606:4700:4700::1111"]); dns.matchDomains = [""]
                 settings.dnsSettings = dns; settings.mtu = 1280
@@ -77,7 +78,7 @@ final class ProxyPacketAdapter {
             completion(bytes.count < 1024 ? bytes : nil)
         }
     }
-    private static func resolve(_ host: String, port: UInt16) -> String? {
+    static func resolve(_ host: String, port: UInt16) -> String? {
         var hints = addrinfo(); hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_STREAM
         var result: UnsafeMutablePointer<addrinfo>?
         guard getaddrinfo(host, String(port), &hints, &result) == 0, let first = result else { return nil }

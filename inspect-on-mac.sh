@@ -44,6 +44,7 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedSectionsImportAndIsolation \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedInvalidImportKeepsProfiles \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedRoutingPersistsTypedPolicy \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutomaticModeDefaultSharedAndPersistent \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedRemembersSelectedSection \
  -derivedDataPath ../SimulatorDerivedData -resultBundlePath ../AutoTunnel.xcresult CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= \
  test > ../simulator-test.log 2>&1

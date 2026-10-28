@@ -80,6 +80,22 @@ import Foundation
         let restoredPayload = try JSONDecoder().decode(ProxyTunnelPayload.self, from: JSONEncoder().encode(payload))
         check(restoredPayload == payload, "lossless typed routing persistence")
         rejects("unresolved core host") { _ = try payload.configuration(resolvedHost: "example.invalid") }
+        var automatic = payload; var reserve = ws; reserve.id = UUID(); reserve.name = "Reserve"; reserve.host = "reserve.example.invalid"
+        automatic.automaticCandidates = [ws, reserve]; automatic.automaticEnabled = true
+        try automatic.validate()
+        check(automatic.selecting(1).profile.host == "reserve.example.invalid", "automatic selected identity retains original domain")
+        let automaticRestored = try JSONDecoder().decode(ProxyTunnelPayload.self, from: JSONEncoder().encode(automatic))
+        check(automaticRestored == automatic, "encrypted auto payload input round trip")
+        var crossSection = reserve; crossSection.source = .blacktemple
+        automatic.automaticCandidates = [ws, crossSection]
+        rejects("cross-section automatic candidate") { try automatic.validate() }
+        automatic.automaticCandidates = [ws, ws]
+        rejects("duplicate automatic candidate identity") { try automatic.validate() }
+        automatic.automaticCandidates = [reserve]
+        rejects("missing automatic anchor") { try automatic.validate() }
+        let probe = try JSONSerialization.jsonObject(with: payload.probeConfiguration(resolvedHost: "192.0.2.10")) as! [String: Any]
+        check((probe["inbounds"] as? [Any])?.isEmpty == true && (probe["outbounds"] as? [Any])?.count == 1 && probe["routing"] == nil, "probe has no listener or direct routing fallback")
+        rejects("unresolved probe endpoint") { _ = try payload.probeConfiguration(resolvedHost: "example.invalid") }
         print("Proxy profile checks: \(checks) passed (synthetic imports only; no VPN traffic claim)")
     }
 }
