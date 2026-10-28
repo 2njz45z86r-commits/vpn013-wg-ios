@@ -14,6 +14,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('root')
 parser.add_argument('--level', choices=('package', 'symbol'), default='package')
 parser.add_argument('--database', default='https://vuln.go.dev', help='Official live database or a separately verified local snapshot')
+parser.add_argument('--encrypted-report', help='Protect detailed development evidence with the supplied public recipient')
+parser.add_argument('--recipient', help='Public evidence recipient file; no private key on the runner')
 args = parser.parse_args()
 root = Path(args.root).resolve()
 assert root.is_dir() and (root / 'go.mod').is_file()
@@ -33,6 +35,14 @@ try:
             cwd=root, env=env, capture_output=True, timeout=240)
         assert scan.returncode == 0 and not scan.stderr.strip()
         assert len(scan.stdout) <= 128 * 1024 * 1024
+        if args.encrypted_report:
+            assert args.recipient
+            host_env = dict(env)
+            for name in ('GOOS', 'GOARCH', 'CGO_ENABLED', 'CC', 'CXX', 'CGO_CFLAGS', 'CGO_CPPFLAGS', 'CGO_LDFLAGS', 'GOFLAGS'):
+                host_env.pop(name, None)
+            helper = Path(__file__).with_name('audit-envelope.go').resolve()
+            encrypted = subprocess.run(['go', 'run', str(helper), 'encrypt', str(Path(args.recipient).resolve()), str(Path(args.encrypted_report).resolve())], input=scan.stdout, env=host_env, capture_output=True, timeout=90)
+            assert encrypted.returncode == 0
         text = scan.stdout.decode('utf-8').strip()
         decoder = json.JSONDecoder()
         config_seen = False

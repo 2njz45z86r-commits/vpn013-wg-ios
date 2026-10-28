@@ -77,8 +77,8 @@ jobs:
           git -C "$RUNNER_TEMP/r013-client-core" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
           cp "$GITHUB_WORKSPACE/overlay/Sources/WireGuardKitGo/api-xray.go" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/api-xray.go"
           cp "$GITHUB_WORKSPACE/overlay/Sources/WireGuardKitGo/api-proxy.go" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/api-proxy.go"
-          cp "$GITHUB_WORKSPACE/overlay/Sources/WireGuardKitGo/wireguard.h" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/wireguard.h"
           python3 stage_into_client.py "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo"
+          cp "$GITHUB_WORKSPACE/overlay/Sources/WireGuardKitGo/wireguard.h" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/wireguard.h"
           cd "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo"
           python3 "$GITHUB_WORKSPACE/scripts/prepare_proxy_tun.py" . "$RUNNER_TEMP/r013-proxy-fd"
           export GOFLAGS="-mod=readonly -modfile=$RUNNER_TEMP/r013-proxy-fd/proxy-tun.mod"

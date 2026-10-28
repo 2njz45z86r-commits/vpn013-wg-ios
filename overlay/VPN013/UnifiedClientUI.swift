@@ -260,7 +260,8 @@ final class ProxyRoutingViewController: UIViewController {
         } catch { proxyError(error, from: self) }
     }
     private func updateModes() {
-        modes.setTitle(selectedMode.title + "  ⌄", for: .normal)
+        modes.setTitle(selectedMode.title, for: .normal)
+        modes.setImage(UIImage(systemName: "chevron.down"), for: .normal)
         modes.accessibilityLabel = "Режим маршрутизации"; modes.accessibilityValue = selectedMode.title
         modes.menu = UIMenu(children: ProxyRoutingPolicy.Mode.allCases.map { mode in
             UIAction(title: mode.title, state: selectedMode == mode ? .on : .off) { [weak self] _ in self?.selectedMode = mode; self?.updateModes() }

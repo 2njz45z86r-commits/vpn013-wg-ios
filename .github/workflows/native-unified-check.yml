@@ -16,6 +16,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Compile the exact app and extension in an isolated development runner
+        id: compile
         run: sh build-on-mac.sh
       - name: Check actual reachable Go dependencies
         run: |
@@ -26,10 +27,15 @@ jobs:
           export CC="$(xcrun --sdk iphoneos --find clang)"
           export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -miphoneos-version-min=14.0"
           export CGO_LDFLAGS="$CGO_CFLAGS"
-          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo
+          set +e
+          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-findings.enc.json --recipient scripts/audit-recipient.pub
+          patched_result=$?
           export GOFLAGS=-mod=readonly
-          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo
+          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-upstream-findings.enc.json --recipient scripts/audit-recipient.pub
+          upstream_result=$?
+          test "$patched_result" -eq 0 && test "$upstream_result" -eq 0
       - name: Run old and new native scenarios, capture actual phone and tablet
+        if: always() && steps.compile.outcome == 'success'
         run: sh inspect-on-mac.sh
       - name: Retain only credential-free diagnostic evidence, never an installable IPA
         if: always()
