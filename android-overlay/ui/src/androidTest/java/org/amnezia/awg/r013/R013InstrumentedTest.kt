@@ -397,6 +397,30 @@ class R013InstrumentedTest {
         assertEquals("Comparison rewrote a saved profile or membership",saved,registry.vault.read().toString())
         screenshot("hourly-selected-real-vpn")
     }
+    @Test fun kOrdinaryProfileUsesBuiltInAutoAndNativePauseSwitch() = runBlocking {
+        val good = fixture().replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
+        OfflineChanges.apply { registry.create("Built-in Auto Fixture",ProfileRegistry.parse(good)) }
+        automaticMode(true); startHome()
+        val tunnel = Application.getTunnelManager().getTunnels()["Built-in Auto Fixture"]!!
+        val backend = Application.getBackend() as GoBackend
+        tunnel.setStateAsync(Tunnel.State.UP)
+        waitFor(20000) { EndpointPing.measure("10.13.99.1") != null }
+        assertTrue(backend.isAutomaticRunning)
+        assertFalse(registry.isAuto(tunnel.name))
+        val revision = backend.connectionRevision; val interfaceName = backend.actualRouteInterfaceName
+        val toggle = allViews().first { it.contentDescription == "Режим Авто" }
+        waitFor { toggle.isEnabled }
+        instrumentation.runOnMainSync { assertTrue(toggle.performClick()) }
+        waitFor { !registry.automaticEnabled() && !backend.isAutomaticRunning && toggle.isEnabled }
+        assertEquals(revision,backend.connectionRevision); assertEquals(interfaceName,backend.actualRouteInterfaceName)
+        assertEquals("Built-in Auto Fixture",backend.automaticMemberName)
+        assertNotNull(EndpointPing.measure("10.13.99.1"))
+        screenshot("built-in-auto-paused-real-disposable-vpn")
+        instrumentation.runOnMainSync { assertTrue(toggle.performClick()) }
+        waitFor { registry.automaticEnabled() && backend.isAutomaticRunning && toggle.isEnabled }
+        assertEquals(revision,backend.connectionRevision)
+        assertTrue(backend.getLastHandshake(tunnel) > 0)
+    }
     private fun fixture(): String {
         val encoded = InstrumentationRegistry.getArguments().getString("syntheticConfig") ?: error("Synthetic peer fixture missing")
         return String(android.util.Base64.decode(encoded,android.util.Base64.DEFAULT),Charsets.UTF_8)

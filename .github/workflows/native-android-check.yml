@@ -6,7 +6,7 @@ permissions:
 jobs:
   native:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -58,9 +58,54 @@ jobs:
           selected = [s for s in lines if s.startswith('e:') or 'error:' in s or 'BUILD SUCCESSFUL' in s or 'BUILD FAILED' in s]
           Path('android-development-review.json').write_text(json.dumps({'source':os.environ['GITHUB_SHA'],'compile':os.environ['COMPILE_OUTCOME'],'errors':selected[-60:],'deviceTestsExecuted':False,'published':False}))
           PY
+      - name: Assemble disposable debug APKs and upgrade fixtures
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          (cd android && ./gradlew --no-daemon --console=plain :ui:assembleDebug :ui:assembleDebugAndroidTest > ../android-assembly.log 2>&1) || {
+            grep -E '^e:|error:|FAILURE:|Execution failed|^> ' android-assembly.log | head -60 || true
+            exit 1
+          }
+          bash scripts/build-previous-android-fixture.sh
+          bash scripts/build-future-android-fixture.sh
+      - name: Exercise disposable VPN, upgrades, native switch and device classes
+        id: emulator
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd android
+          bash r013-ci/emulator-check.sh
+      - name: Inspect reachable native Android dependencies
+        run: |
+          set -euo pipefail
+          export GOOS=android GOARCH=arm64 CGO_ENABLED=1 GOFLAGS=-mod=readonly
+          export CC="$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          python3 scripts/check_go_security.py android/tunnel/tools/libwg-go --encrypted-report android/output/review/go-findings.enc.json --recipient scripts/audit-recipient.pub
+      - name: Retain credential-free review only
+        if: always()
+        env:
+          EMULATOR_OUTCOME: ${{ steps.emulator.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          base=Path('android/output/review')
+          base.mkdir(parents=True,exist_ok=True)
+          for path in list(base.rglob('*')):
+              if path.is_file() and path.suffix not in ('.png','.json','.xml'):
+                  text=path.read_text(errors='replace')
+                  selected=[s for s in text.splitlines() if s.startswith('OK (') or 'FAILURES' in s or 'test=' in s or 'INSTRUMENTATION_FAILED' in s or 'AssertionError' in s or 'Process crashed' in s]
+                  path.with_suffix(path.suffix+'.summary.json').write_text(json.dumps(selected[-80:]))
+          (base/'development-summary.json').write_text(json.dumps({'source':os.environ['GITHUB_SHA'],'emulatorOutcome':os.environ['EMULATOR_OUTCOME'],'physicalDeviceVerified':False,'published':False}))
+          PY
+          (cd android/output && zip -qr android-development-review.zip review -i '*.png' '*.json' '*.xml')
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: android-development-${{ github.run_id }}
           retention-days: 7
-          path: android-development-review.json
+          path: |
+            android-development-review.json
+            android/output/android-development-review.zip

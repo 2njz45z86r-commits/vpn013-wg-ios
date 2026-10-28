@@ -86,7 +86,7 @@ test -s "$RUNNER_TEMP/r013-synthetic-candidate.conf"
 fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic.conf")
 candidate_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic-candidate.conf")
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
-grep -E '^OK \(12 tests\)[[:space:]]*$' output/review/instrumentation.txt
+grep -E '^OK \(14 tests\)[[:space:]]*$' output/review/instrumentation.txt
 grep -F 'test=bSubscriptionRefreshRestoresDeletedAndReconcilesTenTwentyFifteen' output/review/instrumentation.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/instrumentation.txt
 sudo ip address add 2.56.24.1/32 dev lo
