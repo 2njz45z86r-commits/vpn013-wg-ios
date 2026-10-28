@@ -26,6 +26,15 @@ struct EndpointPingTests {
     }
 
     static func main() {
+        let hosts: [String?] = ["slow.example", "fast.example", "blocked.example", "fast.example", nil, "invalid.example"]
+        check(EndpointPingRanking.order(hosts: hosts, measurements: [:]) == [0, 1, 2, 3, 4, 5], "No echo replies preserve all fallback candidates")
+        let timings: [String: EndpointPingResult] = ["slow.example": .milliseconds(120), "fast.example": .milliseconds(20),
+            "blocked.example": .noReply, "invalid.example": .milliseconds(.nan)]
+        check(EndpointPingRanking.order(hosts: hosts, measurements: timings) == [1, 3, 0, 2, 4, 5], "Fastest real timing wins; equal timings and unavailable hosts remain stable")
+        for invalid in [Double.infinity, -1] {
+            check(EndpointPingRanking.order(hosts: ["a", "b"], measurements: ["a": .milliseconds(invalid), "b": .milliseconds(0)]) == [1, 0], "Invalid timing is never treated as a measurement")
+        }
+        check(EndpointPingRanking.order(hosts: [], measurements: timings).isEmpty, "Empty input is safe")
         let nonce = Array(UUID().uuidString.utf8)
         for ipv6 in [false, true] {
             let request = EndpointPingPacket.request(ipv6: ipv6, nonce: nonce)

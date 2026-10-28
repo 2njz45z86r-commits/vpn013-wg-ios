@@ -12,6 +12,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var automatic: AutoTunnelController?
     private var automaticStartCompletion: ((Error?) -> Void)?
     private var automaticEpoch = 0
+    private var automaticStartupPing: EndpointPingCoordinator?
     private lazy var hourlySupport = HourlyProbeSupport(provider: self)
 
     private lazy var adapter: WireGuardAdapter = {
@@ -181,6 +182,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let cleanup = {
             self.localStatisticsEpoch = UUID()
             self.automaticEpoch += 1;self.automatic?.stop();self.automatic = nil
+            self.automaticStartupPing?.cancel();self.automaticStartupPing = nil
             let pending=self.automaticStartCompletion;self.automaticStartCompletion=nil
             pending?(NSError(domain:NSURLErrorDomain,code:NSURLErrorCancelled))
         }
@@ -272,7 +274,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                             hosts: configuration.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } },
                             phase: self.automatic?.phase, revision: revision,
                             statistics: .parse(runtime))
-                        if self.automatic != nil { value.hourlyComparison = self.hourlySupport?.summary ?? "Часовая проверка недоступна" }
+                        if self.automatic != nil { value.hourlyComparison = self.hourlySupport?.summary ?? "Сравнение VPN недоступно" }
                         completionHandler(try? JSONEncoder().encode(value))
                     }
                 }
@@ -302,15 +304,29 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 extension PacketTunnelProvider {
     private func startAutomatic(candidates:[TunnelConfiguration],completion:@escaping (Error?) -> Void) {
         automaticEpoch += 1;let stamp=automaticEpoch
+        automaticStartupPing?.cancel();automaticStartupPing=nil
         automaticStartCompletion=completion
         // Resolve reserves while the physical network is still available. Reusing
         // these addresses avoids a dead tunnel's DNS blocking the reserve itself.
         // The stored profiles retain their domain names; refresh on every start.
         var started=false
         var bootstrapCandidates=candidates
-        func begin(_ resolved:[TunnelConfiguration]) {
+        var configuredCandidates=candidates
+        var resolvedCandidates:[TunnelConfiguration]?
+        var measurements:[String:EndpointPingResult]=[:]
+        var measured=false
+        let hosts=candidates.map { $0.peers.first?.endpoint.map { String(describing:$0.host) } }
+        func begin() {
             guard !started,self.automaticEpoch==stamp else { return };started=true
-            bootstrapCandidates=resolved
+            self.automaticStartupPing?.cancel();self.automaticStartupPing=nil
+            let order=EndpointPingRanking.order(hosts:hosts,measurements:measurements)
+            let resolved=resolvedCandidates ?? candidates
+            bootstrapCandidates=order.map { resolved[$0] }
+            configuredCandidates=order.map { candidates[$0] }
+            // Missing ICMP does not mean a candidate is down: keep all fallbacks.
+            // Log counts only, never domains, keys or configuration contents.
+            let count=measurements.values.filter { if case .milliseconds = $0 { return true }; return false }.count
+            wg_log(.info,message:"Auto startup: measured=\(count);candidates=\(candidates.count)")
             attemptResolved(0)
         }
         func attemptResolved(_ index:Int, attempt:Int = 1) {
@@ -328,11 +344,21 @@ extension PacketTunnelProvider {
                     if error != nil && index+1<bootstrapCandidates.count { attemptResolved(index+1);return }
                     let done=self.automaticStartCompletion;self.automaticStartCompletion=nil
                     if let error=error { done?(error);return }
-                    let controller=AutoTunnelController(provider:self,adapter:self.adapter,candidates:bootstrapCandidates,initialIndex:index,hourly:self.hourlySupport)
+                    let controller=AutoTunnelController(provider:self,adapter:self.adapter,candidates:bootstrapCandidates,initialIndex:index,hourly:self.hourlySupport,configuredCandidates:configuredCandidates)
                     self.automatic=controller;controller.start();done?(nil)
                 }
             }
         }
+        let ping=EndpointPingCoordinator(maxConcurrent:6,probeTimeout:1.5,batchTimeout:8)
+        automaticStartupPing=ping
+        ping.start(hosts:hosts.compactMap { $0 },update:{ host,result in
+            guard !started,self.automaticEpoch==stamp else { return }
+            measurements[host]=result
+        },completion:{
+            guard !started,self.automaticEpoch==stamp else { return }
+            measured=true
+            if resolvedCandidates != nil { begin() }
+        })
         DispatchQueue.global(qos:.userInitiated).async {
             let results=DNSResolver.resolveSync(endpoints:candidates.map { $0.peers.first?.endpoint })
             let ready=candidates.enumerated().map { index,config -> TunnelConfiguration in
@@ -340,9 +366,14 @@ extension PacketTunnelProvider {
                 if case .success(let endpoint)?=results[index] { peers[0].endpoint=endpoint }
                 return TunnelConfiguration(name:config.name,interface:config.interface,peers:peers)
             }
-            DispatchQueue.main.async { begin(ready) }
+            DispatchQueue.main.async {
+                guard !started,self.automaticEpoch==stamp else { return }
+                resolvedCandidates=ready
+                if measured { begin() }
+            }
         }
-        DispatchQueue.main.asyncAfter(deadline:.now()+4) { begin(candidates) }
+        // Bound the physical-network pass before applying tunnel routes.
+        DispatchQueue.main.asyncAfter(deadline:.now()+8) { begin() }
     }
 }
 

@@ -20,6 +20,26 @@ enum EndpointPingResult: Equatable {
     }
 }
 
+/// Only real, finite echo timings affect startup priority. Unanswered hosts
+/// retain their original order and remain eligible for authenticated failover.
+enum EndpointPingRanking {
+    static func order(hosts: [String?], measurements: [String: EndpointPingResult]) -> [Int] {
+        func latency(_ index: Int) -> Double? {
+            guard let host = hosts[index], case .milliseconds(let value)? = measurements[host],
+                  value.isFinite, value >= 0 else { return nil }
+            return value
+        }
+        return hosts.indices.sorted { left, right in
+            switch (latency(left), latency(right)) {
+            case let (a?, b?): return a == b ? left < right : a < b
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil): return left < right
+            }
+        }
+    }
+}
+
 /// Echo requests carry a fresh nonce. A reflected request, unrelated reply or
 /// malformed IP header must never turn into a successful measurement.
 enum EndpointPingPacket {
@@ -150,12 +170,17 @@ enum EndpointPingProbe {
 /// A bounded batch never activates/deactivates a VPN or edits a stored profile.
 /// All presentation callbacks run on main; cancellation ignores late DNS replies.
 final class EndpointPingCoordinator {
-    private let queue: OperationQueue = {
+    private let queue: OperationQueue
+    private let probeTimeout: TimeInterval
+    private let batchTimeout: TimeInterval
+    init(maxConcurrent: Int = 3, probeTimeout: TimeInterval = 3, batchTimeout: TimeInterval = 45) {
         let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 3
+        queue.maxConcurrentOperationCount = max(1, min(maxConcurrent, 6))
         queue.qualityOfService = .userInitiated
-        return queue
-    }()
+        self.queue = queue
+        self.probeTimeout = max(0.1, min(probeTimeout, 3))
+        self.batchTimeout = max(0.1, min(batchTimeout, 45))
+    }
     private var token: EndpointPingCancellation?
     private var watchdog: DispatchWorkItem?
     private var generation = UUID()
@@ -197,7 +222,7 @@ final class EndpointPingCoordinator {
                     guard !token.isCancelled else { return }
                 }
                 #endif
-                let result = EndpointPingProbe.measure(host: host, cancellation: token)
+                let result = EndpointPingProbe.measure(host: host, timeout: self?.probeTimeout ?? 3, cancellation: token)
                 DispatchQueue.main.async {
                     guard self?.generation == stamp else { return }
                     finish(host, result)
@@ -210,7 +235,7 @@ final class EndpointPingCoordinator {
             for host in Array(pending) { finish(host, .unavailable) }
         }
         watchdog = timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 45, execute: timeout)
+        DispatchQueue.main.asyncAfter(deadline: .now() + batchTimeout, execute: timeout)
     }
 
     deinit { token?.cancel(); queue.cancelAllOperations(); watchdog?.cancel() }

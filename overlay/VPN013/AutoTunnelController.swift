@@ -8,6 +8,7 @@ final class AutoTunnelController {
     private weak var provider: NEPacketTunnelProvider?
     private let adapter: WireGuardAdapter
     private let candidates: [TunnelConfiguration]
+    private let configuredCandidates: [TunnelConfiguration]
     private let hourly: HourlyProbeSupport?
     private var policy: AutoFailoverPolicy
     private var timer: DispatchWorkItem?
@@ -18,11 +19,16 @@ final class AutoTunnelController {
     private var installedIndex: Int
     private var applying = false
     private(set) var phase = "Проверка соединения"
-    var activeName: String { candidates[installedIndex].name ?? "Сервер" }
-    var currentConfiguration: TunnelConfiguration? { applying ? nil : candidates[installedIndex] }
+    var activeName: String { configuredCandidates[installedIndex].name ?? "Сервер" }
+    var currentConfiguration: TunnelConfiguration? { applying ? nil : configuredCandidates[installedIndex] }
     var connectionRevision: Int { epoch }
-    init(provider: NEPacketTunnelProvider, adapter: WireGuardAdapter, candidates: [TunnelConfiguration], initialIndex: Int, hourly: HourlyProbeSupport? = nil) {
+    init(provider: NEPacketTunnelProvider, adapter: WireGuardAdapter, candidates: [TunnelConfiguration], initialIndex: Int, hourly: HourlyProbeSupport? = nil, configuredCandidates: [TunnelConfiguration]? = nil) {
         self.provider = provider; self.adapter = adapter; self.candidates = candidates
+        // Numeric connection snapshots permit failover even when the old
+        // tunnel's DNS is dead. UI identity always keeps the imported domain.
+        if let configured = configuredCandidates, configured.count == candidates.count {
+            self.configuredCandidates = configured
+        } else { self.configuredCandidates = candidates }
         policy = AutoFailoverPolicy(count: candidates.count, initialIndex: initialIndex)
         installedIndex = initialIndex; self.hourly = hourly
     }

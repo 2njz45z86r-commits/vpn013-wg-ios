@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'experiments/inactive-probe/**'
+      - 'overlay/VPN013/ProbeCoordinator.swift'
+      - 'tests/PeriodicCoordinatorNativeTests.swift'
       - '.github/workflows/check-inactive-probe.yml'
 permissions:
   contents: read
@@ -77,3 +79,8 @@ jobs:
           cd "$GITHUB_WORKSPACE/experiments/inactive-probe"
           xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-merged-check"
           "$RUNNER_TEMP/r013-merged-check"
+      - name: Verify the actual app five-minute coordinator and lifecycle deadlines
+        if: runner.os == 'macOS'
+        run: |
+          xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" "$GITHUB_WORKSPACE/overlay/VPN013/ProbeCoordinator.swift" "$GITHUB_WORKSPACE/tests/PeriodicCoordinatorNativeTests.swift" "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-periodic-check"
+          "$RUNNER_TEMP/r013-periodic-check"

@@ -45,15 +45,18 @@ final class WireGuardAdapter {
     static func expect(_ value: Bool) { checks += 1; precondition(value, "Lifecycle invariant failed") }
     static func make(_ adapter: WireGuardAdapter, _ provider: NEPacketTunnelProvider) -> AutoTunnelController {
         AutoTunnelController(provider: provider, adapter: adapter,
-            candidates: [TunnelConfiguration(name: "One"), TunnelConfiguration(name: "Two")], initialIndex: 0)
+            candidates: [TunnelConfiguration(name: "Resolved One"), TunnelConfiguration(name: "Resolved Two")], initialIndex: 0,
+            configuredCandidates: [TunnelConfiguration(name: "Domain One"), TunnelConfiguration(name: "Domain Two")])
     }
     static func main() {
         DispatchQueue.main.async {
             let adapter = WireGuardAdapter(), provider = NEPacketTunnelProvider()
             let controller = make(adapter, provider)
+            expect(controller.activeName == "Domain One" && controller.currentConfiguration?.name == "Domain One")
             controller.scheduleForTesting()
             expect(controller.pendingHealthForTesting)
             controller.applyForTesting(1, permit: R013PrimaryPermit())
+            expect(controller.currentConfiguration == nil)
             expect(controller.applyingForTesting && !controller.pendingHealthForTesting && adapter.stops == 1)
             // The hourly winner differs from installedIndex while stop is pending.
             controller.checkForTesting()
@@ -70,6 +73,7 @@ final class WireGuardAdapter {
                 adapter.startDone?(nil)
                 DispatchQueue.main.async {
                     expect(controller.installedForTesting == 1 && !controller.applyingForTesting)
+                    expect(controller.activeName == "Domain Two" && controller.currentConfiguration?.name == "Domain Two")
                     expect(controller.pendingHealthForTesting && !provider.reasserting)
                     controller.stop()
                     expect(!controller.pendingHealthForTesting)

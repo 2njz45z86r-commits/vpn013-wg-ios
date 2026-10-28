@@ -8,7 +8,7 @@ final class HourlyProbeSupport {
     private let physical: R013UDPDriver
     private let current: R013UDPDriver
     private let coordinator: R013ProbeCoordinator
-    private(set) var summary = "Сравнение серверов раз в час"
+    private(set) var summary = "Сравнение VPN каждые 5 минут"
     private(set) var checkedAt: Date?
     private(set) var currentMilliseconds: Double?
     private(set) var measured = 0
@@ -29,7 +29,7 @@ final class HourlyProbeSupport {
             self.measured = status.rows?.filter { $0.status == "measured" }.count ?? 0
             self.summary = "Других VPN проверено: \(self.measured) · задержка DNS"
             self.summary += " · " + DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .short)
-            if status.incomplete { self.summary += " · проверка продолжится в следующий час" }
+            if status.incomplete { self.summary += " · продолжение через 5 минут" }
         }
     }
     deinit {
@@ -60,9 +60,9 @@ final class HourlyProbeSupport {
         // OS DNS change, hardcoded public fallback or default socket resolution.
         let resolver = candidates.flatMap { $0.interface.dns }.map { $0.stringRepresentation }.first(where: Self.publicIPv4)
         guard !snapshots.isEmpty, let resolver = resolver else {
-            summary = "Часовая проверка недоступна: нужен IPv4 DNS из конфигурации"; return
+            summary = "Сравнение VPN недоступно: нужен IPv4 DNS из конфигурации"; return
         }
-        summary = "Сравнение \(snapshots.count) VPN: первая проверка через 30 сек, затем раз в час"
+        summary = "Сравнение \(snapshots.count) VPN: через 30 сек, затем каждые 5 минут · задержка DNS"
         coordinator.startHourly(input: {
             guard current() != nil else { return nil }
             return R013ProbeInput(autoActive: true, resolver: resolver + ":53", startIndex: 0, candidates: snapshots)

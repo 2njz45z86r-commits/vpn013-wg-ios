@@ -93,6 +93,7 @@ final class R013PrimaryPermit {
 // does not intercept WireGuardAdapter itself. Never enable it in a release until
 // all those paths are wired and native/device traffic checks pass.
 final class R013ProbeCoordinator {
+    static let comparisonInterval: TimeInterval = 5 * 60
     typealias CurrentInput = () -> R013ProbeInput?
     typealias Apply = (R013ProbeSnapshot, R013PrimaryPermit, @escaping () -> Void) -> Void
     private let controller: UInt64
@@ -140,9 +141,9 @@ final class R013ProbeCoordinator {
             guard let self = self, self.generation == stamp else { return }; self.run()
         }
         timer = item
-        // A path update/member change must not restart the entire hour. Keep
+        // A path update/member change must not restart the five-minute interval. Keep
         // the monotonic due time and run shortly after a late lifecycle resume.
-        let deadline = max(due ?? (.now() + 3600), .now() + 1)
+        let deadline = max(due ?? (.now() + Self.comparisonInterval), .now() + 1)
         DispatchQueue.main.asyncAfter(deadline: deadline, execute: item)
     }
     // Lifecycle mutation cannot begin until Go confirms all candidate/current
@@ -173,7 +174,7 @@ final class R013ProbeCoordinator {
 
     private func run() {
         requireMain()
-        due = .now() + 3600
+        due = .now() + Self.comparisonInterval
         guard autoActive, !stopped, operation == 0, let input = currentInput?(), input.autoActive,
               !input.candidates.isEmpty, input.candidates.count <= 30 else { scheduleHour(); return }
         let rotated = R013ProbeInput(autoActive: true, resolver: input.resolver,
@@ -258,7 +259,7 @@ final class R013ProbeCoordinator {
         }
     }
     #if R013_PROBE_TESTING
-    // Native test drives the same coordinator without sleeping an actual hour.
+    // Native test drives the same coordinator without sleeping five minutes.
     // This entry point is excluded from normal builds and claims no iOS timing.
     func runNowForTesting() { requireMain(); timer?.cancel(); timer = nil; run() }
     var nextHourForTesting: UInt64? { requireMain(); return due?.uptimeNanoseconds }
