@@ -47,6 +47,11 @@ jobs:
         run: |
           xcodebuild -version
           xcrun swiftc -typecheck -swift-version 5 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target arm64-apple-ios14.0 platform/AppleUDPAPICheck.swift
+      - name: Validate unified client profile imports without network or real keys
+        if: runner.os == 'macOS'
+        run: |
+          xcrun swiftc -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/tests/ProxyProfileTests.swift" -o "$RUNNER_TEMP/r013-profile-check"
+          "$RUNNER_TEMP/r013-profile-check"
       - name: Build experimental native callback archive
         if: runner.os == 'macOS'
         run: |
