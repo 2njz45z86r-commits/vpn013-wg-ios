@@ -77,6 +77,7 @@ struct PrivateTunnelPayload: Codable {
     let version: Int
     let configuration: String
     let automatic: AutoTunnelProfile?
+    var proxy: Data? = nil
 }
 
 extension NETunnelProviderProtocol {

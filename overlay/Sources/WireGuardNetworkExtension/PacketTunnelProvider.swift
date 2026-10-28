@@ -6,6 +6,7 @@ import NetworkExtension
 import os
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
+    private var proxyAdapter: ProxyPacketAdapter?
     private var localStatistics: VPN013LocalStatisticsServer?
     // Read and changed only on the main queue. A stopped startup cannot open a listener later.
     private var localStatisticsEpoch = UUID()
@@ -87,6 +88,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         do {
             try (self.protocolConfiguration as? NETunnelProviderProtocol)?.receivePrivateStartKey(options)
         } catch { completionHandler(error); return }
+        #endif
+
+        #if os(iOS)
+        if let proto = self.protocolConfiguration as? NETunnelProviderProtocol, proto.isVPN013Proxy {
+            do {
+                let value = try proto.proxyPayload()
+                DispatchQueue.main.async {
+                    guard self.localStatisticsEpoch == statisticsEpoch else {
+                        completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return
+                    }
+                    let adapter = ProxyPacketAdapter(provider: self)
+                    self.proxyAdapter = adapter
+                    adapter.start(value, completion: completionHandler)
+                }
+            } catch { completionHandler(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid) }
+            return
+        }
         #endif
 
         let optionKeys = options?.keys.sorted().joined(separator: ", ") ?? "none"
@@ -177,6 +195,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func
     stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        if (protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Proxy == true {
+            DispatchQueue.main.async {
+                self.localStatisticsEpoch = UUID()
+                let proxy = self.proxyAdapter
+                self.proxyAdapter = nil
+                if let proxy = proxy { proxy.stop(completion: completionHandler) } else { completionHandler() }
+            }
+            return
+        }
         wg_log(.info, message: "Stopping tunnel, reason=\(reason.rawValue) (\(reason))")
 
         let cleanup = {
@@ -212,6 +239,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
         guard let completionHandler = completionHandler else { return }
+        if (protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Proxy == true {
+            guard messageData == Data([0x53, 0x50, 1]), let proxy = proxyAdapter else { completionHandler(nil); return }
+            proxy.statistics(completion: completionHandler)
+            return
+        }
 
         if messageData == Data([5]) {
             // Deliberately independent of the engine/main queues and profile storage.

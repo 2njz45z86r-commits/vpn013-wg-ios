@@ -63,6 +63,23 @@ import Foundation
         check(http.transport == .xhttp && http.mode == "packet-up", "XHTTP fields")
         let ipv6 = try ProxyProfile.fromURI(websocket.replacingOccurrences(of: "@ws.example.invalid:443", with: "@[2001:db8::1]:443"), source: .happ)
         check(ipv6.endpoint == "[2001:db8::1]:443", "IPv6 endpoint")
+        let normalizedDomain = try ProxyRoutingPolicy.domain(" YouTube.COM ")
+        check(normalizedDomain == "youtube.com", "normalized domain")
+        check(ProxyRoutingPolicy.validNetwork("192.0.2.0/24"), "IPv4 CIDR")
+        check(ProxyRoutingPolicy.validNetwork("2001:db8::/32"), "IPv6 CIDR")
+        check(!ProxyRoutingPolicy.validNetwork("192.0.2.0/33"), "invalid IPv4 prefix")
+        check(!ProxyRoutingPolicy.validNetwork("2001:db8::/129"), "invalid IPv6 prefix")
+        rejects("URL as domain") { _ = try ProxyRoutingPolicy.domain("https://example.invalid/path") }
+        rejects("empty only-selected") { try ProxyRoutingPolicy(mode: .only).validate() }
+        let payload = ProxyTunnelPayload(profile: ws, routing: ProxyRoutingPolicy(mode: .bypass, domains: ["example.invalid"], networks: ["192.0.2.0/24"]))
+        let generated = try JSONSerialization.jsonObject(with: payload.configuration(resolvedHost: "192.0.2.10")) as! [String: Any]
+        let rules = (generated["routing"] as! [String: Any])["rules"] as! [[String: Any]]
+        check(rules[0]["port"] as? String == "53", "DNS traffic stays protected")
+        check(rules[1]["outboundTag"] as? String == "vpn013-direct", "domain bypass")
+        check(rules[2]["ip"] as? [String] == ["192.0.2.0/24"], "CIDR bypass")
+        let restoredPayload = try JSONDecoder().decode(ProxyTunnelPayload.self, from: JSONEncoder().encode(payload))
+        check(restoredPayload == payload, "lossless typed routing persistence")
+        rejects("unresolved core host") { _ = try payload.configuration(resolvedHost: "example.invalid") }
         print("Proxy profile checks: \(checks) passed (synthetic imports only; no VPN traffic claim)")
     }
 }

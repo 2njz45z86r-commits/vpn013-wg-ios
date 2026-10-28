@@ -1,0 +1,256 @@
+// SPDX-License-Identifier: MIT
+import UIKit
+import NetworkExtension
+import UniformTypeIdentifiers
+
+private func proxyLabel(_ text: String, style: UIFont.TextStyle = .body) -> UILabel {
+    let label = UILabel(); label.text = text; label.numberOfLines = 0
+    label.font = .preferredFont(forTextStyle: style); label.adjustsFontForContentSizeCategory = true
+    label.textColor = VPN013Theme.text; return label
+}
+private func proxyError(_ error: Error, from controller: UIViewController) {
+    let known = error is ProxyProfileError || error is ProxyOperationError
+    let alert = UIAlertController(title: "Действие не завершено", message: known ? error.localizedDescription : ProxyOperationError.system.localizedDescription, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "Понятно", style: .default)); controller.present(alert, animated: true)
+}
+
+/// Native top-level sections. Changing a tab never starts/stops a connection.
+final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerDelegate {
+    private let awg: MainViewController
+    private let profiles = ProxyProfilesManager.shared
+    private let kinds = VPN013ConnectionKind.allCases
+    init(awg: MainViewController) { self.awg = awg; super.init(nibName: nil, bundle: nil) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func viewDidLoad() {
+        super.viewDidLoad(); delegate = self
+        view.backgroundColor = VPN013Theme.background; tabBar.tintColor = VPN013Theme.accent
+        let appearance = UITabBarAppearance(); appearance.configureWithOpaqueBackground(); appearance.backgroundColor = VPN013Theme.background
+        appearance.stackedLayoutAppearance.normal.iconColor = VPN013Theme.secondaryText
+        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: VPN013Theme.secondaryText]
+        tabBar.standardAppearance = appearance
+        if #available(iOS 15, *) { tabBar.scrollEdgeAppearance = appearance }
+        let symbols = ["sparkle", "network", "shield.lefthalf.filled", "circle.hexagongrid"]
+        viewControllers = kinds.enumerated().map { index, kind in
+            let controller: UIViewController = kind == .amneziawg ? awg : UINavigationController(rootViewController: ProxyListViewController(kind: kind))
+            controller.tabBarItem = UITabBarItem(title: kind.title, image: UIImage(systemName: symbols[index]), tag: index)
+            controller.tabBarItem.accessibilityIdentifier = "vpn013.kind." + kind.rawValue
+            return controller
+        }
+        let remembered = UserDefaults.standard.string(forKey: "VPN013SelectedKind")
+        selectedIndex = kinds.firstIndex(where: { $0.rawValue == remembered }) ?? 2
+        #if targetEnvironment(simulator) && DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if !args.contains("--vpn013-test-unified"), args.contains(where: { $0.hasPrefix("--vpn013-test-") }) { selectedIndex = 2 }
+        #endif
+        profiles.changed = { [weak self] in
+            NotificationCenter.default.post(name: .vpn013ProxyChanged, object: nil)
+            self?.showActiveSection()
+        }
+        profiles.reportError = { [weak self] error in
+            guard let self = self, self.presentedViewController == nil else { return }
+            proxyError(error, from: self)
+        }
+        profiles.reload()
+    }
+    func refresh() {
+        awg.refreshTunnelConnectionStatuses(); profiles.reload(); showActiveSection()
+    }
+    private func showActiveSection() {
+        // Only follow a newly active connection, so a person may still inspect
+        // another section while connected. Foreground refresh follows active kind.
+        guard let active = profiles.entries.first(where: { [.connected, .connecting, .reasserting].contains($0.status) }) else { return }
+        let key = active.value.profile.id.uuidString
+        guard activeIdentity != key else { return }; activeIdentity = key
+        if let index = kinds.firstIndex(of: active.value.profile.source) { selectedIndex = index }
+    }
+    private var activeIdentity: String?
+    func foreground() {
+        activeIdentity = nil; refresh()
+        if awg.tunnelsManager?.tunnelInOperation() != nil { selectedIndex = 2 }
+    }
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        UserDefaults.standard.set(kinds[selectedIndex].rawValue, forKey: "VPN013SelectedKind")
+    }
+    func importFile(_ url: URL) {
+        if ["conf", "zip"].contains(url.pathExtension.lowercased()) {
+            selectedIndex = 2; awg.importFromDisposableFile(url: url); return
+        }
+        guard kinds[selectedIndex] != .amneziawg,
+              let navigation = selectedViewController as? UINavigationController else { awg.importFromDisposableFile(url: url); return }
+        let form = ProxyImportViewController(kind: kinds[selectedIndex]); navigation.pushViewController(form, animated: true); form.readFile(url)
+    }
+}
+extension Notification.Name { static let vpn013ProxyChanged = Notification.Name("VPN013ProxyChanged") }
+
+final class ProxyListViewController: UITableViewController {
+    private let kind: VPN013ConnectionKind
+    private let manager = ProxyProfilesManager.shared
+    private var observer: NSObjectProtocol?
+    private var rows: [ProxyProfilesManager.Entry] { manager.entries.filter { $0.value.profile.source == kind } }
+    init(kind: VPN013ConnectionKind) { self.kind = kind; super.init(style: .insetGrouped) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "VPN013"; view.backgroundColor = VPN013Theme.background
+        #if targetEnvironment(simulator) && DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") { navigationItem.prompt = "Тестовые данные · VPN не запускается" }
+        #endif
+        tableView.backgroundColor = VPN013Theme.background; tableView.separatorColor = VPN013Theme.separator
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(importTapped))
+        navigationItem.rightBarButtonItem?.accessibilityLabel = "Добавить конфигурацию " + kind.title
+        navigationItem.rightBarButtonItem?.accessibilityIdentifier = "vpn013.proxy.add"
+        let avatar = UIImageView(image: UIImage(named: "VPN013Avatar")); avatar.contentMode = .scaleAspectFit
+        NSLayoutConstraint.activate([avatar.widthAnchor.constraint(equalToConstant: 32), avatar.heightAnchor.constraint(equalToConstant: 32)])
+        avatar.isAccessibilityElement = true; avatar.accessibilityLabel = "VPN013"
+        navigationItem.leftBarButtonItem = UIBarButtonItem(customView: avatar)
+        observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in self?.tableView.reloadData() }
+        refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refreshProfiles), for: .valueChanged)
+    }
+    deinit { if let token = observer { NotificationCenter.default.removeObserver(token) } }
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); tableView.reloadData() }
+    @objc private func refreshProfiles() { manager.reload(); refreshControl?.endRefreshing() }
+    @objc private func importTapped() { navigationController?.pushViewController(ProxyImportViewController(kind: kind), animated: true) }
+    override func numberOfSections(in tableView: UITableView) -> Int { 1 }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { max(1, rows.count) }
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { kind.title + " · ваши подключения" }
+    override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        rows.isEmpty ? "Добавьте свою ссылку VLESS, файл JSON Xray или совместимую подписку. Конфигурации этого раздела хранятся отдельно от других разделов." : "Нажмите сервер, чтобы подключиться и настроить маршрутизацию. Выбор раздела не меняет текущее подключение."
+    }
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.backgroundColor = VPN013Theme.background; cell.textLabel?.textColor = VPN013Theme.text; cell.detailTextLabel?.textColor = VPN013Theme.secondaryText
+        cell.textLabel?.font = .preferredFont(forTextStyle: .headline); cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.textLabel?.numberOfLines = 0; cell.detailTextLabel?.numberOfLines = 0
+        if rows.isEmpty { cell.textLabel?.text = "Добавить конфигурацию"; cell.detailTextLabel?.text = "Из буфера, файла или ссылки подписки"; cell.imageView?.image = UIImage(systemName: "plus.circle") }
+        else {
+            let entry = rows[indexPath.row]; cell.textLabel?.text = entry.value.profile.name
+            cell.detailTextLabel?.text = entry.value.profile.endpoint + "\n" + ProxyDetailViewController.statusText(entry.status)
+            cell.imageView?.image = UIImage(systemName: entry.inOperation ? "power.circle.fill" : "network")
+        }
+        cell.imageView?.tintColor = VPN013Theme.accent; cell.accessoryType = .disclosureIndicator
+        return cell
+    }
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        if rows.isEmpty { importTapped() }
+        else { navigationController?.pushViewController(ProxyDetailViewController(id: rows[indexPath.row].value.profile.id), animated: true) }
+    }
+    override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard !rows.isEmpty else { return nil }; let entry = rows[indexPath.row]
+        return UISwipeActionsConfiguration(actions: [UIContextualAction(style: .destructive, title: "Удалить") { [weak self] _, _, done in
+            self?.manager.remove(entry) { error in if let error = error, let self = self { proxyError(error, from: self) }; done(error == nil) }
+        }])
+    }
+}
+
+final class ProxyDetailViewController: UITableViewController {
+    private let id: UUID
+    private let manager = ProxyProfilesManager.shared
+    private var entry: ProxyProfilesManager.Entry? { manager.entries.first { $0.value.profile.id == id } }
+    private var observer: NSObjectProtocol?
+    private var timer: Timer?
+    private var traffic: ProxyTraffic?
+    private var trafficInFlight = false
+    init(id: UUID) { self.id = id; super.init(style: .insetGrouped) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    static func statusText(_ status: NEVPNStatus) -> String {
+        switch status {
+        case .connected: return "VPN запущен"
+        case .connecting: return "Подключаемся…"
+        case .disconnecting: return "Отключаемся…"
+        case .reasserting: return "Восстанавливаем подключение…"
+        default: return "VPN выключен"
+        }
+    }
+    override func viewDidLoad() {
+        super.viewDidLoad(); view.backgroundColor = VPN013Theme.background
+        tableView.backgroundColor = VPN013Theme.background; tableView.separatorColor = VPN013Theme.separator
+        observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in self?.tableView.reloadData() }
+    }
+    deinit { if let token = observer { NotificationCenter.default.removeObserver(token) }; timer?.invalidate() }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated); title = entry?.value.profile.name ?? "Подключение"
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.readTraffic() }; readTraffic()
+    }
+    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); timer?.invalidate(); timer = nil }
+    private func readTraffic() {
+        guard !trafficInFlight, let entry = entry else { return }; trafficInFlight = true
+        manager.traffic(entry) { [weak self] value in self?.trafficInFlight = false; self?.traffic = value; self?.tableView.reloadData() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.trafficInFlight = false }
+    }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 5 }
+    override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        "Статус iOS означает запуск VPN. Полученный трафик проверяйте по счётчикам и открытию сайта. Для VLESS не показывается рукопожатие WireGuard."
+    }
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.backgroundColor = VPN013Theme.background; cell.textLabel?.textColor = VPN013Theme.text; cell.detailTextLabel?.textColor = VPN013Theme.secondaryText
+        cell.textLabel?.font = .preferredFont(forTextStyle: .body); cell.textLabel?.numberOfLines = 0; cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.detailTextLabel?.numberOfLines = 0
+        guard let entry = entry else { cell.textLabel?.text = "Профиль больше не доступен"; return cell }
+        switch indexPath.row {
+        case 0: cell.textLabel?.text = entry.value.profile.source.title; cell.detailTextLabel?.text = Self.statusText(entry.status)
+        case 1:
+            cell.textLabel?.text = entry.inOperation ? "Выключить VPN" : "Включить VPN"
+            cell.textLabel?.textColor = VPN013Theme.accent; cell.imageView?.image = UIImage(systemName: "power"); cell.imageView?.tintColor = VPN013Theme.accent
+            cell.accessibilityIdentifier = "vpn013.proxy.power"
+        case 2: cell.textLabel?.text = "Сервер"; cell.detailTextLabel?.text = entry.value.profile.endpoint
+        case 3:
+            cell.textLabel?.text = "Трафик"
+            if entry.status == .connected, let value = traffic, value.running {
+                cell.detailTextLabel?.text = "Получено: " + ByteCountFormatter.string(fromByteCount: max(0, value.rx), countStyle: .binary) + " · Отправлено: " + ByteCountFormatter.string(fromByteCount: max(0, value.tx), countStyle: .binary)
+            } else { cell.detailTextLabel?.text = entry.status == .connected ? "Статистика пока недоступна" : "Появится после подключения" }
+        default: cell.textLabel?.text = "Маршрутизация"; cell.detailTextLabel?.text = entry.value.routing.mode.title; cell.accessoryType = .disclosureIndicator
+        }
+        return cell
+    }
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true); guard let entry = entry else { return }
+        if indexPath.row == 1 { manager.toggle(entry) }
+        if indexPath.row == 4 { navigationController?.pushViewController(ProxyRoutingViewController(entry: entry), animated: true) }
+    }
+}
+
+final class ProxyRoutingViewController: UIViewController {
+    private let entry: ProxyProfilesManager.Entry
+    private let modes = UISegmentedControl(items: ["Всё", "Исключения", "Только выбранное"])
+    private let domains = UITextView(); private let networks = UITextView()
+    init(entry: ProxyProfilesManager.Entry) { self.entry = entry; super.init(nibName: nil, bundle: nil) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Маршрутизация"; view.backgroundColor = VPN013Theme.background
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Сохранить", style: .done, target: self, action: #selector(save))
+        modes.selectedSegmentIndex = ProxyRoutingPolicy.Mode.allCases.firstIndex(of: entry.value.routing.mode) ?? 0
+        modes.accessibilityIdentifier = "vpn013.proxy.routing.mode"
+        domains.text = entry.value.routing.domains.joined(separator: "\n"); networks.text = entry.value.routing.networks.joined(separator: "\n")
+        let info = proxyLabel("Исключения идут напрямую; в режиме «Только выбранное» остальной трафик идёт напрямую. Домены определяются по доступному имени соединения; для точного правила добавьте IP-сеть. Выбор отдельных установленных приложений на обычном iPhone недоступен.", style: .footnote)
+        info.textColor = VPN013Theme.secondaryText
+        let stack = UIStackView(arrangedSubviews: [modes, info, proxyLabel("Домены, по одному в строке", style: .headline), domains, proxyLabel("IP-сети, например 192.0.2.0/24", style: .headline), networks])
+        stack.axis = .vertical; stack.spacing = 16
+        let scroll = UIScrollView(); scroll.keyboardDismissMode = .interactive; scroll.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scroll); stack.translatesAutoresizingMaskIntoConstraints = false; scroll.addSubview(stack)
+        NSLayoutConstraint.activate([scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor), scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuideIfAvailable), stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20), stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24), stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 20), stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20), stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40)])
+        for field in [domains, networks] {
+            field.font = .preferredFont(forTextStyle: .body); field.adjustsFontForContentSizeCategory = true; field.textColor = VPN013Theme.text; field.backgroundColor = .secondarySystemBackground
+            field.autocorrectionType = .no; field.autocapitalizationType = .none; field.smartQuotesType = .no; field.smartDashesType = .no
+            field.heightAnchor.constraint(equalToConstant: 110).isActive = true
+        }
+        domains.accessibilityLabel = "Домены"; networks.accessibilityLabel = "IP-сети"
+    }
+    @objc private func save() {
+        func lines(_ value: String) -> [String] { Array(Set(value.split(whereSeparator: { $0.isNewline }).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })).sorted() }
+        do {
+            let policy = ProxyRoutingPolicy(mode: ProxyRoutingPolicy.Mode.allCases[modes.selectedSegmentIndex], domains: try lines(domains.text).map(ProxyRoutingPolicy.domain), networks: lines(networks.text))
+            try policy.validate()
+            ProxyProfilesManager.shared.update(entry, routing: policy) { [weak self] error in
+                guard let self = self else { return }
+                if let error = error { proxyError(error, from: self) } else { self.navigationController?.popViewController(animated: true) }
+            }
+        } catch { proxyError(error, from: self) }
+    }
+}
+
+private extension UIView {
+    var keyboardLayoutGuideIfAvailable: NSLayoutYAxisAnchor {
+        if #available(iOS 15, *) { return keyboardLayoutGuide.topAnchor }
+        return safeAreaLayoutGuide.bottomAnchor
+    }
+}

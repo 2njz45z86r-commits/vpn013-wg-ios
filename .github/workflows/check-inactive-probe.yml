@@ -19,7 +19,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-15-intel]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       GOTOOLCHAIN: go1.26.10
       CGO_ENABLED: '1'
@@ -50,7 +50,7 @@ jobs:
       - name: Validate unified client profile imports without network or real keys
         if: runner.os == 'macOS'
         run: |
-          xcrun swiftc -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/tests/ProxyProfileTests.swift" -o "$RUNNER_TEMP/r013-profile-check"
+          xcrun swiftc -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/tests/ProxyProfileTests.swift" -o "$RUNNER_TEMP/r013-profile-check"
           "$RUNNER_TEMP/r013-profile-check"
       - name: Build experimental native callback archive
         if: runner.os == 'macOS'
@@ -76,16 +76,22 @@ jobs:
           git clone --quiet --filter=blob:none --no-checkout https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/r013-client-core"
           git -C "$RUNNER_TEMP/r013-client-core" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
           cp "$GITHUB_WORKSPACE/overlay/Sources/WireGuardKitGo/api-xray.go" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/api-xray.go"
+          cp "$GITHUB_WORKSPACE/overlay/Sources/WireGuardKitGo/api-proxy.go" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/api-proxy.go"
+          cp "$GITHUB_WORKSPACE/overlay/Sources/WireGuardKitGo/wireguard.h" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/wireguard.h"
           python3 stage_into_client.py "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo"
           cd "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo"
+          python3 "$GITHUB_WORKSPACE/scripts/prepare_proxy_tun.py" . "$RUNNER_TEMP/r013-proxy-fd"
+          export GOFLAGS="-mod=readonly -overlay=$RUNNER_TEMP/r013-proxy-fd/proxy-tun-overlay.json"
           go mod verify
           go test -mod=readonly -race -count=1 -timeout=90s -v ./r013probe
           go build -mod=readonly -tags=r013_bridge_test -buildmode=c-archive -o "$RUNNER_TEMP/r013-client-core.a" .
           cd "$GITHUB_WORKSPACE/experiments/inactive-probe"
-          xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-merged-check"
+          xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-merged-check"
           "$RUNNER_TEMP/r013-merged-check"
+          xcrun swiftc -parse-as-library -swift-version 5 -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/wireguard.h" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/tests/ProxyCoreNativeCheck.swift" "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-proxy-core-check"
+          "$RUNNER_TEMP/r013-proxy-core-check"
       - name: Verify the actual app five-minute coordinator and lifecycle deadlines
         if: runner.os == 'macOS'
         run: |
-          xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" "$GITHUB_WORKSPACE/overlay/VPN013/ProbeCoordinator.swift" "$GITHUB_WORKSPACE/tests/PeriodicCoordinatorNativeTests.swift" "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -lresolv -o "$RUNNER_TEMP/r013-periodic-check"
+          xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" "$GITHUB_WORKSPACE/overlay/VPN013/ProbeCoordinator.swift" "$GITHUB_WORKSPACE/tests/PeriodicCoordinatorNativeTests.swift" "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-periodic-check"
           "$RUNNER_TEMP/r013-periodic-check"

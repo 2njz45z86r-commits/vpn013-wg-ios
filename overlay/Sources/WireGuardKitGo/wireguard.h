@@ -20,6 +20,10 @@ extern char *wgGetConfig(int handle);
 extern void wgBumpSockets(int handle);
 extern void wgDisableSomeRoamingForBrokenMobileSemantics(int handle);
 extern const char *wgVersion();
+extern int R013ProxyStart(const char *configuration, int32_t tun_fd);
+extern int R013ProxyValidate(const char *configuration);
+extern void R013ProxyStop(void);
+extern char *R013ProxyStatistics(void);
 
 typedef void (*libxray_sockcallback)(uintptr_t fd, void* ctx);
 extern char *LibXrayCutGeoData(const char *datDir, const char *dstDir, const char *cutCodePath);

@@ -102,6 +102,13 @@ class TunnelsManager {
                 var refs: Set<Data> = []
                 var tunnelNames: Set<String> = []
                 for (index, tunnelManager) in tunnelManagers.enumerated().reversed() {
+                    #if os(iOS)
+                    // Proxy profiles have a separate typed UI/manager. Preserve them,
+                    // including a temporarily unreadable profile; never call orphan cleanup.
+                    if (tunnelManager.protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Proxy == true {
+                        tunnelManagers.remove(at: index); continue
+                    }
+                    #endif
                     if let tunnelName = tunnelManager.localizedDescription {
                         tunnelNames.insert(tunnelName)
                     }
@@ -161,7 +168,13 @@ class TunnelsManager {
         NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, _ in
             guard let self = self else { return }
 
-            let loadedTunnelProviders = managers ?? []
+            let loadedTunnelProviders = (managers ?? []).filter {
+                #if os(iOS)
+                return ($0.protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Proxy != true
+                #else
+                return true
+                #endif
+            }
 
             for (index, currentTunnel) in self.tunnels.enumerated().reversed() {
                 if !loadedTunnelProviders.contains(where: { $0.isEquivalentTo(currentTunnel) }) {

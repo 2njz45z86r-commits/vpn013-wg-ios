@@ -26,14 +26,17 @@ python3 - <<'PY'
 from pathlib import Path
 source=Path('../../overlay')
 files=[p for p in source.rglob('*') if p.is_file()]
-assert len(files)==87, 'Unexpected source overlay'
+assert len(files)==98, 'Unexpected source overlay'
 for p in files:
  assert not p.is_symlink(), 'Source overlay must not contain symbolic links'
  target=Path(p.relative_to(source)); target.parent.mkdir(parents=True,exist_ok=True)
  target.write_bytes(p.read_bytes())
 PY
 python3 VPN013/prepare_hourly_project.py
+python3 VPN013/prepare_unified_project.py
 python3 VPN013/add_uitest_target.py
+python3 ../../scripts/prepare_proxy_tun.py Sources/WireGuardKitGo ../proxy-fd
+export GOFLAGS="-mod=readonly -overlay=$PWD/../proxy-fd/proxy-tun-overlay.json"
 mkdir -p ../../build/review
 swiftc VPN013/AutoFailoverPolicy.swift VPN013/tests/main.swift -o ../../build/test-auto-policy
 ../../build/test-auto-policy > ../../build/review/policy-tests.txt

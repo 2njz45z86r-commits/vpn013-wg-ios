@@ -631,6 +631,65 @@ final class AutoTunnelUITests:XCTestCase {
         capture("29-current-power-connecting-disabled-synthetic")
     }
 
+    func testUnifiedSectionsImportAndIsolation() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
+        app.launch()
+        for kind in ["happ", "incy", "blacktemple"] {
+            let tab = app.tabBars.buttons["vpn013.kind." + kind]
+            XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+            XCTAssertTrue(app.tables.cells.staticTexts["Добавить конфигурацию"].waitForExistence(timeout: 8))
+            app.buttons["vpn013.proxy.add"].tap()
+            XCTAssertTrue(app.textViews["vpn013.proxy.import.text"].waitForExistence(timeout: 5))
+            app.buttons["vpn013.proxy.import.check"].tap()
+            XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5))
+            app.alerts.buttons["Добавить"].tap()
+            XCTAssertTrue(app.tables.cells.staticTexts["Demo server"].waitForExistence(timeout: 8))
+            capture("unified-" + kind + "-imported-synthetic")
+        }
+        app.tabBars.buttons["vpn013.kind.amneziawg"].tap()
+        XCTAssertFalse(app.tables.cells.staticTexts["Demo server"].exists)
+        capture("unified-awg-existing-profiles-preserved")
+    }
+
+    func testUnifiedInvalidImportKeepsProfiles() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
+        app.launch(); app.tabBars.buttons["vpn013.kind.happ"].tap(); app.buttons["vpn013.proxy.add"].tap()
+        let input = app.textViews["vpn013.proxy.import.text"]
+        XCTAssertTrue(input.waitForExistence(timeout: 8)); input.tap()
+        input.press(forDuration: 1)
+        if app.menuItems["Выбрать всё"].exists { app.menuItems["Выбрать всё"].tap(); input.typeText("invalid-profile") }
+        else { input.typeText("\ninvalid-profile") }
+        app.buttons["vpn013.proxy.import.check"].tap()
+        XCTAssertTrue(app.alerts["Не удалось добавить"].waitForExistence(timeout: 5))
+        capture("unified-invalid-import-explains-error-synthetic")
+    }
+
+    func testUnifiedRoutingPersistsTypedPolicy() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
+        app.launch(); app.tabBars.buttons["vpn013.kind.incy"].tap(); app.buttons["vpn013.proxy.add"].tap()
+        app.buttons["vpn013.proxy.import.check"].tap(); app.alerts.buttons["Добавить"].tap()
+        let row = app.tables.cells.staticTexts["Demo server"]; XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        XCTAssertTrue(app.tables.cells.staticTexts["Маршрутизация"].waitForExistence(timeout: 5)); app.tables.cells.staticTexts["Маршрутизация"].tap()
+        app.segmentedControls["vpn013.proxy.routing.mode"].buttons["Исключения"].tap()
+        let domains = app.textViews["Домены"]; domains.tap(); domains.typeText("example.invalid")
+        app.navigationBars.buttons["Сохранить"].tap()
+        XCTAssertTrue(app.staticTexts["Выбранное — напрямую"].waitForExistence(timeout: 5))
+        capture("unified-routing-domain-policy-synthetic")
+    }
+
+    func testUnifiedRemembersSelectedSection() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
+        app.launch(); let selected = app.tabBars.buttons["vpn013.kind.blacktemple"]
+        XCTAssertTrue(selected.waitForExistence(timeout: 15)); selected.tap(); app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["vpn013.kind.blacktemple"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.buttons["vpn013.kind.blacktemple"].isSelected)
+        capture("unified-selected-section-restored-synthetic")
+    }
+
     func testUpdatesScreenAndOrderSynchronization() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]

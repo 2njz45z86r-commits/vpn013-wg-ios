@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 export HOMEBREW_NO_AUTO_UPDATE=1
+export GOFLAGS="-mod=readonly -overlay=$PWD/build/proxy-fd/proxy-tun-overlay.json"
 if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
 device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;v=json.load(sys.stdin);print(next(x["udid"] for rows in v["devices"].values() for x in rows if x["name"]=="iPhone 16 Pro"))')
 xcrun simctl boot "$device" || true
@@ -40,6 +41,10 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCurrentPowerButtonEmptyAndLargeType \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCurrentPowerButtonDisabledDuringTransition \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeRussianIPRouteObjectsPreserveVPNAndPeers \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedSectionsImportAndIsolation \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedInvalidImportKeepsProfiles \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedRoutingPersistsTypedPolicy \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedRemembersSelectedSection \
  -derivedDataPath ../SimulatorDerivedData -resultBundlePath ../AutoTunnel.xcresult CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= \
  test > ../simulator-test.log 2>&1
 result=$?
@@ -62,7 +67,7 @@ if [ "$result" -eq 0 ]; then
 import json
 from pathlib import Path
 s=json.loads(Path('build/review/test-summary.json').read_text())
-assert s['result']=='Passed' and s['passedTests']==31 and s['failedTests']==0 and s['skippedTests']==0,s
+assert s['result']=='Passed' and s['passedTests']==35 and s['failedTests']==0 and s['skippedTests']==0,s
 PY
 fi
 # Keep failure screenshots with a PNG extension; never publish UI hierarchy text.

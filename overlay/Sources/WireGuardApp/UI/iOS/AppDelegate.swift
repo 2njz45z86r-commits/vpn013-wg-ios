@@ -9,6 +9,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
     var mainVC: MainViewController?
+    var unifiedVC: VPN013UnifiedViewController?
     var isLaunchedForSpecificAction = false
 
     func application(_ application: UIApplication, willFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
@@ -37,7 +38,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         self.window = window
 
         let mainVC = MainViewController()
-        window.rootViewController = mainVC
+        let unified = VPN013UnifiedViewController(awg: mainVC)
+        unifiedVC = unified
+        window.rootViewController = unified
         window.makeKeyAndVisible()
 
         self.mainVC = mainVC
@@ -58,12 +61,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        mainVC?.importFromDisposableFile(url: url)
-        return true
+        guard url.isFileURL else { return false }
+        unifiedVC?.importFile(url)
+        return unifiedVC != nil
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        mainVC?.refreshTunnelConnectionStatuses()
+        unifiedVC?.foreground()
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
