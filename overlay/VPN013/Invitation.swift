@@ -3,10 +3,10 @@ import Foundation
 
 enum VPN013Invitation {
     static let site = URL(string: "https://vpn013.com/")!
-    static let cabinet = URL(string: "https://t.me/vpn013_com_bot?start=invite")!
+    static let cabinet = URL(string: "https://t.me/vpn013_com_bot?start=menu")!
     static let publicText = "Если Telegram не открывается, зайдите на https://vpn013.com/ — там можно скачать приложение и получить бесплатную конфигурацию на 1 час для первого подключения. Личный кабинет, покупка и продление: https://t.me/vpn013_com_bot"
-    static let bonusText = "За первую покупку друга — 30% оплаченного срока на ваш бонусный баланс. Друг оплатил 30 дней — вам 9 бонусных дней. Вы сами выбираете, на какую свою подписку VPN013 их потратить: Happ, INCY, AmneziaWG или BlackTemple."
-    static let attributionText = "Для бонуса отправляйте личную ссылку из кабинета VPN013. Общая ссылка на сайт не привязана к вашему аккаунту. Переход по ссылке и бесплатный тест бонусных дней не дают."
+    static let bonusText = "Бонусная программа пока недоступна. После её запуска здесь появится информация о личной ссылке и бонусных днях."
+    static let attributionText = "Сейчас можно поделиться сайтом VPN013. Общая ссылка не привязана к вашему аккаунту и не начисляет бонусы."
 }
 
 #if canImport(UIKit)
@@ -33,7 +33,7 @@ final class InvitationViewController: UIViewController {
         bonus.accessibilityIdentifier = "vpn013.invite.bonus"; stack.addArrangedSubview(bonus)
         stack.addArrangedSubview(label(VPN013Invitation.attributionText, style: .footnote, secondary: true))
         let personal = UIButton(type: .system)
-        personal.setTitle("Моя ссылка и бонусный баланс", for: .normal)
+        personal.setTitle("Открыть личный кабинет VPN013", for: .normal)
         personal.addTarget(self, action: #selector(openCabinet), for: .touchUpInside)
         personal.accessibilityIdentifier = "vpn013.invite.personal"
         stack.addArrangedSubview(personal)

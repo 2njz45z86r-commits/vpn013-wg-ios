@@ -770,8 +770,10 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
         let endpoint = app.cells["vpn013.proxy.current-endpoint"]
         XCTAssertTrue(endpoint.waitForExistence(timeout: 8))
-        XCTAssertTrue(endpoint.label.contains("VPN-расширение пока не вернуло текущий сервер"))
-        XCTAssertFalse(endpoint.label.contains("demo.example.invalid"), "A saved Auto seed is not proof of the selected member")
+        let explanation = endpoint.staticTexts["VPN-расширение пока не вернуло текущий сервер"]
+        XCTAssertTrue(explanation.waitForExistence(timeout: 8))
+        XCTAssertFalse(endpoint.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "demo.example.invalid")).firstMatch.exists,
+                       "A saved Auto seed is not proof of the selected member")
         capture("proxy-unknown-current-member-no-seed-fallback-synthetic-no-vpn")
     }
 
