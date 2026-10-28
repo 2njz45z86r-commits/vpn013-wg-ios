@@ -49,6 +49,7 @@ struct ProxyTunnelPayload: Codable, Equatable {
     var routing: ProxyRoutingPolicy = ProxyRoutingPolicy()
     var automaticCandidates: [ProxyProfile]? = nil
     var automaticEnabled: Bool? = nil
+    var subscriptionID: UUID? = nil
     var candidates: [ProxyProfile] { automaticCandidates ?? [profile] }
     func validate() throws {
         try profile.validate(); try routing.validate()

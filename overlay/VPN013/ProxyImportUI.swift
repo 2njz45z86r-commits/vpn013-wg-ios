@@ -43,15 +43,17 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") {
             input.text = "vless://00000000-0000-4000-8000-000000000001@demo.example.invalid:443?type=ws&security=tls&sni=demo.example.invalid&path=%2Fvpn#Demo%20server"
             if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified-json"), let prototype = try? ProxyProfile.fromURI(input.text, source: kind) {
+                do {
                 let profiles = (0..<4).map { index -> ProxyProfile in var value = prototype; value.id = UUID(); value.host = "node\(index).example.invalid"; value.name = "Country \(index)"; return value }
-                var configurations: [[String: Any]] = (0..<3).map { primary in
+                var configurations: [[String: Any]] = try (0..<3).map { primary in
                     let order = [primary] + profiles.indices.filter { $0 != primary }
-                    let outbounds = order.enumerated().map { position, index -> [String: Any] in var value = try! profiles[index].outbound(); value["tag"] = position == 0 ? profiles[index].name : "backup-\(index)"; return value }
+                    let outbounds = try order.enumerated().map { position, index -> [String: Any] in var value = try profiles[index].outbound(); value["tag"] = position == 0 ? profiles[index].name : "backup-\(index)"; return value }
                     return ["remarks": profiles[primary].name, "inbounds": [], "outbounds": outbounds]
                 }
-                let automatic: [String: Any] = ["remarks": "Авто", "inbounds": [], "outbounds": profiles.enumerated().map { index, profile -> [String: Any] in var value = try! profile.outbound(); value["tag"] = "auto-\(index)"; return value }]
+                let automatic: [String: Any] = ["remarks": "Авто", "inbounds": [], "outbounds": try profiles.enumerated().map { index, profile -> [String: Any] in var value = try profile.outbound(); value["tag"] = "auto-\(index)"; return value }]
                 configurations.insert(automatic, at: 0)
-                input.text = String(decoding: try! JSONSerialization.data(withJSONObject: configurations, options: [.sortedKeys]), as: UTF8.self)
+                input.text = String(decoding: try JSONSerialization.data(withJSONObject: configurations, options: [.sortedKeys]), as: UTF8.self)
+                } catch { input.text = "invalid synthetic fixture" }
             }
         }
         #endif
@@ -97,14 +99,14 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
                 self.downloader.start(url, kind: self.kind, identifier: identity) { [weak self] result in
                     guard let self = self else { return }; self.busy(false)
                     switch result {
-                    case .success(let data): self.preview(data)
+                    case .success(let data): self.preview(data, subscriptionURL: url)
                     case .failure(let error): self.show(error)
                     }
                 }
             }); alert.addAction(UIAlertAction(title: "Отмена", style: .cancel)); present(alert, animated: true)
         } else { preview(Data(text.utf8)) }
     }
-    private func preview(_ data: Data) {
+    private func preview(_ data: Data, subscriptionURL: URL? = nil) {
         let generation = UUID(); previewGeneration = generation; let source = kind
         busy(true)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -114,21 +116,24 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
             self.busy(false)
             guard self.viewIfLoaded?.window != nil else { return }
             switch result {
-            case .success(let values): self.showPreview(values)
+            case .success(let values): self.showPreview(values, subscriptionURL: subscriptionURL)
             case .failure(let error): self.show(error is ProxyProfileError ? error : ProxyProfileError.invalid)
             }
             }
         }
     }
-    private func showPreview(_ values: [ProxyProfile]) {
+    private func showPreview(_ values: [ProxyProfile], subscriptionURL: URL?) {
             let names = values.prefix(8).map { $0.name }.joined(separator: "\n")
-            let alert = UIAlertController(title: "Серверов: \(values.count)", message: names + (values.count > 8 ? "\n…" : "") + "\n\nДобавить в раздел \(kind.title)?", preferredStyle: .alert)
+            let note = subscriptionURL == nil ? "" : "\nИсточник будет сохранён защищённо. Потяните список вниз для обновления серверов этой подписки."
+            let alert = UIAlertController(title: "Серверов: \(values.count)", message: names + (values.count > 8 ? "\n…" : "") + "\n\nДобавить в раздел \(kind.title)?" + note, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "Добавить", style: .default) { [weak self] _ in
                 guard let self = self else { return }; self.busy(true)
-                ProxyProfilesManager.shared.add(values) { [weak self] error in
+                let done: (Error?) -> Void = { [weak self] error in
                     guard let self = self else { return }; self.busy(false)
                     if let error = error { self.show(error) } else { self.input.text = ""; self.navigationController?.popToRootViewController(animated: true) }
                 }
+                if let url = subscriptionURL { ProxyProfilesManager.shared.installSubscription(url, profiles: values, kind: self.kind, completion: done) }
+                else { ProxyProfilesManager.shared.add(values, completion: done) }
             }); alert.addAction(UIAlertAction(title: "Отмена", style: .cancel)); present(alert, animated: true)
     }
     private func busy(_ value: Bool) { isBusy = value; submit.isEnabled = !value; input.isEditable = !value; value ? progress.startAnimating() : progress.stopAnimating() }

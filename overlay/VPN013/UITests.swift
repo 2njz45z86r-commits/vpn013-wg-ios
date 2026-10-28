@@ -646,6 +646,7 @@ final class AutoTunnelUITests:XCTestCase {
             XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5))
             app.alerts.buttons["Добавить"].tap()
             XCTAssertTrue(app.tables.cells.staticTexts["Demo server"].waitForExistence(timeout: 8))
+            XCTAssertEqual(tab.label, kind == "happ" ? "Happ" : kind == "incy" ? "INCY" : "BlackTemple", "Loading a section must not rename its protocol tab to VPN013")
             capture("unified-" + kind + "-imported-synthetic")
         }
         app.tabBars.buttons["vpn013.kind.amneziawg"].tap()
@@ -727,6 +728,16 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertFalse(app.tables.cells.staticTexts["node3.example.invalid"].exists)
         app.tabBars.buttons["vpn013.kind.incy"].tap()
         XCTAssertFalse(app.tables.cells.staticTexts["Country 0"].exists)
+    }
+
+    func testProxySubscriptionRosterRestoresDeletedAndPreservesOtherSources() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-subscription-roster"]
+        app.launch(); app.tabBars.buttons["vpn013.kind.happ"].tap()
+        let fixture = app.buttons["vpn013.subscription.fixture"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 10)); fixture.tap()
+        XCTAssertTrue(app.alerts["Проверка подписок пройдена"].waitForExistence(timeout: 25))
+        capture("subscription-roster-restoration-and-source-isolation-synthetic-no-network")
     }
 
     func testUpdatesScreenAndOrderSynchronization() {

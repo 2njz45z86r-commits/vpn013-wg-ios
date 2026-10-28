@@ -233,7 +233,11 @@ struct ProxyProfile: Codable, Equatable {
         stream[security == .reality ? "realitySettings" : "tlsSettings"] = tls
         if transport == .ws { stream["wsSettings"] = ["path": path, "headers": httpHost.isEmpty ? [:] : ["Host": httpHost]] }
         if transport == .xhttp {
-            var http = try xhttpOptions.map { try JSONSerialization.jsonObject(with: $0) as! [String: Any] } ?? [:]
+            var http: [String: Any] = [:]
+            if let data = xhttpOptions {
+                guard let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ProxyProfileError.invalid }
+                http = decoded
+            }
             if var download = http["downloadSettings"] as? [String: Any], let original = download["address"] as? String {
                 if let resolved = additionalHosts[original] { download["address"] = resolved }
                 http["downloadSettings"] = download
@@ -308,7 +312,7 @@ private enum ProxyXHTTPOptions {
             download.removeValue(forKey: "address"); download.removeValue(forKey: "port")
             let outbound: [String: Any] = ["protocol": "vless", "settings": ["vnext": [["address": host, "port": port, "users": [["id": "00000000-0000-4000-8000-000000000001", "encryption": "none"]]]]], "streamSettings": download]
             let profile = try ProxyProfile.fromOutbound(outbound, name: "Download", source: source)
-            var clean = try profile.outbound()["streamSettings"] as! [String: Any]
+            guard var clean = try profile.outbound()["streamSettings"] as? [String: Any] else { throw ProxyProfileError.invalid }
             clean["address"] = profile.host; clean["port"] = Int(profile.port)
             result["downloadSettings"] = clean
         }

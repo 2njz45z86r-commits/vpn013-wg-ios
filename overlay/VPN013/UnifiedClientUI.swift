@@ -9,7 +9,7 @@ private func proxyLabel(_ text: String, style: UIFont.TextStyle = .body) -> UILa
     label.textColor = VPN013Theme.text; return label
 }
 private func proxyError(_ error: Error, from controller: UIViewController) {
-    let known = error is ProxyProfileError || error is ProxyOperationError
+    let known = error is ProxyProfileError || error is ProxyOperationError || error is ProxySubscriptionError
     let alert = UIAlertController(title: "Действие не завершено", message: known ? error.localizedDescription : ProxyOperationError.system.localizedDescription, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "Понятно", style: .default)); controller.present(alert, animated: true)
 }
@@ -115,7 +115,7 @@ final class ProxyListViewController: UITableViewController {
     init(kind: VPN013ConnectionKind) { self.kind = kind; super.init(style: .insetGrouped) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
-        super.viewDidLoad(); title = "VPN013"; view.backgroundColor = VPN013Theme.background
+        super.viewDidLoad(); navigationItem.title = "VPN013"; view.backgroundColor = VPN013Theme.background
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") { navigationItem.prompt = "Тестовые данные · VPN не запускается" }
         #endif
@@ -130,6 +130,12 @@ final class ProxyListViewController: UITableViewController {
         NSLayoutConstraint.activate([avatar.widthAnchor.constraint(equalToConstant: 32), avatar.heightAnchor.constraint(equalToConstant: 32)])
         avatar.isAccessibilityElement = true; avatar.accessibilityLabel = "VPN013"
         navigationItem.leftBarButtonItem = UIBarButtonItem(customView: avatar)
+        #if targetEnvironment(simulator) && DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-subscription-roster") {
+            navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Проверить подписки", style: .plain, target: self, action: #selector(testSubscriptionRoster))
+            navigationItem.leftBarButtonItem?.accessibilityIdentifier = "vpn013.subscription.fixture"
+        }
+        #endif
         observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in self?.tableView.reloadData() }
         refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refreshProfiles), for: .valueChanged)
     }
@@ -142,13 +148,61 @@ final class ProxyListViewController: UITableViewController {
         let size = header.systemLayoutSizeFitting(CGSize(width: width, height: UIView.layoutFittingCompressedSize.height), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
         if abs(header.frame.height - size.height) > 0.5 || header.frame.width != width { header.frame = CGRect(x: 0, y: 0, width: width, height: size.height); tableView.tableHeaderView = header }
     }
-    @objc private func refreshProfiles() { manager.reload(); refreshControl?.endRefreshing() }
+    @objc private func refreshProfiles() {
+        manager.refreshSubscriptions(kind) { [weak self] error in
+            guard let self = self else { return }; self.refreshControl?.endRefreshing()
+            if let error = error { proxyError(error, from: self) } else { self.tableView.reloadData() }
+        }
+    }
     @objc private func importTapped() { navigationController?.pushViewController(ProxyImportViewController(kind: kind), animated: true) }
+    #if targetEnvironment(simulator) && DEBUG
+    @objc private func testSubscriptionRoster() {
+        do {
+            let uri = "vless://00000000-0000-4000-8000-000000000001@synthetic.example.invalid:443?type=ws&security=tls&sni=synthetic.example.invalid#Fixture"
+            let prototype = try ProxyProfile.fromURI(uri, source: .happ)
+            func roster(_ count: Int) -> [ProxyProfile] { (0..<count).map { index in var value = prototype; value.id = UUID(); value.name = "Country \(index)"; value.host = "node\(index).example.invalid"; return value } }
+            guard let url = URL(string: "https://subscription.example.invalid/a"), let other = URL(string: "https://subscription.example.invalid/b") else { return }
+            var manual = prototype; manual.name = "Personal preserved"
+            var originalID: UUID?
+            var stage = 0
+            func done(_ error: Error?) {
+                let alert = UIAlertController(title: error == nil ? "Проверка подписок пройдена" : "Проверка подписок не пройдена", message: error == nil ? "10→20→15; удалённый сервер восстановлен; личный профиль, другая подписка и маршрутизация сохранены. Синтетические данные, без запуска VPN." : "Нарушен проверяемый контракт синхронизации.", preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "Понятно", style: .default)); self.present(alert, animated: true)
+            }
+            func next(_ error: Error?) {
+                guard error == nil else { done(error); return }; stage += 1
+                switch stage {
+                case 1: self.manager.add([manual], completion: next)
+                case 2: self.manager.installSubscription(url, profiles: roster(10), kind: .happ, completion: next)
+                case 3:
+                    guard let entry = self.manager.entries.first(where: { $0.value.profile.name == "Country 0" }) else { done(ProxyProfileError.invalid); return }
+                    originalID = entry.value.profile.id; self.manager.remove(entry, completion: next)
+                case 4: self.manager.installSubscription(url, profiles: roster(10), kind: .happ, completion: next)
+                case 5:
+                    guard let entry = self.manager.entries.first(where: { $0.value.profile.id == originalID }) else { done(ProxyProfileError.invalid); return }
+                    self.manager.update(entry, routing: ProxyRoutingPolicy(mode: .bypass, domains: ["example.invalid"]), completion: next)
+                case 6: self.manager.installSubscription(other, profiles: Array(roster(19).suffix(3)), kind: .happ, completion: next)
+                case 7: self.manager.installSubscription(url, profiles: roster(20), kind: .happ, completion: next)
+                case 8:
+                    guard self.manager.entries.count == 24 else { done(ProxyProfileError.invalid); return }
+                    self.manager.installSubscription(url, profiles: roster(15), kind: .happ, completion: next)
+                default:
+                    let entries = self.manager.entries
+                    guard entries.count == 19, entries.contains(where: { $0.value.profile.name == "Personal preserved" && $0.value.subscriptionID == nil }),
+                          entries.contains(where: { $0.value.profile.name == "Country 18" }),
+                          entries.first(where: { $0.value.profile.id == originalID })?.value.routing.mode == .bypass else { done(ProxyProfileError.invalid); return }
+                    done(nil)
+                }
+            }
+            next(nil)
+        } catch { proxyError(ProxyProfileError.invalid, from: self) }
+    }
+    #endif
     override func numberOfSections(in tableView: UITableView) -> Int { 1 }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { max(1, rows.count) }
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { kind.title + " · ваши подключения" }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        rows.isEmpty ? "Добавьте свою ссылку VLESS, файл JSON Xray или совместимую подписку. Конфигурации этого раздела хранятся отдельно от других разделов." : "Нажмите сервер, чтобы подключиться и настроить маршрутизацию. Выбор раздела не меняет текущее подключение."
+        rows.isEmpty ? "Добавьте свою ссылку VLESS, файл JSON Xray или совместимую подписку. Потяните список вниз, чтобы восстановить серверы сохранённых подписок." : "Нажмите сервер, чтобы подключиться и настроить маршрутизацию. Потяните список вниз для обновления сохранённых подписок. Личные конфигурации остаются отдельно."
     }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)

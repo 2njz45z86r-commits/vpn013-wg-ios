@@ -34,6 +34,8 @@ final class ProxyProfilesManager {
     private var switchingTimer: Timer?
     private var statusObserver: NSObjectProtocol?
     private var configurationObserver: NSObjectProtocol?
+    private let subscriptions = ProxySubscriptionStore()
+    private var subscriptionDownload: ProxySubscriptionDownload?
     #if targetEnvironment(simulator) && DEBUG
     private var simulator = true
     #else
@@ -94,6 +96,106 @@ final class ProxyProfilesManager {
             }
         }
         next()
+    }
+    func installSubscription(_ url: URL, profiles: [ProxyProfile], kind: VPN013ConnectionKind, completion: @escaping (Error?) -> Void) {
+        guard !working else { completion(ProxyOperationError.busy); return }
+        guard !entries.contains(where: { $0.inOperation }) else { completion(ProxyOperationError.stopFirst); return }
+        do {
+            guard VPN013SubscriptionRequest.isSecure(url), url.absoluteString.utf8.count <= 16_384 else { throw ProxyProfileError.invalid }
+            let records = try subscriptions.load()
+            let old = records.first { $0.url == url && $0.kind == kind } ?? ProxySubscriptionRecord(id: UUID(), kind: kind, url: url, members: [], checkedAt: nil)
+            let desired = try old.replacing(with: profiles)
+            working = true
+            synchronize(desired) { error in self.working = false; self.changed?(); completion(error) }
+        } catch { completion(error is ProxyProfileError ? error : ProxyOperationError.unreadable) }
+    }
+    /// No implicit periodic HTTP, device reset, expiry extension or URL rotation.
+    /// A pull refresh explicitly fetches each saved source of this section.
+    func refreshSubscriptions(_ kind: VPN013ConnectionKind, completion: @escaping (Error?) -> Void) {
+        guard !working else { completion(ProxyOperationError.busy); return }
+        guard !entries.contains(where: { $0.inOperation }) else { completion(ProxyOperationError.stopFirst); return }
+        let records: [ProxySubscriptionRecord]
+        do { records = try subscriptions.load().filter { $0.kind == kind } }
+        catch { completion(ProxyOperationError.unreadable); return }
+        guard !records.isEmpty else { reload(); completion(nil); return }
+        working = true; changed?()
+        var remaining = records
+        func finish(_ error: Error?) { self.subscriptionDownload = nil; self.working = false; self.changed?(); completion(error) }
+        func next() {
+            guard !remaining.isEmpty else { finish(nil); return }
+            let record = remaining.removeFirst()
+            let identifier: String
+            do { identifier = try VPN013SubscriptionIdentity.identifier(for: record.url.host!, directory: PrivateTunnelStore.defaultDirectory) }
+            catch { finish(ProxySubscriptionError.identity); return }
+            let download = ProxySubscriptionDownload(); self.subscriptionDownload = download
+            download.start(record.url, kind: kind, identifier: identifier) { result in
+                switch result {
+                case .failure(let error): finish(error)
+                case .success(let data):
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let parsed = Result { try record.replacing(with: ProxyImport.profiles(data, source: kind)) }
+                        DispatchQueue.main.async {
+                            switch parsed {
+                            case .failure(let error): finish(error is ProxyProfileError ? error : ProxyOperationError.unreadable)
+                            case .success(let desired): self.synchronize(desired) { error in if let error = error { finish(error) } else { next() } }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        next()
+    }
+    /// The encrypted desired roster is a recovery journal. Persist additions and
+    /// updates before removing retired members. A system save failure is visible;
+    /// the next refresh converges the partial OS state to that same owned roster.
+    /// Unrelated/manual profiles never match solely by a display name.
+    private func synchronize(_ desired: ProxySubscriptionRecord, completion: @escaping (Error?) -> Void) {
+        do {
+            guard !entries.contains(where: { $0.inOperation }) else { throw ProxyOperationError.stopFirst }
+            var records = try subscriptions.load()
+            records.removeAll { $0.id == desired.id }; records.append(desired)
+            try subscriptions.save(records)
+        } catch { completion(error is ProxyOperationError ? error : ProxyOperationError.unreadable); return }
+        var pending = desired.members
+        func finish(_ error: Error?) { self.changed?(); completion(error) }
+        func retireNext() {
+            let ids = Set(desired.members.map { $0.id })
+            guard let entry = self.entries.first(where: { $0.value.subscriptionID == desired.id && !ids.contains($0.value.profile.id) }) else {
+                do {
+                    var records = try self.subscriptions.load()
+                    if let index = records.firstIndex(where: { $0.id == desired.id }) { records[index].checkedAt = Date() }
+                    try self.subscriptions.save(records); finish(nil)
+                } catch { finish(ProxyOperationError.unreadable) }; return
+            }
+            let done: (Error?) -> Void = { error in
+                DispatchQueue.main.async {
+                    guard error == nil else { finish(ProxyOperationError.system); return }
+                    (entry.manager.protocolConfiguration as? NETunnelProviderProtocol)?.destroyConfigurationReference()
+                    self.entries.removeAll { $0.value.subscriptionID == desired.id && $0.value.profile.id == entry.value.profile.id }; retireNext()
+                }
+            }
+            if self.simulator { done(nil) } else { entry.manager.removeFromPreferences(completionHandler: done) }
+        }
+        func saveNext() {
+            guard !pending.isEmpty else { retireNext(); return }
+            let profile = pending.removeFirst()
+            let existing = self.entries.first { $0.value.subscriptionID == desired.id && $0.value.profile.id == profile.id }
+            let manager = existing?.manager ?? NETunnelProviderManager()
+            let old = manager.protocolConfiguration as? NETunnelProviderProtocol
+            var value = ProxyTunnelPayload(profile: profile, routing: existing?.value.routing ?? ProxyRoutingPolicy())
+            value.subscriptionID = desired.id
+            do { manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old) }
+            catch { finish(ProxyOperationError.unreadable); return }
+            manager.localizedDescription = profile.source.title + " · " + profile.name; manager.isEnabled = true
+            self.persist(manager) { error in
+                if error != nil { manager.protocolConfiguration = old; finish(ProxyOperationError.system); return }
+                if let index = self.entries.firstIndex(where: { $0.value.subscriptionID == desired.id && $0.value.profile.id == profile.id }) { self.entries[index].value = value }
+                else { self.entries.append(Entry(manager: manager, value: value)) }
+                saveNext()
+            }
+        }
+        saveNext()
     }
     private func persist(_ manager: NETunnelProviderManager, completion: @escaping (Error?) -> Void) {
         if simulator { completion(nil); return }

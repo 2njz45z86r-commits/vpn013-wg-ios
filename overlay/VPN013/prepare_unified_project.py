@@ -19,6 +19,7 @@ sources = {
     'ProxyImportUI.swift': [app],
     'SubscriptionRequest.swift': [app],
     'ProxySubscriptionDownload.swift': [app],
+    'ProxySubscriptionStore.swift': [app],
 }
 for name, anchors in sources.items():
     fid = hashlib.sha256(('unified-' + name).encode()).hexdigest()[:24].upper()
