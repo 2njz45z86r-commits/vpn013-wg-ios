@@ -76,7 +76,16 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             selectedIndex = 2; awg.importFromDisposableFile(url: url); return
         }
         guard kinds[selectedIndex] != .amneziawg,
-              let navigation = selectedViewController as? UINavigationController else { awg.importFromDisposableFile(url: url); return }
+              let navigation = selectedViewController as? UINavigationController else {
+            let alert = UIAlertController(title: "В какой раздел добавить?", message: "Для VLESS или JSON выберите приложение, из которого получена конфигурация.", preferredStyle: .alert)
+            for kind in kinds where kind != .amneziawg {
+                alert.addAction(UIAlertAction(title: kind.title, style: .default) { [weak self] _ in
+                    guard let self = self, let index = self.kinds.firstIndex(of: kind) else { return }
+                    self.selectedIndex = index; self.importFile(url)
+                })
+            }
+            alert.addAction(UIAlertAction(title: "Отмена", style: .cancel)); present(alert, animated: true); return
+        }
         let form = ProxyImportViewController(kind: kinds[selectedIndex]); navigation.pushViewController(form, animated: true); form.readFile(url)
     }
 }
@@ -211,14 +220,18 @@ final class ProxyDetailViewController: UITableViewController {
 
 final class ProxyRoutingViewController: UIViewController {
     private let entry: ProxyProfilesManager.Entry
-    private let modes = UISegmentedControl(items: ["Всё", "Исключения", "Только выбранное"])
+    private let modes = UIButton(type: .system)
+    private var selectedMode: ProxyRoutingPolicy.Mode
     private let domains = UITextView(); private let networks = UITextView()
-    init(entry: ProxyProfilesManager.Entry) { self.entry = entry; super.init(nibName: nil, bundle: nil) }
+    init(entry: ProxyProfilesManager.Entry) { self.entry = entry; selectedMode = entry.value.routing.mode; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Маршрутизация"; view.backgroundColor = VPN013Theme.background
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Сохранить", style: .done, target: self, action: #selector(save))
-        modes.selectedSegmentIndex = ProxyRoutingPolicy.Mode.allCases.firstIndex(of: entry.value.routing.mode) ?? 0
+        updateModes()
+        modes.showsMenuAsPrimaryAction = true; modes.contentHorizontalAlignment = .leading
+        modes.titleLabel?.font = .preferredFont(forTextStyle: .headline); modes.titleLabel?.adjustsFontForContentSizeCategory = true; modes.titleLabel?.numberOfLines = 0
+        modes.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
         modes.accessibilityIdentifier = "vpn013.proxy.routing.mode"
         domains.text = entry.value.routing.domains.joined(separator: "\n"); networks.text = entry.value.routing.networks.joined(separator: "\n")
         let info = proxyLabel("Исключения идут напрямую; в режиме «Только выбранное» остальной трафик идёт напрямую. Домены определяются по доступному имени соединения; для точного правила добавьте IP-сеть. Выбор отдельных установленных приложений на обычном iPhone недоступен.", style: .footnote)
@@ -238,13 +251,20 @@ final class ProxyRoutingViewController: UIViewController {
     @objc private func save() {
         func lines(_ value: String) -> [String] { Array(Set(value.split(whereSeparator: { $0.isNewline }).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })).sorted() }
         do {
-            let policy = ProxyRoutingPolicy(mode: ProxyRoutingPolicy.Mode.allCases[modes.selectedSegmentIndex], domains: try lines(domains.text).map(ProxyRoutingPolicy.domain), networks: lines(networks.text))
+            let policy = ProxyRoutingPolicy(mode: selectedMode, domains: try lines(domains.text).map(ProxyRoutingPolicy.domain), networks: lines(networks.text))
             try policy.validate()
             ProxyProfilesManager.shared.update(entry, routing: policy) { [weak self] error in
                 guard let self = self else { return }
                 if let error = error { proxyError(error, from: self) } else { self.navigationController?.popViewController(animated: true) }
             }
         } catch { proxyError(error, from: self) }
+    }
+    private func updateModes() {
+        modes.setTitle(selectedMode.title + "  ⌄", for: .normal)
+        modes.accessibilityLabel = "Режим маршрутизации"; modes.accessibilityValue = selectedMode.title
+        modes.menu = UIMenu(children: ProxyRoutingPolicy.Mode.allCases.map { mode in
+            UIAction(title: mode.title, state: selectedMode == mode ? .on : .off) { [weak self] _ in self?.selectedMode = mode; self?.updateModes() }
+        })
     }
 }
 

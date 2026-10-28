@@ -22,10 +22,12 @@ jobs:
           set -eu
           if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
           export GOOS=ios GOARCH=arm64 CGO_ENABLED=1
-          export GOFLAGS="-mod=readonly -overlay=$PWD/build/proxy-fd/proxy-tun-overlay.json"
+          export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
           export CC="$(xcrun --sdk iphoneos --find clang)"
           export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -miphoneos-version-min=14.0"
           export CGO_LDFLAGS="$CGO_CFLAGS"
+          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo
+          export GOFLAGS=-mod=readonly
           python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo
       - name: Run old and new native scenarios, capture actual phone and tablet
         run: sh inspect-on-mac.sh

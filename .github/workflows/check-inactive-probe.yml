@@ -81,7 +81,7 @@ jobs:
           python3 stage_into_client.py "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo"
           cd "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo"
           python3 "$GITHUB_WORKSPACE/scripts/prepare_proxy_tun.py" . "$RUNNER_TEMP/r013-proxy-fd"
-          export GOFLAGS="-mod=readonly -overlay=$RUNNER_TEMP/r013-proxy-fd/proxy-tun-overlay.json"
+          export GOFLAGS="-mod=readonly -modfile=$RUNNER_TEMP/r013-proxy-fd/proxy-tun.mod"
           go mod verify
           go test -mod=readonly -race -count=1 -timeout=90s -v ./r013probe
           go build -mod=readonly -tags=r013_bridge_test -buildmode=c-archive -o "$RUNNER_TEMP/r013-client-core.a" .

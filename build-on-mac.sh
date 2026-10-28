@@ -36,8 +36,9 @@ python3 VPN013/prepare_hourly_project.py
 python3 VPN013/prepare_unified_project.py
 python3 VPN013/add_uitest_target.py
 python3 ../../scripts/prepare_proxy_tun.py Sources/WireGuardKitGo ../proxy-fd
-export GOFLAGS="-mod=readonly -overlay=$PWD/../proxy-fd/proxy-tun-overlay.json"
+export GOFLAGS="-mod=readonly -modfile=$PWD/../proxy-fd/proxy-tun.mod"
 mkdir -p ../../build/review
+cp ../proxy-fd/proxy-tun-provenance.json ../../build/review/proxy-tun-provenance.json
 swiftc VPN013/AutoFailoverPolicy.swift VPN013/tests/main.swift -o ../../build/test-auto-policy
 ../../build/test-auto-policy > ../../build/review/policy-tests.txt
 cat ../../build/review/policy-tests.txt

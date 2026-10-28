@@ -150,11 +150,11 @@ final class ProxyProfilesManager {
                         [.connected, .connecting, .disconnecting, .reasserting].contains(manager.connection.status)
                 }
                 for other in others { other.connection.stopVPNTunnel() }
-                let cutoff = Date().addingTimeInterval(20)
+                let cutoff = DispatchTime.now() + .seconds(20)
                 func attempt() {
                     guard self.activation == token else { return }
                     if others.contains(where: { ![.disconnected, .invalid].contains($0.connection.status) }) {
-                        if Date() >= cutoff { self.activationFailed(token, error: ProxyOperationError.switching) }
+                        if DispatchTime.now() >= cutoff { self.activationFailed(token, error: ProxyOperationError.switching) }
                         return
                     }
                     self.switchingTimer?.invalidate(); self.switchingTimer = nil

@@ -24,15 +24,20 @@ final class ProxySubscriptionDownload: NSObject, URLSessionDataDelegate {
         received = Data(); callback?(data)
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        guard session === self.session else { completionHandler(.cancel); return }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200,
               response.expectedContentLength <= Int64(ProxyImport.maximumBytes) else { completionHandler(.cancel); finish(nil); return }
         completionHandler(.allow)
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard session === self.session else { return }
         guard received.count + data.count <= ProxyImport.maximumBytes else { finish(nil); return }; received.append(data)
     }
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) { finish(error == nil ? received : nil) }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard session === self.session else { return }; finish(error == nil ? received : nil)
+    }
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        guard session === self.session else { completionHandler(nil); return }
         guard let original = original, let next = request.url, next.scheme?.lowercased() == "https",
               next.host?.lowercased() == original.host?.lowercased(), (next.port ?? 443) == (original.port ?? 443),
               next.user == nil, next.password == nil else { completionHandler(nil); finish(nil); return }
@@ -47,6 +52,7 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
     private let progress = UIActivityIndicatorView(style: .medium)
     private let downloader = ProxySubscriptionDownload()
     private var initialText: String?
+    private var isBusy = false
     init(kind: VPN013ConnectionKind, text: String? = nil) { self.kind = kind; initialText = text; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     deinit { downloader.cancel() }
@@ -76,10 +82,13 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         #endif
     }
     @objc private func pasteText() {
-        guard let value = UIPasteboard.general.string, value.utf8.count <= ProxyImport.maximumBytes else { show(ProxyProfileError.tooLarge); return }
+        guard !isBusy else { return }
+        guard let value = UIPasteboard.general.string else { show(ProxyProfileError.invalid); return }
+        guard value.utf8.count <= ProxyImport.maximumBytes else { show(ProxyProfileError.tooLarge); return }
         input.text = value
     }
     @objc private func pickFile() {
+        guard !isBusy else { return }
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.plainText, .json, .data], asCopy: false)
         picker.delegate = self; picker.allowsMultipleSelection = false; present(picker, animated: true)
     }
@@ -91,11 +100,13 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
             guard url.isFileURL else { throw ProxyProfileError.invalid }
             let file = try FileHandle(forReadingFrom: url); defer { try? file.close() }
             let data = try file.read(upToCount: ProxyImport.maximumBytes + 1) ?? Data()
-            guard data.count <= ProxyImport.maximumBytes, let text = String(data: data, encoding: .utf8) else { throw ProxyProfileError.tooLarge }
+            guard data.count <= ProxyImport.maximumBytes else { throw ProxyProfileError.tooLarge }
+            guard let text = String(data: data, encoding: .utf8) else { throw ProxyProfileError.invalid }
             input.text = text
         } catch { show(error is ProxyProfileError ? error : ProxyProfileError.invalid) }
     }
     @objc private func validateInput() {
+        guard !isBusy else { return }
         view.endEditing(true)
         let text = (input.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.utf8.count <= ProxyImport.maximumBytes else { show(ProxyProfileError.tooLarge); return }
@@ -124,7 +135,7 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
             }); alert.addAction(UIAlertAction(title: "Отмена", style: .cancel)); present(alert, animated: true)
         } catch { show(error is ProxyProfileError ? error : ProxyProfileError.invalid) }
     }
-    private func busy(_ value: Bool) { submit.isEnabled = !value; input.isEditable = !value; value ? progress.startAnimating() : progress.stopAnimating() }
+    private func busy(_ value: Bool) { isBusy = value; submit.isEnabled = !value; input.isEditable = !value; value ? progress.startAnimating() : progress.stopAnimating() }
     private func show(_ error: Error) {
         let alert = UIAlertController(title: "Не удалось добавить", message: error.localizedDescription, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Понятно", style: .default)); present(alert, animated: true)
