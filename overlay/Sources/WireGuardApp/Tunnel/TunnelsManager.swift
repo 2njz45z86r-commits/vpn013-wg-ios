@@ -719,7 +719,7 @@ class TunnelsManager {
                     group = try AutoTunnelProfile(configurations: configurations)
                 } else { group = try? AutoTunnelProfile(configurations: configurations) }
             }
-            try proto.setBuiltinAutomatic(group, enabled: VPN013AutomaticMode.enabled())
+            try proto.setBuiltinAutomatic(group, enabled: VPN013AutomaticMode.enabled(), initial: true)
             builtinPreparing = true
             let done: (Error?) -> Void = { error in
                 DispatchQueue.main.async {
@@ -994,6 +994,15 @@ class TunnelContainer: NSObject {
         guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol else { return false }
         #if os(iOS)
         if let payload = try? proto.privatePayload(), payload.builtinAutomatic != nil { return true }
+        #endif
+        return proto.isVPN013Automatic
+    }
+    var requiresAutomaticIdentity: Bool {
+        guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol else { return false }
+        #if os(iOS)
+        if let payload = try? proto.privatePayload(), payload.builtinAutomatic != nil {
+            return payload.automatic != nil || payload.builtinAutomaticIdentityRequired != false
+        }
         #endif
         return proto.isVPN013Automatic
     }

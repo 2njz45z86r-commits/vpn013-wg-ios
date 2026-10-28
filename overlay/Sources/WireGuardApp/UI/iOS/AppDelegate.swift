@@ -37,6 +37,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         UITableViewCell.appearance().backgroundColor = VPN013Theme.background
         self.window = window
 
+        #if targetEnvironment(simulator) && DEBUG
+        // Initialize before any header reads preferences. Legacy native tests
+        // explicitly use manual mode; the dedicated Auto test checks defaults.
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("--vpn013-test-auto-reset") { UserDefaults.standard.removeObject(forKey: VPN013AutomaticMode.preferenceKey) }
+        else if !args.contains("--vpn013-test-automatic"), args.contains(where: { $0.hasPrefix("--vpn013-test-") }) { VPN013AutomaticMode.setEnabled(false) }
+        #endif
         let mainVC = MainViewController()
         let unified = VPN013UnifiedViewController(awg: mainVC)
         unifiedVC = unified

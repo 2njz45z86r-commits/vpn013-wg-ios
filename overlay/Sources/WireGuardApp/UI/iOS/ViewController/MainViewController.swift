@@ -5,7 +5,9 @@ import UIKit
 
 class MainViewController: UISplitViewController {
 
-    var tunnelsManager: TunnelsManager?
+    var tunnelsManager: TunnelsManager? {
+        didSet { NotificationCenter.default.post(name: AutomaticModeRow.availabilityChanged, object: nil) }
+    }
     var onTunnelsManagerReady: ((TunnelsManager) -> Void)?
     var tunnelsListVC: TunnelsListTableViewController?
 

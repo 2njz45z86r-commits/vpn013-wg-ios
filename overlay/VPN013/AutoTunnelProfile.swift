@@ -77,7 +77,7 @@ extension NETunnelProviderProtocol {
     }
     var usesVPN013Automatic: Bool {
         #if os(iOS)
-        if let payload = try? privatePayload(), payload.builtinAutomatic != nil { return payload.automaticEnabled != false }
+        if let payload = try? privatePayload(), payload.builtinAutomatic != nil || payload.automatic != nil { return payload.automaticEnabled != false }
         #endif
         return isVPN013Automatic
     }
@@ -90,6 +90,9 @@ struct PrivateTunnelPayload: Codable {
     var proxy: Data? = nil
     var builtinAutomatic: AutoTunnelProfile? = nil
     var automaticEnabled: Bool? = nil
+    // Once Auto may have selected a reserve, a saved seed is never proof of the
+    // current endpoint, including after Auto is paused. Reset on a new start.
+    var builtinAutomaticIdentityRequired: Bool? = nil
 }
 
 extension NETunnelProviderProtocol {
@@ -110,9 +113,10 @@ extension NETunnelProviderProtocol {
         let next = try PrivateTunnelStore.current.seal(JSONEncoder().encode(payload), reusing: envelope.id)
         providerConfiguration = [PrivateTunnelStore.idKey: next.id, PrivateTunnelStore.dataKey: next.ciphertext]
     }
-    func setBuiltinAutomatic(_ group: AutoTunnelProfile?, enabled: Bool) throws {
+    func setBuiltinAutomatic(_ group: AutoTunnelProfile?, enabled: Bool, initial: Bool = false) throws {
         guard let envelope = privateEnvelope, var payload = try privatePayload() else { throw PrivateStoreError.invalidEnvelope }
         payload.builtinAutomatic = group; payload.automaticEnabled = enabled
+        payload.builtinAutomaticIdentityRequired = initial ? enabled : (enabled || payload.builtinAutomaticIdentityRequired != false)
         let next = try PrivateTunnelStore.current.seal(JSONEncoder().encode(payload), reusing: envelope.id)
         providerConfiguration = [PrivateTunnelStore.idKey: next.id, PrivateTunnelStore.dataKey: next.ciphertext]
     }

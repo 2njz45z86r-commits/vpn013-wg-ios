@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-28T20:56:53.115581+00:00",
-  "source_sha256": "c9990e1b7c7b425f35106da1b47419be1578385b9eb0e5245b5868b1b3375618",
-  "source_commit_reviewed": "8faecb0ca753ba83af2154aaa4f1b3fcbac7a568",
+  "reviewed_at": "2026-10-28T21:00:23.321380+00:00",
+  "source_sha256": "fccc490ceb2da3a5e39c7c327f16196d626ea01c4af26b34c0f49d8c47753b27",
+  "source_commit_reviewed": "10069735a8b90875817eaf308d5ad8161a693d3b",
   "scope_complete": false,
   "private_report_ref": "private:VPN013-unified-development-20261028",
   "baseline_only": false,

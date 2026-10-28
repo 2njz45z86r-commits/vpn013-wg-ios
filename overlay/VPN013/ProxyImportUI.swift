@@ -14,6 +14,12 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
     init(kind: VPN013ConnectionKind, text: String? = nil) { self.kind = kind; initialText = text; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     deinit { downloader.cancel() }
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isMovingFromParent || navigationController?.isBeingDismissed == true {
+            downloader.cancel(); previewGeneration = UUID()
+        }
+    }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Добавить · " + kind.title; view.backgroundColor = VPN013Theme.background
         let explanation = UILabel(); explanation.text = "Вставьте VLESS, текст подписки, HTTPS-ссылку подписки или выберите файл JSON Xray. Из JSON переносятся серверы VLESS; сторонние правила маршрутизации не переносятся. Их можно настроить в VPN013."

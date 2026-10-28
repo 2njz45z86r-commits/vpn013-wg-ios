@@ -723,8 +723,8 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     private func updateCurrentPingTarget(for tunnel: TunnelContainer, runtime: VPN013ConnectionSnapshot?) {
-        let configuration = tunnel.hasAutomaticRuntime ? nil : tunnel.tunnelConfiguration
-        let target = VPN013ConnectionSnapshot.pingTarget(isAutomatic: tunnel.hasAutomaticRuntime,
+        let configuration = tunnel.requiresAutomaticIdentity ? nil : tunnel.tunnelConfiguration
+        let target = VPN013ConnectionSnapshot.pingTarget(isAutomatic: tunnel.requiresAutomaticIdentity,
             profileName: tunnel.name,
             configuredEndpoints: configuration?.peers.compactMap { $0.endpoint?.stringRepresentation } ?? [],
             configuredHosts: configuration?.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } } ?? [],
@@ -742,7 +742,7 @@ class TunnelsListTableViewController: UIViewController {
         updateCurrentPingTarget(for: tunnel, runtime: nil)
         summaryEndpointLabel.isHidden = false
         summaryEndpointLabel.text = currentPingTarget.map { "Адрес профиля: " + $0.endpoints.joined(separator: ", ") }
-            ?? (tunnel.usesAutomaticSelection ? "Текущий сервер пока недоступен" : "Адрес сервера недоступен")
+            ?? (tunnel.requiresAutomaticIdentity ? "Текущий сервер пока недоступен" : "Адрес сервера недоступен")
         summaryTrafficLabel.isHidden = false
         summaryTrafficLabel.text = "Статистика VPN пока недоступна"
         summaryTrafficLabel.accessibilityLabel = summaryTrafficLabel.text

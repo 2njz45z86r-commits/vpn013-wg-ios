@@ -627,6 +627,7 @@ final class AutoTunnelUITests:XCTestCase {
         app.launch()
         let power = waitForPowerValue("Изменение подключения", in: app)
         XCTAssertFalse(power.isEnabled, "A second activation must not be submitted during a transition")
+        XCTAssertFalse(app.switches["vpn013.automatic-mode"].isEnabled, "Auto preference cannot race the prepared connection payload")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", "Подключение…")).firstMatch.exists)
         capture("29-current-power-connecting-disabled-synthetic")
     }

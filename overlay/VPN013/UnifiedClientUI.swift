@@ -45,16 +45,11 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
         selectedIndex = kinds.firstIndex(where: { $0.rawValue == remembered }) ?? 2
         #if targetEnvironment(simulator) && DEBUG
         let args = ProcessInfo.processInfo.arguments
-        if args.contains("--vpn013-test-auto-reset") { UserDefaults.standard.removeObject(forKey: VPN013AutomaticMode.preferenceKey) }
-        else if !args.contains("--vpn013-test-automatic"), args.contains(where: { $0.hasPrefix("--vpn013-test-") }) {
-            // Legacy manual-connection scenarios explicitly exercise manual
-            // mode. The separate automatic scenario checks the shipping default.
-            VPN013AutomaticMode.setEnabled(false)
-        }
-        if !args.contains("--vpn013-test-unified"), args.contains(where: { $0.hasPrefix("--vpn013-test-") }) { selectedIndex = 2 }
+        if !args.contains("--vpn013-test-unified") { selectedIndex = 2 }
         #endif
         profiles.changed = { [weak self] in
             NotificationCenter.default.post(name: .vpn013ProxyChanged, object: nil)
+            NotificationCenter.default.post(name: AutomaticModeRow.availabilityChanged, object: nil)
             self?.showActiveSection()
         }
         profiles.reportError = { [weak self] error in
