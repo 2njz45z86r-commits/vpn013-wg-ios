@@ -145,4 +145,9 @@ final class ProxyPacketAdapter {
             }
         }
     }
+    #if R013_PROXY_AUTO_TESTING
+    var selectedForTesting: Int { selected }
+    var checkingForTesting: Bool { timer != nil }
+    func switchForTesting(_ index: Int) { switchTo(index, token: epoch) }
+    #endif
 }
