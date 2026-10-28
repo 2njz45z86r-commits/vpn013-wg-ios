@@ -123,9 +123,12 @@ final class ProxyListViewController: UITableViewController {
         let container = UIView(); automaticHeader.translatesAutoresizingMaskIntoConstraints = false; container.addSubview(automaticHeader)
         NSLayoutConstraint.activate([automaticHeader.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20), automaticHeader.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20), automaticHeader.topAnchor.constraint(equalTo: container.topAnchor), automaticHeader.bottomAnchor.constraint(equalTo: container.bottomAnchor)])
         tableView.tableHeaderView = container
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(importTapped))
-        navigationItem.rightBarButtonItem?.accessibilityLabel = "Добавить конфигурацию " + kind.title
-        navigationItem.rightBarButtonItem?.accessibilityIdentifier = "vpn013.proxy.add"
+        let add = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(importTapped))
+        add.accessibilityLabel = "Добавить конфигурацию " + kind.title
+        add.accessibilityIdentifier = "vpn013.proxy.add"
+        let invite = UIBarButtonItem(image: UIImage(systemName: "person.badge.plus"), style: .plain, target: self, action: #selector(inviteFriend))
+        invite.accessibilityLabel = "Пригласить друга"; invite.accessibilityIdentifier = "vpn013.invite"
+        navigationItem.rightBarButtonItems = [add, invite]
         let avatar = UIImageView(image: UIImage(named: "VPN013Avatar")); avatar.contentMode = .scaleAspectFit
         NSLayoutConstraint.activate([avatar.widthAnchor.constraint(equalToConstant: 32), avatar.heightAnchor.constraint(equalToConstant: 32)])
         avatar.isAccessibilityElement = true; avatar.accessibilityLabel = "VPN013"
@@ -155,6 +158,7 @@ final class ProxyListViewController: UITableViewController {
         }
     }
     @objc private func importTapped() { navigationController?.pushViewController(ProxyImportViewController(kind: kind), animated: true) }
+    @objc private func inviteFriend() { navigationController?.pushViewController(InvitationViewController(), animated: true) }
     #if targetEnvironment(simulator) && DEBUG
     @objc private func testSubscriptionRoster() {
         do {

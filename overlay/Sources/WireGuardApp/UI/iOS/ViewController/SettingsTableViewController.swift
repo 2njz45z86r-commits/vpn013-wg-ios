@@ -11,6 +11,7 @@ class SettingsTableViewController: UITableViewController {
         case goBackendVersion
         case exportZipArchive
         case viewLog
+        case inviteFriend
 
         var localizedUIString: String {
             switch self {
@@ -18,6 +19,7 @@ class SettingsTableViewController: UITableViewController {
             case .goBackendVersion: return tr("settingsVersionKeyWireGuardGoBackend")
             case .exportZipArchive: return tr("settingsExportZipButtonTitle")
             case .viewLog: return tr("settingsViewLogButtonTitle")
+            case .inviteFriend: return "Пригласить друга"
             }
         }
     }
@@ -25,7 +27,8 @@ class SettingsTableViewController: UITableViewController {
     let settingsFieldsBySection: [[SettingsFields]] = [
         [.iosAppVersion, .goBackendVersion],
         [.exportZipArchive],
-        [.viewLog]
+        [.viewLog],
+        [.inviteFriend]
     ]
 
     let tunnelsManager: TunnelsManager?
@@ -167,6 +170,11 @@ extension SettingsTableViewController {
             cell.onTapped = { [weak self] in
                 self?.exportConfigurationsAsZipFile(sourceView: cell.button)
             }
+            return cell
+        } else if field == .inviteFriend {
+            let cell: ButtonCell = tableView.dequeueReusableCell(for: indexPath)
+            cell.buttonText = field.localizedUIString; cell.button.accessibilityIdentifier = "vpn013.invite"
+            cell.onTapped = { [weak self] in self?.navigationController?.pushViewController(InvitationViewController(), animated: true) }
             return cell
         } else if field == .viewLog {
             let cell: ButtonCell = tableView.dequeueReusableCell(for: indexPath)

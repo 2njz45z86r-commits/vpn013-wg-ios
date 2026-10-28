@@ -96,6 +96,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 self.handleAppMessage(Data([operation]), completionHandler: reply)
             }
         }
+        server.onRejected = { wg_log(.error, staticMessage: "Local statistics authentication rejected") }
         localStatistics = server; server.start()
         guard automaticSession != nil,
               let control = try? VPN013LocalStatisticsCredentials.automaticControl(secret: secret,
@@ -109,10 +110,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     let enabled = try state.accept(operation: operation, stamp: stamp, digest: digest)
                     self.proxyAdapter?.setAutomaticEnabled(enabled)
                     self.automatic?.setEnabled(enabled)
+                    wg_log(.info, staticMessage: "Authenticated automatic mode applied")
                     reply(Data([1]))
-                } catch { reply(nil) }
+                } catch { wg_log(.error, staticMessage: "Automatic mode command rejected"); reply(nil) }
             }
         }
+        commands.onRejected = { wg_log(.error, staticMessage: "Local automatic control authentication rejected") }
         localAutomaticControl = commands; commands.start()
     }
 

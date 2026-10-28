@@ -100,6 +100,14 @@ final class VPN013LocalStatisticsServer {
     private var portIndex = 0
     private var period = ProcessInfo.processInfo.systemUptime
     private var admitted = 0
+    var onRejected: (() -> Void)?
+    private var lastRejectedReport: TimeInterval?
+
+    private func reportRejected() {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard lastRejectedReport.map({ now - $0 >= 60 }) ?? true else { return }
+        lastRejectedReport = now; onRejected?()
+    }
 
     init(credentials: VPN013LocalStatisticsCredentials, read: @escaping Read) {
         precondition(!credentials.isAutomaticControl)
@@ -171,7 +179,7 @@ final class VPN013LocalStatisticsServer {
         connection.receive(minimumIncompleteLength: 73, maximumLength: 73) { [weak self] data, _, _, error in
             guard let self = self, self.running, self.connections[id] != nil,
                   error == nil, let data = data,
-                  let operation = self.credentials.authenticate(data) else { connection.cancel(); return }
+                  let operation = self.credentials.authenticate(data) else { self?.reportRejected(); connection.cancel(); return }
             let respond: (Data?) -> Void = { [weak self] reply in
                 guard let self = self else { return }
                 self.queue.async {
@@ -191,7 +199,7 @@ final class VPN013LocalStatisticsServer {
                 }
             }
             if let command = self.command {
-                guard let stamp = self.credentials.commandStamp(data) else { connection.cancel(); return }
+                guard let stamp = self.credentials.commandStamp(data) else { self.reportRejected(); connection.cancel(); return }
                 command(operation, stamp, Data(SHA256.hash(data: data)), respond)
             } else { self.read(operation, respond) }
         }

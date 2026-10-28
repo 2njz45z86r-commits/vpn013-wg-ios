@@ -7,6 +7,7 @@ s = p.read_text()
 app = '6F7774E421718281006A79B3'
 extensions = ['35A950238CE7EA1DBD6C5A57', 'B47708F94D16F2FA231D8BDE']
 sources = {
+    'Invitation.swift': [app],
     'AutomaticMode.swift': [app, *extensions],
     'AutomaticModeUI.swift': [app],
     'ProxyProfile.swift': [app, *extensions],

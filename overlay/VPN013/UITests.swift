@@ -1,5 +1,26 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testInvitationReachableFromEveryProxySectionWithoutSharingProfiles() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
+        app.launch()
+        for kind in ["happ", "incy", "blacktemple"] {
+            let tab = app.tabBars.buttons["vpn013.kind." + kind]
+            XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+            let invite = app.buttons["vpn013.invite"]
+            XCTAssertTrue(invite.waitForExistence(timeout: 8)); invite.tap()
+            XCTAssertTrue(app.navigationBars["Пригласить друга"].waitForExistence(timeout: 5))
+            let message = app.staticTexts["vpn013.invite.message"]
+            XCTAssertTrue(message.waitForExistence(timeout: 5))
+            XCTAssertTrue(message.label.contains("https://vpn013.com/"))
+            XCTAssertTrue(message.label.contains("https://t.me/vpn013_com_bot"))
+            XCTAssertFalse(message.label.contains("vless://"))
+            XCTAssertTrue(app.buttons["vpn013.invite.personal"].exists)
+            XCTAssertTrue(app.buttons["vpn013.invite.share"].exists)
+            capture("invite-" + kind + "-public-links-no-profile-data")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+        }
+    }
     func testNativeRussianIPRouteObjectsPreserveVPNAndPeers() {
         let app=XCUIApplication()
         app.launchArguments=["-AppleLanguages","(ru)","-AppleLocale","ru_RU","--vpn013-test-count","2","--vpn013-test-russian-routes"]
