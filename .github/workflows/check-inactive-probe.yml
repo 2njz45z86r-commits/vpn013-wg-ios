@@ -88,10 +88,29 @@ jobs:
           cd "$GITHUB_WORKSPACE/experiments/inactive-probe"
           xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-merged-check"
           "$RUNNER_TEMP/r013-merged-check"
-          xcrun swiftc -parse-as-library -swift-version 5 -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/wireguard.h" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/tests/ProxyCoreNativeCheck.swift" "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-proxy-core-check"
+          xcrun swiftc -parse-as-library -swift-version 5 -I "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo" -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/wireguard.h" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/tests/ProxyCoreNativeCheck.swift" "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-proxy-core-check"
           "$RUNNER_TEMP/r013-proxy-core-check"
       - name: Verify the actual app five-minute coordinator and lifecycle deadlines
         if: runner.os == 'macOS'
         run: |
           xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" "$GITHUB_WORKSPACE/overlay/VPN013/ProbeCoordinator.swift" "$GITHUB_WORKSPACE/tests/PeriodicCoordinatorNativeTests.swift" "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-periodic-check"
           "$RUNNER_TEMP/r013-periodic-check"
+      - name: Protect detailed dependency evidence for private review
+        if: always() && runner.os == 'macOS'
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/r013-private-audit"
+          export GOFLAGS="-mod=readonly -modfile=$RUNNER_TEMP/r013-proxy-fd/proxy-tun.mod"
+          set +e
+          python3 "$GITHUB_WORKSPACE/scripts/check_go_security.py" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo" --encrypted-report "$RUNNER_TEMP/r013-private-audit/dependencies.enc.json" --recipient "$GITHUB_WORKSPACE/scripts/audit-recipient.pub"
+          patched_result=$?
+          export GOFLAGS=-mod=readonly
+          python3 "$GITHUB_WORKSPACE/scripts/check_go_security.py" "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo" --encrypted-report "$RUNNER_TEMP/r013-private-audit/upstream.enc.json" --recipient "$GITHUB_WORKSPACE/scripts/audit-recipient.pub"
+          upstream_result=$?
+          test "$patched_result" -eq 0 && test "$upstream_result" -eq 0
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && runner.os == 'macOS'
+        with:
+          name: unified-encrypted-audit-${{ github.run_id }}
+          retention-days: 3
+          path: ${{ runner.temp }}/r013-private-audit/*.enc.json
