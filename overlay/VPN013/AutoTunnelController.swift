@@ -19,6 +19,7 @@ final class AutoTunnelController {
     private var installedIndex: Int
     private var applying = false
     private var enabled = true
+    var automaticEnabled: Bool { enabled }
     private var pausePending = false
     private(set) var phase = "Проверка соединения"
     var activeName: String { configuredCandidates[installedIndex].name ?? "Сервер" }

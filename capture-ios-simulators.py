@@ -14,10 +14,11 @@ def main():
     def call(*args,limit=90):
         return subprocess.check_output(["xcrun","simctl",*args],text=True,timeout=limit,stderr=subprocess.STDOUT)
     def devices():
-        return [d for rows in json.loads(call("list","devices","available","-j"))["devices"].values() for d in rows]
+        return [dict(d,runtime=runtime) for runtime,rows in json.loads(call("list","devices","available","-j"))["devices"].items() for d in rows]
     available=devices()
-    phone=next(d["udid"] for d in available if d["name"]=="iPhone 16 Pro")
-    tablet=next(d["udid"] for d in available if d["name"].startswith("iPad"))
+    selected=next(d for d in available if d["name"]=="iPhone 16 Pro" and (not os.environ.get('VPN013_CAPTURE_PHONE_ID') or d['udid']==os.environ['VPN013_CAPTURE_PHONE_ID']))
+    phone=selected['udid']
+    tablet=next(d["udid"] for d in available if d["name"].startswith("iPad") and d['runtime']==selected['runtime'])
     assert phone!=tablet and all(str(uuid.UUID(d)).upper()==d.upper() for d in (phone,tablet))
     def stage(label):
         print("Simulator capture stage="+label,flush=True)
@@ -40,12 +41,23 @@ def main():
         width,height=int.from_bytes(b[16:20],"big"),int.from_bytes(b[20:24],"big")
         assert width>=300 and height>=300
     fixture=["--vpn013-test-count","2","--vpn013-test-current-card","--vpn013-test-start-current","--vpn013-test-ping-loopback"]
+    def unified(device,prefix):
+        for kind in ('happ','incy','blacktemple'):
+            launch(device,["--vpn013-test-unified","--vpn013-test-automatic","--vpn013-test-auto-reset","-VPN013SelectedKind",kind])
+            screenshot(device,prefix+'-unified-'+kind+'.png')
+        call('ui',device,'content_size','accessibility-extra-extra-extra-large',limit=45)
+        try:
+            launch(device,["--vpn013-test-unified","--vpn013-test-automatic","--vpn013-test-auto-reset","-VPN013SelectedKind","blacktemple"])
+            screenshot(device,prefix+'-unified-large-type.png')
+        finally:call('ui',device,'content_size','large',limit=45)
     stage("phone-large-type")
     try:
         boot(phone)
         call("ui",phone,"content_size","accessibility-extra-extra-extra-large",limit=45)
         launch(phone,fixture);screenshot(phone,"phone-large-type.png")
         call("ui",phone,"content_size","large",limit=45)
+        stage("phone-unified-sections")
+        unified(phone,'phone')
         stage("phone-ordinary-launch")
         launch(phone,[]);screenshot(phone,"phone-normal-launch-no-fixture.png")
     finally:
@@ -59,6 +71,8 @@ def main():
             call("ui",tablet,"appearance","dark",limit=45)
             call("install",tablet,str(app),limit=90)
             launch(tablet,fixture);screenshot(tablet,"tablet.png")
+            stage('tablet-unified-sections')
+            unified(tablet,'tablet')
             break
         except (subprocess.TimeoutExpired,subprocess.CalledProcessError):
             stage("tablet-reset-after-bounded-failure")
@@ -68,6 +82,7 @@ def main():
     (review/"simulator-capture-completion.json").write_text(json.dumps({
         "version":meta["CFBundleShortVersionString"],"build":meta["CFBundleVersion"],
         "freshPhoneLargeType":True,"freshPhoneOrdinaryLaunch":True,"freshTablet":True,
+        "freshUnifiedPhone":True,"freshUnifiedTablet":True,"freshUnifiedLargeType":True,
         "sequentialSimulators":True,"physicalIPhoneTested":False},indent=2))
     stage("complete")
 if __name__=="__main__":main()

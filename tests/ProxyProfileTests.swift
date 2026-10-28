@@ -131,6 +131,25 @@ import Foundation
         let probe = try JSONSerialization.jsonObject(with: payload.probeConfiguration(resolvedHost: "192.0.2.10")) as! [String: Any]
         check((probe["inbounds"] as? [Any])?.isEmpty == true && (probe["outbounds"] as? [Any])?.count == 1 && probe["routing"] == nil, "probe has no listener or direct routing fallback")
         rejects("unresolved probe endpoint") { _ = try payload.probeConfiguration(resolvedHost: "example.invalid") }
+        let livePayload = ProxyTunnelPayload(profile: ws, automaticCandidates: [ws, reserve], automaticEnabled: true)
+        let live = ProxyTraffic(running: true, rx: 32, tx: 11, selectedName: reserve.name, selectedEndpoint: reserve.endpoint, automatic: false, httpsMilliseconds: 44)
+        let liveData = try JSONEncoder().encode(live)
+        check(ProxyTraffic.validated(liveData, payload: livePayload)?.selectedEndpoint == reserve.endpoint, "paused Auto retains actual reserve identity")
+        var wrong = live; wrong.selectedEndpoint = "foreign.example.invalid:443"
+        let wrongEndpoint = try JSONEncoder().encode(wrong)
+        check(ProxyTraffic.validated(wrongEndpoint, payload: livePayload) == nil, "foreign endpoint is never a current-server observation")
+        wrong = live; wrong.selectedName = "Foreign name"
+        let wrongName = try JSONEncoder().encode(wrong)
+        check(ProxyTraffic.validated(wrongName, payload: livePayload) == nil, "name and endpoint must identify the same owned candidate")
+        wrong = live; wrong.rx = -1
+        let negative = try JSONEncoder().encode(wrong)
+        check(ProxyTraffic.validated(negative, payload: livePayload) == nil, "negative traffic is not a valid sample")
+        wrong = live; wrong.httpsMilliseconds = -1
+        let negativeTime = try JSONEncoder().encode(wrong)
+        check(ProxyTraffic.validated(negativeTime, payload: livePayload) == nil, "negative latency is not presented")
+        let stopped = try JSONEncoder().encode(ProxyTraffic(running: false, rx: 0, tx: 0))
+        check(ProxyTraffic.validated(stopped, payload: livePayload) == nil, "stopped core cannot prove a current endpoint")
+        check(ProxyTraffic.validated(Data(repeating: 0, count: 4096), payload: livePayload) == nil, "statistics IPC remains bounded")
         let sources: [ProxyProfile] = (0..<19).map { index in
             var value = ws; value.id = UUID(); value.host = "node\(index).example.invalid"; value.name = "Country \(index)"; return value
         }

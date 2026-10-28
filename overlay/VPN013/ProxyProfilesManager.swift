@@ -20,7 +20,12 @@ final class ProxyProfilesManager {
     struct Entry {
         let manager: NETunnelProviderManager
         var value: ProxyTunnelPayload
-        var status: NEVPNStatus { manager.connection.status }
+        var status: NEVPNStatus {
+            #if targetEnvironment(simulator) && DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-proxy-connected-missing") { return .connected }
+            #endif
+            return manager.connection.status
+        }
         var inOperation: Bool { [.connected, .connecting, .reasserting, .disconnecting].contains(status) }
     }
     static let shared = ProxyProfilesManager()
@@ -36,6 +41,8 @@ final class ProxyProfilesManager {
     private var configurationObserver: NSObjectProtocol?
     private let subscriptions = ProxySubscriptionStore()
     private var subscriptionDownload: ProxySubscriptionDownload?
+    private var localReads: [UUID: VPN013LocalStatisticsRead] = [:]
+    private var automaticControl: VPN013LocalStatisticsRead?
     #if targetEnvironment(simulator) && DEBUG
     private var simulator = true
     #else
@@ -50,6 +57,7 @@ final class ProxyProfilesManager {
         if let token = statusObserver { NotificationCenter.default.removeObserver(token) }
         if let token = configurationObserver { NotificationCenter.default.removeObserver(token) }
         switchingTimer?.invalidate()
+        automaticControl?.cancel(); localReads.values.forEach { $0.cancel() }
     }
     func reload() {
         guard !simulator, !working else { changed?(); return }
@@ -81,7 +89,13 @@ final class ProxyProfilesManager {
                 return candidate == entry.value.profile
             }
             if duplicate { next(); return }
-            let value = ProxyTunnelPayload(profile: profile)
+            var value = ProxyTunnelPayload(profile: profile)
+            #if targetEnvironment(simulator) && DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-proxy-connected-missing") {
+                var reserve = profile; reserve.id = UUID(); reserve.name = "Reserve"; reserve.host = "reserve.example.invalid"
+                value.automaticCandidates = [profile, reserve]; value.automaticEnabled = true
+            }
+            #endif
             let manager = NETunnelProviderManager()
             do { manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value) }
             catch { self.working = false; self.changed?(); completion(ProxyOperationError.unreadable); return }
@@ -304,33 +318,54 @@ final class ProxyProfilesManager {
     }
     func traffic(_ entry: Entry, completion: @escaping (ProxyTraffic?) -> Void) {
         guard entry.status == .connected, let session = entry.manager.connection as? NETunnelProviderSession else { completion(nil); return }
-        do {
-            try session.sendProviderMessage(Data([0x53, 0x50, 1])) { data in
-                let value = data.flatMap { $0.count < 4096 ? try? JSONDecoder().decode(ProxyTraffic.self, from: $0) : nil }
-                DispatchQueue.main.async { completion(value) }
-            }
-        } catch { completion(nil) }
+        let envelope = (entry.manager.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope
+        #if targetEnvironment(simulator) && DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-proxy-connected-missing") { completion(nil); return }
+        #endif
+        let token = UUID(); var ended = false; var localStarted = false
+        let finish: (Data?) -> Void = { data in
+            guard !ended else { return }; ended = true
+            self.localReads.removeValue(forKey: token)?.cancel()
+            guard let current = self.entries.first(where: { $0.value.profile.id == entry.value.profile.id }), current.status == .connected,
+                  let before = envelope, let now = (current.manager.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope,
+                  before.id == now.id, before.ciphertext == now.ciphertext else { completion(nil); return }
+            completion(data.flatMap { ProxyTraffic.validated($0, payload: current.value) })
+        }
+        let local = {
+            guard !ended, !localStarted else { return }; localStarted = true
+            guard let envelope = envelope, let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
+                  let credentials = try? VPN013LocalStatisticsCredentials(secret: secret, id: envelope.id, ciphertext: envelope.ciphertext),
+                  let read = try? VPN013LocalStatisticsRead(credentials: credentials, operation: 8) else { finish(nil); return }
+            self.localReads[token] = read
+            read.start { finish(try? $0.get()) }
+        }
+        do { try session.sendProviderMessage(Data([8])) { data in DispatchQueue.main.async {
+            if let data = data, ProxyTraffic.validated(data, payload: entry.value) != nil { finish(data) }
+            else { local() }
+        } } } catch { local() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: local)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { finish(nil) }
     }
     func applyAutomaticPreference(completion: @escaping (Error?) -> Void) {
         guard let index = entries.firstIndex(where: { $0.status == .connected }) else { completion(nil); return }
         guard !working else { completion(ProxyOperationError.busy); return }
-        let entry = entries[index]; let old = entry.manager.protocolConfiguration as? NETunnelProviderProtocol
-        var value = entry.value; value.automaticEnabled = VPN013AutomaticMode.enabled()
-        do { entry.manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old) }
-        catch { completion(error); return }
-        working = true
-        var answered = false
-        let finish: (Error?) -> Void = { error in
-            guard !answered else { return }; answered = true
-            self.working = false; self.changed?(); completion(error)
+        let entry = entries[index]; let enabled = VPN013AutomaticMode.enabled()
+        guard let envelope = (entry.manager.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope,
+              let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
+              let credentials = try? VPN013LocalStatisticsCredentials.automaticControl(secret: secret,
+                id: envelope.id, ciphertext: envelope.ciphertext),
+              let read = try? VPN013LocalStatisticsRead(credentials: credentials, operation: enabled ? 10 : 9) else {
+            completion(ProxyOperationError.system); return
         }
-        persist(entry.manager) { error in
-            guard error == nil else { entry.manager.protocolConfiguration = old; finish(error); return }
-            if let index = self.entries.firstIndex(where: { $0.value.profile.id == value.profile.id }) { self.entries[index].value = value }
-            guard let session = entry.manager.connection as? NETunnelProviderSession else { finish(ProxyOperationError.system); return }
-            do { try session.sendProviderMessage(Data([7, value.automaticEnabled == true ? 1 : 0])) { data in DispatchQueue.main.async { finish(data == Data([1]) ? nil : ProxyOperationError.system) } } }
-            catch { finish(ProxyOperationError.system) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { finish(ProxyOperationError.system) }
+        working = true
+        automaticControl = read
+        read.start { result in
+            self.automaticControl = nil
+            let index = self.entries.firstIndex { $0.value.profile.id == entry.value.profile.id && $0.status == .connected &&
+                ($0.manager.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope?.ciphertext == envelope.ciphertext }
+            let accepted = (try? result.get()) == Data([1]) && index != nil
+            if accepted, let index = index { self.entries[index].value.automaticEnabled = enabled }
+            self.working = false; self.changed?(); completion(accepted ? nil : ProxyOperationError.system)
         }
     }
 }

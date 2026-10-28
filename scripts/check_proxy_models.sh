@@ -15,3 +15,5 @@ xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/ProxyProfi
 "$target/requests"
 xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/ProxyProfile.swift" "$root/overlay/VPN013/PrivateTunnelStore.swift" "$root/overlay/VPN013/SubscriptionRequest.swift" "$root/overlay/VPN013/ProxySubscriptionStore.swift" "$root/tests/ProxySubscriptionStoreTests.swift" -o "$target/store"
 "$target/store"
+xcrun swiftc -swift-version 5 "$root/overlay/VPN013/LocalStatistics.swift" "$root/overlay/VPN013/tests/LocalStatisticsTests.swift" -o "$target/local"
+"$target/local"

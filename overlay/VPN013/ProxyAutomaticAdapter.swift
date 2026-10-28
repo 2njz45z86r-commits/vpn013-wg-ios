@@ -19,6 +19,8 @@ final class ProxyPacketAdapter {
     private var resolved: [String?] = []
     private var additional: [[String: String]] = []
     private var selected = 0
+    private var connectionRevision = UUID()
+    private var trafficOverflow = false
     private var enabled = false
     private var applying = false
     private var failures = 0
@@ -69,7 +71,7 @@ final class ProxyPacketAdapter {
     }
     private func install(_ index: Int, token: UUID, completion: @escaping (Error?) -> Void) {
         guard epoch == token, let value = payload, resolved.indices.contains(index), let host = resolved[index] else { completion(PacketTunnelProviderError.dnsResolutionFailure); return }
-        applying = true
+        applying = true; connectionRevision = UUID()
         primary.start(value.selecting(index), resolvedHost: host, additionalHosts: additional[index], excludedHosts: resolved.compactMap { $0 } + additional.flatMap { $0.values }) { error in
             guard self.epoch == token else { return }; self.applying = false
             if error == nil {
@@ -82,6 +84,7 @@ final class ProxyPacketAdapter {
     }
     func setAutomaticEnabled(_ value: Bool) {
         dispatchPrecondition(condition: .onQueue(.main))
+        guard enabled != value else { return }
         enabled = value; probeGeneration = UUID(); timer?.cancel(); timer = nil; _ = R013ProxyProbeReset()
         if value { schedule(after: 1) }
     }
@@ -124,7 +127,11 @@ final class ProxyPacketAdapter {
         primary.statistics { data in
             DispatchQueue.main.async {
                 guard self.epoch == token else { return }
-                if let data = data, let value = try? JSONDecoder().decode(ProxyTraffic.self, from: data) { self.carriedRX += max(0, value.rx); self.carriedTX += max(0, value.tx) }
+                if let data = data, let value = try? JSONDecoder().decode(ProxyTraffic.self, from: data), value.rx >= 0, value.tx >= 0 {
+                    let rx = self.carriedRX.addingReportingOverflow(value.rx), tx = self.carriedTX.addingReportingOverflow(value.tx)
+                    if rx.overflow || tx.overflow { self.trafficOverflow = true }
+                    else { self.carriedRX = rx.partialValue; self.carriedTX = tx.partialValue }
+                }
                 self.primary.stop {
                     guard self.epoch == token else { return }
                     self.install(index, token: token) { error in
@@ -146,10 +153,17 @@ final class ProxyPacketAdapter {
         primary.stop(completion: completion)
     }
     func statistics(completion: @escaping (Data?) -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard !applying, !trafficOverflow else { completion(nil); return }
+        let token = epoch, revision = connectionRevision, index = selected
         primary.statistics { data in
             DispatchQueue.main.async {
-                guard let data = data, var value = try? JSONDecoder().decode(ProxyTraffic.self, from: data), let profile = self.payload?.candidates[self.selected] else { completion(nil); return }
-                value.rx += self.carriedRX; value.tx += self.carriedTX
+                guard self.epoch == token, self.connectionRevision == revision, self.selected == index, !self.applying, !self.trafficOverflow,
+                      let data = data, var value = try? JSONDecoder().decode(ProxyTraffic.self, from: data), value.running, value.rx >= 0, value.tx >= 0,
+                      let profile = self.payload?.candidates[index] else { completion(nil); return }
+                let rx = value.rx.addingReportingOverflow(self.carriedRX), tx = value.tx.addingReportingOverflow(self.carriedTX)
+                guard !rx.overflow, !tx.overflow else { completion(nil); return }
+                value.rx = rx.partialValue; value.tx = tx.partialValue
                 value.selectedName = profile.name; value.selectedEndpoint = profile.endpoint; value.automatic = self.enabled; value.httpsMilliseconds = self.latency
                 completion(try? JSONEncoder().encode(value))
             }

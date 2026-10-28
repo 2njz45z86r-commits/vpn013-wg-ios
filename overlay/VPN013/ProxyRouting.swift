@@ -109,4 +109,13 @@ struct ProxyTraffic: Codable {
     var selectedEndpoint: String? = nil
     var automatic: Bool? = nil
     var httpsMilliseconds: Double? = nil
+
+    static func validated(_ data: Data, payload: ProxyTunnelPayload) -> Self? {
+        guard data.count < 4096, let value = try? JSONDecoder().decode(Self.self, from: data),
+              value.running, value.rx >= 0, value.tx >= 0,
+              let name = value.selectedName, let endpoint = value.selectedEndpoint,
+              payload.candidates.contains(where: { $0.name == name && $0.endpoint == endpoint }),
+              value.httpsMilliseconds.map({ $0.isFinite && $0 >= 0 && $0 <= 60_000 }) ?? true else { return nil }
+        return value
+    }
 }

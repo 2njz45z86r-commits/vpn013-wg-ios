@@ -8,6 +8,8 @@ import os
 class PacketTunnelProvider: NEPacketTunnelProvider {
     private var proxyAdapter: ProxyPacketAdapter?
     private var localStatistics: VPN013LocalStatisticsServer?
+    private var localAutomaticControl: VPN013LocalStatisticsServer?
+    private var automaticSession: VPN013AutomaticSessionState?
     // Read and changed only on the main queue. A stopped startup cannot open a listener later.
     private var localStatisticsEpoch = UUID()
     private var automatic: AutoTunnelController?
@@ -74,6 +76,55 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
 
+    private func makeAutomaticSession(_ proto: NETunnelProviderProtocol, initial: Bool) throws -> VPN013AutomaticSessionState {
+        guard let envelope = proto.privateEnvelope else { throw PrivateStoreError.invalidEnvelope }
+        let store = PrivateTunnelStore.current
+        return try VPN013AutomaticSessionState(directory: store.directory,
+            secret: store.key(for: envelope.id), id: envelope.id,
+            ciphertext: envelope.ciphertext, initialEnabled: initial)
+    }
+
+    private func startLocalChannels(_ proto: NETunnelProviderProtocol, epoch: UUID) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard localStatisticsEpoch == epoch, let envelope = proto.privateEnvelope,
+              let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
+              let credentials = try? VPN013LocalStatisticsCredentials(secret: secret,
+                id: envelope.id, ciphertext: envelope.ciphertext) else { return }
+        let server = VPN013LocalStatisticsServer(credentials: credentials) { [weak self] operation, reply in
+            DispatchQueue.main.async {
+                guard let self = self, self.localStatisticsEpoch == epoch else { reply(nil); return }
+                self.handleAppMessage(Data([operation]), completionHandler: reply)
+            }
+        }
+        localStatistics = server; server.start()
+        guard automaticSession != nil,
+              let control = try? VPN013LocalStatisticsCredentials.automaticControl(secret: secret,
+                id: envelope.id, ciphertext: envelope.ciphertext) else { return }
+        let commands = VPN013LocalStatisticsServer(controlCredentials: control) { [weak self] operation, stamp, digest, reply in
+            DispatchQueue.main.async {
+                guard let self = self, self.localStatisticsEpoch == epoch,
+                      self.proxyAdapter != nil || self.automatic != nil,
+                      let state = self.automaticSession else { reply(nil); return }
+                do {
+                    let enabled = try state.accept(operation: operation, stamp: stamp, digest: digest)
+                    self.proxyAdapter?.setAutomaticEnabled(enabled)
+                    self.automatic?.setEnabled(enabled)
+                    reply(Data([1]))
+                } catch { reply(nil) }
+            }
+        }
+        localAutomaticControl = commands; commands.start()
+    }
+
+    private func stopLocalChannels(completion: @escaping () -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let servers = [localStatistics, localAutomaticControl].compactMap { $0 }
+        localStatistics = nil; localAutomaticControl = nil
+        let group = DispatchGroup()
+        for server in servers { group.enter(); server.stop { group.leave() } }
+        group.notify(queue: .main, execute: completion)
+    }
+
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         let statisticsEpoch = UUID()
         let rememberStatisticsStartup = { self.localStatisticsEpoch = statisticsEpoch }
@@ -93,14 +144,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         #if os(iOS)
         if let proto = self.protocolConfiguration as? NETunnelProviderProtocol, proto.isVPN013Proxy {
             do {
-                let value = try proto.proxyPayload()
+                var value = try proto.proxyPayload()
+                let state = try makeAutomaticSession(proto, initial: value.automaticEnabled ?? false)
+                value.automaticEnabled = state.enabled
                 DispatchQueue.main.async {
                     guard self.localStatisticsEpoch == statisticsEpoch else {
                         completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return
                     }
                     let adapter = ProxyPacketAdapter(provider: self)
+                    self.automaticSession = state
                     self.proxyAdapter = adapter
-                    adapter.start(value, completion: completionHandler)
+                    adapter.start(value) { error in
+                        guard error == nil else { self.automaticSession = nil; completionHandler(error); return }
+                        guard self.localStatisticsEpoch == statisticsEpoch else {
+                            completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return
+                        }
+                        self.startLocalChannels(proto, epoch: statisticsEpoch)
+                        completionHandler(nil)
+                    }
                 }
             } catch { completionHandler(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid) }
             return
@@ -128,18 +189,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 guard self.localStatisticsEpoch == statisticsEpoch else {
                     completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return
                 }
-                // Independent read-only authenticated transport. It cannot alter the
-                // engine, routes, profiles or keys and never binds a LAN/WAN address.
-                if let envelope = tunnelProviderProtocol.privateEnvelope,
-                   let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
-                   let credentials = try? VPN013LocalStatisticsCredentials(secret: secret,
-                        id: envelope.id, ciphertext: envelope.ciphertext) {
-                    let server = VPN013LocalStatisticsServer(credentials: credentials) { [weak self] operation, reply in
-                        guard let self = self else { reply(nil); return }
-                        self.handleAppMessage(Data([operation]), completionHandler: reply)
-                    }
-                    self.localStatistics = server; server.start()
-                }
+                self.startLocalChannels(tunnelProviderProtocol, epoch: statisticsEpoch)
                 completionHandler(nil)
             }
         }
@@ -147,8 +197,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         do {
             if let profile = try AutoTunnelProfile.load(from:tunnelProviderProtocol) {
                 let candidates = try profile.validatedConfigurations()
-                let enabled = (try? tunnelProviderProtocol.privatePayload()?.automaticEnabled) ?? true
-                DispatchQueue.main.async { self.startAutomatic(candidates:candidates, enabled: enabled, completion:finishStart) }
+                let initial = (try? tunnelProviderProtocol.privatePayload()?.automaticEnabled) ?? true
+                let state = try tunnelProviderProtocol.privateEnvelope.map { _ in
+                    try makeAutomaticSession(tunnelProviderProtocol, initial: initial)
+                }
+                DispatchQueue.main.async {
+                    guard self.localStatisticsEpoch == statisticsEpoch else {
+                        completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return
+                    }
+                    self.automaticSession = state
+                    self.startAutomatic(candidates:candidates, enabled: state?.enabled ?? initial, completion:finishStart)
+                }
                 return
             }
         } catch { finishStart(error); return }
@@ -201,7 +260,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 self.localStatisticsEpoch = UUID()
                 let proxy = self.proxyAdapter
                 self.proxyAdapter = nil
-                if let proxy = proxy { proxy.stop(completion: completionHandler) } else { completionHandler() }
+                self.automaticSession = nil
+                self.stopLocalChannels {
+                    if let proxy = proxy { proxy.stop(completion: completionHandler) } else { completionHandler() }
+                }
             }
             return
         }
@@ -209,6 +271,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         let cleanup = {
             self.localStatisticsEpoch = UUID()
+            self.automaticSession = nil
             self.automaticEpoch += 1;self.automatic?.stop();self.automatic = nil
             self.automaticStartupPing?.cancel();self.automaticStartupPing = nil
             let pending=self.automaticStartCompletion;self.automaticStartCompletion=nil
@@ -232,25 +295,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             #endif
         }
         }
-        if let server = localStatistics {
-            localStatistics = nil
-            server.stop(completion: stopAdapter)
-        } else { stopAdapter() }
+        DispatchQueue.main.async { self.stopLocalChannels(completion: stopAdapter) }
     }
 
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
         guard let completionHandler = completionHandler else { return }
-        if messageData.count == 2, messageData[0] == 7, messageData[1] <= 1 {
-            DispatchQueue.main.async {
-                let enabled = messageData[1] == 1
-                if let proxy = self.proxyAdapter { proxy.setAutomaticEnabled(enabled); completionHandler(Data([1])) }
-                else if let automatic = self.automatic { automatic.setEnabled(enabled); completionHandler(Data([1])) }
-                else { completionHandler(nil) }
-            }; return
-        }
         if (protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Proxy == true {
-            guard messageData == Data([0x53, 0x50, 1]), let proxy = proxyAdapter else { completionHandler(nil); return }
-            proxy.statistics(completion: completionHandler)
+            guard messageData == Data([8]) || messageData == Data([0x53, 0x50, 1]) else { completionHandler(nil); return }
+            DispatchQueue.main.async {
+                guard let proxy = self.proxyAdapter else { completionHandler(nil); return }
+                proxy.statistics(completion: completionHandler)
+            }
             return
         }
 
@@ -316,6 +371,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                             phase: self.automatic?.phase, revision: revision,
                             statistics: .parse(runtime))
                         if self.automatic != nil { value.hourlyComparison = self.hourlySupport?.summary ?? "Сравнение VPN недоступно" }
+                        value.automaticEnabled = self.automatic?.automaticEnabled
                         completionHandler(try? JSONEncoder().encode(value))
                     }
                 }

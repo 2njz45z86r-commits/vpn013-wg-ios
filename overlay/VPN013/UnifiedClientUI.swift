@@ -238,6 +238,7 @@ final class ProxyDetailViewController: UITableViewController {
     private var timer: Timer?
     private var traffic: ProxyTraffic?
     private var trafficInFlight = false
+    private var trafficRequest = UUID()
     init(id: UUID) { self.id = id; super.init(style: .insetGrouped) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     static func statusText(_ status: NEVPNStatus) -> String {
@@ -252,18 +253,28 @@ final class ProxyDetailViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad(); view.backgroundColor = VPN013Theme.background
         tableView.backgroundColor = VPN013Theme.background; tableView.separatorColor = VPN013Theme.separator
-        observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in self?.tableView.reloadData() }
+        observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else { return }; self.invalidateTraffic(); self.tableView.reloadData(); self.readTraffic()
+        }
     }
     deinit { if let token = observer { NotificationCenter.default.removeObserver(token) }; timer?.invalidate() }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated); title = entry?.value.profile.name ?? "Подключение"
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.readTraffic() }; readTraffic()
     }
-    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); timer?.invalidate(); timer = nil }
+    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); timer?.invalidate(); timer = nil; invalidateTraffic() }
+    private func invalidateTraffic() { trafficRequest = UUID(); trafficInFlight = false; traffic = nil }
     private func readTraffic() {
-        guard !trafficInFlight, let entry = entry else { return }; trafficInFlight = true
-        manager.traffic(entry) { [weak self] value in self?.trafficInFlight = false; self?.traffic = value; self?.tableView.reloadData() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.trafficInFlight = false }
+        guard viewIfLoaded?.window != nil, !trafficInFlight, let entry = entry, entry.status == .connected else { return }
+        let request = UUID(); trafficRequest = request; trafficInFlight = true
+        manager.traffic(entry) { [weak self] value in
+            guard let self = self, self.trafficRequest == request, self.entry?.status == .connected else { return }
+            self.trafficInFlight = false; self.traffic = value; self.tableView.reloadData()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self = self, self.trafficRequest == request, self.trafficInFlight else { return }
+            self.invalidateTraffic(); self.tableView.reloadData()
+        }
     }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 5 }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
@@ -282,8 +293,9 @@ final class ProxyDetailViewController: UITableViewController {
             cell.textLabel?.textColor = VPN013Theme.accent; cell.imageView?.image = UIImage(systemName: "power"); cell.imageView?.tintColor = VPN013Theme.accent
             cell.accessibilityIdentifier = "vpn013.proxy.power"
         case 2:
-            cell.textLabel?.text = entry.status == .connected ? (traffic?.selectedName ?? "Сервер") : "Сервер"
-            cell.detailTextLabel?.text = entry.status == .connected ? (traffic?.selectedEndpoint ?? entry.value.profile.endpoint) : entry.value.profile.endpoint
+            cell.accessibilityIdentifier = "vpn013.proxy.current-endpoint"
+            cell.textLabel?.text = entry.status == .connected ? (traffic?.selectedName ?? "Текущий сервер") : "Адрес профиля"
+            cell.detailTextLabel?.text = entry.status == .connected ? (traffic?.selectedEndpoint ?? "VPN-расширение пока не вернуло текущий сервер") : entry.value.profile.endpoint
         if let milliseconds = traffic?.httpsMilliseconds, entry.status == .connected { cell.detailTextLabel?.text?.append("\nHTTPS через VPN: \(Int(milliseconds)) мс") }
         case 3:
             cell.textLabel?.text = "Трафик"

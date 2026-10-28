@@ -5,9 +5,9 @@ import Network
 
 @main enum LocalStatisticsTests {
     static var checks = 0
-    static func expect(_ value: @autoclosure () -> Bool, _ text: String) {
+    static func expect(_ value: @autoclosure () throws -> Bool, _ text: String) {
         checks += 1
-        guard value() else { fatalError(text) }
+        guard (try? value()) == true else { fatalError(text) }
     }
     static func wait(_ seconds: TimeInterval = 5, _ value: () -> Bool) {
         let until = Date().addingTimeInterval(seconds)
@@ -124,6 +124,75 @@ import Network
         expect((try? result?.get()) == sample, "port collision and forged localhost response cannot corrupt metrics")
         stopped = false; second.stop { DispatchQueue.main.async { stopped = true } }; wait { stopped }
         forged.cancel()
+        try checkAutomaticControl(key)
         print("Authenticated native statistics transport checks passed: \(checks); synthetic values only, not physical iPhone proof")
+    }
+
+    static func checkAutomaticControl(_ statistics: VPN013LocalStatisticsCredentials) throws {
+        let secret = Data(repeating: UInt8(1), count: 32), ciphertext = Data(repeating: UInt8(3), count: 40)
+        let id = "8B1F212E-1195-4320-9CE7-6B21F208C43B"
+        let control = try VPN013LocalStatisticsCredentials.automaticControl(secret: secret, id: id, ciphertext: ciphertext)
+        let stamp = UInt64(Date().timeIntervalSince1970 * 1000)
+        let now = Date(timeIntervalSince1970: Double(stamp) / 1000)
+        let nonce = try VPN013LocalStatisticsCredentials.commandNonce(milliseconds: stamp, random: Data(repeating: 7, count: 24))
+        let request = try control.request(operation: 9, nonce: nonce)
+        expect(statistics.authenticate(request) == nil, "read-only keys cannot admit an Auto command")
+        expect(control.authenticate(try statistics.request(operation: 8, nonce: nonce)) == nil, "control keys cannot admit statistics")
+        expect((try? control.request(operation: 6, nonce: nonce)) == nil, "control cannot read counters or configuration")
+        expect((try? statistics.request(operation: 10, nonce: nonce)) == nil, "read-only channel cannot write mode")
+        expect(control.commandStamp(request, now: now) == stamp, "fresh authenticated timestamp admitted")
+        expect(control.commandStamp(request, now: now.addingTimeInterval(31)) == nil, "expired command rejected")
+        expect(control.commandStamp(request, now: now.addingTimeInterval(-31)) == nil, "future command rejected")
+        expect(Set(statistics.ports) != Set(control.ports), "control uses separate derived binding")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("vpn013-auto-fixture-" + UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        func state(_ cipher: Data = ciphertext, initial: Bool = true) throws -> VPN013AutomaticSessionState {
+            try VPN013AutomaticSessionState(directory: directory, secret: secret, id: id,
+                ciphertext: cipher, initialEnabled: initial)
+        }
+        let session = try state(), digest = Data(SHA256.hash(data: request))
+        expect(session.enabled, "new revision uses explicit initial setting")
+        expect(try session.accept(operation: 9, stamp: stamp, digest: digest, now: now) == false, "authenticated disable persists")
+        let restored = try state()
+        expect(!restored.enabled, "OS restart restores paused mode without changing profile ciphertext")
+        expect(try restored.accept(operation: 9, stamp: stamp, digest: digest, now: now) == false, "exact latest retry is idempotent")
+        expect((try? restored.accept(operation: 10, stamp: stamp, digest: digest, now: now)) == nil, "same serial cannot be used for opposite command")
+        let later = Data(repeating: UInt8(11), count: 32)
+        expect(try restored.accept(operation: 10, stamp: stamp + 1, digest: later, now: now), "later command can resume")
+        let restarted = try state()
+        expect(restarted.enabled, "resumed mode survives OS restart")
+        expect((try? restarted.accept(operation: 9, stamp: stamp, digest: digest, now: now)) == nil, "old captured command cannot revert a later setting after restart")
+        expect((try? restarted.accept(operation: 0, stamp: stamp + 2, digest: later, now: now)) == nil, "no raw/config command")
+        expect((try? restarted.accept(operation: 9, stamp: stamp + 2, digest: Data(), now: now)) == nil, "bounded authenticated digest required")
+        expect((try? restarted.accept(operation: 9, stamp: stamp + 2, digest: later, now: now.addingTimeInterval(31))) == nil, "state also rejects stale queue delivery")
+        let attributes = try FileManager.default.attributesOfItem(atPath: directory.appendingPathComponent(id + ".automatic").path)
+        expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600, "mode journal private permissions")
+        let otherCipher = Data(repeating: UInt8(9), count: 40)
+        expect(!(try state(otherCipher, initial: false)).enabled, "new authenticated profile revision gets its own mode")
+        let damaged = directory.appendingPathComponent(id + ".automatic")
+        var bytes = try Data(contentsOf: damaged); bytes[bytes.count - 1] ^= 1; try bytes.write(to: damaged)
+        expect((try? state(otherCipher)) == nil, "tampered mode journal fails closed")
+        _ = try state() // A new valid encrypted revision can replace the retired one.
+
+        let defaultsName = "VPN013IdentityFixture." + UUID().uuidString
+        guard let defaults = UserDefaults(suiteName: defaultsName) else { fatalError("fixture defaults") }
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+        expect(!VPN013AutomaticIdentityHistory.required(id: id, ciphertext: ciphertext, initial: false, defaults: defaults), "fresh manual mode can retain manual endpoint")
+        VPN013AutomaticIdentityHistory.rememberEnabled(id: id, ciphertext: ciphertext, defaults: defaults)
+        expect(VPN013AutomaticIdentityHistory.required(id: id, ciphertext: ciphertext, initial: false, defaults: defaults), "lost enable acknowledgement still requires actual member")
+        expect(!VPN013AutomaticIdentityHistory.required(id: id, ciphertext: otherCipher, initial: false, defaults: defaults), "new manual activation resets only its revision")
+
+        let server = VPN013LocalStatisticsServer(controlCredentials: control) { operation, serial, commandDigest, reply in
+            DispatchQueue.main.async {
+                do { _ = try session.accept(operation: operation, stamp: serial, digest: commandDigest); reply(Data([1])) }
+                catch { reply(nil) }
+            }
+        }
+        server.start(); RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        var result: Result<Data, Error>?
+        let read = try VPN013LocalStatisticsRead(credentials: control, operation: 10)
+        read.start { result = $0 }; wait { result != nil }
+        expect((try? result?.get()) == Data([1]) && session.enabled, "real authenticated TCP command changes only fixture mode")
+        var stopped = false; server.stop { DispatchQueue.main.async { stopped = true } }; wait { stopped }
     }
 }

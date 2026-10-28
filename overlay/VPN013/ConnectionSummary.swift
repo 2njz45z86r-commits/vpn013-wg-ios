@@ -6,6 +6,7 @@ import CryptoKit
 struct VPN013ConnectionSnapshot: Codable, Equatable {
     var schema = 1
     var hourlyComparison: String? = nil
+    var automaticEnabled: Bool? = nil
     let name: String
     let endpoints: [String]
     let hosts: [String]

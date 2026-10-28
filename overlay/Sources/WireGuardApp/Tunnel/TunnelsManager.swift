@@ -739,28 +739,11 @@ class TunnelsManager {
     func applyAutomaticPreference(completion: @escaping (Error?) -> Void) {
         guard !builtinPreparing else { completion(ProxyOperationError.busy); return }
         guard let tunnel = tunnelInOperation(), tunnel.status == .active,
-              let proto = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
-              let old = proto.copy() as? NETunnelProviderProtocol else { completion(nil); return }
-        do {
-            let enabled = VPN013AutomaticMode.enabled()
-            try proto.setBuiltinAutomatic(try AutoTunnelProfile.load(from: proto), enabled: enabled)
-            builtinPreparing = true
-            var answered = false
-            let finish: (Error?) -> Void = { error in
-                guard !answered else { return }; answered = true
-                self.builtinPreparing = false; completion(error)
-            }
-            tunnel.tunnelProvider.saveToPreferences { error in
-                DispatchQueue.main.async {
-                    guard error == nil else { tunnel.tunnelProvider.protocolConfiguration = old; finish(error); return }
-                    guard let session = tunnel.tunnelProvider.connection as? NETunnelProviderSession else { finish(ProxyOperationError.system); return }
-                    do { try session.sendProviderMessage(Data([7, enabled ? 1 : 0])) { reply in
-                        DispatchQueue.main.async { finish(reply == Data([1]) ? nil : ProxyOperationError.system) }
-                    } } catch { finish(ProxyOperationError.system) }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { finish(ProxyOperationError.system) }
-                }
-            }
-        } catch { tunnel.tunnelProvider.protocolConfiguration = old; completion(error) }
+              tunnel.hasAutomaticRuntime else { completion(nil); return }
+        builtinPreparing = true
+        tunnel.applyAutomaticMode(VPN013AutomaticMode.enabled()) { error in
+            self.builtinPreparing = false; completion(error)
+        }
     }
     #endif
 
@@ -988,7 +971,10 @@ class TunnelContainer: NSObject {
         (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Automatic == true
     }
     var usesAutomaticSelection: Bool {
-        (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.usesVPN013Automatic == true
+        if status == .active,
+           let envelope = (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope,
+           effectiveAutomaticRevision == envelope.ciphertext, let enabled = effectiveAutomaticEnabled { return enabled }
+        return (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.usesVPN013Automatic == true
     }
     var hasAutomaticRuntime: Bool {
         guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol else { return false }
@@ -1001,7 +987,9 @@ class TunnelContainer: NSObject {
         guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol else { return false }
         #if os(iOS)
         if let payload = try? proto.privatePayload(), payload.builtinAutomatic != nil {
-            return payload.automatic != nil || payload.builtinAutomaticIdentityRequired != false
+            guard let envelope = proto.privateEnvelope else { return true }
+            return VPN013AutomaticIdentityHistory.required(id: envelope.id, ciphertext: envelope.ciphertext,
+                initial: payload.automatic != nil || payload.builtinAutomaticIdentityRequired != false)
         }
         #endif
         return proto.isVPN013Automatic
@@ -1021,9 +1009,33 @@ class TunnelContainer: NSObject {
     }
 
     private(set) var connectionSnapshotIssue: VPN013SnapshotIssue?
+    private var effectiveAutomaticRevision: Data?
+    private var effectiveAutomaticEnabled: Bool?
+    private var automaticControl: VPN013LocalStatisticsRead?
     private let statisticsMessages = VPN013StatisticsMessageClient()
     private var lastStatisticsDiagnostic = ""
     private var lastStatisticsDiagnosticAt: TimeInterval = 0
+
+    func applyAutomaticMode(_ enabled: Bool, completion: @escaping (Error?) -> Void) {
+        guard status == .active, automaticControl == nil,
+              let envelope = (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope,
+              let secret = try? PrivateTunnelStore.current.key(for: envelope.id),
+              let credentials = try? VPN013LocalStatisticsCredentials.automaticControl(secret: secret,
+                id: envelope.id, ciphertext: envelope.ciphertext),
+              let read = try? VPN013LocalStatisticsRead(credentials: credentials, operation: enabled ? 10 : 9) else {
+            completion(ProxyOperationError.system); return
+        }
+        if enabled { VPN013AutomaticIdentityHistory.rememberEnabled(id: envelope.id, ciphertext: envelope.ciphertext) }
+        automaticControl = read
+        read.start { result in
+            self.automaticControl = nil
+            guard self.status == .active,
+                  (self.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope?.ciphertext == envelope.ciphertext,
+                  (try? result.get()) == Data([1]) else { completion(ProxyOperationError.system); return }
+            self.effectiveAutomaticRevision = envelope.ciphertext; self.effectiveAutomaticEnabled = enabled
+            completion(nil)
+        }
+    }
 
     private func statisticsSender(_ session: NETunnelProviderSession) -> VPN013StatisticsMessageClient.Sender {
         { message, response in try session.sendProviderMessage(message, responseHandler: response) }
@@ -1150,6 +1162,10 @@ class TunnelContainer: NSObject {
                     }
                     guard let value = try? JSONDecoder().decode(VPN013ConnectionSnapshot.self, from: data), value.isValid
                     else { self.connectionSnapshotIssue = .invalidResponse; completion(nil); return }
+                    if let enabled = value.automaticEnabled, let envelope = capturedEnvelope {
+                        self.effectiveAutomaticRevision = envelope.ciphertext; self.effectiveAutomaticEnabled = enabled
+                        if enabled { VPN013AutomaticIdentityHistory.rememberEnabled(id: envelope.id, ciphertext: envelope.ciphertext) }
+                    }
                     self.connectionSnapshotIssue = nil
                     completion(value)
         }

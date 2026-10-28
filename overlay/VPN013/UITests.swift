@@ -740,6 +740,20 @@ final class AutoTunnelUITests:XCTestCase {
         capture("subscription-roster-restoration-and-source-isolation-synthetic-no-network")
     }
 
+    func testProxyMissingRuntimeNeverDisplaysAutomaticSeedAsCurrentServer() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-proxy-connected-missing"]
+        app.launch(); app.tabBars.buttons["vpn013.kind.happ"].tap(); app.buttons["vpn013.proxy.add"].tap()
+        app.buttons["vpn013.proxy.import.check"].tap(); app.alerts.buttons["Добавить"].tap()
+        let row = app.tables.cells.staticTexts["Demo server"]
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        let endpoint = app.cells["vpn013.proxy.current-endpoint"]
+        XCTAssertTrue(endpoint.waitForExistence(timeout: 8))
+        XCTAssertTrue(endpoint.label.contains("VPN-расширение пока не вернуло текущий сервер"))
+        XCTAssertFalse(endpoint.label.contains("demo.example.invalid"), "A saved Auto seed is not proof of the selected member")
+        capture("proxy-unknown-current-member-no-seed-fallback-synthetic-no-vpn")
+    }
+
     func testUpdatesScreenAndOrderSynchronization() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]
