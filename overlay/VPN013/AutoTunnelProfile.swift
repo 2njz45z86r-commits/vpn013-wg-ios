@@ -67,13 +67,19 @@ extension NETunnelProviderProtocol {
         #if os(iOS)
         if privateEnvelope != nil {
             guard let value = try? privatePayload() else { return false }
-            return value.automatic != nil || (value.builtinAutomatic != nil && value.automaticEnabled != false)
+            return value.automatic != nil
         }
         #endif
         #if targetEnvironment(simulator)
         if providerConfiguration?["VPN013SimulatorAutoJSON"] != nil { return true }
         #endif
         return providerConfiguration?[AutoTunnelProfile.referenceKey] is Data
+    }
+    var usesVPN013Automatic: Bool {
+        #if os(iOS)
+        if let payload = try? privatePayload(), payload.builtinAutomatic != nil { return payload.automaticEnabled != false }
+        #endif
+        return isVPN013Automatic
     }
 }
 
@@ -100,7 +106,7 @@ extension NETunnelProviderProtocol {
     }
     func setPrivateAutomatic(_ automatic: AutoTunnelProfile) throws {
         guard let envelope = privateEnvelope, let old = try privatePayload() else { throw PrivateStoreError.invalidEnvelope }
-        let payload = PrivateTunnelPayload(version: 1, configuration: old.configuration, automatic: automatic)
+        let payload = PrivateTunnelPayload(version: 1, configuration: old.configuration, automatic: automatic, proxy: old.proxy, builtinAutomatic: nil, automaticEnabled: old.automaticEnabled)
         let next = try PrivateTunnelStore.current.seal(JSONEncoder().encode(payload), reusing: envelope.id)
         providerConfiguration = [PrivateTunnelStore.idKey: next.id, PrivateTunnelStore.dataKey: next.ciphertext]
     }

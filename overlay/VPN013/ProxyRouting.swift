@@ -93,8 +93,8 @@ struct ProxyTunnelPayload: Codable, Equatable {
 
 struct ProxyTraffic: Codable {
     let running: Bool
-    let rx: Int64
-    let tx: Int64
+    var rx: Int64
+    var tx: Int64
     var selectedName: String? = nil
     var selectedEndpoint: String? = nil
     var automatic: Bool? = nil

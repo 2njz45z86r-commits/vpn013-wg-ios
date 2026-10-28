@@ -575,8 +575,8 @@ class TunnelsListTableViewController: UIViewController {
         }
         currentPingRow.isHidden = tunnel.status != .active
         if tunnel.status != .active { clearCurrentConnectionInfo() }
-        summaryNameLabel.text = tunnel.isVPN013Automatic ? (automaticSummaryName ?? tunnel.name) : tunnel.name
-        if tunnel.isVPN013Automatic {
+        summaryNameLabel.text = tunnel.hasAutomaticRuntime ? (automaticSummaryName ?? tunnel.name) : tunnel.name
+        if tunnel.usesAutomaticSelection {
             let count = tunnel.automaticServerCount
             summaryModeLabel.text = "Авто · \(count) \(serverCountWord(count))"
             summaryModeLabel.isHidden = false
@@ -586,7 +586,7 @@ class TunnelsListTableViewController: UIViewController {
             if currentPingTarget == nil { showCurrentStatsUnavailable(for: tunnel) }
             updateRunningSummaryStatus(for: tunnel)
             summaryProofLabel.isHidden = false
-            if tunnel.isVPN013Automatic {
+            if tunnel.usesAutomaticSelection {
                 summaryProofLabel.text = automaticSummaryPhase ?? "VPN запущен · трафик ещё не проверен"
             } else {
                 summaryProofLabel.text = (currentRuntimeStatistics ?? .init()).manualHandshakeSummary
@@ -704,7 +704,7 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     private func updateRunningSummaryStatus(for tunnel: TunnelContainer) {
-        let confirmed = tunnel.isVPN013Automatic
+        let confirmed = tunnel.usesAutomaticSelection
             ? automaticSummaryPhase?.hasPrefix("Трафик проверен") == true
             : false
         summaryStatusLabel.text = confirmed ? "Подключено" : "VPN запущен"
@@ -723,8 +723,8 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     private func updateCurrentPingTarget(for tunnel: TunnelContainer, runtime: VPN013ConnectionSnapshot?) {
-        let configuration = tunnel.isVPN013Automatic ? nil : tunnel.tunnelConfiguration
-        let target = VPN013ConnectionSnapshot.pingTarget(isAutomatic: tunnel.isVPN013Automatic,
+        let configuration = tunnel.hasAutomaticRuntime ? nil : tunnel.tunnelConfiguration
+        let target = VPN013ConnectionSnapshot.pingTarget(isAutomatic: tunnel.hasAutomaticRuntime,
             profileName: tunnel.name,
             configuredEndpoints: configuration?.peers.compactMap { $0.endpoint?.stringRepresentation } ?? [],
             configuredHosts: configuration?.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } } ?? [],
@@ -742,16 +742,16 @@ class TunnelsListTableViewController: UIViewController {
         updateCurrentPingTarget(for: tunnel, runtime: nil)
         summaryEndpointLabel.isHidden = false
         summaryEndpointLabel.text = currentPingTarget.map { "Адрес профиля: " + $0.endpoints.joined(separator: ", ") }
-            ?? (tunnel.isVPN013Automatic ? "Текущий сервер пока недоступен" : "Адрес сервера недоступен")
+            ?? (tunnel.usesAutomaticSelection ? "Текущий сервер пока недоступен" : "Адрес сервера недоступен")
         summaryTrafficLabel.isHidden = false
         summaryTrafficLabel.text = "Статистика VPN пока недоступна"
         summaryTrafficLabel.accessibilityLabel = summaryTrafficLabel.text
         summaryHandshakeLabel.isHidden = issue == nil
         summaryHandshakeLabel.text = issue?.explanation
-        if !tunnel.isVPN013Automatic {
+        if !tunnel.usesAutomaticSelection {
             summaryProofLabel.text = VPN013ConnectionSnapshot.Statistics().manualHandshakeSummary
         }
-        if tunnel.isVPN013Automatic {
+        if tunnel.usesAutomaticSelection {
             automaticSummaryName = nil
             automaticSummaryPhase = nil
             summaryNameLabel.text = tunnel.name
@@ -784,15 +784,15 @@ class TunnelsListTableViewController: UIViewController {
             }
             self.updateCurrentPingTarget(for: tunnel, runtime: snapshot)
             self.currentRuntimeStatistics = snapshot.statistics
-            self.automaticSummaryName = tunnel.isVPN013Automatic ? snapshot.name : tunnel.name
+            self.automaticSummaryName = tunnel.hasAutomaticRuntime ? snapshot.name : tunnel.name
             self.automaticSummaryPhase = snapshot.phase
-            if tunnel.isVPN013Automatic, let hourly = snapshot.hourlyComparison {
+            if tunnel.usesAutomaticSelection, let hourly = snapshot.hourlyComparison {
                 self.summaryModeLabel.text = "Авто · " + hourly
                 self.summaryModeLabel.isHidden = false
             }
             self.updateRunningSummaryStatus(for: tunnel)
             self.summaryNameLabel.text = self.automaticSummaryName
-            if tunnel.isVPN013Automatic {
+            if tunnel.usesAutomaticSelection {
                 self.summaryProofLabel.text = snapshot.phase ?? "VPN запущен · трафик ещё не проверен"
             } else {
                 self.summaryProofLabel.text = snapshot.statistics.manualHandshakeSummary
@@ -856,7 +856,7 @@ class TunnelsListTableViewController: UIViewController {
                 ?? results.first?.text ?? "Недоступно"
             self.cancelCurrentPing()
             self.currentPingLabel.text = "Пинг адреса · " + result
-            if !tunnel.isVPN013Automatic { self.setConnectionTestText(result, for: tunnel) }
+            if !tunnel.usesAutomaticSelection { self.setConnectionTestText(result, for: tunnel) }
             self.sizeSummaryHeader()
         })
         sizeSummaryHeader()

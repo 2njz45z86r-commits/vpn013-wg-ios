@@ -969,11 +969,24 @@ class TunnelContainer: NSObject {
 
     var automaticProfileForUpdates: AutoTunnelProfile? {
         guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol else { return nil }
+        #if os(iOS)
+        if proto.privateEnvelope != nil { return try? proto.privatePayload()?.automatic }
+        #endif
         return try? AutoTunnelProfile.load(from: proto)
     }
 
     var isVPN013Automatic: Bool {
         (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Automatic == true
+    }
+    var usesAutomaticSelection: Bool {
+        (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.usesVPN013Automatic == true
+    }
+    var hasAutomaticRuntime: Bool {
+        guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol else { return false }
+        #if os(iOS)
+        if let payload = try? proto.privatePayload(), payload.builtinAutomatic != nil { return true }
+        #endif
+        return proto.isVPN013Automatic
     }
 
     var automaticServerCount: Int {
@@ -982,7 +995,7 @@ class TunnelContainer: NSObject {
     }
 
     func getAutomaticStatus(completion: @escaping (String?) -> Void) {
-        guard isVPN013Automatic, status == .active,
+        guard usesAutomaticSelection, status == .active,
               let session = tunnelProvider.connection as? NETunnelProviderSession else { completion(nil);return }
         do { try session.sendProviderMessage(Data([2])) { data in
             DispatchQueue.main.async { completion(data.flatMap { String(data:$0,encoding:.utf8) }) }
@@ -1052,7 +1065,7 @@ class TunnelContainer: NSObject {
             return
         }
         #endif
-        let automatic = isVPN013Automatic
+        let automatic = hasAutomaticRuntime
         let manualConfiguration = automatic ? nil : tunnelConfiguration
         let manualName = name
         let capturedEnvelope = (tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.privateEnvelope
@@ -1075,7 +1088,7 @@ class TunnelContainer: NSObject {
             }) { result in
                     self.recordStatisticsDiagnostic()
                     guard self.status == .active else { self.connectionSnapshotIssue = .notRunning; completion(nil); return }
-                    guard self.isVPN013Automatic == automatic,
+                    guard self.hasAutomaticRuntime == automatic,
                           let current = self.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
                           capturedProvider != nil, current.providerBundleIdentifier == capturedProvider,
                           current.privateEnvelope?.id == capturedEnvelope?.id,
@@ -1104,7 +1117,7 @@ class TunnelContainer: NSObject {
                         guard let config = manualConfiguration else {
                             self.connectionSnapshotIssue = .invalidResponse; completion(nil); return
                         }
-                        guard !self.isVPN013Automatic,
+                        guard !self.hasAutomaticRuntime,
                               self.tunnelConfiguration?.asWgQuickConfig() == config.asWgQuickConfig(),
                               let expected = VPN013RuntimeStatisticsReply.identity(config.peers.map { $0.publicKey.hexKey }),
                               reply.peerIdentity == expected else {
@@ -1386,7 +1399,7 @@ extension NETunnelProviderManager {
             completion: @escaping (Result<Date, TunnelHandshakeError>) -> Void
         ) {
             // The extension owns traffic checks across all thirteen candidates.
-            if isVPN013Automatic { handshakeState = .confirmed; completion(.success(connectedAt));return }
+            if usesAutomaticSelection { handshakeState = .confirmed; completion(.success(connectedAt));return }
             #if targetEnvironment(simulator)
                 completion(.success(connectedAt))
                 return
