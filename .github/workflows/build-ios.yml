@@ -2,6 +2,10 @@ name: Build and inspect VPN013 WG
 on:
   workflow_dispatch:
     inputs:
+      development_check:
+        description: Validate unified development source; never retain or publish an IPA
+        type: boolean
+        default: false
       publish_release:
         description: Publish only after final artifact review
         type: boolean
@@ -22,8 +26,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   security-review:
+    if: inputs.development_check != true
     uses: ./.github/workflows/security-review.yml
   build:
+    if: inputs.development_check != true
     needs: [security-review]
     runs-on: macos-15-intel
     timeout-minutes: 45
@@ -112,3 +118,8 @@ jobs:
       - name: Export credential-free development files for verification
         if: always()
         run: python3 export-build-evidence.py
+  unified-development:
+    if: github.event_name == 'workflow_dispatch' && inputs.development_check == true
+    permissions:
+      contents: read
+    uses: ./.github/workflows/native-unified-check.yml
