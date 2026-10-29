@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-29T10:38:02.225741+00:00",
-  "source_sha256": "48cb0101df4c15581e1c328c6950ebb50408ae89c10773afc2d7ffea696c009d",
-  "source_commit_reviewed": "Android native TUN/REALITY traffic and cross-section failure acceptance pending",
+  "reviewed_at": "2026-10-29T10:45:14.558837+00:00",
+  "source_sha256": "1977ebb9090b56cb208b9e1c5db730cea160586425d8fa0030650d3a0e140bce",
+  "source_commit_reviewed": "Android compact Auto initial-state regression fixed; exact native acceptance pending",
   "scope_complete": false,
   "private_report_ref": "private:VPN013-Android-unified-20261029",
   "baseline_only": false,
