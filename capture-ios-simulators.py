@@ -18,7 +18,9 @@ def main():
     available=devices()
     selected=next(d for d in available if d["name"]=="iPhone 16 Pro" and (not os.environ.get('VPN013_CAPTURE_PHONE_ID') or d['udid']==os.environ['VPN013_CAPTURE_PHONE_ID']))
     phone=selected['udid']
-    tablet=next(d["udid"] for d in available if d["name"].startswith("iPad") and d['runtime']==selected['runtime'])
+    tablet_template=next(d for d in available if d["name"].startswith("iPad") and d['runtime']==selected['runtime'])
+    # A fresh disposable tablet avoids persisted simulator launch services state.
+    tablet=call('create','VPN013 Review Tablet '+uuid.uuid4().hex[:8],tablet_template['deviceTypeIdentifier'],selected['runtime']).strip()
     assert phone!=tablet and all(str(uuid.UUID(d)).upper()==d.upper() for d in (phone,tablet))
     def stage(label):
         print("Simulator capture stage="+label,flush=True)
@@ -50,6 +52,12 @@ def main():
             launch(device,["--vpn013-test-unified","--vpn013-test-automatic","--vpn013-test-auto-reset","-VPN013SelectedKind","blacktemple"])
             screenshot(device,prefix+'-unified-large-type.png')
         finally:call('ui',device,'content_size','large',limit=45)
+    def cross(device,prefix):
+        for large in (False,True):
+            call('ui',device,'content_size','accessibility-extra-extra-extra-large' if large else 'large',limit=45)
+            launch(device,['--vpn013-test-count','2','--vpn013-test-unified','--vpn013-test-cross-runtime','--vpn013-test-auto-reset'])
+            screenshot(device,prefix+'-cross-protocol'+('-large-type' if large else '')+'.png')
+        call('ui',device,'content_size','large',limit=45)
     stage("phone-large-type")
     try:
         boot(phone)
@@ -58,6 +66,7 @@ def main():
         call("ui",phone,"content_size","large",limit=45)
         stage("phone-unified-sections")
         unified(phone,'phone')
+        cross(phone,'phone')
         stage("phone-ordinary-launch")
         launch(phone,[]);screenshot(phone,"phone-normal-launch-no-fixture.png")
     finally:
@@ -73,16 +82,22 @@ def main():
             launch(tablet,fixture);screenshot(tablet,"tablet.png")
             stage('tablet-unified-sections')
             unified(tablet,'tablet')
+            cross(tablet,'tablet')
             break
         except (subprocess.TimeoutExpired,subprocess.CalledProcessError):
             stage("tablet-reset-after-bounded-failure")
             if attempt==1:raise
+            # Recreate once rather than retrying the same hung launch state.
+            shutdown(tablet);call('delete',tablet,limit=45)
+            tablet=call('create','VPN013 Review Tablet '+uuid.uuid4().hex[:8],tablet_template['deviceTypeIdentifier'],selected['runtime']).strip()
         finally:
             shutdown(tablet)
     (review/"simulator-capture-completion.json").write_text(json.dumps({
         "version":meta["CFBundleShortVersionString"],"build":meta["CFBundleVersion"],
         "freshPhoneLargeType":True,"freshPhoneOrdinaryLaunch":True,"freshTablet":True,
         "freshUnifiedPhone":True,"freshUnifiedTablet":True,"freshUnifiedLargeType":True,
+        "freshCrossProtocolPhone":True,"freshCrossProtocolTablet":True,"freshCrossProtocolLargeType":True,
         "sequentialSimulators":True,"physicalIPhoneTested":False},indent=2))
     stage("complete")
+    call('delete',tablet,limit=45)
 if __name__=="__main__":main()
