@@ -135,10 +135,8 @@ class R013InstrumentedTest {
             val intent = Intent(context, R013HomeActivity::class.java).setAction(Intent.ACTION_SEND)
                 .putExtra(Intent.EXTRA_STREAM, android.net.Uri.fromFile(file)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             activity = instrumentation.startActivitySync(intent) as R013HomeActivity
-            try {
-                waitFor(20000) { ProxyRegistry(registry.vault).list(ProxyProfile.Section.INCY).any { it.profile.host == "example.org" } }
-            } catch (error: AssertionError) {
-                val observed = mutableListOf<String>()
+            val observed = mutableSetOf<String>()
+            fun captureKnownFeedback() {
                 instrumentation.runOnMainSync {
                     fun visit(view: View) {
                         if (view is TextView) {
@@ -149,6 +147,13 @@ class R013InstrumentedTest {
                     }
                     visit(activity!!.window.decorView)
                 }
+            }
+            try {
+                waitFor(20000) {
+                    captureKnownFeedback()
+                    ProxyRegistry(registry.vault).list(ProxyProfile.Section.INCY).any { it.profile.host == "example.org" }
+                }
+            } catch (error: AssertionError) {
                 throw AssertionError("ZIP import did not finish; known feedback=" + observed.joinToString("|"), error)
             }
         } finally { file.delete() }
