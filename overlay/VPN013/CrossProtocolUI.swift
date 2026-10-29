@@ -10,6 +10,10 @@ final class CrossProtocolObserver {
     private var generation = UUID()
     private var local: VPN013LocalStatisticsRead?
     private var manager: NETunnelProviderManager?
+    #if targetEnvironment(simulator) && DEBUG
+    private var fixtureStopped = false
+    private var fixture: Bool { ProcessInfo.processInfo.arguments.contains("--vpn013-test-cross-runtime") }
+    #endif
     func start() {
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refresh() }
@@ -17,6 +21,14 @@ final class CrossProtocolObserver {
     }
     func stop() { timer?.invalidate(); timer = nil; generation = UUID(); busy = false; local?.cancel(); local = nil }
     func refresh() {
+        #if targetEnvironment(simulator) && DEBUG
+        if fixture {
+            let runtime = CrossProtocolRuntime(schema: 1, kind: .happ, name: "Резервный профиль", endpoint: "reserve.example.invalid:443",
+                phase: "Тестовые данные · VPN не запускается", received: nil, sent: nil, handshake: nil,
+                automaticEnabled: true, trafficVerified: false)
+            changed?(fixtureStopped ? nil : runtime, !fixtureStopped); return
+        }
+        #endif
         guard !busy else { return }; busy = true
         let token = UUID(); generation = token
         NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, _ in
@@ -58,7 +70,12 @@ final class CrossProtocolObserver {
             }
         }
     }
-    func stopConnection() { manager?.connection.stopVPNTunnel(); refresh() }
+    func stopConnection() {
+        #if targetEnvironment(simulator) && DEBUG
+        if fixture { fixtureStopped = true; refresh(); return }
+        #endif
+        manager?.connection.stopVPNTunnel(); refresh()
+    }
 }
 
 final class CrossProtocolStatusView: UIView {

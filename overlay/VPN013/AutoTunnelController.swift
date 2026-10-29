@@ -108,9 +108,12 @@ final class AutoTunnelController {
         probe?.run { [weak self] healthy, latency in
             guard let self = self, self.policy.running, self.enabled, self.epoch == stamp else { return }
             self.probe = nil
-            if healthy { self.cycleHadTraffic = true; self.onVerifiedTraffic?() }
+            if healthy { self.onVerifiedTraffic?() }
+            if healthy, let latency = latency, latency.isFinite,
+               latency > AutoFailoverPolicy.maximumLatencyMilliseconds { self.cycleHadTraffic = true }
             switch self.policy.record(healthy: healthy, networkAvailable: self.networkAvailable, latencyMilliseconds: latency) {
             case .stay:
+                self.cycleHadTraffic = false
                 self.phase = latency.map { "Трафик проверен · \(Int($0)) мс" } ?? "Трафик проверен"
                 self.schedule(after: 15)
             case .wait(let seconds):

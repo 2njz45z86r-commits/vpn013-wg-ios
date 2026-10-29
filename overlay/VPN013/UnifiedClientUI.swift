@@ -9,7 +9,7 @@ private func proxyLabel(_ text: String, style: UIFont.TextStyle = .body) -> UILa
     label.textColor = VPN013Theme.text; return label
 }
 private func proxyError(_ error: Error, from controller: UIViewController) {
-    let known = error is ProxyProfileError || error is ProxyOperationError || error is ProxySubscriptionError
+    let known = error is ProxyProfileError || error is ProxyOperationError || error is ProxySubscriptionError || error is CrossProtocolError
     let alert = UIAlertController(title: "Действие не завершено", message: known ? error.localizedDescription : ProxyOperationError.system.localizedDescription, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "Понятно", style: .default)); controller.present(alert, animated: true)
 }

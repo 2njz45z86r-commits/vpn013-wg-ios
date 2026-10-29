@@ -777,6 +777,25 @@ final class AutoTunnelUITests:XCTestCase {
         capture("proxy-unknown-current-member-no-seed-fallback-synthetic-no-vpn")
     }
 
+    func testCrossProtocolRuntimeUsesActualSectionAndGlobalStop() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-unified", "--vpn013-test-cross-runtime"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["vpn013.cross.kind"].waitForExistence(timeout: 20))
+        XCTAssertEqual(app.staticTexts["vpn013.cross.kind"].label, "Общее Авто · Happ")
+        XCTAssertTrue(app.tabBars.buttons["Happ"].isSelected)
+        XCTAssertTrue(app.staticTexts["vpn013.cross.current"].label.contains("reserve.example.invalid:443"))
+        XCTAssertTrue(app.staticTexts["vpn013.cross.current"].label.contains("Тестовые данные"))
+        for kind in ["INCY", "AmneziaWG", "BlackTemple", "Happ"] {
+            app.tabBars.buttons[kind].tap()
+            XCTAssertTrue(app.buttons["vpn013.cross.stop"].isHittable)
+        }
+        capture("cross-protocol-current-and-stop-synthetic-no-vpn")
+        app.buttons["vpn013.cross.stop"].tap()
+        XCTAssertFalse(app.buttons["vpn013.cross.stop"].exists)
+        capture("cross-protocol-user-stopped-synthetic-no-vpn")
+    }
+
     func testUpdatesScreenAndOrderSynchronization() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]

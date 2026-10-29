@@ -91,7 +91,11 @@ struct CrossProtocolPlan: Codable {
             remaining.append(candidate)
         }
         let order = [first.kind] + [VPN013ConnectionKind.amneziawg, .happ, .incy, .blacktemple].filter { $0 != first.kind }
-        remaining.sort { order.firstIndex(of: $0.kind)! < order.firstIndex(of: $1.kind)! }
+        remaining = remaining.enumerated().sorted {
+            let left = order.firstIndex(of: $0.element.kind) ?? order.count
+            let right = order.firstIndex(of: $1.element.kind) ?? order.count
+            return left == right ? $0.offset < $1.offset : left < right
+        }.map { $0.element }
         // Grouping can include an existing Auto profile plus its individual
         // members. Do not repeatedly test the same imported connection.
         var awgSeen = Set<String>(), proxySeen = Set<UUID>(), groups: [Group] = []

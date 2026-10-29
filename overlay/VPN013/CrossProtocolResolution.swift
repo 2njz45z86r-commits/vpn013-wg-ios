@@ -17,8 +17,8 @@ final class CrossProtocolResolution {
         var lists: [[(String, UInt16)]] = []
         for group in plan.groups {
             if let awg = group.awg {
-                lists.append(try awg.validatedConfigurations().flatMap { configuration in
-                    configuration.peers.compactMap { peer in
+                lists.append(try awg.validatedConfigurations().flatMap { configuration -> [(String, UInt16)] in
+                    configuration.peers.compactMap { peer -> (String, UInt16)? in
                         guard let endpoint = peer.endpoint, let port = UInt16(endpoint.stringRepresentation.split(separator: ":").last ?? "") else { return nil }
                         return (String(describing: endpoint.host), port)
                     }
