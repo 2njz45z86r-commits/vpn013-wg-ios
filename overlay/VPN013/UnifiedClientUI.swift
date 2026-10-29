@@ -144,7 +144,11 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             let scoped = url.startAccessingSecurityScopedResource()
             let entries = try? ZipArchive.unarchive(url: url, requiredFileExtensions: ["txt"])
             if scoped { url.stopAccessingSecurityScopedResource() }
-            let hasSubscription = entries?.contains(where: { $0.fileBaseName == "Подписка" }) == true
+            guard let entries = entries else {
+                let alert = UIAlertController(title: "Не удалось открыть ZIP", message: "Проверьте архив и повторите попытку.", preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "Понятно", style: .default)); present(alert, animated: true); return
+            }
+            let hasSubscription = entries.contains(where: { $0.fileBaseName == "Подписка" })
             if hasSubscription {
                 let alert = UIAlertController(title: "В какой раздел добавить?", message: "Выберите приложение, для которого выпущена подписка.", preferredStyle: .alert)
                 for kind in kinds where kind != .amneziawg {
