@@ -130,9 +130,18 @@ object ProxyImport {
                     query["mode"] = if (transport.optBoolean("multiMode", false)) "multi" else "gun"
                 }
                 "xhttp" -> {
-                    fields(transport, setOf("path", "host", "mode"))
+                    fields(transport, setOf("path", "host", "mode", "xPaddingBytes"))
                     query["path"] = string(transport, "path", "/"); query["mode"] = string(transport, "mode", "auto")
                     if (transport.has("host")) query["host"] = string(transport, "host")
+                    if (transport.has("xPaddingBytes")) {
+                        val padding = transport.opt("xPaddingBytes")
+                        query["x_padding_bytes"] = when (padding) {
+                            is String -> padding
+                            is Int -> padding.toString()
+                            is Long -> padding.toString()
+                            else -> invalid()
+                        }
+                    }
                 }
             }
             if (stream.has(key) && stream.optJSONObject(key) == null) invalid()

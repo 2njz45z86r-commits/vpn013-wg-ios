@@ -27,6 +27,9 @@ public final class ProxyProfileTest {
         String roster=ROOT+"#First\n"+ROOT+"#Second\n"+ROOT+"#First";
         check(ProxyProfile.parseList(roster,ProxyProfile.Section.BLACKTEMPLE).size()==2);
         check(ProxyProfile.parseList(Base64.getEncoder().encodeToString(roster.getBytes(StandardCharsets.UTF_8)),ProxyProfile.Section.HAPP).size()==2);
+        check(ProxyProfile.parse(ROOT+"&type=xhttp&x_padding_bytes=100-200",ProxyProfile.Section.INCY).options.get("x_padding_bytes").equals("100-200"));
+        for(String pad:new String[]{"-1","2-1","01","65537","1-65537","1-2-3"}) rejects(ROOT+"&type=xhttp&x_padding_bytes="+pad);
+        rejects(ROOT+"&type=tcp&x_padding_bytes=10");
         String large=Base64.getEncoder().encodeToString(roster.getBytes(StandardCharsets.UTF_8))+" ".repeat(1_048_577);
         for(ProxyProfile.Section section:ProxyProfile.Section.values())
             check(ProxyProfile.parseList(large,section).size()==2);

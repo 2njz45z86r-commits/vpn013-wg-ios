@@ -17,7 +17,7 @@ public final class ProxyProfile {
     public final int port;
     public final Map<String, String> options;
     private static final Set<String> ALLOWED = Set.of("type", "security", "encryption", "sni", "fp", "pbk", "sid",
-            "flow", "path", "host", "serviceName", "mode", "alpn", "authority", "spx", "pqv");
+            "flow", "path", "host", "serviceName", "mode", "alpn", "authority", "spx", "pqv", "x_padding_bytes");
 
     private ProxyProfile(Section section, String name, String host, int port, String userId,
                          String transport, String security, String serverName, Map<String,String> options) {
@@ -101,6 +101,14 @@ public final class ProxyProfile {
             if(q.containsKey("authority") && !q.get("authority").isEmpty()) host(q.get("authority"));
             if(!transport.equals("grpc") && (q.containsKey("serviceName") || q.containsKey("authority"))) throw invalid();
             if(!Set.of("ws","xhttp").contains(transport) && (q.containsKey("path") || q.containsKey("host"))) throw invalid();
+            if(q.containsKey("x_padding_bytes")) {
+                if(!transport.equals("xhttp")) throw invalid();
+                String padding=q.get("x_padding_bytes");
+                if(!padding.matches("(?:0|[1-9][0-9]{0,4})(?:-(?:0|[1-9][0-9]{0,4}))?")) throw invalid();
+                String[] bounds=padding.split("-",-1);
+                int first=Integer.parseInt(bounds[0]), last=Integer.parseInt(bounds[bounds.length-1]);
+                if(first>last || last>65536) throw invalid();
+            }
             clean(q.getOrDefault("path",""),2048); clean(q.getOrDefault("serviceName",""),256);
             clean(q.getOrDefault("authority",""),253);
             String mode=q.getOrDefault("mode","");

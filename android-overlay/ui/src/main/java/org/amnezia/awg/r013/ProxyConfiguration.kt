@@ -40,6 +40,7 @@ object ProxyConfiguration {
             "xhttp" -> {
                 val xhttp = JSONObject().put("path", q["path"] ?: "/").put("mode", q["mode"]?.takeIf { it.isNotEmpty() } ?: "auto")
                 q["host"]?.takeIf { it.isNotEmpty() }?.let { xhttp.put("host", it) }
+                q["x_padding_bytes"]?.let { xhttp.put("xPaddingBytes", it) }
                 stream.put("xhttpSettings", xhttp)
             }
         }

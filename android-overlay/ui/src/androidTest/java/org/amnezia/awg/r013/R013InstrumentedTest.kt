@@ -96,6 +96,16 @@ class R013InstrumentedTest {
             val parsed = ProxyImport.parse(docs.toString(), section)
             assertEquals(18, parsed.size)
             assertEquals(18, parsed.map { it.host }.toSet().size)
+            val xhttp = ProxyConfiguration.outbound(ProxyProfile.parse(
+                "vless://$user@server.example.org:443?security=tls&type=xhttp&x_padding_bytes=100-200", section))
+            val xsettings = xhttp.getJSONObject("streamSettings").getJSONObject("xhttpSettings")
+            assertEquals("100-200", xsettings.getString("xPaddingBytes"))
+            val ximport = ProxyImport.parse(xhttp.toString(), section).single()
+            assertEquals("100-200", ximport.options["x_padding_bytes"])
+            assertEquals("100-200", ProxyConfiguration.outbound(ximport).getJSONObject("streamSettings").getJSONObject("xhttpSettings").getString("xPaddingBytes"))
+            xsettings.put("xPaddingBytes", 65537)
+            try { ProxyImport.parse(xhttp.toString(), section); fail("Oversized XHTTP padding accepted") }
+            catch (_: IllegalArgumentException) { }
             val ws = ProxyConfiguration.outbound(ProxyProfile.parse(
                 "vless://$user@example.org:443?security=tls&type=ws&host=front.example.org",
                 section))
