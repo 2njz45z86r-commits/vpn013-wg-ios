@@ -111,6 +111,11 @@ struct CrossProtocolPlan: Codable {
     }
     let version: Int
     let groups: [Group]
+    static func matchingProxyCandidates(primary: ProxyTunnelPayload, others: [ProxyTunnelPayload]) -> [ProxyProfile] {
+        [primary.profile] + others.filter {
+            $0.profile.id != primary.profile.id && $0.profile.source == primary.profile.source && $0.routing == primary.routing
+        }.map { $0.profile }
+    }
     func validate() throws {
         guard version == 1, (1...120).contains(groups.count), groups.reduce(0, { $0 + $1.count }) <= 120 else { throw CrossProtocolError.tooMany }
         for group in groups { try group.validate() }
@@ -121,20 +126,21 @@ struct CrossProtocolPlan: Codable {
     static func attach(to primary: NETunnelProviderProtocol, managers: [NETunnelProviderManager]) throws {
         guard let envelope = primary.privateEnvelope, var payload = try primary.privatePayload() else { throw CrossProtocolError.invalid }
         guard VPN013AutomaticMode.enabled() else { payload.crossProtocol = nil; try store(payload, in: primary, id: envelope.id); return }
-        func group(_ value: PrivateTunnelPayload, name: String) throws -> Group {
+        func group(_ value: PrivateTunnelPayload, name: String, includeCandidates: Bool = false) throws -> Group {
             if let data = value.proxy {
                 var proxy = try JSONDecoder().decode(ProxyTunnelPayload.self, from: data)
+                if !includeCandidates { proxy.automaticCandidates = nil }
                 proxy.automaticEnabled = true
                 let result = Group(kind: proxy.profile.source, name: proxy.profile.name, proxy: proxy)
                 try result.validate(); return result
             }
             let awg: AutoTunnelProfile
-            if let existing = value.builtinAutomatic ?? value.automatic { awg = existing }
+            if let existing = (includeCandidates ? value.builtinAutomatic : nil) ?? value.automatic { awg = existing }
             else { awg = try AutoTunnelProfile(configurations: [TunnelConfiguration(fromWgQuickConfig: value.configuration, called: name)]) }
             let result = Group(kind: .amneziawg, name: name, awg: awg)
             try result.validate(); return result
         }
-        let first = try group(payload, name: primary.serverAddress ?? "AmneziaWG")
+        let first = try group(payload, name: primary.serverAddress ?? "AmneziaWG", includeCandidates: true)
         var remaining: [Group] = []
         for manager in managers {
             guard let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,

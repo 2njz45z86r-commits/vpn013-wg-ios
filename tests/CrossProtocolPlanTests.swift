@@ -89,6 +89,20 @@ final class NETunnelProviderManager {
         expect(plan.groups.map { $0.kind } == [.happ, .happ, .incy, .blacktemple], "own section first, foreign excluded, repeated member deduplicated")
         expect(plan.groups[0].proxy?.profile == happ, "primary retained exactly")
         expect(plan.groups[1].proxy?.profile.id != happ.id, "other own configuration retained")
+        var differentRouting = ProxyTunnelPayload(profile: try profile(.happ))
+        differentRouting.routing = ProxyRoutingPolicy(mode: .bypass, domains: ["direct.example.invalid"])
+        let grouped = CrossProtocolPlan.matchingProxyCandidates(primary: ProxyTunnelPayload(profile: happ), others: [differentRouting])
+        expect(grouped.map { $0.id } == [happ.id], "initial group never overrides another configuration's routing")
+        let routed = try manager(PrivateTunnelPayload(proxy: JSONEncoder().encode(differentRouting)))
+        try CrossProtocolPlan.attach(to: proto, managers: [routed])
+        let routedPlan = try proto.privatePayload()!.crossProtocol!
+        expect(routedPlan.groups[1].proxy?.routing == differentRouting.routing, "next configuration keeps its own routing policy")
+        var stale = ProxyTunnelPayload(profile: incy)
+        stale.automaticCandidates = [incy, try profile(.incy)]
+        let cached = try manager(PrivateTunnelPayload(proxy: JSONEncoder().encode(stale)))
+        try CrossProtocolPlan.attach(to: proto, managers: [cached])
+        let refreshedPlan = try proto.privatePayload()!.crossProtocol!
+        expect(refreshedPlan.groups[1].count == 1, "old nonprimary Auto snapshot cannot resurrect a deleted reserve")
         var permitted: CrossProtocolPlan.MutationPermit?
         var completed = false, rejected = false
         func drain(_ test: () -> Bool) {

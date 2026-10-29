@@ -276,7 +276,7 @@ final class ProxyProfilesManager {
         let token = UUID(); activation = token; working = true; changed?()
         do {
             var value = entry.value
-            let sources = [entry.value.profile] + entries.filter { $0.value.profile.id != entry.value.profile.id && $0.value.profile.source == entry.value.profile.source }.map { $0.value.profile }
+            let sources = CrossProtocolPlan.matchingProxyCandidates(primary: entry.value, others: entries.map { $0.value })
             if VPN013AutomaticMode.enabled(), sources.count > 30 { throw ProxyOperationError.automaticLimit }
             value.automaticCandidates = sources.count <= 30 ? sources : [entry.value.profile]
             value.automaticEnabled = VPN013AutomaticMode.enabled()
