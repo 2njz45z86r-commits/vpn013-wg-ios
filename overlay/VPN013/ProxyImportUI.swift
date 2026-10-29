@@ -103,7 +103,7 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
     }
     @objc private func pickFile() {
         guard !isBusy else { return }
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.plainText, .json, .data], asCopy: false)
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.plainText, .json, .zip, .data], asCopy: false)
         picker.delegate = self; picker.allowsMultipleSelection = false; present(picker, animated: true)
     }
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { if let url = urls.first { readFile(url) } }
@@ -112,6 +112,17 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
             guard url.isFileURL else { throw ProxyProfileError.invalid }
+            if url.pathExtension.lowercased() == "zip" {
+                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                guard let size = attributes[.size] as? NSNumber, size.int64Value <= Int64(ProxyImport.maximumBytes) else { throw ProxyProfileError.tooLarge }
+                // Owner archives contain equivalent Android/iPhone copies. Import
+                // only a unique subscription, never an arbitrary instruction file.
+                let entries = try ZipArchive.unarchive(url: url, requiredFileExtensions: ["txt"])
+                let subscriptions = entries.filter { $0.fileBaseName == "Подписка" }.map { $0.contents }
+                guard let data = subscriptions.first, subscriptions.allSatisfy({ $0 == data }),
+                      let text = String(data: data, encoding: .utf8) else { throw ProxyProfileError.invalid }
+                input.text = text; validateInput(); return
+            }
             let file = try FileHandle(forReadingFrom: url); defer { try? file.close() }
             let data = try file.read(upToCount: ProxyImport.maximumBytes + 1) ?? Data()
             guard data.count <= ProxyImport.maximumBytes else { throw ProxyProfileError.tooLarge }
