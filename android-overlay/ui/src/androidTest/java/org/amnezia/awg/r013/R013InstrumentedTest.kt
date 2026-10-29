@@ -129,10 +129,28 @@ class R013InstrumentedTest {
             }
         }
         try {
+            assertEquals("INCY", ArchiveReader.ownerSection(file.readBytes()))
+            assertEquals("example.org", ProxyImport.parse(ArchiveReader.subscription(file.readBytes()), ProxyProfile.Section.INCY).single().host)
+            context.contentResolver.openInputStream(android.net.Uri.fromFile(file))!!.use { assertTrue(it.read() >= 0) }
             val intent = Intent(context, R013HomeActivity::class.java).setAction(Intent.ACTION_SEND)
                 .putExtra(Intent.EXTRA_STREAM, android.net.Uri.fromFile(file)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             activity = instrumentation.startActivitySync(intent) as R013HomeActivity
-            waitFor(20000) { ProxyRegistry(registry.vault).list(ProxyProfile.Section.INCY).any { it.profile.host == "example.org" } }
+            try {
+                waitFor(20000) { ProxyRegistry(registry.vault).list(ProxyProfile.Section.INCY).any { it.profile.host == "example.org" } }
+            } catch (error: AssertionError) {
+                val observed = mutableListOf<String>()
+                instrumentation.runOnMainSync {
+                    fun visit(view: View) {
+                        if (view is TextView) {
+                            val text = view.text.toString()
+                            if (text in listOf("Не удалось открыть файл. Прежние профили сохранены.", "Файл не содержит поддерживаемую конфигурацию. Прежние профили сохранены.")) observed.add(text)
+                        }
+                        if (view is ViewGroup) for (i in 0 until view.childCount) visit(view.getChildAt(i))
+                    }
+                    visit(activity!!.window.decorView)
+                }
+                throw AssertionError("ZIP import did not finish; known feedback=" + observed.joinToString("|"), error)
+            }
         } finally { file.delete() }
     }
     @Test fun aTypedProxyImportPreservesAwgAndEncryptsSecrets() = runBlocking {
