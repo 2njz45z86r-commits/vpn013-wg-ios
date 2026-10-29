@@ -83,6 +83,10 @@
             </intent-filter>
         </activity>
         <activity android:name=".activity.MainActivity" android:exported="false" />
+        <service android:name="org.amnezia.awg.r013.ProxyVpnService" android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE" android:foregroundServiceType="systemExempted">
+            <intent-filter><action android:name="android.net.VpnService" /></intent-filter>
+        </service>
         <receiver android:name="org.amnezia.awg.r013.TrialExpiryReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

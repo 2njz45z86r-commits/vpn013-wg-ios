@@ -64,6 +64,9 @@ func r013InvalidateScopes() {
 
 // The primary registry is observed, not supplied by a saved/seed configuration.
 func r013Actual() probe.ActiveState {
+	if r013ProxyActive.Load() {
+		return probe.ActiveState{}
+	}
 	tunnelHandlesMu.RLock()
 	defer tunnelHandlesMu.RUnlock()
 	if len(tunnelHandles) == 0 {
@@ -89,6 +92,9 @@ func r013Valid(ticket uint64) bool {
 
 //export r013PrimaryBegin
 func r013PrimaryBegin() C.longlong {
+	if !r013CancelProxyProbe() {
+		return 0
+	}
 	r013InvalidateScopes()
 	ctx, cancel := r013Context()
 	defer cancel()

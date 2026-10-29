@@ -15,7 +15,8 @@ object OfflineChanges {
         manager.getTunnels()
         val registry = ProfileRegistry.get(Application.get())
         val before = withContext(Dispatchers.IO) {
-            if (Application.getBackend().runningTunnelNames.isNotEmpty()) throw ActiveVPNException()
+            if (Application.getBackend().runningTunnelNames.isNotEmpty() || ProxyVpnService.activeId != null ||
+                ProxyVpnService.requestedId != null || UnifiedAutoCoordinator.busy) throw ActiveVPNException()
             registry.vault.read()
         }
         try {

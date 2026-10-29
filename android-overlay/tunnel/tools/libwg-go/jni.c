@@ -82,6 +82,19 @@ static uint64_t r013_next_gate;
 struct r013_gate { uint64_t id; jobject object; jmethodID prepare; };
 static struct r013_gate r013_gates[2];
 
+extern int r013ProxyStart(long long, const char *, int, long long);
+extern int r013ProxyStop(long long);
+extern char *r013ProxyStats(void);
+extern long long r013ProxyProbe(const char *, long long);
+JNIEXPORT jint JNICALL Java_org_amnezia_awg_GoBackend_r013ProxyStart(JNIEnv *env, jclass c, jlong ticket, jstring input, jint fd, jobject gate);
+JNIEXPORT jint JNICALL Java_org_amnezia_awg_GoBackend_r013ProxyStop(JNIEnv *env, jclass c, jlong ticket)
+{ (void)env; (void)c; return r013ProxyStop(ticket); }
+JNIEXPORT jstring JNICALL Java_org_amnezia_awg_GoBackend_r013ProxyStats(JNIEnv *env, jclass c)
+{
+    (void)c; char *wire = r013ProxyStats(); if (!wire) return NULL;
+    jstring result = (*env)->NewStringUTF(env, wire); free(wire); return result;
+}
+
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
 {
 	(void)reserved;
@@ -122,6 +135,32 @@ static uint64_t r013_register_gate(JNIEnv *env, jobject object)
 	}
 	pthread_mutex_unlock(&r013_gates_lock);
 	return id;
+}
+
+JNIEXPORT jint JNICALL Java_org_amnezia_awg_GoBackend_r013ProxyStart(JNIEnv *env, jclass c, jlong ticket, jstring input, jint fd, jobject gate)
+{
+    (void)c;
+    if (!input || fd < 0) return -1;
+    jsize size = (*env)->GetStringUTFLength(env, input);
+    if (size <= 0 || size > 1048576) return -1;
+    uint64_t registered = r013_register_gate(env, gate); if (!registered) return -1;
+    const char *wire = (*env)->GetStringUTFChars(env, input, 0);
+    if (!wire) { r013_gate_release(registered); return -1; }
+    int result = r013ProxyStart(ticket, wire, fd, (long long)registered);
+    (*env)->ReleaseStringUTFChars(env, input, wire);
+    if (result != 0) r013_gate_release(registered);
+    return result;
+}
+
+JNIEXPORT jlong JNICALL Java_org_amnezia_awg_GoBackend_r013ProxyProbe(JNIEnv *env, jclass c, jstring input, jobject gate)
+{
+    (void)c; if (!input) return -1;
+    jsize size = (*env)->GetStringUTFLength(env, input); if (size <= 0 || size > 1048576) return -1;
+    uint64_t registered = r013_register_gate(env, gate); if (!registered) return -1;
+    const char *wire = (*env)->GetStringUTFChars(env, input, 0);
+    if (!wire) { r013_gate_release(registered); return -1; }
+    long long result = r013ProxyProbe(wire, registered);
+    (*env)->ReleaseStringUTFChars(env, input, wire); r013_gate_release(registered); return result;
 }
 
 int r013_gate_prepare(uint64_t id, int route, int fd)

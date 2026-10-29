@@ -68,6 +68,13 @@ class R013HomeActivity : AppCompatActivity() {
     private lateinit var automaticToggle: MaterialSwitch
     private var applyingAutomatic = false
     private var automaticReady = false
+    private var selectedSection = "AMNEZIAWG"
+    private val proxyStore by lazy { ProxyRegistry(registry.vault) }
+    private var pendingProxy: String? = null
+    private val proxyPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val id = pendingProxy; pendingProxy = null
+        if (id != null && result.resultCode == RESULT_OK) connectProxy(id)
+    }
     private var listSignature = ""
     private var currentIdentity = ""
     private var currentHost: String? = null
@@ -121,6 +128,27 @@ class R013HomeActivity : AppCompatActivity() {
             setOnMenuItemClickListener { addMenu(); true }
         }
         content.addView(toolbar, LinearLayout.LayoutParams(-1, dp(64)))
+        val tabs = horizontal()
+        listOf("HAPP", "INCY", "AMNEZIAWG", "BLACKTEMPLE").forEach { section ->
+            tabs.addView(button(UnifiedAutoCoordinator.label(section)) {
+                selectedSection = section; listSignature = ""
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { registry.vault.edit { it.put("selectedSection", section) } }
+                    renderRows(true)
+                }
+            }.apply { textSize = 11f; minWidth = 0; setPadding(dp(2), 0, dp(2), 0) }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        }
+        content.addView(tabs)
+        lifecycleScope.launch {
+            selectedSection = withContext(Dispatchers.IO) {
+                val active = ProxyVpnService.activeId
+                ProxyProfile.Section.values().firstOrNull { kind -> proxyStore.list(kind).any { it.id == active } }?.name
+                    ?: registry.vault.read().optString("selectedSection", "AMNEZIAWG").takeIf {
+                        it in listOf("AMNEZIAWG", "HAPP", "INCY", "BLACKTEMPLE")
+                    } ?: "AMNEZIAWG"
+            }
+            listSignature = ""
+        }
         val automaticRow = horizontal().apply { setPadding(0, dp(8), 0, dp(12)); gravity = Gravity.CENTER_VERTICAL }
         val automaticLabels = vertical().apply {
             addView(text("Режим Авто", 18, true))
@@ -196,8 +224,26 @@ class R013HomeActivity : AppCompatActivity() {
         @Suppress("DEPRECATION") val uri = if (intent.action == Intent.ACTION_SEND) intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) else if (intent.action == Intent.ACTION_VIEW) intent.data else null
         if (uri != null && uri.scheme in listOf("content", "file")) { intent.action = null; importFile(uri) }
     }
-    private fun importFile(uri: Uri) { lifecycleScope.launch { TunnelImporter.importTunnel(contentResolver, uri) { feedback(it.toString()); listSignature = "" } } }
+    private fun importFile(uri: Uri) {
+        if (selectedSection != "AMNEZIAWG") {
+            val section = ProxyProfile.Section.valueOf(selectedSection)
+            lifecycleScope.launch {
+                try {
+                    val text = withContext(Dispatchers.IO) { contentResolver.openInputStream(uri)!!.use { input ->
+                        val output = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192)
+                        while (true) { val count = input.read(buffer); if (count < 0) break
+                            require(output.size() + count <= 1_048_576); output.write(buffer, 0, count) }
+                        Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                            .decode(java.nio.ByteBuffer.wrap(output.toByteArray())).toString()
+                    } }
+                    OfflineChanges.apply { proxyStore.importText(section, text) }; listSignature = ""; renderRows()
+                } catch (_: Exception) { feedback("Файл не содержит поддерживаемую конфигурацию. Прежние профили сохранены.") }
+            }; return
+        }
+        lifecycleScope.launch { TunnelImporter.importTunnel(contentResolver, uri) { feedback(it.toString()); listSignature = "" } }
+    }
     private fun addMenu() {
+        if (selectedSection != "AMNEZIAWG") { proxyAddMenu(); return }
         val dialog = BottomSheetDialog(this)
         val box = vertical().apply { setPadding(dp(20), dp(12), dp(20), dp(24)) }
         box.addView(text("Добавить профиль", 22, true).apply { setPadding(dp(12), dp(12), dp(12), dp(16)) })
@@ -239,6 +285,7 @@ class R013HomeActivity : AppCompatActivity() {
         catch (e: Exception) { feedback(e.message ?: "Изменение не выполнено. Прежние профили сохранены.") }
     } }
     private suspend fun renderRows(force: Boolean = false) {
+        if (selectedSection != "AMNEZIAWG") { renderProxyRows(); return }
         val tunnels = Application.getTunnelManager().getTunnels().toList()
         val signature = tunnels.joinToString { it.name + it.state.toString() + it.connectionStatus.toString() } + connecting + applyingAutomatic + pings.toString()
         if (!force && signature == listSignature) return
@@ -302,7 +349,11 @@ class R013HomeActivity : AppCompatActivity() {
         connecting = true
         automaticToggle.isEnabled = false
         lifecycleScope.launch {
-            try { renderRows(true); tunnel.setStateAsync(if (up) Tunnel.State.UP else Tunnel.State.DOWN) }
+            try {
+                renderRows(true)
+                if (up) UnifiedAutoCoordinator.connect(this@R013HomeActivity, UnifiedAutoCoordinator.Candidate("AMNEZIAWG", tunnel.name))
+                else { UnifiedAutoCoordinator.stop(); tunnel.setStateAsync(Tunnel.State.DOWN) }
+            }
             catch (e: Exception) { feedback(e.message ?: "Не удалось изменить подключение") }
             finally { connecting = false; automaticToggle.isEnabled = true; listSignature = ""; renderCurrent(); renderRows() }
         }
@@ -324,6 +375,23 @@ class R013HomeActivity : AppCompatActivity() {
         }
     }
     private suspend fun renderCurrent() {
+        if (ProxyVpnService.activeId != null || ProxyVpnService.requestedId != null) {
+            val id = ProxyVpnService.activeId ?: ProxyVpnService.requestedId
+            val record = withContext(Dispatchers.IO) { ProxyProfile.Section.values().flatMap { proxyStore.list(it) }.singleOrNull { it.id == id } }
+            summaryTitle.text = record?.profile?.name ?: "Подключение…"
+            val stats = withContext(Dispatchers.IO) { ProxyVpnService.statistics() }
+            summaryDetails.text = buildString {
+                record?.profile?.let { append(UnifiedAutoCoordinator.label(it.section.name)); append(" · ${it.host}:${it.port}\n") }
+                append(UnifiedAutoCoordinator.status ?: "Проверяется подключение")
+                stats?.let { append("\n↓ ${bytes(it.optLong("rx"))}  ↑ ${bytes(it.optLong("tx"))}") }
+            }
+            routingDetails.text = "Настройки выбранного подключения"
+            currentPing.isEnabled = true; currentPing.contentDescription = "Отключить VPN"
+            currentPing.setOnClickListener { lifecycleScope.launch { UnifiedAutoCoordinator.stop(); listSignature = ""; renderCurrent(); renderRows(true) } }
+            return
+        }
+        currentPing.setOnClickListener { pingCurrent() }
+        currentPing.contentDescription = "Проверить пинг текущего сервера"
         val backend = Application.getBackend() as GoBackend
         routingDetails.text = backend.russianRoutingStatus
         val snapshot = withContext(Dispatchers.IO) {
@@ -348,6 +416,54 @@ class R013HomeActivity : AppCompatActivity() {
             snapshot.handshake?.let { append("\nРукопожатие: ${DateFormat.getTimeInstance(DateFormat.MEDIUM).format(Date(it))}") }
             snapshot.hourly?.let { append("\n$it") }
         }
+    }
+    private fun proxyAddMenu() {
+        MaterialAlertDialogBuilder(this).setTitle("Добавить · ${UnifiedAutoCoordinator.label(selectedSection)}")
+            .setItems(arrayOf("Вставить конфигурацию", "Импортировать файл", "Купить конфигурацию")) { _, choice ->
+                when(choice) {
+                    0 -> {
+                        val section = ProxyProfile.Section.valueOf(selectedSection)
+                        val input = TextInputEditText(this).apply { hint = "VLESS, Base64 или JSON Xray"; minLines = 4; maxLines = 8; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE }
+                        MaterialAlertDialogBuilder(this).setTitle("Своя конфигурация").setView(input)
+                            .setPositiveButton("Добавить") { _, _ -> launchOffline { val ids = proxyStore.importText(section, input.text.toString()); "Добавлено профилей: ${ids.size}" } }
+                            .setNegativeButton("Отмена", null).show()
+                    }
+                    1 -> fileResult.launch(arrayOf("text/*", "application/json", "application/octet-stream"))
+                    2 -> open(ClientProtocol.BOT)
+                }
+            }.show()
+    }
+    private suspend fun renderProxyRows() {
+        val section = ProxyProfile.Section.valueOf(selectedSection)
+        val records = withContext(Dispatchers.IO) { proxyStore.list(section) }
+        val signature = selectedSection + records.joinToString { it.id } + ProxyVpnService.activeId + ProxyVpnService.requestedId + UnifiedAutoCoordinator.busy
+        if (listSignature == signature) return
+        listSignature = signature; rows.removeAllViews(); countLabel.text = "${UnifiedAutoCoordinator.label(selectedSection)} · ${records.size}"
+        allPing.isEnabled = false
+        if (records.isEmpty()) rows.addView(button("Добавить свою конфигурацию") { proxyAddMenu() })
+        for (record in records) {
+            val row = horizontal().apply { minimumHeight = dp(76); gravity = Gravity.CENTER_VERTICAL }
+            row.addView(text(record.profile.name, 18, true).apply {
+                contentDescription = record.profile.name
+                setOnLongClickListener {
+                    MaterialAlertDialogBuilder(this@R013HomeActivity).setTitle(record.profile.name)
+                        .setItems(arrayOf("Удалить")) { _, _ -> launchOffline { proxyStore.delete(record.id); "Профиль удалён" } }.show(); true
+                }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            val active = ProxyVpnService.activeId == record.id || ProxyVpnService.requestedId == record.id
+            row.addView(button(if (active) "Выключить" else "Включить") {
+                if (active) lifecycleScope.launch { UnifiedAutoCoordinator.stop(); listSignature = ""; renderRows(true) }
+                else connectProxy(record.id)
+            }.apply { isEnabled = !UnifiedAutoCoordinator.busy || active }, LinearLayout.LayoutParams(-2, dp(52)))
+            rows.addView(row)
+        }
+    }
+    private fun connectProxy(id: String) {
+        val permission = android.net.VpnService.prepare(this)
+        if (permission != null) { pendingProxy = id; proxyPermission.launch(permission); return }
+        val record = ProxyProfile.Section.values().flatMap { proxyStore.list(it) }.singleOrNull { it.id == id } ?: return
+        UnifiedAutoCoordinator.connect(this, UnifiedAutoCoordinator.Candidate(record.profile.section.name, id))
+        listSignature = ""
     }
     private data class Current(val profile: String?, val member: String?, val endpoints: List<String>, val host: String?, val received: Long?, val sent: Long?, val handshake: Long?, val revision: Long, val hourly: String?)
     private fun pingCurrent() {

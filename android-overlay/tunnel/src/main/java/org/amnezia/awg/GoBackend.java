@@ -28,4 +28,8 @@ public class GoBackend {
     @Nullable public static native String r013ProbePoll(long scope, long operation);
     public static native long r013ProbeChoose(long scope, long operation, String freshChoiceJSON);
     public static native int r013ProbeRelease(long scope);
+    public static native int r013ProxyStart(long ticket, String configuration, int fd, Object gate);
+    public static native int r013ProxyStop(long ticket);
+    @Nullable public static native String r013ProxyStats();
+    public static native long r013ProxyProbe(String configuration, Object gate);
 }

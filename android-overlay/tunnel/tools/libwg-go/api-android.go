@@ -88,7 +88,7 @@ func awgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
 
 func awgTurnOnInternal(interfaceName string, tunFd int32, settings string) int32 {
 	tunnelHandlesMu.RLock()
-	alreadyActive := len(tunnelHandles) != 0
+	alreadyActive := len(tunnelHandles) != 0 || r013ProxyActive.Load()
 	tunnelHandlesMu.RUnlock()
 	if alreadyActive {
 		unix.Close(int(tunFd))
