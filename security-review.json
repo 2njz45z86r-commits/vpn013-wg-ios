@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-29T08:38:10.731900+00:00",
-  "source_sha256": "5c7607ced127ee8c6390b0ce524b92aea64f4b0a5f055a4d7e162f9ee8e4b68d",
+  "reviewed_at": "2026-10-29T08:49:04.255769+00:00",
+  "source_sha256": "9caa42572dc2595f5888249745088d0f3c918ae9ab7dedfabc838d50e8e71011",
   "source_commit_reviewed": "iPhone compact Auto and wrapped subscription import; native/release audit pending",
   "runtime_commit_reviewed": "bad878a3aaf1869be4fc236e1949652e73e2e0c7",
   "scope_complete": false,
