@@ -215,8 +215,21 @@ class TunnelsManager {
     func add(
         tunnelConfiguration: TunnelConfiguration, onDemandOption: ActivateOnDemandOption = .off,
         automaticProfile: AutoTunnelProfile? = nil,
+        sourcePrepared: Bool = false,
         completionHandler: @escaping (Result<TunnelContainer, TunnelsManagerError>) -> Void
     ) {
+        #if os(iOS) && !targetEnvironment(simulator)
+        if !sourcePrepared {
+            CrossProtocolPlan.prepareMutation { result in
+                switch result {
+                case .failure(let error): completionHandler(.failure(.systemErrorOnAddTunnel(systemError: error)))
+                case .success(let permit):
+                    self.add(tunnelConfiguration: tunnelConfiguration, onDemandOption: onDemandOption, automaticProfile: automaticProfile, sourcePrepared: true) { result in permit.release(); completionHandler(result) }
+                }
+            }
+            return
+        }
+        #endif
         let tunnelName = tunnelConfiguration.name ?? ""
         if tunnelName.isEmpty {
             completionHandler(.failure(TunnelsManagerError.tunnelNameEmpty))
@@ -351,8 +364,21 @@ class TunnelsManager {
         onDemandOption: ActivateOnDemandOption,
         shouldEnsureOnDemandEnabled: Bool = false,
         automaticProfile: AutoTunnelProfile? = nil,
+        sourcePrepared: Bool = false,
         completionHandler: @escaping (TunnelsManagerError?) -> Void
     ) {
+        #if os(iOS) && !targetEnvironment(simulator)
+        if !sourcePrepared {
+            CrossProtocolPlan.prepareMutation { result in
+                switch result {
+                case .failure(let error): completionHandler(.systemErrorOnModifyTunnel(systemError: error))
+                case .success(let permit):
+                    self.modify(tunnel: tunnel, tunnelConfiguration: tunnelConfiguration, onDemandOption: onDemandOption, shouldEnsureOnDemandEnabled: shouldEnsureOnDemandEnabled, automaticProfile: automaticProfile, sourcePrepared: true) { error in permit.release(); completionHandler(error) }
+                }
+            }
+            return
+        }
+        #endif
         let tunnelName = tunnelConfiguration.name ?? ""
         if tunnelName.isEmpty {
             completionHandler(TunnelsManagerError.tunnelNameEmpty)
@@ -473,8 +499,19 @@ class TunnelsManager {
     }
 
     func remove(
-        tunnel: TunnelContainer, completionHandler: @escaping (TunnelsManagerError?) -> Void
+        tunnel: TunnelContainer, sourcePrepared: Bool = false, completionHandler: @escaping (TunnelsManagerError?) -> Void
     ) {
+        #if os(iOS) && !targetEnvironment(simulator)
+        if !sourcePrepared {
+            CrossProtocolPlan.prepareMutation { result in
+                switch result {
+                case .failure(let error): completionHandler(.systemErrorOnRemoveTunnel(systemError: error))
+                case .success(let permit): self.remove(tunnel: tunnel, sourcePrepared: true) { error in permit.release(); completionHandler(error) }
+                }
+            }
+            return
+        }
+        #endif
         let tunnelProviderManager = tunnel.tunnelProvider
         let removeCompletion: (Error?) -> Void = { [weak self] error in
             if let error = error {
@@ -621,6 +658,11 @@ class TunnelsManager {
     }
 
     func startActivation(of tunnel: TunnelContainer, automaticPrepared: Bool = false) {
+        #if os(iOS)
+        guard !CrossProtocolPlan.changingSources else {
+            activationDelegate?.tunnelActivationAttemptFailed(tunnel: tunnel, error: .tunnelIsNotInactive); return
+        }
+        #endif
         guard !managedUpdateInProgress else { return }
         guard tunnels.contains(tunnel) else { return }  // Ensure it's not deleted
         guard tunnel.status == .inactive else {

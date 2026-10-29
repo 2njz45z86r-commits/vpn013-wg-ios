@@ -4,12 +4,14 @@ import NetworkExtension
 import CryptoKit
 
 enum CrossProtocolError: LocalizedError {
-    case invalid, tooMany, exhausted
+    case invalid, tooMany, exhausted, busy, stopFirst
     var errorDescription: String? {
         switch self {
         case .invalid: return "Не удалось проверить резервные конфигурации. Исходные профили сохранены."
         case .tooMany: return "Для общего Авто доступно до 120 совместимых подключений. Уменьшите список или выключите Авто."
         case .exhausted: return "Ни одна загруженная конфигурация не подтвердила VPN-трафик. Проверьте интернет, срок доступа и обновите ключ в кабинете провайдера."
+        case .busy: return "Дождитесь завершения изменения конфигураций."
+        case .stopFirst: return "Сначала выключите общее Авто, затем измените или удалите конфигурацию."
         }
     }
 }
@@ -38,6 +40,56 @@ struct CrossProtocolRuntime: Codable {
 /// Each group retains its own full routing/configuration. Never follow a
 /// provider URL, issue a key or modify the imported source during recovery.
 struct CrossProtocolPlan: Codable {
+    static private(set) var changingSources = false
+    final class MutationPermit {
+        private var released = false
+        func release() {
+            dispatchPrecondition(condition: .onQueue(.main))
+            guard !released else { return }; released = true; CrossProtocolPlan.changingSources = false
+        }
+    }
+    /// Before editing/deleting sources, remove inactive recovery snapshots from
+    /// every owned manager. Otherwise an OS-direct start could use a deleted
+    /// profile copied into an old plan. The caller holds the permit until its
+    /// actual source edit completes; app starts are blocked for that duration.
+    static func prepareMutation(appID: String? = Bundle.main.bundleIdentifier,
+                                completion: @escaping (Result<MutationPermit, Error>) -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard !changingSources else { completion(.failure(CrossProtocolError.busy)); return }
+        guard let appID = appID else { completion(.failure(CrossProtocolError.invalid)); return }
+        changingSources = true; let permit = MutationPermit()
+        NETunnelProviderManager.loadAllFromPreferences { managers, error in
+            DispatchQueue.main.async {
+                let finish: (Error?) -> Void = { error in
+                    if let error = error { permit.release(); completion(.failure(error)) }
+                    else { completion(.success(permit)) }
+                }
+                guard error == nil else { finish(CrossProtocolError.invalid); return }
+                var pending = (managers ?? []).filter { item in
+                    guard let proto = item.protocolConfiguration as? NETunnelProviderProtocol else { return false }
+                    return proto.providerBundleIdentifier == appID + ".network-extension" && (try? proto.privatePayload()?.crossProtocol) != nil
+                }
+                guard !pending.contains(where: { [.connected, .connecting, .reasserting, .disconnecting].contains($0.connection.status) }) else { finish(CrossProtocolError.stopFirst); return }
+                func next() {
+                    guard !pending.isEmpty else { finish(nil); return }
+                    let manager = pending.removeFirst()
+                    guard [.disconnected, .invalid].contains(manager.connection.status),
+                          let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,
+                          let envelope = proto.privateEnvelope, var payload = try? proto.privatePayload() else { finish(CrossProtocolError.stopFirst); return }
+                    let previous = proto.copy() as? NETunnelProviderProtocol
+                    do { payload.crossProtocol = nil; try store(payload, in: proto, id: envelope.id) }
+                    catch { finish(CrossProtocolError.invalid); return }
+                    manager.saveToPreferences { error in
+                        DispatchQueue.main.async {
+                            if error != nil { manager.protocolConfiguration = previous; finish(CrossProtocolError.invalid) }
+                            else { next() }
+                        }
+                    }
+                }
+                next()
+            }
+        }
+    }
     struct Group: Codable {
         var kind: VPN013ConnectionKind
         var name: String

@@ -77,7 +77,19 @@ final class ProxyProfilesManager {
             }
         }
     }
-    func add(_ profiles: [ProxyProfile], completion: @escaping (Error?) -> Void) {
+    private func prepareSources(completion: @escaping (Error?) -> Void, action: @escaping (@escaping (Error?) -> Void) -> Void) {
+        guard !working else { completion(ProxyOperationError.busy); return }
+        working = true
+        CrossProtocolPlan.prepareMutation { result in
+            self.working = false
+            switch result {
+            case .failure(let error): completion(error)
+            case .success(let permit): action { error in permit.release(); completion(error) }
+            }
+        }
+    }
+    func add(_ profiles: [ProxyProfile], sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
+        if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.add(profiles, sourcePrepared: true, completion: $0) }; return }
         guard !working else { completion(ProxyOperationError.busy); return }
         working = true; changed?()
         var remaining = profiles
@@ -111,7 +123,8 @@ final class ProxyProfilesManager {
         }
         next()
     }
-    func installSubscription(_ url: URL, profiles: [ProxyProfile], kind: VPN013ConnectionKind, completion: @escaping (Error?) -> Void) {
+    func installSubscription(_ url: URL, profiles: [ProxyProfile], kind: VPN013ConnectionKind, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
+        if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.installSubscription(url, profiles: profiles, kind: kind, sourcePrepared: true, completion: $0) }; return }
         guard !working else { completion(ProxyOperationError.busy); return }
         guard !entries.contains(where: { $0.inOperation }) else { completion(ProxyOperationError.stopFirst); return }
         do {
@@ -125,7 +138,8 @@ final class ProxyProfilesManager {
     }
     /// No implicit periodic HTTP, device reset, expiry extension or URL rotation.
     /// A pull refresh explicitly fetches each saved source of this section.
-    func refreshSubscriptions(_ kind: VPN013ConnectionKind, completion: @escaping (Error?) -> Void) {
+    func refreshSubscriptions(_ kind: VPN013ConnectionKind, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
+        if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.refreshSubscriptions(kind, sourcePrepared: true, completion: $0) }; return }
         guard !working else { completion(ProxyOperationError.busy); return }
         guard !entries.contains(where: { $0.inOperation }) else { completion(ProxyOperationError.stopFirst); return }
         let records: [ProxySubscriptionRecord]
@@ -217,7 +231,8 @@ final class ProxyProfilesManager {
             DispatchQueue.main.async { completion(error == nil ? nil : ProxyOperationError.system) }
         }
     }
-    func update(_ entry: Entry, routing: ProxyRoutingPolicy, completion: @escaping (Error?) -> Void) {
+    func update(_ entry: Entry, routing: ProxyRoutingPolicy, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
+        if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.update(entry, routing: routing, sourcePrepared: true, completion: $0) }; return }
         guard !working else { completion(ProxyOperationError.busy); return }
         guard !entry.inOperation else { completion(ProxyOperationError.stopFirst); return }
         var value = entry.value; value.routing = routing
@@ -233,7 +248,8 @@ final class ProxyProfilesManager {
             self.changed?(); completion(error)
         }
     }
-    func remove(_ entry: Entry, completion: @escaping (Error?) -> Void) {
+    func remove(_ entry: Entry, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
+        if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.remove(entry, sourcePrepared: true, completion: $0) }; return }
         guard !working else { completion(ProxyOperationError.busy); return }
         guard !entry.inOperation else { completion(ProxyOperationError.stopFirst); return }
         working = true
@@ -254,6 +270,7 @@ final class ProxyProfilesManager {
             activation = nil; switchingTimer?.invalidate(); switchingTimer = nil
             entry.manager.connection.stopVPNTunnel(); working = false; changed?(); return
         }
+        guard !CrossProtocolPlan.changingSources else { reportError?(CrossProtocolError.busy); return }
         guard !working else { reportError?(ProxyOperationError.busy); return }
         if simulator { reportError?(ProxyOperationError.system); return }
         let token = UUID(); activation = token; working = true; changed?()
