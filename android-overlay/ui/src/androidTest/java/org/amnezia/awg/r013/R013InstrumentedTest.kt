@@ -156,6 +156,17 @@ class R013InstrumentedTest {
             } catch (error: AssertionError) {
                 throw AssertionError("ZIP import did not finish; known feedback=" + observed.joinToString("|"), error)
             }
+            waitFor(10000) {
+                var shown = false
+                instrumentation.runOnMainSync {
+                    fun visit(view: View) {
+                        if (view is TextView && view.text.toString() == "INCY · 1") shown = true
+                        if (view is ViewGroup) for (i in 0 until view.childCount) visit(view.getChildAt(i))
+                    }
+                    visit(activity!!.window.decorView)
+                }
+                shown
+            }
         } finally { file.delete() }
     }
     @Test fun aTypedProxyImportPreservesAwgAndEncryptsSecrets() = runBlocking {

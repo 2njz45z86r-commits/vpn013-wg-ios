@@ -252,7 +252,7 @@ class R013HomeActivity : AppCompatActivity() {
                         if (bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4b.toByte()) ArchiveReader.ownerSection(bytes) else null
                     }
                 }
-                if (identified != null) { selectedSection = identified; listSignature = ""; renderRows() }
+                if (identified != null) { incomingSection = true; selectedSection = identified; listSignature = ""; renderRows() }
                 importFileInSection(uri)
             } catch (_: Exception) { feedback("Не удалось открыть файл. Прежние профили сохранены.") }
         }
