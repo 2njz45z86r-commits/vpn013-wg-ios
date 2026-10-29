@@ -65,10 +65,12 @@ class R013HomeActivity : AppCompatActivity() {
     private lateinit var currentPing: MaterialButton
     private lateinit var allPing: MaterialButton
     private lateinit var countLabel: TextView
-    private lateinit var automaticToggle: MaterialSwitch
+    private lateinit var automaticToggle: MaterialButton
     private var applyingAutomatic = false
     private var automaticReady = false
     private var selectedSection = "AMNEZIAWG"
+    private var incomingSection = false
+    private var importDialog: androidx.appcompat.app.AlertDialog? = null
     private val proxyStore by lazy { ProxyRegistry(registry.vault) }
     private var pendingProxy: String? = null
     private val proxyPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -145,32 +147,34 @@ class R013HomeActivity : AppCompatActivity() {
         }
         content.addView(tabs)
         lifecycleScope.launch {
-            selectedSection = withContext(Dispatchers.IO) {
+            val rememberedSection = withContext(Dispatchers.IO) {
                 val active = ProxyVpnService.activeId
                 ProxyProfile.Section.values().firstOrNull { kind -> proxyStore.list(kind).any { it.id == active } }?.name
                     ?: registry.vault.read().optString("selectedSection", "AMNEZIAWG").takeIf {
                         it in listOf("AMNEZIAWG", "HAPP", "INCY", "BLACKTEMPLE")
                     } ?: "AMNEZIAWG"
             }
+            if (!incomingSection) selectedSection = rememberedSection
             listSignature = ""
         }
-        val automaticRow = horizontal().apply { setPadding(0, dp(8), 0, dp(12)); gravity = Gravity.CENTER_VERTICAL }
-        val automaticLabels = vertical().apply {
-            addView(text("Режим Авто", 18, true))
-            addView(text("Сравнение каждые 5 минут. Выключите, чтобы оставаться на выбранном сервере.", 12).apply {
-                setTextColor(color(R.color.r013_secondary)); setPadding(0, dp(4), dp(12), 0)
-            })
+        automaticToggle = MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
+            text = "Авто"; textSize = 10f; isAllCaps = false; isCheckable = true
+            contentDescription = "Режим Авто"; isEnabled = false
+            minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+            insetTop = 0; insetBottom = 0; setPadding(0,0,0,0); cornerRadius = dp(18); strokeWidth = dp(1)
+            strokeColor = ColorStateList.valueOf(color(R.color.r013_accent))
+            val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            backgroundTintList = ColorStateList(states,intArrayOf(color(R.color.r013_accent),color(R.color.r013_background)))
+            setTextColor(ColorStateList(states,intArrayOf(color(R.color.r013_background),color(R.color.r013_secondary))))
+            setOnClickListener { if (automaticReady && !applyingAutomatic) applyAutomatic(isChecked) }
         }
-        automaticRow.addView(automaticLabels, LinearLayout.LayoutParams(0, -2, 1f))
-        automaticToggle = MaterialSwitch(this).apply {
-            contentDescription = "Режим Авто"; minimumHeight = dp(48); isEnabled = false
-            setOnCheckedChangeListener { _, value ->
-                if (!automaticReady || applyingAutomatic) return@setOnCheckedChangeListener
-                applyAutomatic(value)
-            }
+        val automaticHit = FrameLayout(this).apply { addView(automaticToggle,FrameLayout.LayoutParams(dp(36),dp(36),Gravity.CENTER)) }
+        automaticHit.post {
+            val bounds = android.graphics.Rect(); automaticToggle.getHitRect(bounds); bounds.inset(-dp(6),-dp(6))
+            automaticHit.touchDelegate = android.view.TouchDelegate(bounds,automaticToggle)
         }
-        automaticRow.addView(automaticToggle, LinearLayout.LayoutParams(-2, dp(48)))
-        content.addView(automaticRow)
+        toolbar.titleMarginStart = dp(48)
+        toolbar.addView(automaticHit, androidx.appcompat.widget.Toolbar.LayoutParams(dp(48),dp(48),Gravity.START).apply { marginStart=dp(48) })
         lifecycleScope.launch {
             try { automaticToggle.isChecked = withContext(Dispatchers.IO) { registry.automaticEnabled() }; automaticReady = true; automaticToggle.isEnabled = true }
             catch (_: Exception) { feedback("Не удалось прочитать настройку Авто. Откройте настройки и повторите.") }
@@ -226,6 +230,16 @@ class R013HomeActivity : AppCompatActivity() {
         NativeTrial.resumeRenewal(this) { listSignature = "" }
     }
     private fun handleSharedFile(intent: Intent) {
+        if (intent.action==Intent.ACTION_VIEW && intent.data?.scheme.equals("vpn013",true)) {
+            try {
+                val (section,text)=ProxySubscription.handoff(intent.data.toString())
+                incomingSection=true;selectedSection=section;listSignature="";intent.action=null
+                if(section=="AMNEZIAWG") fileResult.launch(arrayOf("application/zip","text/plain","application/octet-stream"))
+                else if(importDialog?.isShowing != true) showProxyInput(ProxyProfile.Section.valueOf(section),text ?: "")
+                else feedback("Сначала завершите ввод текущего ключа. Введённый текст сохранён.")
+            } catch (_:Exception) { feedback("Ссылка VPN013 не содержит поддерживаемую конфигурацию.") }
+            return
+        }
         @Suppress("DEPRECATION") val uri = if (intent.action == Intent.ACTION_SEND) intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) else if (intent.action == Intent.ACTION_VIEW) intent.data else null
         if (uri != null && uri.scheme in listOf("content", "file")) { intent.action = null; importFile(uri) }
     }
@@ -433,24 +447,57 @@ class R013HomeActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this).setTitle("Добавить · ${UnifiedAutoCoordinator.label(selectedSection)}")
             .setItems(arrayOf("Вставить конфигурацию или подписку", "Импортировать файл", "Купить конфигурацию", "Сканировать QR")) { _, choice ->
                 when(choice) {
-                    0 -> {
-                        val section = ProxyProfile.Section.valueOf(selectedSection)
-                        val input = TextInputEditText(this).apply { hint = "VLESS, HTTPS-подписка, Base64 или JSON Xray"; minLines = 4; maxLines = 8; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE }
-                        MaterialAlertDialogBuilder(this).setTitle("Своя конфигурация").setView(input)
-                            .setPositiveButton("Добавить") { _, _ -> launchOffline {
-                                val text = ProxySubscription.normalizeInput(input.text.toString())
-                                val count = if (text.startsWith("https://", ignoreCase = true)) {
-                                    val source = proxyStore.source(section, text); proxyStore.reconcile(source, ProxySubscription.fetch(source))
-                                } else proxyStore.importText(section, text).size
-                                "Добавлено профилей: $count"
-                            } }
-                            .setNegativeButton("Отмена", null).show()
-                    }
+                    0 -> showProxyInput(ProxyProfile.Section.valueOf(selectedSection))
                     1 -> fileResult.launch(arrayOf("text/*", "application/json", "application/octet-stream"))
                     2 -> open(ClientProtocol.BOT)
                     3 -> qrResult.launch(ScanOptions().setOrientationLocked(false).setBeepEnabled(false).setPrompt("Конфигурация VLESS"))
                 }
             }.show()
+    }
+    private fun showProxyInput(section:ProxyProfile.Section, initial:String="") {
+        val input=TextInputEditText(this).apply {
+            hint="Ключ или HTTPS-ссылка подписки";minLines=4;maxLines=8;setText(initial)
+            inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            isSaveEnabled=false
+        }
+        val box=vertical().apply { setPadding(dp(20),dp(8),dp(20),0);addView(input) }
+        val dialog=MaterialAlertDialogBuilder(this).setTitle("Добавить · ${UnifiedAutoCoordinator.label(section.name)}")
+            .setView(box).setPositiveButton("Загрузить конфигурацию",null).setNeutralButton("Из буфера",null).setNegativeButton("Отмена",null).create()
+        importDialog=dialog
+        dialog.setOnDismissListener { if(importDialog===dialog) importDialog=null }
+        dialog.setOnShowListener {
+            dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
+                val clipboard=getSystemService(android.content.ClipboardManager::class.java)
+                val value=clipboard.primaryClip?.getItemAt(0)?.text?.toString()
+                if(value==null || value.toByteArray(Charsets.UTF_8).size>1_048_576) feedback("В буфере нет подходящего ключа")
+                else input.setText(value)
+            }
+            dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                val value=input.text.toString()
+                if(value.isBlank()) { input.error="Вставьте ключ или ссылку";return@setOnClickListener }
+                input.error=null;input.clearFocus()
+                getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(input.windowToken,0)
+                dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).isEnabled=false
+                dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).isEnabled=false;input.isEnabled=false
+                lifecycleScope.launch {
+                    try {
+                        val count=OfflineChanges.apply {
+                            val text=ProxySubscription.normalizeInput(value)
+                            if(text.startsWith("https://",true)) {
+                                val source=proxyStore.source(section,text);proxyStore.reconcile(source,ProxySubscription.fetch(source))
+                            } else proxyStore.importText(section,text).size
+                        }
+                        dialog.dismiss();listSignature="";renderRows();feedback("Добавлено профилей: $count")
+                    } catch(_:Exception) { input.error="Не удалось загрузить. Проверьте формат, срок ссылки и привязку устройства. Текст сохранён." }
+                    finally { if(dialog.isShowing) {
+                        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).isEnabled=true
+                        dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).isEnabled=true;input.isEnabled=true
+                    } }
+                }
+            }
+        }
+        dialog.show()
+        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
     }
     private suspend fun renderProxyRows() {
         val section = ProxyProfile.Section.valueOf(selectedSection)

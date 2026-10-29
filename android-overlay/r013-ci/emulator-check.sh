@@ -52,6 +52,14 @@ for setting in window_animation_scale transition_animation_scale animator_durati
 adb shell cmd uimode night yes
 # First install the historical app, seed its real encrypted vault, then replace
 # it without uninstalling. Both APKs use the same ephemeral runner debug key.
+python3 - <<'PY_SIZE'
+from pathlib import Path
+import json,os
+paths=[Path('ui/build/outputs/apk/debug/ui-debug.apk'),Path(os.environ['RUNNER_TEMP'])/'VPN013WG-future-debug.apk']
+proof={p.name:p.stat().st_size for p in paths}
+Path('output/review/apk-sizes.json').write_text(json.dumps(proof))
+assert all(0<v<=268435456 for v in proof.values())
+PY_SIZE
 test -s "$RUNNER_TEMP/VPN013WG-previous-debug.apk"
 adb install -r -t "$RUNNER_TEMP/VPN013WG-previous-debug.apk"
 adb install -r -t ui/build/outputs/apk/androidTest/debug/ui-debug-androidTest.apk

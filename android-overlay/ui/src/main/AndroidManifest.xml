@@ -82,6 +82,12 @@
                 <data android:mimeType="application/octet-stream" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vpn013" android:host="import" />
+            </intent-filter>
         </activity>
         <activity android:name=".activity.MainActivity" android:exported="false" />
         <service android:name="org.amnezia.awg.r013.ProxyVpnService" android:exported="false"

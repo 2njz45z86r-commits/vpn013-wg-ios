@@ -10,8 +10,7 @@ import java.nio.charset.CodingErrorAction
 object ProxySubscription {
     fun normalizeInput(raw: String): String {
         val text = raw.trim()
-        val prefix = "blacktemple://import/"
-        if (!text.startsWith(prefix, ignoreCase = true)) return text
+        val prefix = listOf("blacktemple://import/", "happ://add/", "incy://import/").firstOrNull { text.startsWith(it, ignoreCase=true) } ?: return text
         require(text.length <= 16_384) { "Слишком длинная ссылка подписки" }
         val payload = text.substring(prefix.length)
         val result = if (payload.startsWith("https://", ignoreCase = true)) payload
@@ -19,6 +18,18 @@ object ProxySubscription {
         val uri = URI(result)
         require(uri.scheme.equals("https", true) && !uri.host.isNullOrBlank() && uri.rawUserInfo == null && uri.rawFragment == null && result.none { it.code < 32 || it.code == 127 }) { "Нужна HTTPS-ссылка подписки" }
         return result
+    }
+    fun handoff(raw: String): Pair<String,String?> {
+        require(raw.toByteArray(Charsets.UTF_8).size <= 16384)
+        val uri=URI(raw)
+        require(uri.scheme.equals("vpn013",true) && uri.host=="import" && uri.rawUserInfo==null && uri.port == -1 && uri.rawQuery==null)
+        val section=uri.path.removePrefix("/").uppercase(java.util.Locale.ROOT)
+        require(section in listOf("HAPP","INCY","AMNEZIAWG","BLACKTEMPLE") && uri.path=="/"+section.lowercase(java.util.Locale.ROOT))
+        if(section=="AMNEZIAWG") { require(uri.rawFragment.isNullOrEmpty());return section to null }
+        val text=java.net.URLDecoder.decode(requireNotNull(uri.rawFragment).replace("+","%2B"),"UTF-8")
+        val target=URI(text)
+        require(target.scheme.equals("https",true) && !target.host.isNullOrBlank() && target.rawUserInfo==null && target.rawFragment==null && text.none { it.code<33 || it.code==127 })
+        return section to text
     }
     fun fetch(source: ProxyRegistry.Source): String {
         val uri = URI(source.url)

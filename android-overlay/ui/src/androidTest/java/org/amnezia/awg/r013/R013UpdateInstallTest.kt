@@ -40,7 +40,7 @@ class R013UpdateInstallTest {
     }
     @Test fun noConsentDoesNotOpenInstaller() {
         val fixture = futureFile()
-        assertTrue(fixture.isFile)
+        assertTrue(fixture.isFile && fixture.length() in 1..268_435_456L)
         instrumentation.runOnMainSync { ClientUpdates.resumePendingInstall(activity!!) }
         Thread.sleep(700)
         assertFalse(marker.exists())
@@ -99,11 +99,11 @@ class R013UpdateInstallTest {
         waitFor { instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == context.packageName }
         assertFalse(marker.exists())
         assertEquals(context.packageName,instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString())
-        assertEquals(16,context.packageManager.getPackageInfo(context.packageName,0).longVersionCode.toInt())
+        assertEquals(BuildConfig.VERSION_CODE,context.packageManager.getPackageInfo(context.packageName,0).longVersionCode.toInt())
     }
     private fun futureFile(): File = File(context.getExternalFilesDir(null),"update-fixture.apk").copyTo(File(directory,"VPN013WG.apk"),overwrite=true)
     private fun release(file: File) = JSONObject().put("schema",1).put("app","vpn013-wg").put("platform","android")
-        .put("version","1.5.6").put("build",17).put("notes","")
+        .put("version","1.7.2").put("build",18).put("notes","")
         .put("downloadURL","https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/ci-never-published/fixture.apk")
         .put("sha256",MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) })
     private fun startHome() {
@@ -124,7 +124,7 @@ class R013UpdateInstallTest {
         }
         // This fixture contains only synthetic APKs and synthetic vault data.
         // Persist bounded visible UI diagnostics, never production logs/keys.
-        File(review,"update-install-failure.txt").writeText("marker=${marker.exists()} permission=${context.packageManager.canRequestPackageInstalls()} finishing=${activity?.isFinishing} destroyed=${activity?.isDestroyed}\n"+visible(root).take(16000))
+        File(review,"update-install-failure.txt").writeText("apkBytes=${File(directory,"VPN013WG.apk").length()} marker=${marker.exists()} permission=${context.packageManager.canRequestPackageInstalls()} finishing=${activity?.isFinishing} destroyed=${activity?.isDestroyed}\n"+visible(root).take(16000))
         fail("Native update flow timed out; marker=${marker.exists()} permission=${context.packageManager.canRequestPackageInstalls()} package=${root?.packageName}")
     }
 }

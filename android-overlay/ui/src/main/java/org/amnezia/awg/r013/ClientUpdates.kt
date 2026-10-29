@@ -198,7 +198,7 @@ object ClientUpdates {
                     val release = JSONObject(marker.readText(Charsets.UTF_8))
                     validateRelease(release)
                     val apk = File(directory, "VPN013WG.apk")
-                    require(apk.isFile && apk.length() in 1..100_663_296L) { "Файл обновления недоступен. Повторите проверку обновлений." }
+                    require(apk.isFile && apk.length() in 1..268_435_456L) { "Файл обновления недоступен. Повторите проверку обновлений." }
                     val digest = MessageDigest.getInstance("SHA-256")
                     apk.inputStream().use { input -> val buffer = ByteArray(32768)
                         while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
@@ -240,11 +240,11 @@ object ClientUpdates {
                     connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 30000; connection.useCaches = false
                     val code = connection.responseCode
                     if (code in listOf(301,302,303,307,308)) { url = URL(url, connection.getHeaderField("Location") ?: error("Нет адреса файла")); continue }
-                    require(code == 200 && connection.contentLengthLong <= 100_663_296L) { "Файл обновления недоступен или слишком велик" }
+                    require(code == 200 && connection.contentLengthLong <= 268_435_456L) { "Файл обновления недоступен или слишком велик" }
                     var total = 0L
                     connection.inputStream.use { input -> pending.outputStream().use { out -> val buffer = ByteArray(32768)
                         while (true) { val n = input.read(buffer); if (n < 0) break; total += n
-                            require(total <= 100_663_296L) { "Файл обновления слишком велик" }; digest.update(buffer, 0, n); out.write(buffer, 0, n) }
+                            require(total <= 268_435_456L) { "Файл обновления слишком велик" }; digest.update(buffer, 0, n); out.write(buffer, 0, n) }
                         out.fd.sync()
                     } }
                     finished = true; break

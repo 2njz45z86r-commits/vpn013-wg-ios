@@ -117,6 +117,14 @@ class R013InstrumentedTest {
         assertEquals(4, fresh.list(ProxyProfile.Section.INCY).size)
         assertEquals(awgBefore, registry.vault.read().getJSONObject("profiles").toString())
         val wrapped = "https://subscription.example.invalid/test?part=a%2Bb"
+        for(section in listOf("happ","incy","blacktemple")) {
+            val handoff=ProxySubscription.handoff("vpn013://import/$section#"+java.net.URLEncoder.encode(wrapped,"UTF-8"))
+            assertEquals(section.uppercase(java.util.Locale.ROOT),handoff.first);assertEquals(wrapped,handoff.second)
+        }
+        assertEquals("AMNEZIAWG" to null,ProxySubscription.handoff("vpn013://import/amneziawg"))
+        for(invalid in listOf("vpn013://import/unknown","vpn013://import/happ","vpn013://import/amneziawg#https%3A%2F%2Fexample.invalid","vpn013://import/happ#http%3A%2F%2Fexample.invalid","vpn013://user@import/happ#https%3A%2F%2Fexample.invalid")) {
+            var refused=false;try { ProxySubscription.handoff(invalid) } catch(_:Exception) { refused=true };assertTrue(refused)
+        }
         assertEquals(wrapped, ProxySubscription.normalizeInput("blacktemple://import/" + wrapped))
         assertEquals(wrapped, ProxySubscription.normalizeInput("blacktemple://import/" + java.net.URLEncoder.encode(wrapped, "UTF-8")))
         val managed = store.source(ProxyProfile.Section.HAPP, "https://subscription.example.invalid/test")
@@ -477,6 +485,7 @@ class R013InstrumentedTest {
         assertFalse(registry.isAuto(tunnel.name))
         val revision = backend.connectionRevision; val interfaceName = backend.actualRouteInterfaceName
         val toggle = allViews().first { it.contentDescription == "Режим Авто" }
+        assertTrue("Auto must remain compact in common toolbar",toggle.width <= (48*context.resources.displayMetrics.density).toInt() && toggle.height <= (48*context.resources.displayMetrics.density).toInt())
         waitFor { toggle.isEnabled }
         // CompoundButton's return value describes OnClickListener delivery,
         // not a successful checked-state change. Assert the real mode below.

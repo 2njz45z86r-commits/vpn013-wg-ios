@@ -34,7 +34,7 @@ class R013UpgradePreservationTest {
             expected.writeText(JSONObject().put("uid",context.applicationInfo.uid).put("package",context.packageName)
                 .put("vault",vault.read()).put("diskHash",diskHash()).toString(),Charsets.UTF_8)
         } else {
-            assertEquals(16L,context.packageManager.getPackageInfo(context.packageName,0).longVersionCode)
+            assertEquals(BuildConfig.VERSION_CODE.toLong(),context.packageManager.getPackageInfo(context.packageName,0).longVersionCode)
             val before=JSONObject(expected.readText(Charsets.UTF_8))
             assertEquals(before.getInt("uid"),context.applicationInfo.uid)
             assertEquals(before.getString("package"),context.packageName)
