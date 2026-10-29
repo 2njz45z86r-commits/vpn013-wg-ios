@@ -92,6 +92,19 @@ jobs:
           export GOOS=android GOARCH=arm64 CGO_ENABLED=1 GOFLAGS=-mod=readonly
           export CC="$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
           python3 scripts/check_go_security.py android/tunnel/tools/libwg-go --encrypted-report android/output/review/go-findings.enc.json --recipient scripts/audit-recipient.pub
+          modfile=$(python3 - <<'PY'
+          from pathlib import Path
+          import json
+          paths=sorted(Path('android/tunnel/build').rglob('proxy-tun.mod'))
+          assert 1 <= len(paths) <= 12
+          for path in paths:
+              proof=json.loads(path.with_name('proxy-tun-provenance.json').read_text())
+              assert proof['moduleCacheUnchanged'] and not proof['linkerChecksDisabled'] and proof['anetVersion']=='v0.0.5'
+          print(paths[0].resolve())
+          PY
+          )
+          export GOFLAGS="-mod=readonly -modfile=$modfile"
+          python3 scripts/check_go_security.py android/tunnel/tools/libwg-go --encrypted-report android/output/review/go-patched-findings.enc.json --recipient scripts/audit-recipient.pub
       - name: Retain credential-free review only
         if: always()
         env:
