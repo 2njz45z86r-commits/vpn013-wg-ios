@@ -1,11 +1,11 @@
 """Reuse only completed native acceptance for byte-identical Android sources."""
 import hashlib,io,json,os,pathlib,subprocess,urllib.error,urllib.request,zipfile
-SOURCE="ff7453ae351c37ce6d1f1d72432e0b35f611a2cd"
-RUN=40860052912
-ARTIFACT=12891473600
-DIGEST="243880a3557e9f193437c2c33f93a8ac742b57677806a3a6299733fd9c247d4c"
-PINS={'android-overlay': 'a791e12337896d1a4faa6b383194e20b256b23f8', '.github/workflows/native-android-check.yml': '4ad1e05d4025ce53c0e61862d525ddcc355f289b', 'scripts/build-previous-android-fixture.sh': 'e93f56ac6a122e0c123315b07197abf6c7631a2f', 'scripts/build-future-android-fixture.sh': '90e32f514197e26ff770d87ab394a3a6ae112f3a', 'scripts/check_go_security.py': '25526bede0c3d524ae4188bcc02254c14e67f0fb', 'scripts/audit-envelope.go': 'a010cb69c8dcf2207fe7a6847ede977c95b50058', 'scripts/audit-recipient.pub': '97046bff2fbe54b06b6c0d86417fae6d99fa6ed7'}
-COUNTS={'upgrade-before':1,'upgrade-after':1,'update-install-preflight':2,'update-install-flow':1,'native-trial-flow':5,'instrumentation':15,'proxy-runtime':2,'russian-routing':1,'network-recovery':3,'font-scale':1,'tablet':1}
+SOURCE="eb9b50533892e77344edd2452a41a0415da0af28"
+RUN=40937945656
+ARTIFACT=12926881962
+DIGEST="66324fdacb47b958737baaa925edd260c6c66e830ebe35b60f157ac52d6a3b24"
+PINS={'android-overlay': '72e169a090d1670c7b8ed579da74cb376cd3cd1c', '.github/workflows/native-android-check.yml': '4ad1e05d4025ce53c0e61862d525ddcc355f289b', 'scripts/build-previous-android-fixture.sh': 'e93f56ac6a122e0c123315b07197abf6c7631a2f', 'scripts/build-future-android-fixture.sh': '86b24eeee5c3de2aa6e3f3a006151932884a6e74', 'scripts/check_go_security.py': '25526bede0c3d524ae4188bcc02254c14e67f0fb', 'scripts/audit-envelope.go': 'a010cb69c8dcf2207fe7a6847ede977c95b50058', 'scripts/audit-recipient.pub': '97046bff2fbe54b06b6c0d86417fae6d99fa6ed7'}
+COUNTS={'upgrade-before':1,'upgrade-after':1,'update-install-preflight':2,'update-install-flow':1,'native-trial-flow':5,'instrumentation':16,'proxy-runtime':2,'russian-routing':1,'network-recovery':3,'font-scale':1,'tablet':1}
 
 def validate_review(files):
  d=json.loads(files['review/development-summary.json'])
@@ -17,6 +17,7 @@ def validate_review(files):
   assert not any(any(bad in line for bad in ['FAILURES','INSTRUMENTATION_FAILED','Process crashed','AssertionError']) for line in lines),name
   assert sum(line=='INSTRUMENTATION_STATUS_CODE: 0' for line in lines)==count,name
   assert not any(line=='INSTRUMENTATION_STATUS_CODE: -2' for line in lines)
+ assert 'INSTRUMENTATION_STATUS: test=multiServerSubscriptionImportsPrimaryNodesOnly' in json.loads(files['review/instrumentation.txt.summary.json'])
  for name in ['proxy-auto-cross-section','proxy-happ','proxy-incy','proxy-blacktemple','built-in-auto-paused-real-disposable-vpn','phone-main']:
   data=files['review/screenshots/'+name+'.png'];assert data.startswith(b'\x89PNG\r\n\x1a\n')
  route=json.loads(files['review/russian-route-proof.json']);assert route['foreignIPv6Captured'] is True and route['exactRussianExclusions']==10838
@@ -47,7 +48,7 @@ def main():
  def get(path):
   with urllib.request.urlopen(urllib.request.Request(base+path,headers=headers),timeout=30) as r:return json.load(r)
  run=get('/actions/runs/'+str(RUN));assert run['head_sha']==SOURCE and run['status']=='completed' and run['conclusion']=='success'
- jobs=get('/actions/runs/'+str(RUN)+'/jobs')['jobs'];j=next(j for j in jobs if j['id']==123401032178)
+ jobs=get('/actions/runs/'+str(RUN)+'/jobs')['jobs'];j=next(j for j in jobs if j['id']==123673546393)
  required={'Compile Android backend, UI and instrumented scenarios','Exercise disposable VPN, upgrades, native switch and device classes','Inspect reachable native Android dependencies'}
  assert required.issubset({s['name'] for s in j['steps']})
  assert j['conclusion']=='success' and all(s['conclusion']=='success' for s in j['steps'] if s['name'] in required)
