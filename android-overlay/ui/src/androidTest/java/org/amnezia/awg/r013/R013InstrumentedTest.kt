@@ -78,7 +78,9 @@ class R013InstrumentedTest {
         val nodes = (1..18).map { n ->
             ProxyConfiguration.outbound(ProxyProfile.parse(
                 "vless://$user@server$n.example.org:443?security=tls#server$n",
-                ProxyProfile.Section.INCY))
+                ProxyProfile.Section.INCY)).also { outbound ->
+                    outbound.getJSONObject("streamSettings").put("tcpSettings", JSONObject().put("header", JSONObject().put("type", "none")))
+                }
         }
         val docs = JSONArray()
         val padding = "x".repeat(160_000)
@@ -94,7 +96,17 @@ class R013InstrumentedTest {
             val parsed = ProxyImport.parse(docs.toString(), section)
             assertEquals(18, parsed.size)
             assertEquals(18, parsed.map { it.host }.toSet().size)
+            val ws = ProxyConfiguration.outbound(ProxyProfile.parse(
+                "vless://$user@example.org:443?security=tls&type=ws&host=front.example.org",
+                section))
+            ws.getJSONObject("streamSettings").getJSONObject("wsSettings").remove("headers")
+            ws.getJSONObject("streamSettings").getJSONObject("wsSettings").put("host", "front.example.org")
+            assertEquals("front.example.org", ProxyImport.parse(ws.toString(), section).single().options["host"])
         }
+        val bad = JSONObject(nodes.first().toString())
+        bad.getJSONObject("streamSettings").getJSONObject("tcpSettings").getJSONObject("header").put("type", "http")
+        try { ProxyImport.parse(bad.toString(), ProxyProfile.Section.INCY); fail("Unsupported TCP header accepted") }
+        catch (_: IllegalArgumentException) { }
     }
     @Test fun aTypedProxyImportPreservesAwgAndEncryptsSecrets() = runBlocking {
         OfflineChanges.apply { registry.create("Keep", ProfileRegistry.parse(config())) }

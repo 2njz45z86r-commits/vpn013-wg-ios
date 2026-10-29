@@ -80,7 +80,7 @@ object ProxyImport {
         val type = string(stream, "network", "tcp")
         val security = string(stream, "security")
         if (type !in setOf("tcp", "ws", "grpc", "xhttp") || security !in setOf("tls", "reality")) invalid()
-        val transportKey = mapOf("ws" to "wsSettings", "grpc" to "grpcSettings", "xhttp" to "xhttpSettings")[type]
+        val transportKey = mapOf("tcp" to "tcpSettings", "ws" to "wsSettings", "grpc" to "grpcSettings", "xhttp" to "xhttpSettings")[type]
         fields(stream, setOfNotNull("network", "security", if (security == "tls") "tlsSettings" else "realitySettings", transportKey))
         val tls = stream.optJSONObject(if (security == "tls") "tlsSettings" else "realitySettings") ?: invalid()
         fields(tls, setOf("serverName", "fingerprint", "alpn", "allowInsecure", "publicKey", "shortId", "spiderX", "mldsa65Verify", "show"))
@@ -101,11 +101,24 @@ object ProxyImport {
         transportKey?.let { key ->
             val transport = stream.optJSONObject(key) ?: JSONObject()
             when (type) {
+                "tcp" -> {
+                    fields(transport, setOf("header"))
+                    if (transport.has("header")) {
+                        val header = transport.optJSONObject("header") ?: invalid()
+                        fields(header, setOf("type"))
+                        if (string(header, "type", "none") != "none") invalid()
+                    }
+                }
                 "ws" -> {
-                    fields(transport, setOf("path", "headers"))
+                    fields(transport, setOf("path", "headers", "host"))
                     query["path"] = string(transport, "path", "/")
+                    if (transport.has("host")) query["host"] = string(transport, "host")
                     transport.optJSONObject("headers")?.let { headers ->
-                        fields(headers, setOf("Host")); if (headers.has("Host")) query["host"] = string(headers, "Host")
+                        fields(headers, setOf("Host")); if (headers.has("Host")) {
+                            val host = string(headers, "Host")
+                            if (query.containsKey("host") && query["host"] != host) invalid()
+                            query["host"] = host
+                        }
                     }
                     if (transport.has("headers") && transport.optJSONObject("headers") == null) invalid()
                 }
