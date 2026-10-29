@@ -66,7 +66,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$(git rev-parse HEAD:overlay)" = "c2180d18a45cceca98f12af6d8fc369df17f0906" ]; then
+          if [ "$(git rev-parse HEAD:overlay)" = "ff6dd5ba2b107d465b07509c58092fdad9c51c91" ]; then
+            python3 reuse-ios171-passed-ui.py
+          elif [ "$(git rev-parse HEAD:overlay)" = "c2180d18a45cceca98f12af6d8fc369df17f0906" ]; then
             python3 reuse-ios17-passed-ui.py
           elif [ "$(git rev-parse HEAD:overlay)" = "f80ad4e4f8dd23ae3737e8869ea61ced1c5d5ce5" ]; then
             python3 reuse-complete-unified-review.py
