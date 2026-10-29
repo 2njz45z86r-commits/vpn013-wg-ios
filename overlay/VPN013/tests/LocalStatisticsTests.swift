@@ -27,6 +27,11 @@ import Network
         expect(key.ports == same.ports, "same profile derives same bounded ports")
         expect(Set(key.ports).count == 4 && key.ports.allSatisfy { $0 >= 49152 }, "four unique high ports")
         expect(key.authenticate(request) == 6, "authentic fixed read request")
+        let crossRead = try key.request(operation: 11, nonce: Data(repeating: 7, count: 32))
+        expect(key.authenticate(crossRead) == 11, "cross-protocol status is a fixed authenticated read operation")
+        let separateControl = try VPN013LocalStatisticsCredentials.automaticControl(secret: Data(repeating: 1, count: 32),
+            id: "8B1F212E-1195-4320-9CE7-6B21F208C43B", ciphertext: Data(repeating: 3, count: 40))
+        expect(separateControl.authenticate(crossRead) == nil, "status frame can never authorize mode control")
         expect(other.authenticate(request) == nil, "different profile key denied")
         expect(key.authenticate(Data()) == nil, "empty request denied")
         expect(key.authenticate(request + Data([0])) == nil, "oversized request denied")

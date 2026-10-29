@@ -46,6 +46,7 @@ struct CrossProtocolPlan: Codable {
         func release() {
             dispatchPrecondition(condition: .onQueue(.main))
             guard !released else { return }; released = true; CrossProtocolPlan.changingSources = false
+            NotificationCenter.default.post(name: Notification.Name("VPN013AutomaticAvailabilityChanged"), object: nil)
         }
     }
     /// Before editing/deleting sources, remove inactive recovery snapshots from
@@ -58,6 +59,7 @@ struct CrossProtocolPlan: Codable {
         guard !changingSources else { completion(.failure(CrossProtocolError.busy)); return }
         guard let appID = appID else { completion(.failure(CrossProtocolError.invalid)); return }
         changingSources = true; let permit = MutationPermit()
+        NotificationCenter.default.post(name: Notification.Name("VPN013AutomaticAvailabilityChanged"), object: nil)
         NETunnelProviderManager.loadAllFromPreferences { managers, error in
             DispatchQueue.main.async {
                 let finish: (Error?) -> Void = { error in

@@ -284,14 +284,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func
     stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        if crossProtocol != nil || crossResolver != nil {
+        if crossProtocol != nil || crossResolver != nil || crossStopping || crossEngine != nil {
             DispatchQueue.main.async {
                 self.localStatisticsEpoch = UUID(); self.crossResolver?.cancel(); self.crossResolver = nil
                 self.crossDeadline?.cancel(); self.crossDeadline = nil; self.crossPath?.cancel(); self.crossPath = nil
                 let cross = self.crossProtocol; self.crossProtocol = nil; self.automaticSession = nil
                 self.stopLocalChannels {
-                    if let cross = cross { cross.stop(completion: completionHandler) }
-                    else { self.stopCrossEngine { _ in completionHandler() } }
+                    let finished = { self.crossPlan = nil; completionHandler() }
+                    if let cross = cross { cross.stop(completion: finished) }
+                    else { self.stopCrossEngine { _ in finished() } }
                 }
             }
             return
@@ -540,12 +541,12 @@ extension PacketTunnelProvider {
                 coordinator.start { error in
                     self.crossDeadline?.cancel(); self.crossDeadline = nil
                     if error != nil, self.crossProtocol === coordinator {
-                        self.crossPath?.cancel(); self.crossPath = nil; self.crossProtocol = nil
+                        self.crossPath?.cancel(); self.crossPath = nil; self.crossProtocol = nil; self.crossPlan = nil
                     }
                     completion(error)
                 }
             }
-        } catch { crossResolver?.cancel(); crossResolver = nil; completion(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid) }
+        } catch { crossResolver?.cancel(); crossResolver = nil; crossPlan = nil; completion(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid) }
     }
     private func readCrossRuntime(completion: @escaping (Data?) -> Void) {
         dispatchPrecondition(condition: .onQueue(.main))
@@ -553,8 +554,10 @@ extension PacketTunnelProvider {
               plan.groups.indices.contains(coordinator.selection.current) else { completion(nil); return }
         let group = plan.groups[coordinator.selection.current]
         let token = localStatisticsEpoch
+        let connectionRevision = coordinator.revision
         let encode: (String, String?, String, UInt64?, UInt64?, Date?) -> Void = { name, endpoint, phase, rx, tx, handshake in
-            guard self.localStatisticsEpoch == token, self.crossProtocol === coordinator else { completion(nil); return }
+            guard self.localStatisticsEpoch == token, self.crossProtocol === coordinator,
+                  coordinator.revision == connectionRevision else { completion(nil); return }
             completion(try? JSONEncoder().encode(CrossProtocolRuntime(schema: 1, kind: group.kind, name: name,
                 endpoint: endpoint, phase: phase, received: rx, sent: tx, handshake: handshake,
                 automaticEnabled: coordinator.selection.enabled, trafficVerified: coordinator.trafficConfirmed)))

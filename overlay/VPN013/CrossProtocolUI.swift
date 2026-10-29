@@ -108,9 +108,9 @@ final class CrossProtocolStatusView: UIView {
         return ceil(heading + body + button + 36)
     }
     func update(_ value: CrossProtocolRuntime?) {
-        title.text = value.map { "Общее Авто · " + $0.kind.title } ?? "Общее Авто"
+        title.text = value.map { ($0.automaticEnabled ? "Общее Авто · " : "VPN · ") + $0.kind.title } ?? "Общее подключение"
         if let value = value {
-            var lines = [value.name, value.phase]
+            var lines = [value.name, value.automaticEnabled ? value.phase : "Авто выключено · текущая конфигурация"]
             if let endpoint = value.endpoint { lines.append(endpoint) }
             if let rx = value.received, let tx = value.sent { lines.append("↓ \(rx) байт · ↑ \(tx) байт") }
             detail.text = lines.joined(separator: "\n")

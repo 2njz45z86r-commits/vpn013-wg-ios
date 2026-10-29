@@ -15,6 +15,7 @@ final class CrossProtocolCoordinator {
     private let pauseEngine: (Bool) -> Void
     private let ended: (Error) -> Void
     private var generation = 0
+    var revision: Int { generation }
     private var pending: ((Error?) -> Void)?
     init(count: Int, enabled: Bool,
          start: @escaping (Int, Bool, @escaping (Error?) -> Void) -> Void,
