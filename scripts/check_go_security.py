@@ -33,7 +33,6 @@ try:
         scanner = Path(temporary) / ('govulncheck.exe' if os.name == 'nt' else 'govulncheck')
         scan = subprocess.run([str(scanner), '-db', args.database, '-json', '-scan', args.level, '.'],
             cwd=root, env=env, capture_output=True, timeout=240)
-        assert scan.returncode == 0 and not scan.stderr.strip()
         assert len(scan.stdout) <= 128 * 1024 * 1024
         if args.encrypted_report:
             assert args.recipient
@@ -41,8 +40,10 @@ try:
             for name in ('GOOS', 'GOARCH', 'CGO_ENABLED', 'CC', 'CXX', 'CGO_CFLAGS', 'CGO_CPPFLAGS', 'CGO_LDFLAGS', 'GOFLAGS'):
                 host_env.pop(name, None)
             helper = Path(__file__).with_name('audit-envelope.go').resolve()
-            encrypted = subprocess.run(['go', 'run', str(helper), 'encrypt', str(Path(args.recipient).resolve()), str(Path(args.encrypted_report).resolve())], input=scan.stdout, env=host_env, capture_output=True, timeout=90)
+            payload = scan.stdout if scan.returncode == 0 and not scan.stderr.strip() else json.dumps({'scanFailed':True,'returncode':scan.returncode,'stderr':scan.stderr.decode('utf-8',errors='replace')[-65536:]}).encode()
+            encrypted = subprocess.run(['go', 'run', str(helper), 'encrypt', str(Path(args.recipient).resolve()), str(Path(args.encrypted_report).resolve())], input=payload, env=host_env, capture_output=True, timeout=90)
             assert encrypted.returncode == 0
+        assert scan.returncode == 0 and not scan.stderr.strip()
         text = scan.stdout.decode('utf-8').strip()
         decoder = json.JSONDecoder()
         config_seen = False

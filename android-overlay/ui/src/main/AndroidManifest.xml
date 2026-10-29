@@ -37,6 +37,7 @@
         android:label="@string/permission_label"
         android:protectionLevel="signature" />
 
+    <queries><intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent></queries>
     <application
         android:name=".Application"
         android:allowBackup="false"

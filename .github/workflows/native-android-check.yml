@@ -67,7 +67,7 @@ jobs:
           export JAVA_HOME="$JAVA_HOME_17_X64"
           export PATH="$JAVA_HOME/bin:$PATH"
           (cd android && ./gradlew --no-daemon --console=plain :ui:assembleDebug :ui:assembleDebugAndroidTest > ../android-assembly.log 2>&1) || {
-            grep -E '^e:|error:|FAILURE:|Execution failed|^> ' android-assembly.log | head -60 || true
+            grep -E '^e:|error:|FAILURE:|Execution failed|^> |^go:|\.go:[0-9]+:|Traceback|Error:|AssertionError|^make.*\*\*\*' android-assembly.log | tail -80 || true
             exit 1
           }
           bash scripts/build-previous-android-fixture.sh

@@ -116,11 +116,28 @@ class R013InstrumentedTest {
         val fresh = ProxyRegistry(PrivateVault(context))
         assertEquals(4, fresh.list(ProxyProfile.Section.INCY).size)
         assertEquals(awgBefore, registry.vault.read().getJSONObject("profiles").toString())
+        val wrapped = "https://subscription.example.invalid/test?part=a%2Bb"
+        assertEquals(wrapped, ProxySubscription.normalizeInput("blacktemple://import/" + wrapped))
+        assertEquals(wrapped, ProxySubscription.normalizeInput("blacktemple://import/" + java.net.URLEncoder.encode(wrapped, "UTF-8")))
+        val managed = store.source(ProxyProfile.Section.HAPP, "https://subscription.example.invalid/test")
+        val otherSource = store.source(ProxyProfile.Section.INCY, "https://subscription.example.invalid/other")
+        assertEquals(managed.hwid, otherSource.hwid)
+        fun roster(count: Int) = (0 until count).joinToString("\n") { "vless://$user@node$it.example.org:443?security=tls#Node$it" }
+        OfflineChanges.apply { store.reconcile(managed, roster(10)); store.reconcile(otherSource, roster(2)) }
+        assertEquals(14, store.list(ProxyProfile.Section.HAPP).size)
+        val restored = store.list(ProxyProfile.Section.HAPP).single { it.profile.name == "Node9" }.id
+        OfflineChanges.apply { store.delete(restored); store.reconcile(managed, roster(20)) }
+        assertEquals(24, store.list(ProxyProfile.Section.HAPP).size)
+        assertTrue(store.list(ProxyProfile.Section.HAPP).any { it.id == restored })
+        OfflineChanges.apply { store.reconcile(managed, roster(15)) }
+        assertEquals(19, store.list(ProxyProfile.Section.HAPP).size)
+        assertEquals(6, store.list(ProxyProfile.Section.INCY).size)
+        assertEquals(awgBefore, registry.vault.read().getJSONObject("profiles").toString())
         val bytes = File(context.filesDir, "r013-vault.bin").readBytes().toString(Charsets.ISO_8859_1)
         assertFalse(bytes.contains(user)); assertFalse(bytes.contains("Private name")); assertFalse(bytes.contains("example.org"))
         val removed = store.list(ProxyProfile.Section.HAPP).first().id
         OfflineChanges.apply { store.delete(removed) }
-        assertEquals(3, store.list(ProxyProfile.Section.HAPP).size)
+        assertEquals(18, store.list(ProxyProfile.Section.HAPP).size)
         assertEquals(4, store.list(ProxyProfile.Section.BLACKTEMPLE).size)
         assertEquals(awgBefore, registry.vault.read().getJSONObject("profiles").toString())
     }

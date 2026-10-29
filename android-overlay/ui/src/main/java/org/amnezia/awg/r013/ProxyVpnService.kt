@@ -58,10 +58,12 @@ class ProxyVpnService : VpnService() {
                     check(token == revision.get()) { "Подключение отменено" }
                     val ticket = Native.r013PrimaryBegin(); check(ticket != 0L) { "Прежнее подключение ещё завершается" }
                     try {
-                        val descriptor = Builder().setSession("VPN013").setMtu(1280)
+                        val builder = Builder().setSession("VPN013").setMtu(1280)
                             .addAddress("10.13.0.2", 32).addAddress("fd13::2", 128)
                             .addRoute("0.0.0.0", 0).addRoute("::", 0).addDnsServer("1.1.1.1")
-                            .setBlocking(false).apply { setUnderlyingNetworks(arrayOf(captured.network)) }.establish()
+                            .setBlocking(false).apply { setUnderlyingNetworks(arrayOf(captured.network)) }
+                        ProxyRouting.apply(this@ProxyVpnService, builder, ProxyRouting.read(ProfileRegistry.get(this@ProxyVpnService).vault, id))
+                        val descriptor = builder.establish()
                             ?: error("Не удалось создать VPN")
                         tun = descriptor
                         check(token == revision.get() && captured.current()) { "Сеть изменилась" }

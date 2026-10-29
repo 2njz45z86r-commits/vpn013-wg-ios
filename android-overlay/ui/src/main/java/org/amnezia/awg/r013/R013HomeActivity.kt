@@ -96,6 +96,11 @@ class R013HomeActivity : AppCompatActivity() {
     }
     private val qrResult = registerForActivityResult(ScanContract()) { result ->
         result.contents?.let { text ->
+            if (selectedSection != "AMNEZIAWG") {
+                val section = ProxyProfile.Section.valueOf(selectedSection)
+                launchOffline { "Добавлено профилей: ${proxyStore.importText(section, text).size}" }
+                return@let
+            }
             lifecycleScope.launch {
                 try { val config = withContext(Dispatchers.IO) { ProfileRegistry.parse(text) }
                     askName("Новый профиль", "Профиль") { name -> launchOffline { registry.create(name, config); "Профиль добавлен" } }
@@ -268,7 +273,13 @@ class R013HomeActivity : AppCompatActivity() {
     private fun settings() {
         MaterialAlertDialogBuilder(this).setTitle("VPN013").setItems(arrayOf("Обновить конфигурации", "Проверить обновление приложения", "Настройки и журнал", "Купить конфигурацию")) { _, index ->
             when (index) {
-                0 -> lifecycleScope.launch { try { feedback("Проверяем обновления конфигураций…"); feedback(ClientUpdates.refreshOrders()) ; listSignature = "" } catch (e: Exception) { feedback(e.message ?: "Обновление не выполнено") } }
+                0 -> lifecycleScope.launch { try {
+                    feedback("Проверяем обновления конфигураций…")
+                    val ordinary = ClientUpdates.refreshOrders()
+                    val count = OfflineChanges.apply { var count = 0
+                        for (source in proxyStore.sources()) count += proxyStore.reconcile(source, ProxySubscription.fetch(source)); count }
+                    feedback("$ordinary · Профилей подписок: $count"); listSignature = ""
+                } catch (_: Exception) { feedback("Обновление не выполнено. Отключите VPN и проверьте доступность подписки. Прежние профили сохранены.") } }
                 1 -> ClientUpdates.offerUpdate(this)
                 2 -> startActivity(Intent(this, SettingsActivity::class.java))
                 3 -> open(ClientProtocol.BOT)
@@ -385,7 +396,8 @@ class R013HomeActivity : AppCompatActivity() {
                 append(UnifiedAutoCoordinator.status ?: "Проверяется подключение")
                 stats?.let { append("\n↓ ${bytes(it.optLong("rx"))}  ↑ ${bytes(it.optLong("tx"))}") }
             }
-            routingDetails.text = "Настройки выбранного подключения"
+            routingDetails.text = if (android.os.Build.VERSION.SDK_INT >= 33) "Российские IP-сети — напрямую; остальные — через VPN"
+                else "Все IP-сети — через VPN; исключения российских сетей требуют Android 13 или новее"
             currentPing.isEnabled = true; currentPing.contentDescription = "Отключить VPN"
             currentPing.setOnClickListener { lifecycleScope.launch { UnifiedAutoCoordinator.stop(); listSignature = ""; renderCurrent(); renderRows(true) } }
             return
@@ -419,17 +431,24 @@ class R013HomeActivity : AppCompatActivity() {
     }
     private fun proxyAddMenu() {
         MaterialAlertDialogBuilder(this).setTitle("Добавить · ${UnifiedAutoCoordinator.label(selectedSection)}")
-            .setItems(arrayOf("Вставить конфигурацию", "Импортировать файл", "Купить конфигурацию")) { _, choice ->
+            .setItems(arrayOf("Вставить конфигурацию или подписку", "Импортировать файл", "Купить конфигурацию", "Сканировать QR")) { _, choice ->
                 when(choice) {
                     0 -> {
                         val section = ProxyProfile.Section.valueOf(selectedSection)
-                        val input = TextInputEditText(this).apply { hint = "VLESS, Base64 или JSON Xray"; minLines = 4; maxLines = 8; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE }
+                        val input = TextInputEditText(this).apply { hint = "VLESS, HTTPS-подписка, Base64 или JSON Xray"; minLines = 4; maxLines = 8; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE }
                         MaterialAlertDialogBuilder(this).setTitle("Своя конфигурация").setView(input)
-                            .setPositiveButton("Добавить") { _, _ -> launchOffline { val ids = proxyStore.importText(section, input.text.toString()); "Добавлено профилей: ${ids.size}" } }
+                            .setPositiveButton("Добавить") { _, _ -> launchOffline {
+                                val text = ProxySubscription.normalizeInput(input.text.toString())
+                                val count = if (text.startsWith("https://", ignoreCase = true)) {
+                                    val source = proxyStore.source(section, text); proxyStore.reconcile(source, ProxySubscription.fetch(source))
+                                } else proxyStore.importText(section, text).size
+                                "Добавлено профилей: $count"
+                            } }
                             .setNegativeButton("Отмена", null).show()
                     }
                     1 -> fileResult.launch(arrayOf("text/*", "application/json", "application/octet-stream"))
                     2 -> open(ClientProtocol.BOT)
+                    3 -> qrResult.launch(ScanOptions().setOrientationLocked(false).setBeepEnabled(false).setPrompt("Конфигурация VLESS"))
                 }
             }.show()
     }
@@ -447,7 +466,9 @@ class R013HomeActivity : AppCompatActivity() {
                 contentDescription = record.profile.name
                 setOnLongClickListener {
                     MaterialAlertDialogBuilder(this@R013HomeActivity).setTitle(record.profile.name)
-                        .setItems(arrayOf("Удалить")) { _, _ -> launchOffline { proxyStore.delete(record.id); "Профиль удалён" } }.show(); true
+                        .setItems(arrayOf("Маршрутизация приложений", "Удалить")) { _, item ->
+                            if (item == 0) proxyApplications(record.id) else launchOffline { proxyStore.delete(record.id); "Профиль удалён" }
+                        }.show(); true
                 }
             }, LinearLayout.LayoutParams(0, -2, 1f))
             val active = ProxyVpnService.activeId == record.id || ProxyVpnService.requestedId == record.id
@@ -464,6 +485,26 @@ class R013HomeActivity : AppCompatActivity() {
         val record = ProxyProfile.Section.values().flatMap { proxyStore.list(it) }.singleOrNull { it.id == id } ?: return
         UnifiedAutoCoordinator.connect(this, UnifiedAutoCoordinator.Candidate(record.profile.section.name, id))
         listSignature = ""
+    }
+    private fun proxyApplications(id: String) {
+        MaterialAlertDialogBuilder(this).setTitle("Маршрутизация приложений")
+            .setItems(arrayOf("Все приложения", "Только выбранные", "Кроме выбранных")) { _, choice ->
+                if (choice == 0) { launchOffline { ProxyRouting.save(registry.vault, id, ProxyRouting.Rules()); "Маршрутизация сохранена" }; return@setItems }
+                val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                val apps = packageManager.queryIntentActivities(launcher, 0).map { it.activityInfo.applicationInfo }
+                    .distinctBy { it.packageName }.filter { it.packageName != packageName }
+                    .sortedBy { packageManager.getApplicationLabel(it).toString() }.take(200)
+                val previous = ProxyRouting.read(registry.vault, id)
+                val checked = BooleanArray(apps.size) { apps[it].packageName in previous.packages }
+                MaterialAlertDialogBuilder(this).setTitle(if (choice == 1) "Только выбранные" else "Кроме выбранных")
+                    .setMultiChoiceItems(apps.map { packageManager.getApplicationLabel(it).toString() }.toTypedArray(), checked) { _, index, value -> checked[index] = value }
+                    .setPositiveButton("Сохранить") { _, _ -> launchOffline {
+                        val packages = apps.filterIndexed { index, _ -> checked[index] }.map { it.packageName }.toSet()
+                        require(choice != 1 || packages.isNotEmpty()) { "Выберите хотя бы одно приложение" }
+                        ProxyRouting.save(registry.vault, id, previous.copy(mode = if (choice == 1) "only" else "except", packages = packages))
+                        "Маршрутизация сохранена. VPN013 остаётся в туннеле для проверки подключения."
+                    } }.setNegativeButton("Отмена", null).show()
+            }.show()
     }
     private data class Current(val profile: String?, val member: String?, val endpoints: List<String>, val host: String?, val received: Long?, val sent: Long?, val handshake: Long?, val revision: Long, val hourly: String?)
     private fun pingCurrent() {
