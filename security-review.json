@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-29T08:08:38.305736+00:00",
-  "source_sha256": "bca50eee8826f59cd0fb813fc4f1e944d198fae501075f3d33f93ee52c5fc467",
+  "reviewed_at": "2026-10-29T10:21:33.049141+00:00",
+  "source_sha256": "b61f6f3cb4a5b5028579b16e77ee2ce1844718579c119db5dfe680e154e61fac",
   "source_commit_reviewed": "Android exact anet private-runtime link fix; native validation pending",
   "scope_complete": false,
   "private_report_ref": "private:VPN013-Android-unified-20261029",
