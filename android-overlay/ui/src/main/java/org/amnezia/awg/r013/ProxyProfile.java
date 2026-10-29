@@ -107,7 +107,7 @@ public final class ProxyProfile {
                 if(!padding.matches("(?:0|[1-9][0-9]{0,4})(?:-(?:0|[1-9][0-9]{0,4}))?")) throw invalid();
                 String[] bounds=padding.split("-",-1);
                 int first=Integer.parseInt(bounds[0]), last=Integer.parseInt(bounds[bounds.length-1]);
-                if(first>last || last>65536) throw invalid();
+                if(first>last || last>65536 || (first==0 && last!=0)) throw invalid();
             }
             clean(q.getOrDefault("path",""),2048); clean(q.getOrDefault("serviceName",""),256);
             clean(q.getOrDefault("authority",""),253);
