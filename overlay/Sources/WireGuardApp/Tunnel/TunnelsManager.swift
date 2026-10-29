@@ -987,14 +987,14 @@ class TunnelContainer: NSObject {
     var hasAutomaticRuntime: Bool {
         guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol else { return false }
         #if os(iOS)
-        if let payload = try? proto.privatePayload(), payload.builtinAutomatic != nil { return true }
+        if let payload = try? proto.privatePayload(), payload.builtinAutomatic != nil || payload.crossProtocol != nil { return true }
         #endif
         return proto.isVPN013Automatic
     }
     var requiresAutomaticIdentity: Bool {
         guard let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol else { return false }
         #if os(iOS)
-        if let payload = try? proto.privatePayload(), payload.builtinAutomatic != nil {
+        if let payload = try? proto.privatePayload(), payload.builtinAutomatic != nil || payload.crossProtocol != nil {
             guard let envelope = proto.privateEnvelope else { return true }
             return VPN013AutomaticIdentityHistory.required(id: envelope.id, ciphertext: envelope.ciphertext,
                 initial: payload.automatic != nil || payload.builtinAutomaticIdentityRequired != false)

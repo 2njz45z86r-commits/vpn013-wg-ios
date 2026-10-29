@@ -77,7 +77,7 @@ extension NETunnelProviderProtocol {
     }
     var usesVPN013Automatic: Bool {
         #if os(iOS)
-        if let payload = try? privatePayload(), payload.builtinAutomatic != nil || payload.automatic != nil { return payload.automaticEnabled != false }
+        if let payload = try? privatePayload(), payload.builtinAutomatic != nil || payload.automatic != nil || payload.crossProtocol != nil { return payload.automaticEnabled != false }
         #endif
         return isVPN013Automatic
     }

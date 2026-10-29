@@ -104,6 +104,7 @@ assert e['CFBundleIdentifier']=='com.vpn013.awg.network-extension'
 for root,meta in [(app,info),(ext,e)]:
  binary=(root/meta['CFBundleExecutable']).read_bytes();assert binary[:4]==bytes.fromhex('cffaedfe')
  assert b'VPN013SimulatorAutoJSON' not in binary and b'demo.wireguard.com' not in binary
+ assert b'--vpn013-test-cross-runtime' not in binary and b'reserve.example.invalid' not in binary
 Path('build/review/bundle-verification.json').write_text(json.dumps({'appID':info['CFBundleIdentifier'],'extensionID':e['CFBundleIdentifier'],'appleDistributionSigned':False,'adHocIntegrityChecked':True,'requiresOwnerResigning':True,'customerKeysIncluded':False,'physicalDeviceTested':False,'version':info['CFBundleShortVersionString']},indent=2))
 PY
 (cd build && zip -qr VPN013Admin-unsigned.ipa Payload)

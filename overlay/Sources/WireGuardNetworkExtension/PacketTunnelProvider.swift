@@ -519,6 +519,18 @@ extension PacketTunnelProvider {
                         self?.automatic?.setEnabled(enabled); self?.proxyAdapter?.setAutomaticEnabled(enabled)
                     }, ended: { [weak self] error in self?.cancelTunnelWithError(error) })
                 self.crossProtocol = coordinator
+                coordinator.changed = { [weak coordinator] in
+                    guard let coordinator = coordinator, plan.groups.indices.contains(coordinator.selection.current) else { return }
+                    let phase: String
+                    switch coordinator.phase {
+                    case .idle: phase = "idle"
+                    case .starting: phase = "starting"
+                    case .running: phase = "running"
+                    case .switching: phase = "switching"
+                    case .stopped: phase = "stopped"
+                    }
+                    wg_log(.info, message: "Cross-protocol: phase=\(phase);section=\(plan.groups[coordinator.selection.current].kind.rawValue)")
+                }
                 let monitor = NWPathMonitor(); self.crossPath = monitor
                 monitor.pathUpdateHandler = { [weak coordinator] path in coordinator?.networkAvailable = path.status == .satisfied }
                 monitor.start(queue: .main)

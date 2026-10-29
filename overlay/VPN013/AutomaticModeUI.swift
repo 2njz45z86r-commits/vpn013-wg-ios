@@ -15,7 +15,7 @@ final class AutomaticModeRow: UIView {
         let title = UILabel(); title.text = "Режим Авто"
         title.font = .preferredFont(forTextStyle: .headline); title.adjustsFontForContentSizeCategory = true
         title.textColor = VPN013Theme.text; title.numberOfLines = 0
-        explanation.text = "Лучший ответ при запуске, сравнение каждые 5 минут. Выключите для ручного выбора."
+        explanation.text = "Лучший ответ при запуске, сравнение каждые 5 минут. Если раздел не работает — другие загруженные конфигурации. Выключите для ручного выбора."
         explanation.font = .preferredFont(forTextStyle: .footnote); explanation.adjustsFontForContentSizeCategory = true
         explanation.textColor = VPN013Theme.secondaryText; explanation.numberOfLines = 0
         let labels = UIStackView(arrangedSubviews: [title, explanation]); labels.axis = .vertical; labels.spacing = 4
