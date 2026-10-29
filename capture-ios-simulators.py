@@ -1,6 +1,6 @@
 """Bounded sequential screenshots on disposable CI simulators. No physical device."""
 from pathlib import Path
-import json,os,plistlib,subprocess,time,uuid
+import json,os,plistlib,subprocess,time,uuid,zlib
 
 def main():
     assert os.environ.get("GITHUB_ACTIONS")=="true"
@@ -17,7 +17,7 @@ def main():
         return [dict(d,runtime=runtime) for runtime,rows in json.loads(call("list","devices","available","-j"))["devices"].items() for d in rows]
     available=devices()
     selected=next(d for d in available if d["name"]=="iPhone 16 Pro" and (not os.environ.get('VPN013_CAPTURE_PHONE_ID') or d['udid']==os.environ['VPN013_CAPTURE_PHONE_ID']))
-    phone=selected['udid']
+    phone=call('create','VPN013 Review Phone '+uuid.uuid4().hex[:8],selected['deviceTypeIdentifier'],selected['runtime']).strip()
     tablet_template=next(d for d in available if d["name"].startswith("iPad") and d['runtime']==selected['runtime'])
     # A fresh disposable tablet avoids persisted simulator launch services state.
     tablet=call('create','VPN013 Review Tablet '+uuid.uuid4().hex[:8],tablet_template['deviceTypeIdentifier'],selected['runtime']).strip()
@@ -32,7 +32,10 @@ def main():
             call("boot",device,limit=45)
         call("bootstatus",device,"-b",limit=180)
     def launch(device,args):
-        call("launch","--terminate-running-process",device,"com.vpn013.awg",
+        # Terminate independently: a new foreground launch must not reuse a
+        # previous test application's launch-services transaction.
+        subprocess.run(['xcrun','simctl','terminate',device,'com.vpn013.awg'],capture_output=True,timeout=45)
+        call("launch",device,"com.vpn013.awg",
              "-AppleLanguages","(ru)","-AppleLocale","ru_RU",*args,limit=90)
         time.sleep(3)
     def screenshot(device,name):
@@ -42,6 +45,15 @@ def main():
         assert 10000<len(b)<15000000 and b.startswith(b"\x89PNG\r\n\x1a\n")
         width,height=int.from_bytes(b[16:20],"big"),int.from_bytes(b[20:24],"big")
         assert width>=300 and height>=300
+        chunks=[];position=8
+        while position<len(b):
+            size=int.from_bytes(b[position:position+4],'big');kind=b[position+4:position+8]
+            assert size<=len(b)-position-12
+            if kind==b'IDAT':chunks.append(b[position+8:position+8+size])
+            position+=size+12
+        decoder=zlib.decompressobj();pixels=decoder.decompress(b''.join(chunks),64*1024*1024)
+        assert decoder.eof and not decoder.unconsumed_tail,'Oversized/incomplete screenshot pixels'
+        assert len(set(pixels))>16,'Blank/unrendered simulator screenshot is not appearance evidence'
     fixture=["--vpn013-test-count","2","--vpn013-test-current-card","--vpn013-test-start-current","--vpn013-test-ping-loopback"]
     def unified(device,prefix):
         for kind in ('happ','incy','blacktemple'):
@@ -59,8 +71,10 @@ def main():
             screenshot(device,prefix+'-cross-protocol'+('-large-type' if large else '')+'.png')
         call('ui',device,'content_size','large',limit=45)
     stage("phone-large-type")
+    shutdown(selected['udid'])
     try:
         boot(phone)
+        call('install',phone,str(app),limit=90)
         call("ui",phone,"content_size","accessibility-extra-extra-extra-large",limit=45)
         launch(phone,fixture);screenshot(phone,"phone-large-type.png")
         call("ui",phone,"content_size","large",limit=45)
@@ -99,5 +113,6 @@ def main():
         "freshCrossProtocolPhone":True,"freshCrossProtocolTablet":True,"freshCrossProtocolLargeType":True,
         "sequentialSimulators":True,"physicalIPhoneTested":False},indent=2))
     stage("complete")
+    call('delete',phone,limit=45)
     call('delete',tablet,limit=45)
 if __name__=="__main__":main()
