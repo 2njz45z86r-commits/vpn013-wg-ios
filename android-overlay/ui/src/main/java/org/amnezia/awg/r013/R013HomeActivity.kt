@@ -269,7 +269,13 @@ class R013HomeActivity : AppCompatActivity() {
                             .decode(java.nio.ByteBuffer.wrap(bytes)).toString()
                     } }
                     val normalized = ProxySubscription.normalizeInput(text)
-                    if (normalized.startsWith("https://", true)) { showProxyInput(section, normalized); return@launch }
+                    if (normalized.startsWith("https://", true)) {
+                        val count = OfflineChanges.apply {
+                            val source = proxyStore.source(section, normalized)
+                            proxyStore.reconcile(source, ProxySubscription.fetch(source))
+                        }
+                        listSignature = ""; renderRows(); feedback("Добавлено профилей: $count"); return@launch
+                    }
                     OfflineChanges.apply { proxyStore.importText(section, text) }; listSignature = ""; renderRows()
                 } catch (_: Exception) { feedback("Файл не содержит поддерживаемую конфигурацию. Прежние профили сохранены.") }
             }; return
