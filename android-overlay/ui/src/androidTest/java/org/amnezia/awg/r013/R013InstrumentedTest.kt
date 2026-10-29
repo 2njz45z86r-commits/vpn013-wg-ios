@@ -117,6 +117,20 @@ class R013InstrumentedTest {
         bad.getJSONObject("streamSettings").getJSONObject("tcpSettings").getJSONObject("header").put("type", "http")
         try { ProxyImport.parse(bad.toString(), ProxyProfile.Section.INCY); fail("Unsupported TCP header accepted") }
         catch (_: IllegalArgumentException) { }
+        val file = File(context.cacheDir, "owner-zip-fixture.zip")
+        java.util.zip.ZipOutputStream(file.outputStream()).use { zip ->
+            val key = "vless://$user@example.org:443?type=tcp&security=tls#Example\n"
+            for ((name, contents) in listOf("Android/Подписка.txt" to key, "iPhone/Подписка.txt" to key,
+                    "Android/Инструкция.txt" to "Тест · INCY · Android\n", "iPhone/Инструкция.txt" to "Тест · INCY · iPhone\n")) {
+                zip.putNextEntry(java.util.zip.ZipEntry(name)); zip.write(contents.toByteArray(Charsets.UTF_8)); zip.closeEntry()
+            }
+        }
+        try {
+            val intent = Intent(context, R013HomeActivity::class.java).setAction(Intent.ACTION_SEND)
+                .putExtra(Intent.EXTRA_STREAM, android.net.Uri.fromFile(file)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity = instrumentation.startActivitySync(intent) as R013HomeActivity
+            waitFor(20000) { ProxyRegistry(registry.vault).list(ProxyProfile.Section.INCY).any { it.profile.host == "example.org" } }
+        } finally { file.delete() }
     }
     @Test fun aTypedProxyImportPreservesAwgAndEncryptsSecrets() = runBlocking {
         OfflineChanges.apply { registry.create("Keep", ProfileRegistry.parse(config())) }
