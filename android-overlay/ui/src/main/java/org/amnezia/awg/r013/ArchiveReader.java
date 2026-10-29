@@ -42,6 +42,32 @@ public final class ArchiveReader {
         if (found == null || found.isEmpty()) throw new IOException("В архиве нет подписки");
         return found;
     }
+    /** Identify only owner archives with consistent explicit platform labels. */
+    public static String ownerSection(byte[] archive) throws IOException {
+        if (archive.length > 8_388_608) throw new IOException("Архив слишком велик");
+        String section = null; int count = 0, total = 0;
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archive), StandardCharsets.UTF_8)) {
+            for (ZipEntry entry; (entry = zip.getNextEntry()) != null;) {
+                if (++count > 256) throw new IOException("В архиве слишком много файлов");
+                String path = entry.getName().replace('\\', '/');
+                if (path.length() > 512 || path.startsWith("/") || Arrays.asList(path.split("/")).contains("..")) throw new IOException("Недопустимое имя файла");
+                if (entry.isDirectory()) continue;
+                byte[] data = bounded(zip, 1_048_576); total += data.length;
+                if (total > 4_194_304) throw new IOException("Распакованный архив слишком велик");
+                if (!path.substring(path.lastIndexOf('/') + 1).equals("Инструкция.txt")) continue;
+                String text;
+                try { text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(data)).toString(); }
+                catch (java.nio.charset.CharacterCodingException e) { return null; }
+                String[] parts = text.split("\\R",2)[0].split(" · ");
+                if (parts.length < 3 || !Set.of("Android", "iPhone", "Windows").contains(parts[parts.length-1])) return null;
+                String label = parts[parts.length-2].toUpperCase(Locale.ROOT);
+                if (!Set.of("HAPP", "INCY", "BLACKTEMPLE", "AMNEZIAWG").contains(label)) return null;
+                if (section != null && !section.equals(label)) return null;
+                section = label;
+            }
+        }
+        return section;
+    }
     public static Bundle read(byte[] archive) throws IOException {
         if (archive.length > 8_388_608) throw new IOException("Архив слишком велик");
         Map<String, Candidate> selected = new LinkedHashMap<>();

@@ -244,6 +244,20 @@ class R013HomeActivity : AppCompatActivity() {
         if (uri != null && uri.scheme in listOf("content", "file")) { intent.action = null; importFile(uri) }
     }
     private fun importFile(uri: Uri) {
+        lifecycleScope.launch {
+            try {
+                val identified = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)!!.use { input ->
+                        val bytes = ArchiveReader.bounded(input, 8_388_608)
+                        if (bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4b.toByte()) ArchiveReader.ownerSection(bytes) else null
+                    }
+                }
+                if (identified != null) { selectedSection = identified; listSignature = ""; renderRows() }
+                importFileInSection(uri)
+            } catch (_: Exception) { feedback("Не удалось открыть файл. Прежние профили сохранены.") }
+        }
+    }
+    private fun importFileInSection(uri: Uri) {
         if (selectedSection != "AMNEZIAWG") {
             val section = ProxyProfile.Section.valueOf(selectedSection)
             lifecycleScope.launch {

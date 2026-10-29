@@ -40,6 +40,9 @@ public final class ArchiveReaderTest {
         refused(Map.of("A.conf","a","VPN013-Access.json","{}","sub/VPN013-Access.json","{}"));
         check(ArchiveReader.read(zip(Map.of("Дом.conf","ordinary"))).profiles().get(0).name().equals("Дом"));
         check(ArchiveReader.subscription(zip(Map.of("Android/Подписка.txt", "https://example.invalid/sub/example\n", "iPhone/Подписка.txt", "https://example.invalid/sub/example\n", "README.txt", "instructions"))).equals("https://example.invalid/sub/example"));
+        check("INCY".equals(ArchiveReader.ownerSection(zip(Map.of("Android/Инструкция.txt","Профиль · INCY · Android\n", "iPhone/Инструкция.txt","Профиль · INCY · iPhone\n")))));
+        check(ArchiveReader.ownerSection(zip(Map.of("Android/Инструкция.txt","Профиль · INCY · Android\n", "iPhone/Инструкция.txt","Профиль · Happ · iPhone\n"))) == null);
+        check(ArchiveReader.ownerSection(zip(Map.of("README.txt","no label"))) == null);
         for (Map<String,String> files : List.of(Map.of("Android/Подписка.txt","a","iPhone/Подписка.txt","b"), Map.of("../Подписка.txt","a"), Map.of("README.txt","none"))) {
             try { ArchiveReader.subscription(zip(files)); throw new AssertionError("Unsafe subscription accepted"); } catch (IOException expected) { checks++; }
         }
