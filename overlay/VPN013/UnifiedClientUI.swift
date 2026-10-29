@@ -140,7 +140,29 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
         }
     }
     func importFile(_ url: URL) {
-        if ["conf", "zip"].contains(url.pathExtension.lowercased()) {
+        if url.pathExtension.lowercased() == "zip" {
+            let scoped = url.startAccessingSecurityScopedResource()
+            let entries = try? ZipArchive.unarchive(url: url, requiredFileExtensions: ["txt"])
+            if scoped { url.stopAccessingSecurityScopedResource() }
+            let hasSubscription = entries?.contains(where: { $0.fileBaseName == "Подписка" }) == true
+            if hasSubscription {
+                let alert = UIAlertController(title: "В какой раздел добавить?", message: "Выберите приложение, для которого выпущена подписка.", preferredStyle: .alert)
+                for kind in kinds where kind != .amneziawg {
+                    alert.addAction(UIAlertAction(title: kind.title, style: .default) { [weak self] _ in
+                        guard let self = self, let index = self.kinds.firstIndex(of: kind) else { return }
+                        self.selectedIndex = index
+                        guard let navigation = self.selectedViewController as? UINavigationController else { return }
+                        let form = ProxyImportViewController(kind: kind); navigation.pushViewController(form, animated: true); form.readFile(url)
+                    })
+                }
+                alert.addAction(UIAlertAction(title: VPN013ConnectionKind.amneziawg.title, style: .default) { [weak self] _ in
+                    guard let self = self else { return }; self.selectedIndex = 2; self.awg.importFromDisposableFile(url: url)
+                })
+                alert.addAction(UIAlertAction(title: "Отмена", style: .cancel)); present(alert, animated: true); return
+            }
+            selectedIndex = 2; awg.importFromDisposableFile(url: url); return
+        }
+        if url.pathExtension.lowercased() == "conf" {
             selectedIndex = 2; awg.importFromDisposableFile(url: url); return
         }
         guard kinds[selectedIndex] != .amneziawg,
