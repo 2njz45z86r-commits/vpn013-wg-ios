@@ -59,7 +59,7 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
                 let identity = runtime.kind.rawValue + "\n" + runtime.name + "\n" + (runtime.endpoint ?? "")
                 if self.crossIdentity != identity {
                     self.crossIdentity = identity
-                    if let index = self.kinds.firstIndex(of: runtime.kind) { self.selectedIndex = index }
+                    if !self.isEditingImport, let index = self.kinds.firstIndex(of: runtime.kind) { self.selectedIndex = index }
                 }
             } else if !active { self.crossIdentity = nil }
             self.layoutCrossStatus()
@@ -103,8 +103,11 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
     func refresh() {
         awg.refreshTunnelConnectionStatuses(); profiles.reload(); crossObserver.refresh(); showActiveSection()
     }
+    private var isEditingImport: Bool {
+        (selectedViewController as? UINavigationController)?.topViewController is ProxyImportViewController
+    }
     private func showActiveSection() {
-        guard !crossIsActive else { return }
+        guard !crossIsActive, !isEditingImport else { return }
         // Only follow a newly active connection, so a person may still inspect
         // another section while connected. Foreground refresh follows active kind.
         guard let active = profiles.entries.first(where: { [.connected, .connecting, .reasserting].contains($0.status) }) else { return }
@@ -114,8 +117,9 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
     }
     private var activeIdentity: String?
     func foreground() {
+        let keepDraft = isEditingImport
         activeIdentity = nil; refresh()
-        if awg.tunnelsManager?.tunnelInOperation() != nil { selectedIndex = 2 }
+        if !keepDraft && awg.tunnelsManager?.tunnelInOperation() != nil { selectedIndex = 2 }
     }
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         UserDefaults.standard.set(kinds[selectedIndex].rawValue, forKey: "VPN013SelectedKind")
@@ -131,7 +135,7 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             awg.tunnelsListVC?.presentViewControllerForFileImport()
         } else if let navigation = selectedViewController as? UINavigationController {
             // Keep a person's existing draft instead of replacing it with an incoming link.
-            guard !(navigation.topViewController is ProxyImportViewController) else { return }
+            if let existing = navigation.topViewController as? ProxyImportViewController { existing.offerIncomingText(text); return }
             navigation.pushViewController(ProxyImportViewController(kind: kind, text: text), animated: true)
         }
     }

@@ -53,7 +53,10 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         let stack = UIStackView(arrangedSubviews: [explanation, actions, input, submit, progress, privacy]); stack.axis = .vertical; stack.spacing = 16
         let scroll = UIScrollView(); scroll.keyboardDismissMode = .interactive; scroll.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(scroll)
         stack.translatesAutoresizingMaskIntoConstraints = false; scroll.addSubview(stack)
-        NSLayoutConstraint.activate([scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor), scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuideIfAvailable), stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20), stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 20), stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20), stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20), stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40), input.heightAnchor.constraint(equalToConstant: 132)])
+        let keyboardBottom: NSLayoutYAxisAnchor
+        if #available(iOS 15, *) { keyboardBottom = view.keyboardLayoutGuide.topAnchor }
+        else { keyboardBottom = view.safeAreaLayoutGuide.bottomAnchor }
+        NSLayoutConstraint.activate([scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor), scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: keyboardBottom), stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20), stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 20), stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20), stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20), stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40), input.heightAnchor.constraint(equalToConstant: 132)])
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") {
             input.text = "vless://00000000-0000-4000-8000-000000000001@demo.example.invalid:443?type=ws&security=tls&sni=demo.example.invalid&path=%2Fvpn#Demo%20server"
@@ -79,6 +82,14 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         guard value.utf8.count <= ProxyImport.maximumBytes else { show(ProxyProfileError.tooLarge); return }
         input.text = value
         view.endEditing(true)
+    }
+    func offerIncomingText(_ text: String?) {
+        guard let text = text, !isBusy else { return }; loadViewIfNeeded()
+        if (input.text ?? "").isEmpty { input.text = text; return }
+        guard presentedViewController == nil else { return }
+        let alert = UIAlertController(title: "Заменить введённый ключ?", message: "Открыта новая ссылка из бота. Текущий текст будет заменён только после подтверждения.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Заменить", style: .default) { [weak self] _ in self?.input.text = text })
+        alert.addAction(UIAlertAction(title: "Оставить текущий", style: .cancel)); present(alert, animated: true)
     }
     @objc private func hideKeyboard() { view.endEditing(true) }
     @objc private func scanQR() {
