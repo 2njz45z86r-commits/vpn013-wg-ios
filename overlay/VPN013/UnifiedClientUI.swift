@@ -64,13 +64,14 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             } else if !active { self.crossIdentity = nil }
             self.layoutCrossStatus()
         }
-        crossObserver.start()
         let remembered = UserDefaults.standard.string(forKey: "VPN013SelectedKind")
         selectedIndex = kinds.firstIndex(where: { $0.rawValue == remembered }) ?? 2
         #if targetEnvironment(simulator) && DEBUG
         let args = ProcessInfo.processInfo.arguments
         if !args.contains("--vpn013-test-unified") { selectedIndex = 2 }
         #endif
+        // Restore preferences first so an existing runtime selects its actual section.
+        crossObserver.start()
         profiles.changed = { [weak self] in
             NotificationCenter.default.post(name: .vpn013ProxyChanged, object: nil)
             NotificationCenter.default.post(name: AutomaticModeRow.availabilityChanged, object: nil)

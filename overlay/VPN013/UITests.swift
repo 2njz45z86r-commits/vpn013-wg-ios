@@ -779,7 +779,7 @@ final class AutoTunnelUITests:XCTestCase {
 
     func testCrossProtocolRuntimeUsesActualSectionAndGlobalStop() {
         let app = XCUIApplication()
-        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-unified", "--vpn013-test-cross-runtime"]
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-unified", "--vpn013-test-cross-runtime", "--vpn013-test-auto-reset"]
         app.launch()
         XCTAssertTrue(app.staticTexts["vpn013.cross.kind"].waitForExistence(timeout: 20))
         XCTAssertEqual(app.staticTexts["vpn013.cross.kind"].label, "Общее Авто · Happ")
