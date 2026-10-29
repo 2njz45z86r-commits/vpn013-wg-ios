@@ -487,6 +487,8 @@ class R013InstrumentedTest {
         val toggle = allViews().first { it.contentDescription == "Режим Авто" }
         assertTrue("Auto must remain compact in common toolbar",toggle.width <= (48*context.resources.displayMetrics.density).toInt() && toggle.height <= (48*context.resources.displayMetrics.density).toInt())
         waitFor { toggle.isEnabled }
+        assertEquals("The compact native button must reflect the persisted mode before the first tap",
+            registry.automaticEnabled(),(toggle as com.google.android.material.button.MaterialButton).isChecked)
         // CompoundButton's return value describes OnClickListener delivery,
         // not a successful checked-state change. Assert the real mode below.
         instrumentation.runOnMainSync { toggle.performClick() }

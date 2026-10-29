@@ -176,7 +176,7 @@ class R013HomeActivity : AppCompatActivity() {
         toolbar.titleMarginStart = dp(48)
         toolbar.addView(automaticHit, androidx.appcompat.widget.Toolbar.LayoutParams(dp(48),dp(48),Gravity.START).apply { marginStart=dp(48) })
         lifecycleScope.launch {
-            try { automaticToggle.isChecked = withContext(Dispatchers.IO) { registry.automaticEnabled() }; automaticReady = true; automaticToggle.isEnabled = true }
+            try { setAutomaticChecked(withContext(Dispatchers.IO) { registry.automaticEnabled() }); automaticReady = true; automaticToggle.isEnabled = true }
             catch (_: Exception) { feedback("Не удалось прочитать настройку Авто. Откройте настройки и повторите.") }
         }
         val card = MaterialCardView(this).apply {
@@ -383,6 +383,15 @@ class R013HomeActivity : AppCompatActivity() {
             finally { connecting = false; automaticToggle.isEnabled = true; listSignature = ""; renderCurrent(); renderRows() }
         }
     }
+    /** Material1.11 deliberately ignores setChecked while disabled. Apply the
+     * saved visual state synchronously on the main thread without enabling input
+     * across a suspension point; this does not trigger the click listener. */
+    private fun setAutomaticChecked(enabled: Boolean) {
+        val inputEnabled=automaticToggle.isEnabled
+        automaticToggle.isEnabled=true
+        automaticToggle.isChecked=enabled
+        automaticToggle.isEnabled=inputEnabled
+    }
     private fun applyAutomatic(enabled: Boolean) {
         if (connecting || applyingAutomatic) return
         applyingAutomatic = true; automaticToggle.isEnabled = false
@@ -395,7 +404,7 @@ class R013HomeActivity : AppCompatActivity() {
                 listSignature = ""; renderCurrent(); renderRows()
             } catch (_: Exception) {
                 feedback("Не удалось применить Авто. Повторите действие; активный VPN сохранён.")
-                try { automaticToggle.isChecked = withContext(Dispatchers.IO) { registry.automaticEnabled() } } catch (_: Exception) { }
+                try { setAutomaticChecked(withContext(Dispatchers.IO) { registry.automaticEnabled() }) } catch (_: Exception) { }
             } finally { applyingAutomatic = false; automaticToggle.isEnabled = !connecting }
         }
     }
