@@ -3,9 +3,18 @@
 
 import Foundation
 import NetworkExtension
+import Network
 import os
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
+    private var crossProtocol: CrossProtocolCoordinator?
+    private var crossPlan: CrossProtocolPlan?
+    private var crossResolver: CrossProtocolResolution?
+    private var crossPath: NWPathMonitor?
+    private var crossDeadline: DispatchWorkItem?
+    private var crossEngine: VPN013ConnectionKind?
+    private var crossStopping = false
+    private var crossStopCompletions: [(Error?) -> Void] = []
     private var proxyAdapter: ProxyPacketAdapter?
     private var localStatistics: VPN013LocalStatisticsServer?
     private var localAutomaticControl: VPN013LocalStatisticsServer?
@@ -104,12 +113,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let commands = VPN013LocalStatisticsServer(controlCredentials: control) { [weak self] operation, stamp, digest, reply in
             DispatchQueue.main.async {
                 guard let self = self, self.localStatisticsEpoch == epoch,
-                      self.proxyAdapter != nil || self.automatic != nil,
+                      self.proxyAdapter != nil || self.automatic != nil || self.crossProtocol != nil,
                       let state = self.automaticSession else { reply(nil); return }
                 do {
                     let enabled = try state.accept(operation: operation, stamp: stamp, digest: digest)
-                    self.proxyAdapter?.setAutomaticEnabled(enabled)
-                    self.automatic?.setEnabled(enabled)
+                    if let cross = self.crossProtocol { cross.setEnabled(enabled) }
+                    else { self.proxyAdapter?.setAutomaticEnabled(enabled); self.automatic?.setEnabled(enabled) }
                     wg_log(.info, staticMessage: "Authenticated automatic mode applied")
                     reply(Data([1]))
                 } catch { wg_log(.error, staticMessage: "Automatic mode command rejected"); reply(nil) }
@@ -145,6 +154,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         #endif
 
         #if os(iOS)
+        if let proto = self.protocolConfiguration as? NETunnelProviderProtocol,
+           let plan = try? proto.privatePayload()?.crossProtocol {
+            do {
+                try plan.validate()
+                let state = try makeAutomaticSession(proto, initial: true)
+                DispatchQueue.main.async {
+                    guard self.localStatisticsEpoch == statisticsEpoch else { completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return }
+                    self.automaticSession = state
+                    self.startCrossProtocol(plan, enabled: state.enabled, epoch: statisticsEpoch) { error in
+                        guard error == nil else { self.automaticSession = nil; completionHandler(error); return }
+                        guard self.localStatisticsEpoch == statisticsEpoch else { completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return }
+                        self.startLocalChannels(proto, epoch: statisticsEpoch); completionHandler(nil)
+                    }
+                }
+            } catch { completionHandler(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid) }
+            return
+        }
         if let proto = self.protocolConfiguration as? NETunnelProviderProtocol, proto.isVPN013Proxy {
             do {
                 var value = try proto.proxyPayload()
@@ -258,6 +284,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func
     stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        if crossProtocol != nil || crossResolver != nil {
+            DispatchQueue.main.async {
+                self.localStatisticsEpoch = UUID(); self.crossResolver?.cancel(); self.crossResolver = nil
+                self.crossDeadline?.cancel(); self.crossDeadline = nil; self.crossPath?.cancel(); self.crossPath = nil
+                let cross = self.crossProtocol; self.crossProtocol = nil; self.automaticSession = nil
+                self.stopLocalChannels {
+                    if let cross = cross { cross.stop(completion: completionHandler) }
+                    else { self.stopCrossEngine { _ in completionHandler() } }
+                }
+            }
+            return
+        }
         if (protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Proxy == true {
             DispatchQueue.main.async {
                 self.localStatisticsEpoch = UUID()
@@ -303,6 +341,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
         guard let completionHandler = completionHandler else { return }
+        if crossProtocol != nil {
+            if messageData == Data([11]) {
+                DispatchQueue.main.async { self.readCrossRuntime(completion: completionHandler) }; return
+            }
+            let running: Bool
+            if let phase = crossProtocol?.phase, case .running = phase { running = true } else { running = false }
+            let initialIsProxy = (protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Proxy == true
+            if !running || initialIsProxy != (crossEngine != .amneziawg) { completionHandler(nil); return }
+        }
         if (protocolConfiguration as? NETunnelProviderProtocol)?.isVPN013Proxy == true {
             guard messageData == Data([8]) || messageData == Data([0x53, 0x50, 1]) else { completionHandler(nil); return }
             DispatchQueue.main.async {
@@ -402,7 +449,132 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 }
 
 extension PacketTunnelProvider {
-    private func startAutomatic(candidates:[TunnelConfiguration],enabled:Bool = true,completion:@escaping (Error?) -> Void) {
+    private func stopCrossEngine(completion: @escaping (Error?) -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        crossStopCompletions.append(completion)
+        guard !crossStopping else { return }; crossStopping = true
+        automaticEpoch += 1; automaticStartupPing?.cancel(); automaticStartupPing = nil
+        let pending = automaticStartCompletion; automaticStartCompletion = nil
+        pending?(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled))
+        automatic?.stop(); automatic = nil
+        let finish: (Error?) -> Void = { error in
+            DispatchQueue.main.async {
+                self.crossEngine = nil; self.crossStopping = false; self.reasserting = false
+                let callbacks = self.crossStopCompletions; self.crossStopCompletions.removeAll()
+                callbacks.forEach { $0(error) }
+            }
+        }
+        if let proxy = proxyAdapter {
+            proxyAdapter = nil; proxy.stop { finish(nil) }
+        } else if crossEngine == .amneziawg {
+            adapter.stop { error in
+                if case .invalidState? = error { finish(nil) }
+                else { finish(error) }
+            }
+        } else { finish(nil) }
+    }
+    private func startCrossProtocol(_ plan: CrossProtocolPlan, enabled: Bool, epoch: UUID, completion: @escaping (Error?) -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        crossPlan = plan
+        let resolver = CrossProtocolResolution(); crossResolver = resolver
+        do {
+            try resolver.start(plan) { addresses in
+                guard self.localStatisticsEpoch == epoch else { return }; self.crossResolver = nil
+                let coordinator = CrossProtocolCoordinator(count: plan.groups.count, enabled: enabled,
+                    start: { [weak self] index, automatic, done in
+                        guard let self = self, self.localStatisticsEpoch == epoch, plan.groups.indices.contains(index) else { done(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return }
+                        let group = plan.groups[index]; self.crossEngine = group.kind
+                        self.reasserting = self.crossProtocol?.phase != .starting(0)
+                        if let awg = group.awg {
+                            do {
+                                let original = try awg.validatedConfigurations()
+                                let resolved = original.map { configuration -> TunnelConfiguration in
+                                    var peers = configuration.peers
+                                    for i in peers.indices {
+                                        guard let endpoint = peers[i].endpoint, let host = addresses[String(describing: endpoint.host)],
+                                              let port = endpoint.stringRepresentation.split(separator: ":").last else { continue }
+                                        peers[i].endpoint = Endpoint(from: (host.contains(":") ? "[\(host)]" : host) + ":" + String(port))
+                                    }
+                                    return TunnelConfiguration(name: configuration.name, interface: configuration.interface, peers: peers)
+                                }
+                                self.startAutomatic(candidates: resolved, enabled: automatic, displayCandidates: original) { error in
+                                    guard self.localStatisticsEpoch == epoch else { return }
+                                    self.automatic?.onExhausted = { [weak self] in self?.crossProtocol?.failed() ?? false }
+                                    self.automatic?.onVerifiedTraffic = { [weak self] in self?.crossProtocol?.verifiedTraffic() }
+                                    self.reasserting = false; done(error)
+                                }
+                            } catch { done(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid) }
+                        } else if var payload = group.proxy {
+                            payload.automaticEnabled = automatic
+                            let proxy = ProxyPacketAdapter(provider: self); self.proxyAdapter = proxy
+                            proxy.onExhausted = { [weak self] in self?.crossProtocol?.failed() ?? false }
+                            proxy.onVerifiedTraffic = { [weak self] in self?.crossProtocol?.verifiedTraffic() }
+                            proxy.start(payload, preResolved: addresses) { error in
+                                guard self.localStatisticsEpoch == epoch else { return }; self.reasserting = false; done(error)
+                            }
+                        } else { done(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid) }
+                    }, stop: { [weak self] done in
+                        guard let self = self else { done(nil); return }; self.stopCrossEngine(completion: done)
+                    }, pause: { [weak self] enabled in
+                        self?.automatic?.setEnabled(enabled); self?.proxyAdapter?.setAutomaticEnabled(enabled)
+                    }, ended: { [weak self] error in self?.cancelTunnelWithError(error) })
+                self.crossProtocol = coordinator
+                let monitor = NWPathMonitor(); self.crossPath = monitor
+                monitor.pathUpdateHandler = { [weak coordinator] path in coordinator?.networkAvailable = path.status == .satisfied }
+                monitor.start(queue: .main)
+                let deadline = DispatchWorkItem { [weak coordinator] in coordinator?.stop(completion: {}) }
+                self.crossDeadline = deadline
+                DispatchQueue.main.asyncAfter(deadline: .now() + 45, execute: deadline)
+                coordinator.start { error in
+                    self.crossDeadline?.cancel(); self.crossDeadline = nil
+                    if error != nil, self.crossProtocol === coordinator {
+                        self.crossPath?.cancel(); self.crossPath = nil; self.crossProtocol = nil
+                    }
+                    completion(error)
+                }
+            }
+        } catch { crossResolver?.cancel(); crossResolver = nil; completion(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid) }
+    }
+    private func readCrossRuntime(completion: @escaping (Data?) -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard let coordinator = crossProtocol, let plan = crossPlan,
+              plan.groups.indices.contains(coordinator.selection.current) else { completion(nil); return }
+        let group = plan.groups[coordinator.selection.current]
+        let token = localStatisticsEpoch
+        let encode: (String, String?, String, UInt64?, UInt64?, Date?) -> Void = { name, endpoint, phase, rx, tx, handshake in
+            guard self.localStatisticsEpoch == token, self.crossProtocol === coordinator else { completion(nil); return }
+            completion(try? JSONEncoder().encode(CrossProtocolRuntime(schema: 1, kind: group.kind, name: name,
+                endpoint: endpoint, phase: phase, received: rx, sent: tx, handshake: handshake,
+                automaticEnabled: coordinator.selection.enabled, trafficVerified: coordinator.trafficConfirmed)))
+        }
+        guard case .running = coordinator.phase else {
+            encode(group.name, nil, "Переключение конфигурации", nil, nil, nil); return
+        }
+        let selection = coordinator.selection.current
+        if let proxy = proxyAdapter {
+            proxy.statistics { data in
+                DispatchQueue.main.async {
+                    guard coordinator.phase == .running(selection), let data = data,
+                          let value = try? JSONDecoder().decode(ProxyTraffic.self, from: data), value.running,
+                          value.rx >= 0, value.tx >= 0 else { completion(nil); return }
+                    encode(value.selectedName ?? group.name, value.selectedEndpoint,
+                        coordinator.trafficConfirmed ? "VPN-трафик подтверждён" : "Проверка VPN-трафика",
+                        UInt64(value.rx), UInt64(value.tx), nil)
+                }
+            }
+        } else if let configuration = automatic?.currentConfiguration {
+            let revision = automatic?.connectionRevision
+            adapter.getRuntimeConfiguration { runtime in
+                DispatchQueue.main.async {
+                    guard coordinator.phase == .running(selection), self.automatic?.connectionRevision == revision else { completion(nil); return }
+                    let stats = VPN013ConnectionSnapshot.Statistics.parse(runtime)
+                    encode(configuration.name ?? group.name, configuration.peers.first?.endpoint?.stringRepresentation,
+                        self.automatic?.phase ?? "Проверка VPN-трафика", stats.received, stats.sent, stats.handshake)
+                }
+            }
+        } else { completion(nil) }
+    }
+    private func startAutomatic(candidates:[TunnelConfiguration],enabled:Bool = true,displayCandidates:[TunnelConfiguration]? = nil,completion:@escaping (Error?) -> Void) {
         automaticEpoch += 1;let stamp=automaticEpoch
         automaticStartupPing?.cancel();automaticStartupPing=nil
         automaticStartCompletion=completion
@@ -422,7 +594,7 @@ extension PacketTunnelProvider {
             let order=enabled ? EndpointPingRanking.order(hosts:hosts,measurements:measurements) : Array(candidates.indices)
             let resolved=resolvedCandidates ?? candidates
             bootstrapCandidates=order.map { resolved[$0] }
-            configuredCandidates=order.map { candidates[$0] }
+            configuredCandidates=order.map { (displayCandidates ?? candidates)[$0] }
             // Missing ICMP does not mean a candidate is down: keep all fallbacks.
             // Log counts only, never domains, keys or configuration contents.
             let count=measurements.values.filter { if case .milliseconds = $0 { return true }; return false }.count

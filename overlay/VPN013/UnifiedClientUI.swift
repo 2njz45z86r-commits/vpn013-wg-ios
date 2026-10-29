@@ -20,6 +20,11 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
     private let profiles = ProxyProfilesManager.shared
     private let kinds = VPN013ConnectionKind.allCases
     private var automaticObserver: NSObjectProtocol?
+    private let crossObserver = CrossProtocolObserver()
+    private let crossStatus = CrossProtocolStatusView()
+    private var crossHeight: NSLayoutConstraint?
+    private var crossIsActive = false
+    private var crossIdentity: String?
     init(awg: MainViewController) { self.awg = awg; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
@@ -41,6 +46,25 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             controller.tabBarItem.accessibilityIdentifier = "vpn013.kind." + kind.rawValue
             return controller
         }
+        crossStatus.translatesAutoresizingMaskIntoConstraints = false; crossStatus.isHidden = true
+        view.addSubview(crossStatus)
+        let height = crossStatus.heightAnchor.constraint(equalToConstant: 150); crossHeight = height
+        NSLayoutConstraint.activate([crossStatus.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16), crossStatus.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16), crossStatus.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -8), height])
+        crossStatus.stop = { [weak self] in self?.crossObserver.stopConnection() }
+        crossObserver.changed = { [weak self] runtime, active in
+            guard let self = self else { return }
+            self.crossIsActive = active; self.crossStatus.isHidden = !active
+            self.crossStatus.update(runtime)
+            if let runtime = runtime {
+                let identity = runtime.kind.rawValue + "\n" + runtime.name + "\n" + (runtime.endpoint ?? "")
+                if self.crossIdentity != identity {
+                    self.crossIdentity = identity
+                    if let index = self.kinds.firstIndex(of: runtime.kind) { self.selectedIndex = index }
+                }
+            } else if !active { self.crossIdentity = nil }
+            self.layoutCrossStatus()
+        }
+        crossObserver.start()
         let remembered = UserDefaults.standard.string(forKey: "VPN013SelectedKind")
         selectedIndex = kinds.firstIndex(where: { $0.rawValue == remembered }) ?? 2
         #if targetEnvironment(simulator) && DEBUG
@@ -66,11 +90,20 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             self.awg.tunnelsManager?.applyAutomaticPreference(completion: finished)
         }
     }
-    deinit { if let token = automaticObserver { NotificationCenter.default.removeObserver(token) } }
+    deinit { crossObserver.stop(); if let token = automaticObserver { NotificationCenter.default.removeObserver(token) } }
+    override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); layoutCrossStatus() }
+    private func layoutCrossStatus() {
+        let width = max(1, view.bounds.width - view.safeAreaInsets.left - view.safeAreaInsets.right - 32)
+        let height = crossStatus.preferredHeight(width: width)
+        if abs((crossHeight?.constant ?? 0) - height) > 0.5 { crossHeight?.constant = height }
+        let inset: CGFloat = crossIsActive ? height + 16 : 0
+        for controller in viewControllers ?? [] where abs(controller.additionalSafeAreaInsets.bottom - inset) > 0.5 { controller.additionalSafeAreaInsets.bottom = inset }
+    }
     func refresh() {
-        awg.refreshTunnelConnectionStatuses(); profiles.reload(); showActiveSection()
+        awg.refreshTunnelConnectionStatuses(); profiles.reload(); crossObserver.refresh(); showActiveSection()
     }
     private func showActiveSection() {
+        guard !crossIsActive else { return }
         // Only follow a newly active connection, so a person may still inspect
         // another section while connected. Foreground refresh follows active kind.
         guard let active = profiles.entries.first(where: { [.connected, .connecting, .reasserting].contains($0.status) }) else { return }

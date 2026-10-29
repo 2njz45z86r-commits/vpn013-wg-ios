@@ -271,6 +271,10 @@ final class ProxyProfilesManager {
             DispatchQueue.main.async {
                 guard self.activation == token else { return }
                 guard error == nil else { self.activationFailed(token, error: ProxyOperationError.system); return }
+                do {
+                    guard let proto = entry.manager.protocolConfiguration as? NETunnelProviderProtocol else { throw CrossProtocolError.invalid }
+                    try CrossProtocolPlan.attach(to: proto, managers: managers ?? [])
+                } catch { self.activationFailed(token, error: error); return }
                 let others = (managers ?? []).filter { manager in
                     guard let appID = Bundle.main.bundleIdentifier,
                           let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,

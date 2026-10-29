@@ -5,6 +5,8 @@ import NetworkExtension
 /// All state and scheduling live in the extension's main queue. Candidate probes
 /// use a separate serial queue: no TUN ownership, no host app timer, no fake ping.
 final class ProxyPacketAdapter {
+    var onExhausted: (() -> Bool)?
+    var onVerifiedTraffic: (() -> Void)?
     private weak var provider: NEPacketTunnelProvider?
     private let primary: ProxySinglePacketAdapter
     private let resolver = DispatchQueue(label: "VPN013.auto.resolve")
@@ -31,7 +33,7 @@ final class ProxyPacketAdapter {
     private var carriedTX: Int64 = 0
     init(provider: NEPacketTunnelProvider) { self.provider = provider; primary = ProxySinglePacketAdapter(provider: provider) }
 
-    func start(_ value: ProxyTunnelPayload, completion: @escaping (Error?) -> Void) {
+    func start(_ value: ProxyTunnelPayload, preResolved: [String: String] = [:], completion: @escaping (Error?) -> Void) {
         dispatchPrecondition(condition: .onQueue(.main))
         do { try value.validate() } catch { completion(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid); return }
         let token = UUID(); epoch = token; payload = value; pending = completion; enabled = value.automaticEnabled ?? false
@@ -46,11 +48,11 @@ final class ProxyPacketAdapter {
             let addresses = value.candidates.map { profile -> String? in
                 var hosts: [String: String] = [:]
                 for endpoint in profile.additionalEndpoints {
-                    if let host = ProxySinglePacketAdapter.resolve(endpoint.host, port: endpoint.port) { hosts[endpoint.host] = host }
+                    if let host = preResolved[endpoint.host] ?? ProxySinglePacketAdapter.resolve(endpoint.host, port: endpoint.port) { hosts[endpoint.host] = host }
                 }
                 secondary.append(hosts)
                 guard hosts.count == profile.additionalEndpoints.count else { return nil }
-                return ProxySinglePacketAdapter.resolve(profile.host, port: profile.port)
+                return preResolved[profile.host] ?? ProxySinglePacketAdapter.resolve(profile.host, port: profile.port)
             }
             DispatchQueue.main.async {
                 guard self.epoch == token else { return }; self.resolved = addresses; self.additional = secondary
@@ -61,7 +63,16 @@ final class ProxyPacketAdapter {
                     guard self.epoch == token else { return }; self.startupPing = nil
                     let order = EndpointPingRanking.order(hosts: value.candidates.map { Optional($0.host) }, measurements: measured)
                     guard let first = order.first(where: { addresses[$0] != nil }) else { self.finish(PacketTunnelProviderError.dnsResolutionFailure); return }
-                    self.install(first, token: token) { self.finish($0) }
+                    func attempt(_ remaining: [Int]) {
+                        guard self.epoch == token, let next = remaining.first else { return }
+                        self.install(next, token: token) { error in
+                            guard self.epoch == token else { return }
+                            guard let error = error else { self.finish(nil); return }
+                            guard remaining.count > 1 else { self.finish(error); return }
+                            self.primary.stop { guard self.epoch == token else { return }; attempt(Array(remaining.dropFirst())) }
+                        }
+                    }
+                    attempt([first] + order.filter { $0 != first && addresses[$0] != nil })
                 })
             }
         }
@@ -113,8 +124,10 @@ final class ProxyPacketAdapter {
             DispatchQueue.main.async {
                 guard self.epoch == token, self.probeGeneration == generation, self.enabled, !self.applying else { return }
                 let currentSample = samples.first { $0.index == current }
+                if currentSample != nil { self.onVerifiedTraffic?() }
                 self.latency = currentSample?.milliseconds; self.failures = currentSample == nil ? self.failures + 1 : 0
                 let now = ProcessInfo.processInfo.systemUptime
+                if self.failures >= 2, samples.isEmpty, self.onExhausted?() == true { return }
                 if comparisonDue { repeat { self.nextComparison += AutomaticSelection.checkInterval } while self.nextComparison <= now }
                 if let replacement = AutomaticSelection.replacement(current: currentSample, candidates: samples, count: value.candidates.count, currentIndex: current, consecutiveFailures: self.failures, secondsSinceSwitch: now - self.lastSwitch) { self.switchTo(replacement, token: token) }
                 else { self.schedule(after: 15) }

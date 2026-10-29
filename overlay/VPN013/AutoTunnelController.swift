@@ -5,6 +5,9 @@ import NetworkExtension
 
 /// All mutable state lives on the main queue; callbacks carry an epoch to ignore stale work.
 final class AutoTunnelController {
+    var onExhausted: (() -> Bool)?
+    var onVerifiedTraffic: (() -> Void)?
+    private var cycleHadTraffic = false
     private weak var provider: NEPacketTunnelProvider?
     private let adapter: WireGuardAdapter
     private let candidates: [TunnelConfiguration]
@@ -105,11 +108,16 @@ final class AutoTunnelController {
         probe?.run { [weak self] healthy, latency in
             guard let self = self, self.policy.running, self.enabled, self.epoch == stamp else { return }
             self.probe = nil
+            if healthy { self.cycleHadTraffic = true; self.onVerifiedTraffic?() }
             switch self.policy.record(healthy: healthy, networkAvailable: self.networkAvailable, latencyMilliseconds: latency) {
             case .stay:
                 self.phase = latency.map { "Трафик проверен · \(Int($0)) мс" } ?? "Трафик проверен"
                 self.schedule(after: 15)
             case .wait(let seconds):
+                if seconds == 60 {
+                    let failedCycle = !self.cycleHadTraffic; self.cycleHadTraffic = false
+                    if failedCycle, self.onExhausted?() == true { return }
+                }
                 self.phase = seconds == 60 ? "Все серверы проверены. Повтор через минуту" : "Повторная проверка"
                 self.schedule(after: seconds)
             case .switchTo(let index):
@@ -155,7 +163,9 @@ final class AutoTunnelController {
                             self.phase = "Не удалось подключиться. Повторная попытка"
                             switch self.policy.record(healthy: false, networkAvailable: true) {
                             case .switchTo(let next): self.applyCandidate(next)
-                            case .wait(let seconds): self.schedule(after: seconds)
+                            case .wait(let seconds):
+                                if seconds == 60, !self.cycleHadTraffic, self.onExhausted?() == true { break }
+                                self.cycleHadTraffic = false; self.schedule(after: seconds)
                             default: self.schedule(after: 60)
                             }
                         }

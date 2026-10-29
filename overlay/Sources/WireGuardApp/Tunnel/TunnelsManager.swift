@@ -731,7 +731,15 @@ class TunnelsManager {
             #if targetEnvironment(simulator)
             done(nil)
             #else
-            tunnel.tunnelProvider.saveToPreferences(completionHandler: done)
+            NETunnelProviderManager.loadAllFromPreferences { managers, error in
+                DispatchQueue.main.async {
+                    guard error == nil else { done(ProxyOperationError.system); return }
+                    do {
+                        try CrossProtocolPlan.attach(to: proto, managers: managers ?? [])
+                        tunnel.tunnelProvider.saveToPreferences(completionHandler: done)
+                    } catch { done(error) }
+                }
+            }
             #endif
         } catch { tunnel.tunnelProvider.protocolConfiguration = old; completion(error) }
     }

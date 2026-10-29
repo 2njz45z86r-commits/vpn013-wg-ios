@@ -88,6 +88,7 @@ struct PrivateTunnelPayload: Codable {
     let configuration: String
     let automatic: AutoTunnelProfile?
     var proxy: Data? = nil
+    var crossProtocol: CrossProtocolPlan? = nil
     var builtinAutomatic: AutoTunnelProfile? = nil
     var automaticEnabled: Bool? = nil
     // Once Auto may have selected a reserve, a saved seed is never proof of the

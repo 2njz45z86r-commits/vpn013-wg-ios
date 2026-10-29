@@ -53,7 +53,7 @@ struct VPN013LocalStatisticsCredentials {
         return frame[8]
     }
     private func allowed(_ operation: UInt8) -> Bool {
-        isAutomaticControl ? [9, 10].contains(operation) : [3, 6, 8].contains(operation)
+        isAutomaticControl ? [9, 10].contains(operation) : [3, 6, 8, 11].contains(operation)
     }
     static func commandNonce(milliseconds: UInt64, random: Data) throws -> Data {
         guard random.count == 24 else { throw Failure.invalid }
