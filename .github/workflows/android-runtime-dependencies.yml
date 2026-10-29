@@ -1,6 +1,10 @@
 name: Android resolved runtime dependency review
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/android-runtime-dependencies.yml
+      - scripts/check_android_maven.py
 permissions:
   contents: read
 jobs:
