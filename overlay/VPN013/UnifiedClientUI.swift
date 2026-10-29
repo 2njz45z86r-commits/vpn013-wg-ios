@@ -150,6 +150,21 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             }
             let hasSubscription = entries.contains(where: { $0.fileBaseName == "Подписка" })
             if hasSubscription {
+                // Owner ZIP instructions identify the application and platform
+                // in their first line. Select only when all copies agree.
+                let instructions = entries.filter { $0.fileBaseName == "Инструкция" }
+                let labels = instructions.compactMap { entry -> VPN013ConnectionKind? in
+                    guard let text = String(data: entry.contents, encoding: .utf8), let line = text.split(separator: "\n").first else { return nil }
+                    let parts = String(line).components(separatedBy: " · ")
+                    guard parts.count >= 3, ["Android", "iPhone", "Windows"].contains(parts.last ?? "") else { return nil }
+                    let name = parts[parts.count - 2].lowercased()
+                    return VPN013ConnectionKind(rawValue: name)
+                }
+                if let kind = labels.first, labels.count == instructions.count, kind != .amneziawg, labels.allSatisfy({ $0 == kind }), let index = kinds.firstIndex(of: kind),
+                   let navigation = viewControllers?[index] as? UINavigationController {
+                    selectedIndex = index
+                    let form = ProxyImportViewController(kind: kind); navigation.pushViewController(form, animated: true); form.readFile(url); return
+                }
                 let alert = UIAlertController(title: "В какой раздел добавить?", message: "Выберите приложение, для которого выпущена подписка.", preferredStyle: .alert)
                 for kind in kinds where kind != .amneziawg {
                     alert.addAction(UIAlertAction(title: kind.title, style: .default) { [weak self] _ in
