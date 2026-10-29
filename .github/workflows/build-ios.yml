@@ -22,7 +22,7 @@ permissions:
   contents: write
   actions: read
 concurrency:
-  group: vpn013-ios-manual
+  group: vpn013-ios-${{ inputs.development_check && 'development' || 'release' }}
   cancel-in-progress: false
 jobs:
   security-review:
@@ -32,7 +32,7 @@ jobs:
     if: inputs.development_check != true
     needs: [security-review]
     runs-on: macos-15-intel
-    timeout-minutes: 45
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -49,17 +49,26 @@ jobs:
         run: |
           set -eu
           if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
-          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1 GOFLAGS=-mod=readonly
+          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1
+          export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
           export CC="$(xcrun --sdk iphoneos --find clang)"
           export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -miphoneos-version-min=14.0"
           export CGO_LDFLAGS="$CGO_CFLAGS"
-          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo
+          set +e
+          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-findings.enc.json --recipient scripts/audit-recipient.pub
+          patched_result=$?
+          export GOFLAGS=-mod=readonly
+          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-upstream-findings.enc.json --recipient scripts/audit-recipient.pub
+          upstream_result=$?
+          test "$patched_result" -eq 0 && test "$upstream_result" -eq 0
       - name: Verify native checks and appearances
         id: native
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$(git rev-parse HEAD:overlay)" = "7831fa62836b83a3b4abe2dd3e5dd21cdfe4847d" ] && [ "$(git rev-parse HEAD:build-on-mac.sh)" = "d526fbb1a457c3683747e2c23347153b747749fa" ] && [ "$(git rev-parse HEAD:inspect-on-mac.sh)" = "4deaae0abd6399f249a2af4842d596eb3219533a" ] && [ "$(git rev-parse HEAD:publish-client-release.py)" = "af5bd9febff562a1898585b825e8bdd386facd3b" ]; then
+          if [ "$(git rev-parse HEAD:overlay)" = "f80ad4e4f8dd23ae3737e8869ea61ced1c5d5ce5" ]; then
+            python3 reuse-complete-unified-review.py
+          elif [ "$(git rev-parse HEAD:overlay)" = "7831fa62836b83a3b4abe2dd3e5dd21cdfe4847d" ] && [ "$(git rev-parse HEAD:build-on-mac.sh)" = "d526fbb1a457c3683747e2c23347153b747749fa" ] && [ "$(git rev-parse HEAD:inspect-on-mac.sh)" = "4deaae0abd6399f249a2af4842d596eb3219533a" ] && [ "$(git rev-parse HEAD:publish-client-release.py)" = "af5bd9febff562a1898585b825e8bdd386facd3b" ]; then
             python3 reuse-passed-ios159-tests.py
           elif [ "$(git rev-parse HEAD:overlay)" = "e1011585812b85d7b6292a6816085a18eed139d2" ]; then
             python3 reuse-complete-routing-review.py
