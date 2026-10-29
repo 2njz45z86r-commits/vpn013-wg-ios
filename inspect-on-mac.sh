@@ -19,6 +19,7 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayUnsafeZIPPreservesExistingProfiles \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayExpiredOffersPersonalRenewalWithoutImport \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedZipImportsThirteenWithoutDuplicateError \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedOwnerProxyZIPSelectsIncyAndPreviewsProfile \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testRedesignedListKeepsNativeControls \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAddMenuKeepsAllActions \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testDeveloperFooterAvailable \
