@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-29T07:45:19.299133+00:00",
-  "source_sha256": "cd332cccf315b1ed7ec2d24af3d826a97943fbc4d6270a19b38bb484b85bc5a1",
-  "source_commit_reviewed": "Android typed subscription reconciliation and routing development; not release approved",
+  "reviewed_at": "2026-10-29T07:55:38.610274+00:00",
+  "source_sha256": "26184a2a1099f926b8d48e34d97f1b20cf42f7de8456a80970d84a71bc9327fe",
+  "source_commit_reviewed": "Android build diagnostics only; release audit incomplete",
   "scope_complete": false,
   "private_report_ref": "private:VPN013-Android-unified-20261029",
   "baseline_only": false,

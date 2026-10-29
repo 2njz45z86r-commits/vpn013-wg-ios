@@ -36,6 +36,7 @@ try:
         assert len(scan.stdout) <= 128 * 1024 * 1024
         if args.encrypted_report:
             assert args.recipient
+            Path(args.encrypted_report).resolve().parent.mkdir(parents=True, exist_ok=True)
             host_env = dict(env)
             for name in ('GOOS', 'GOARCH', 'CGO_ENABLED', 'CC', 'CXX', 'CGO_CFLAGS', 'CGO_CPPFLAGS', 'CGO_LDFLAGS', 'GOFLAGS'):
                 host_env.pop(name, None)
