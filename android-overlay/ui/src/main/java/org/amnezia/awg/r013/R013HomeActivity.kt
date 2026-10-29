@@ -249,12 +249,13 @@ class R013HomeActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     val text = withContext(Dispatchers.IO) { contentResolver.openInputStream(uri)!!.use { input ->
-                        val output = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192)
-                        while (true) { val count = input.read(buffer); if (count < 0) break
-                            require(output.size() + count <= 8_388_608); output.write(buffer, 0, count) }
+                        val bytes = ArchiveReader.bounded(input, 8_388_608)
+                        if (bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4b.toByte()) return@use ArchiveReader.subscription(bytes)
                         Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
-                            .decode(java.nio.ByteBuffer.wrap(output.toByteArray())).toString()
+                            .decode(java.nio.ByteBuffer.wrap(bytes)).toString()
                     } }
+                    val normalized = ProxySubscription.normalizeInput(text)
+                    if (normalized.startsWith("https://", true)) { showProxyInput(section, normalized); return@launch }
                     OfflineChanges.apply { proxyStore.importText(section, text) }; listSignature = ""; renderRows()
                 } catch (_: Exception) { feedback("Файл не содержит поддерживаемую конфигурацию. Прежние профили сохранены.") }
             }; return

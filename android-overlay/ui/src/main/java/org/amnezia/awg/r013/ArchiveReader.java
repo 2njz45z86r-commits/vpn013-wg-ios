@@ -19,6 +19,29 @@ public final class ArchiveReader {
         }
         return out.toByteArray();
     }
+    /** Owner ZIPs contain matching platform copies. Never extract archive paths. */
+    public static String subscription(byte[] archive) throws IOException {
+        if (archive.length > 8_388_608) throw new IOException("Архив слишком велик");
+        String found = null; int count = 0, total = 0;
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archive), StandardCharsets.UTF_8)) {
+            for (ZipEntry entry; (entry = zip.getNextEntry()) != null;) {
+                if (++count > 256) throw new IOException("В архиве слишком много файлов");
+                String path = entry.getName().replace('\\', '/');
+                if (path.length() > 512 || path.startsWith("/") || Arrays.asList(path.split("/")).contains("..")) throw new IOException("Недопустимое имя файла");
+                if (entry.isDirectory()) continue;
+                byte[] data = bounded(zip, 1_048_576); total += data.length;
+                if (total > 4_194_304) throw new IOException("Распакованный архив слишком велик");
+                if (!path.substring(path.lastIndexOf('/') + 1).equals("Подписка.txt")) continue;
+                String value;
+                try { value = StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(data)).toString().trim(); }
+                catch (java.nio.charset.CharacterCodingException e) { throw new IOException("Некорректный текст", e); }
+                if (found != null && !found.equals(value)) throw new IOException("В архиве разные подписки");
+                found = value;
+            }
+        }
+        if (found == null || found.isEmpty()) throw new IOException("В архиве нет подписки");
+        return found;
+    }
     public static Bundle read(byte[] archive) throws IOException {
         if (archive.length > 8_388_608) throw new IOException("Архив слишком велик");
         Map<String, Candidate> selected = new LinkedHashMap<>();

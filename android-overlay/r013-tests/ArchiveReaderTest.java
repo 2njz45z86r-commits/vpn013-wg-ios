@@ -39,6 +39,10 @@ public final class ArchiveReaderTest {
         Map<String,String> many = new LinkedHashMap<>(); for (int n = 0; n < 257; n++) many.put("t"+n+".txt","x"); refused(many);
         refused(Map.of("A.conf","a","VPN013-Access.json","{}","sub/VPN013-Access.json","{}"));
         check(ArchiveReader.read(zip(Map.of("Дом.conf","ordinary"))).profiles().get(0).name().equals("Дом"));
+        check(ArchiveReader.subscription(zip(Map.of("Android/Подписка.txt", "https://example.invalid/sub/example\n", "iPhone/Подписка.txt", "https://example.invalid/sub/example\n", "README.txt", "instructions"))).equals("https://example.invalid/sub/example"));
+        for (Map<String,String> files : List.of(Map.of("Android/Подписка.txt","a","iPhone/Подписка.txt","b"), Map.of("../Подписка.txt","a"), Map.of("README.txt","none"))) {
+            try { ArchiveReader.subscription(zip(files)); throw new AssertionError("Unsafe subscription accepted"); } catch (IOException expected) { checks++; }
+        }
         try { ArchiveReader.bounded(new ByteArrayInputStream(new byte[9]),8); throw new AssertionError(); } catch (IOException expected) { checks++; }
         System.out.println("Android archive checks passed: " + checks);
     }
