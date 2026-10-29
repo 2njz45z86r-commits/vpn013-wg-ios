@@ -33,6 +33,8 @@ jobs:
           javac -encoding UTF-8 -d output/models tunnel/src/main/java/org/amnezia/awg/r013/AutoPolicy.java tunnel/src/main/java/org/amnezia/awg/r013/HourlySchedule.java r013-tests/AutoPolicyTest.java r013-tests/HourlyScheduleTest.java
           java -cp output/models AutoPolicyTest
           java -cp output/models HourlyScheduleTest
+          javac -encoding UTF-8 -d output/models ui/src/main/java/org/amnezia/awg/r013/ProxyProfile.java r013-tests/ProxyProfileTest.java
+          java -cp output/models ProxyProfileTest
       - name: Compile Android backend, UI and instrumented scenarios
         id: compile
         run: |

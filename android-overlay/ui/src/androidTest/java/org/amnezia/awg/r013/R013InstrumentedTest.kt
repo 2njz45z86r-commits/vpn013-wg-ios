@@ -73,6 +73,44 @@ class R013InstrumentedTest {
         assertEquals(before,registry.config("One").toAwgQuickString())
         assertEquals(listOf("One","Two"), registry.automaticMembers("One").map { it.first })
     }
+    @Test fun aTypedProxyImportPreservesAwgAndEncryptsSecrets() = runBlocking {
+        OfflineChanges.apply { registry.create("Keep", ProfileRegistry.parse(config())) }
+        val awgBefore = registry.vault.read().getJSONObject("profiles").toString()
+        val store = ProxyRegistry(registry.vault)
+        val user = "00000000-0000-4000-8000-000000000001"
+        for (section in ProxyProfile.Section.values()) {
+            for (transport in listOf("tcp", "ws", "grpc", "xhttp")) {
+                val uri = "vless://$user@example.org:443?security=tls&type=$transport#Private%20name"
+                OfflineChanges.apply { store.importText(section, uri) }
+            }
+            assertEquals(4, store.list(section).size)
+            for (record in store.list(section)) {
+                val outbound = ProxyConfiguration.outbound(record.profile)
+                assertEquals("vless", outbound.getString("protocol"))
+                val stream = outbound.getJSONObject("streamSettings")
+                assertEquals(record.profile.transport, stream.getString("network"))
+                assertFalse(stream.getJSONObject("tlsSettings").getBoolean("allowInsecure"))
+                assertFalse(outbound.has("inbounds"))
+            }
+        }
+        val before = registry.vault.read().toString()
+        try {
+            OfflineChanges.apply { store.importText(ProxyProfile.Section.HAPP,
+                "vless://$user@example.org:443?security=tls\ninvalid") }
+            fail("Partial proxy import accepted")
+        } catch (_: IllegalArgumentException) { }
+        assertEquals(before, registry.vault.read().toString())
+        val fresh = ProxyRegistry(PrivateVault(context))
+        assertEquals(4, fresh.list(ProxyProfile.Section.INCY).size)
+        assertEquals(awgBefore, registry.vault.read().getJSONObject("profiles").toString())
+        val bytes = File(context.filesDir, "r013-vault.bin").readBytes().toString(Charsets.ISO_8859_1)
+        assertFalse(bytes.contains(user)); assertFalse(bytes.contains("Private name")); assertFalse(bytes.contains("example.org"))
+        val removed = store.list(ProxyProfile.Section.HAPP).first().id
+        OfflineChanges.apply { store.delete(removed) }
+        assertEquals(3, store.list(ProxyProfile.Section.HAPP).size)
+        assertEquals(4, store.list(ProxyProfile.Section.BLACKTEMPLE).size)
+        assertEquals(awgBefore, registry.vault.read().getJSONObject("profiles").toString())
+    }
     @Test fun aEncryptedAtomicVault() = runBlocking {
         val text = config(); OfflineChanges.apply { registry.create("Дом", ProfileRegistry.parse(text)) }
         val disk = File(context.filesDir,"r013-vault.bin"); val bytes = disk.readBytes()
