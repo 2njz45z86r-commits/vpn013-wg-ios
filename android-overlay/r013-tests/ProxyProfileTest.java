@@ -27,6 +27,9 @@ public final class ProxyProfileTest {
         String roster=ROOT+"#First\n"+ROOT+"#Second\n"+ROOT+"#First";
         check(ProxyProfile.parseList(roster,ProxyProfile.Section.BLACKTEMPLE).size()==2);
         check(ProxyProfile.parseList(Base64.getEncoder().encodeToString(roster.getBytes(StandardCharsets.UTF_8)),ProxyProfile.Section.HAPP).size()==2);
+        String large=Base64.getEncoder().encodeToString(roster.getBytes(StandardCharsets.UTF_8))+" ".repeat(1_048_577);
+        for(ProxyProfile.Section section:ProxyProfile.Section.values())
+            check(ProxyProfile.parseList(large,section).size()==2);
         for(String tail:new String[]{"&allowInsecure=1","&security=reality","&type=udp","&flow=unknown","&fp=unknown",
                 "&type=ws&flow=xtls-rprx-vision","&type=xhttp&mode=unknown","&type=grpc&mode=packet-up","&alpn=bad",
                 "&sid=a","&path=%0D%0AHeader","&sni=bad_host","&host=example.org%3A443","&extra=%7B%7D","&unknown=1",
@@ -36,7 +39,7 @@ public final class ProxyProfileTest {
                 ROOT.replace("example.org","-bad.org"),ROOT.replace("example.org","example..org"),
                 ROOT.replace("security=tls","security=none"),ROOT.replace("security=tls","security=reality&pbk=bad"),
                 ROOT+"\ninvalid",ROOT.replace("00000000-0000-4000-8000-000000000001","1-1-1-1-1"),
-                ROOT.replace("example.org","[fe80::1%25wlan0]"),"A".repeat(1_048_577),
+                ROOT.replace("example.org","[fe80::1%25wlan0]"),"A".repeat(8_388_609),
                 Base64.getEncoder().encodeToString(new byte[]{(byte)0xff})}) rejects(input);
         StringBuilder many=new StringBuilder(); for(int i=0;i<101;i++) many.append(ROOT).append('#').append(i).append('\n');
         rejects(many.toString());

@@ -49,7 +49,7 @@ object ProxySubscription {
                 while (true) {
                     check(System.nanoTime() < deadline) { "Сервер подписки не ответил вовремя" }
                     val count = input.read(buffer); if (count < 0) break
-                    check(output.size() + count <= 1_048_576) { "Слишком большая подписка" }; output.write(buffer, 0, count)
+                    check(output.size() + count <= 8_388_608) { "Слишком большая подписка" }; output.write(buffer, 0, count)
                 }
             }
             check(System.nanoTime() < deadline) { "Сервер подписки не ответил вовремя" }

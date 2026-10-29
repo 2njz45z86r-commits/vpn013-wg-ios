@@ -20,7 +20,7 @@ object ProxyImport {
         return array.optJSONObject(0) ?: invalid()
     }
     fun parse(text: String, section: ProxyProfile.Section): List<ProxyProfile> {
-        if (text.toByteArray(Charsets.UTF_8).size > 1_048_576) invalid()
+        if (text.toByteArray(Charsets.UTF_8).size > 8_388_608) invalid()
         val trimmed = text.trim()
         if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return ProxyProfile.parseList(text, section)
         // Bound parser recursion before allocating JSONObject/JSONArray on a caller-supplied document.
@@ -45,12 +45,21 @@ object ProxyImport {
                 val document = documents.optJSONObject(i) ?: invalid()
                 val outbounds = document.optJSONArray("outbounds") ?: JSONArray().put(document)
                 if (outbounds.length() !in 1..100) invalid()
+                val remark = document.optString("remarks", "")
+                val automatic = remark.contains("авто", ignoreCase = true) || remark.contains("auto", ignoreCase = true)
+                // Multi-entry subscriptions include an automatic aggregate and
+                // copies of all backup nodes in every named entry. The named
+                // entry's first VLESS node is its primary server.
+                if (documents.length() > 1 && automatic) continue
+                var primaryAdded = false
                 for (j in 0 until outbounds.length()) {
                     val outbound = outbounds.optJSONObject(j) ?: invalid()
                     val protocol = string(outbound, "protocol")
-                    if (protocol in setOf("freedom", "blackhole", "dns")) continue
+                    if (protocol in setOf("freedom", "blackhole", "dns", "loopback")) continue
                     if (protocol != "vless") invalid()
+                    if (documents.length() > 1 && primaryAdded) continue
                     result.add(fromOutbound(outbound, section))
+                    primaryAdded = true
                     if (result.size > 100) invalid()
                 }
             }

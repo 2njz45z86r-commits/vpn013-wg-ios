@@ -251,7 +251,7 @@ class R013HomeActivity : AppCompatActivity() {
                     val text = withContext(Dispatchers.IO) { contentResolver.openInputStream(uri)!!.use { input ->
                         val output = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192)
                         while (true) { val count = input.read(buffer); if (count < 0) break
-                            require(output.size() + count <= 1_048_576); output.write(buffer, 0, count) }
+                            require(output.size() + count <= 8_388_608); output.write(buffer, 0, count) }
                         Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
                             .decode(java.nio.ByteBuffer.wrap(output.toByteArray())).toString()
                     } }
@@ -478,7 +478,7 @@ class R013HomeActivity : AppCompatActivity() {
             dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
                 val clipboard=getSystemService(android.content.ClipboardManager::class.java)
                 val value=clipboard.primaryClip?.getItemAt(0)?.text?.toString()
-                if(value==null || value.toByteArray(Charsets.UTF_8).size>1_048_576) feedback("В буфере нет подходящего ключа")
+                if(value==null || value.toByteArray(Charsets.UTF_8).size>8_388_608) feedback("В буфере нет подходящего ключа")
                 else input.setText(value)
             }
             dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {

@@ -73,6 +73,27 @@ class R013InstrumentedTest {
         assertEquals(before,registry.config("One").toAwgQuickString())
         assertEquals(listOf("One","Two"), registry.automaticMembers("One").map { it.first })
     }
+    @Test fun multiServerSubscriptionImportsPrimaryNodesOnly() {
+        val user = "00000000-0000-4000-8000-000000000001"
+        val nodes = (1..18).map { n ->
+            ProxyConfiguration.outbound(ProxyProfile.parse(
+                "vless://$user@server$n.example.org:443?security=tls#server$n",
+                ProxyProfile.Section.INCY))
+        }
+        val docs = JSONArray()
+        docs.put(JSONObject().put("remarks", "Авто · минимальный пинг").put("outbounds", JSONArray(nodes)))
+        nodes.forEachIndexed { index, node ->
+            val outbounds = JSONArray().put(node)
+            nodes.forEachIndexed { backupIndex, backup -> if (backupIndex != index) outbounds.put(backup) }
+            outbounds.put(JSONObject().put("protocol", "loopback"))
+            docs.put(JSONObject().put("remarks", "server${index + 1}").put("outbounds", outbounds))
+        }
+        for (section in ProxyProfile.Section.values()) {
+            val parsed = ProxyImport.parse(docs.toString(), section)
+            assertEquals(18, parsed.size)
+            assertEquals(18, parsed.map { it.host }.toSet().size)
+        }
+    }
     @Test fun aTypedProxyImportPreservesAwgAndEncryptsSecrets() = runBlocking {
         OfflineChanges.apply { registry.create("Keep", ProfileRegistry.parse(config())) }
         val awgBefore = registry.vault.read().getJSONObject("profiles").toString()

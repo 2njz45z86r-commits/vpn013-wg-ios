@@ -117,7 +117,7 @@ public final class ProxyProfile {
     }
     /** Parse atomically. One bad row never silently replaces a complete saved roster. */
     public static List<ProxyProfile> parseList(String input, Section section) {
-        if(input==null || input.getBytes(StandardCharsets.UTF_8).length>1_048_576) throw invalid();
+        if(input==null || input.getBytes(StandardCharsets.UTF_8).length>8_388_608) throw invalid();
         String text=input.trim();
         if(!text.regionMatches(true,0,"vless://",0,8)) {
             try {
