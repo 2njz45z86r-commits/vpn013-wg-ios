@@ -81,13 +81,15 @@ class R013InstrumentedTest {
                 ProxyProfile.Section.INCY))
         }
         val docs = JSONArray()
-        docs.put(JSONObject().put("remarks", "Авто · минимальный пинг").put("outbounds", JSONArray(nodes)))
+        val padding = "x".repeat(160_000)
+        docs.put(JSONObject().put("remarks", "Авто · минимальный пинг").put("outbounds", JSONArray(nodes)).put("padding", padding))
         nodes.forEachIndexed { index, node ->
             val outbounds = JSONArray().put(node)
             nodes.forEachIndexed { backupIndex, backup -> if (backupIndex != index) outbounds.put(backup) }
             outbounds.put(JSONObject().put("protocol", "loopback"))
-            docs.put(JSONObject().put("remarks", "server${index + 1}").put("outbounds", outbounds))
+            docs.put(JSONObject().put("remarks", "server${index + 1}").put("outbounds", outbounds).put("padding", padding))
         }
+        assertTrue(docs.toString().toByteArray(Charsets.UTF_8).size > 2_900_000)
         for (section in ProxyProfile.Section.values()) {
             val parsed = ProxyImport.parse(docs.toString(), section)
             assertEquals(18, parsed.size)
