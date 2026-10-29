@@ -154,9 +154,6 @@ final class ProxyListViewController: UITableViewController {
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") { navigationItem.prompt = "Тестовые данные · VPN не запускается" }
         #endif
         tableView.backgroundColor = VPN013Theme.background; tableView.separatorColor = VPN013Theme.separator
-        let container = UIView(); automaticHeader.translatesAutoresizingMaskIntoConstraints = false; container.addSubview(automaticHeader)
-        NSLayoutConstraint.activate([automaticHeader.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20), automaticHeader.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20), automaticHeader.topAnchor.constraint(equalTo: container.topAnchor), automaticHeader.bottomAnchor.constraint(equalTo: container.bottomAnchor)])
-        tableView.tableHeaderView = container
         let add = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(importTapped))
         add.accessibilityLabel = "Добавить конфигурацию " + kind.title
         add.accessibilityIdentifier = "vpn013.proxy.add"
@@ -166,7 +163,7 @@ final class ProxyListViewController: UITableViewController {
         let avatar = UIImageView(image: UIImage(named: "VPN013Avatar")); avatar.contentMode = .scaleAspectFit
         NSLayoutConstraint.activate([avatar.widthAnchor.constraint(equalToConstant: 32), avatar.heightAnchor.constraint(equalToConstant: 32)])
         avatar.isAccessibilityElement = true; avatar.accessibilityLabel = "VPN013"
-        navigationItem.leftBarButtonItem = UIBarButtonItem(customView: avatar)
+        navigationItem.leftBarButtonItems = [UIBarButtonItem(customView: avatar), UIBarButtonItem(customView: automaticHeader)]
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-subscription-roster") {
             navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Проверить подписки", style: .plain, target: self, action: #selector(testSubscriptionRoster))

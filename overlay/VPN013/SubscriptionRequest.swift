@@ -54,6 +54,22 @@ enum VPN013SubscriptionIdentity {
 }
 
 enum VPN013SubscriptionRequest {
+    /// Original-app handoff links wrap an HTTPS subscription; they are not executable configs.
+    /// Preserve escaped tokens/query bytes when an ordinary HTTPS URL is already present.
+    static func importText(_ raw: String) throws -> String {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefix = "blacktemple://import/"
+        guard text.prefix(prefix.count).lowercased() == prefix else { return text }
+        guard text.utf8.count <= 16_384 else { throw ProxyProfileError.tooLarge }
+        let payload = String(text.dropFirst(prefix.count))
+        let result: String
+        if payload.prefix(8).lowercased() == "https://" { result = payload }
+        else if let decoded = payload.removingPercentEncoding { result = decoded }
+        else { throw ProxyProfileError.invalid }
+        guard let url = URL(string: result), isSecure(url), url.fragment == nil,
+              !result.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }) else { throw ProxyProfileError.invalid }
+        return result
+    }
     static func isSecure(_ url: URL) -> Bool {
         url.scheme?.lowercased() == "https" && url.host != nil && url.user == nil && url.password == nil
     }

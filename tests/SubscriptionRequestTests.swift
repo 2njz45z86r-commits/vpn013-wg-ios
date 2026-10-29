@@ -30,6 +30,15 @@ final class SyntheticSubscriptionProtocol: URLProtocol {
     static let original = URL(string: "https://connect.vpn555.shop:8443/sub/" + String(repeating: "A", count: 43))!
     static func expect(_ value: Bool) { checks += 1; precondition(value, "Subscription request invariant") }
     static func main() throws {
+        let wrapped = "blacktemple://import/" + original.absoluteString + "?client=a%2Bb"
+        expect(try VPN013SubscriptionRequest.importText(wrapped) == original.absoluteString + "?client=a%2Bb")
+        let encoded = original.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        expect(try VPN013SubscriptionRequest.importText("BLACKTEMPLE://IMPORT/" + encoded) == original.absoluteString)
+        expect(try VPN013SubscriptionRequest.importText("vless://synthetic") == "vless://synthetic")
+        for payload in ["http://example.invalid/a", "https://user:pass@example.invalid/a", "file:///tmp/a", "blacktemple://import/https://example.invalid/a"] {
+            do { _ = try VPN013SubscriptionRequest.importText("blacktemple://import/" + payload); preconditionFailure("Unsafe wrapped URL accepted") }
+            catch { checks += 1 }
+        }
         identity = try VPN013SubscriptionIdentity.identifier(for: "Publisher.example.invalid", directory: directory)
         let repeated = try VPN013SubscriptionIdentity.identifier(for: "publisher.example.invalid", directory: directory)
         let other = try VPN013SubscriptionIdentity.identifier(for: "another.example.invalid", directory: directory)

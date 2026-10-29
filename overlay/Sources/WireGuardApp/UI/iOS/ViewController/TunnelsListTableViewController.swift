@@ -205,7 +205,7 @@ class TunnelsListTableViewController: UIViewController {
             navigationItem.rightBarButtonItems = [addButton, updates]
             let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(settingsButtonTapped(sender:)))
             settings.accessibilityLabel = tr("tunnelsListSettingsButtonTitle")
-            navigationItem.leftBarButtonItem = settings
+            navigationItem.leftBarButtonItems = [settings, UIBarButtonItem(customView: AutomaticModeRow())]
         case .rowSwiped:
             navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(doneButtonTapped))
             navigationItem.leftBarButtonItem = UIBarButtonItem(title: tr("tunnelsListSelectButtonTitle"), style: .plain, target: self, action: #selector(selectButtonTapped))
@@ -430,7 +430,7 @@ class TunnelsListTableViewController: UIViewController {
         let pingStack = UIStackView(arrangedSubviews: [checkAllButton, pingExplanationLabel])
         pingStack.axis = .vertical
         pingStack.spacing = 8
-        let stack = UIStackView(arrangedSubviews: [AutomaticModeRow(), summary, pingStack, emptyStateContainer])
+        let stack = UIStackView(arrangedSubviews: [summary, pingStack, emptyStateContainer])
         stack.axis = .vertical
         stack.spacing = 16
         stack.translatesAutoresizingMaskIntoConstraints = false

@@ -1368,6 +1368,7 @@ class TunnelContainer: NSObject {
         }
 
         // Start the tunnel
+        var activationStage = "prepare"
         do {
             wg_log(.debug, staticMessage: "startActivation: Starting tunnel")
             isAttemptingActivation = true
@@ -1377,14 +1378,22 @@ class TunnelContainer: NSObject {
             #if os(iOS)
             if let proto = tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
                let envelope = proto.privateEnvelope {
+                activationStage = "private-store-key"
                 options[PrivateTunnelStore.startKey] = try PrivateTunnelStore.current.key(for: envelope.id) as NSData
             }
             #endif
-            try (tunnelProvider.connection as? NETunnelProviderSession)?.startTunnel(options: options)
+            activationStage = "system-start"
+            guard let session = tunnelProvider.connection as? NETunnelProviderSession else {
+                throw NSError(domain: "VPN013.Activation", code: 1, userInfo: [NSLocalizedDescriptionKey: "Системный профиль VPN недоступен. Закройте и снова откройте VPN013, затем повторите подключение."])
+            }
+            try session.startTunnel(options: options)
             wg_log(.debug, staticMessage: "startActivation: Success")
             activationDelegate?.tunnelActivationAttemptSucceeded(tunnel: self)
         } catch let error {
             isAttemptingActivation = false
+            let diagnostic = error as NSError
+            let domain = String(diagnostic.domain.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "_") }.prefix(96))
+            wg_log(.error, message: "Activation failure: stage=\(activationStage) domain=\(domain) code=\(diagnostic.code)")
             guard let systemError = error as? NEVPNError else {
                 wg_log(.error, message: "Failed to activate tunnel: Error: \(error)")
                 status = .inactive
