@@ -1,0 +1,37 @@
+name: Android resolved runtime dependency review
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Resolve pinned application runtime only
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/amnezia-vpn/amneziawg-android.git android
+          git -C android checkout ff15093bf3856fea0947923474870b86efb682f0
+          cp -a android-overlay/. android/
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain :ui:dependencies --configuration releaseRuntimeClasspath > runtime-dependencies.txt 2>&1
+      - name: Check exact resolved Maven packages
+        run: python3 scripts/check_android_maven.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: android-runtime-dependencies-${{ github.run_id }}
+          path: android/output/review/*.json
+          retention-days: 7
+          if-no-files-found: warn
