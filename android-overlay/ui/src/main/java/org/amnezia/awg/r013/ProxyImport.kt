@@ -40,24 +40,30 @@ object ProxyImport {
         try {
             val documents = if (trimmed.startsWith('[')) JSONArray(trimmed) else JSONArray().put(JSONObject(trimmed))
             if (documents.length() !in 1..100) invalid()
+            // Only collapse the provider's documented failover bundle. Ordinary
+            // multi-document Xray input may legitimately contain several nodes.
+            val providerBundle = documents.length() > 1 && (0 until documents.length()).all { index ->
+                val doc = documents.optJSONObject(index)
+                doc?.optJSONObject("meta")?.optString("serverDescription") == "Автоматический резерв"
+            } && documents.optJSONObject(0)?.optString("remarks") == "⚡ Авто · минимальный пинг"
             val result = mutableListOf<ProxyProfile>()
             for (i in 0 until documents.length()) {
                 val document = documents.optJSONObject(i) ?: invalid()
                 val outbounds = document.optJSONArray("outbounds") ?: JSONArray().put(document)
                 if (outbounds.length() !in 1..100) invalid()
                 val remark = document.optString("remarks", "")
-                val automatic = remark.contains("авто", ignoreCase = true) || remark.contains("auto", ignoreCase = true)
+                val automatic = remark == "⚡ Авто · минимальный пинг"
                 // Multi-entry subscriptions include an automatic aggregate and
                 // copies of all backup nodes in every named entry. The named
                 // entry's first VLESS node is its primary server.
-                if (documents.length() > 1 && automatic) continue
+                if (providerBundle && automatic) continue
                 var primaryAdded = false
                 for (j in 0 until outbounds.length()) {
                     val outbound = outbounds.optJSONObject(j) ?: invalid()
                     val protocol = string(outbound, "protocol")
                     if (protocol in setOf("freedom", "blackhole", "dns", "loopback")) continue
                     if (protocol != "vless") invalid()
-                    if (documents.length() > 1 && primaryAdded) continue
+                    if (providerBundle && primaryAdded) continue
                     result.add(fromOutbound(outbound, section))
                     primaryAdded = true
                     if (result.size > 100) invalid()

@@ -84,13 +84,16 @@ class R013InstrumentedTest {
         }
         val docs = JSONArray()
         val padding = "x".repeat(160_000)
-        docs.put(JSONObject().put("remarks", "Авто · минимальный пинг").put("outbounds", JSONArray(nodes)).put("padding", padding))
+        docs.put(JSONObject().put("remarks", "⚡ Авто · минимальный пинг").put("meta", JSONObject().put("serverDescription", "Автоматический резерв")).put("outbounds", JSONArray(nodes)).put("padding", padding))
         nodes.forEachIndexed { index, node ->
             val outbounds = JSONArray().put(node)
             nodes.forEachIndexed { backupIndex, backup -> if (backupIndex != index) outbounds.put(backup) }
             outbounds.put(JSONObject().put("protocol", "loopback"))
-            docs.put(JSONObject().put("remarks", "server${index + 1}").put("outbounds", outbounds).put("padding", padding))
+            docs.put(JSONObject().put("remarks", "server${index + 1}").put("meta", JSONObject().put("serverDescription", "Автоматический резерв")).put("outbounds", outbounds).put("padding", padding))
         }
+        val ordinary = JSONArray().put(JSONObject().put("remarks", "auto-custom").put("outbounds", JSONArray().put(nodes[0]).put(nodes[1])))
+            .put(JSONObject().put("remarks", "other").put("outbounds", JSONArray().put(nodes[2])))
+        assertEquals(3, ProxyImport.parse(ordinary.toString(), ProxyProfile.Section.INCY).size)
         assertTrue(docs.toString().toByteArray(Charsets.UTF_8).size > 2_900_000)
         for (section in ProxyProfile.Section.values()) {
             val parsed = ProxyImport.parse(docs.toString(), section)
