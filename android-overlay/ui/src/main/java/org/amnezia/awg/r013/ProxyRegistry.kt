@@ -17,7 +17,7 @@ class ProxyRegistry(private val vault: PrivateVault) {
 
     /** Parse everything before entering the vault transaction: invalid imports preserve prior data. */
     fun importText(section: ProxyProfile.Section, text: String): List<String> {
-        val profiles = ProxyProfile.parseList(text, section)
+        val profiles = ProxyImport.parse(text, section)
         return vault.edit { document ->
             val records = document.optJSONObject("proxyProfiles") ?: JSONObject().also { document.put("proxyProfiles", it) }
             check(records.length() + profiles.size <= 300) { "Достигнут предел: 300 профилей" }

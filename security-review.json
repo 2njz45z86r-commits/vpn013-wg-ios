@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-29T07:01:26.720661+00:00",
-  "source_sha256": "7c75f523828e88decd19b1b761f956c5a817fae401ded730689552266d901337",
-  "source_commit_reviewed": "Android typed proxy import development; not release approved",
+  "reviewed_at": "2026-10-29T07:04:26.593424+00:00",
+  "source_sha256": "21652cc4e525f17c1341daaa5e7867f7197e40784053bd8063f68ca111b31509",
+  "source_commit_reviewed": "Android typed URI/JSON import development; release audit incomplete",
   "scope_complete": false,
   "private_report_ref": "private:VPN013-Android-unified-20261029",
   "baseline_only": false,

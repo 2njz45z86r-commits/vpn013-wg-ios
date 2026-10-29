@@ -15,9 +15,9 @@ object ProxyConfiguration {
         val stream = JSONObject().put("network", profile.transport).put("security", profile.security)
         val tls = JSONObject().put("serverName", profile.serverName)
         q["fp"]?.takeIf { it.isNotEmpty() }?.let { tls.put("fingerprint", it) }
+        q["alpn"]?.let { tls.put("alpn", JSONArray(it.split(','))) }
         if (profile.security == "tls") {
             tls.put("allowInsecure", false)
-            q["alpn"]?.let { tls.put("alpn", JSONArray(it.split(','))) }
             stream.put("tlsSettings", tls)
         } else {
             tls.put("publicKey", q.getValue("pbk")).put("shortId", q["sid"] ?: "")

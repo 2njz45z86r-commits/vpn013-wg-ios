@@ -44,7 +44,8 @@ public final class ProxyProfile {
                     bytes.write((high<<4)|low); i+=3;
                 } else {
                     int cp=value.codePointAt(i);
-                    bytes.writeBytes(new String(Character.toChars(cp)).getBytes(StandardCharsets.UTF_8));
+                    byte[] encoded=new String(Character.toChars(cp)).getBytes(StandardCharsets.UTF_8);
+                    bytes.write(encoded,0,encoded.length);
                     i+=Character.charCount(cp);
                 }
             }

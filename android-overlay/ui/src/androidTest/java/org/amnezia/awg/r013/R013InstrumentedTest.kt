@@ -91,6 +91,13 @@ class R013InstrumentedTest {
                 assertEquals(record.profile.transport, stream.getString("network"))
                 assertFalse(stream.getJSONObject("tlsSettings").getBoolean("allowInsecure"))
                 assertFalse(outbound.has("inbounds"))
+                val imported = ProxyImport.parse(JSONObject().put("outbounds", JSONArray().put(outbound))
+                    .put("api", JSONObject().put("tag", "ignored-input"))
+                    .put("inbounds", JSONArray().put(JSONObject().put("port", 12345))).toString(), section).single()
+                assertEquals(record.profile.host, imported.host)
+                assertEquals(record.profile.transport, imported.transport)
+                assertEquals(record.profile.userId, imported.userId)
+                assertFalse(ProxyConfiguration.outbound(imported).toString().contains("ignored-input"))
             }
         }
         val before = registry.vault.read().toString()
@@ -100,6 +107,12 @@ class R013InstrumentedTest {
             fail("Partial proxy import accepted")
         } catch (_: IllegalArgumentException) { }
         assertEquals(before, registry.vault.read().toString())
+        val example = ProxyConfiguration.outbound(store.list(ProxyProfile.Section.HAPP).first().profile)
+        example.getJSONObject("streamSettings").getJSONObject("tlsSettings").put("allowInsecure", true)
+        try { ProxyImport.parse(example.toString(), ProxyProfile.Section.HAPP); fail("Insecure TLS accepted") }
+        catch (_: IllegalArgumentException) { }
+        try { ProxyImport.parse("[".repeat(25) + "]".repeat(25), ProxyProfile.Section.HAPP); fail("Deep JSON accepted") }
+        catch (_: IllegalArgumentException) { }
         val fresh = ProxyRegistry(PrivateVault(context))
         assertEquals(4, fresh.list(ProxyProfile.Section.INCY).size)
         assertEquals(awgBefore, registry.vault.read().getJSONObject("profiles").toString())
