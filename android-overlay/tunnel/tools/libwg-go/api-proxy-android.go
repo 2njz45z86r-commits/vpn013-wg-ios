@@ -135,6 +135,7 @@ func r013ProxyProbe(raw *C.char, gate C.longlong) (result C.longlong) {
 	if err != nil {
 		return
 	}
+	route.Bind(instance)
 	if instance.Start() != nil {
 		return
 	}
@@ -248,6 +249,7 @@ func r013ProxyStart(ticket C.longlong, raw *C.char, fd C.int, gate C.longlong) (
 		result = -3
 		return
 	}
+	route.Bind(instance)
 	if instance.Start() != nil {
 		result = -4
 		return

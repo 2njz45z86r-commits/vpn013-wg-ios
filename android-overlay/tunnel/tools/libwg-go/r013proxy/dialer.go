@@ -10,12 +10,15 @@ import (
 	"time"
 
 	xnet "github.com/xtls/xray-core/common/net"
+	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/transport/internet"
 )
 
 var errRoute = errors.New("physical socket route unavailable")
 
 type routeKey struct{}
+
+var instanceRoutes sync.Map
 
 // Route owns one immutable Android Network gate and every socket opened for it.
 // A retired gate is never replaced by the process's current/default VPN route.
@@ -32,6 +35,7 @@ func NewRoute(protect func(uintptr) bool) *Route {
 func (r *Route) Context(ctx context.Context) context.Context {
 	return context.WithValue(ctx, routeKey{}, r)
 }
+func (r *Route) Bind(instance *core.Instance) { instanceRoutes.Store(instance, r) }
 func (r *Route) control(_, _ string, raw syscall.RawConn) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -48,6 +52,12 @@ func (r *Route) control(_, _ string, raw syscall.RawConn) error {
 	return nil
 }
 func (r *Route) Close() {
+	instanceRoutes.Range(func(key, value any) bool {
+		if value == r {
+			instanceRoutes.Delete(key)
+		}
+		return true
+	})
 	r.mu.Lock()
 	r.closed = true
 	sockets := make([]*ownedConn, 0, len(r.sockets))
@@ -99,6 +109,11 @@ type systemDialer struct{}
 
 func (systemDialer) Dial(ctx context.Context, _ xnet.Address, dest xnet.Destination, _ *internet.SocketConfig) (net.Conn, error) {
 	route, ok := ctx.Value(routeKey{}).(*Route)
+	if !ok {
+		if value, found := instanceRoutes.Load(core.FromContext(ctx)); found {
+			route, ok = value.(*Route)
+		}
+	}
 	if !ok {
 		return nil, errRoute
 	}

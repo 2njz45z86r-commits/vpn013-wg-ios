@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-29T07:21:52.915830+00:00",
-  "source_sha256": "632ada89f1bae4f00c824f288bab6a6f672deb336daf6e8e35f5793832573f3b",
-  "source_commit_reviewed": "Android protected native Xray/TUN development; release audit incomplete",
+  "reviewed_at": "2026-10-29T07:25:42.452811+00:00",
+  "source_sha256": "152c02156071b4f9e4999a1c400450d61b3325cea3cab0daf7dcf24e224852ad",
+  "source_commit_reviewed": "Android native Xray lifetime/routing development; release audit incomplete",
   "scope_complete": false,
   "private_report_ref": "private:VPN013-Android-unified-20261029",
   "baseline_only": false,

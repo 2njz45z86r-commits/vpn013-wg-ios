@@ -4,7 +4,8 @@ package r013proxy
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -32,12 +33,12 @@ import (
 )
 
 func TestRealTLSVLESSUsesProtectedSocketAndTransfersBytes(t *testing.T) {
-	public, private, err := ed25519.GenerateKey(rand.Reader)
+	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 	certificate := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "localhost"}, DNSNames: []string{"localhost"}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign, IsCA: true, BasicConstraintsValid: true}
-	der, err := x509.CreateCertificate(rand.Reader, certificate, certificate, public, private)
+	der, err := x509.CreateCertificate(rand.Reader, certificate, certificate, &private.PublicKey, private)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +95,7 @@ func TestRealTLSVLESSUsesProtectedSocketAndTransfersBytes(t *testing.T) {
 	route := NewRoute(func(uintptr) bool { protected.Add(1); return true })
 	defer route.Close()
 	port := listener.Addr().(*net.TCPAddr).Port
-	object := map[string]any{"log": map[string]any{"loglevel": "none"}, "outbounds": []any{map[string]any{"protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": port, "users": []any{map[string]any{"id": "00000000-0000-0000-0000-000000000000", "encryption": "none"}}}}}, "streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"serverName": "localhost", "allowInsecure": false, "certificates": []any{map[string]any{"usage": "verify", "certificate": strings.Split(strings.TrimSpace(string(certPEM)), "\n")}}}}}}}
+	object := map[string]any{"log": map[string]any{"loglevel": "none"}, "outbounds": []any{map[string]any{"protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": port, "users": []any{map[string]any{"id": "00000000-0000-0000-0000-000000000000", "encryption": "none"}}}}}, "streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"serverName": "localhost", "allowInsecure": false, "disableSystemRoot": true, "certificates": []any{map[string]any{"usage": "verify", "certificate": strings.Split(strings.TrimSpace(string(certPEM)), "\n")}}}}}}}
 	raw, _ := json.Marshal(object)
 	config, err := serial.LoadJSONConfig(bytes.NewReader(raw))
 	if err != nil {
@@ -107,6 +108,7 @@ func TestRealTLSVLESSUsesProtectedSocketAndTransfersBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer instance.Close()
+	route.Bind(instance)
 	if err = instance.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -121,9 +123,14 @@ func TestRealTLSVLESSUsesProtectedSocketAndTransfersBytes(t *testing.T) {
 	}
 	got := make([]byte, len(payload))
 	if _, err = io.ReadFull(conn, got); err != nil {
-		t.Fatal(err)
+		select {
+		case serverError := <-served:
+			t.Fatalf("read=%v server=%v protected=%d", err, serverError, protected.Load())
+		default:
+			t.Fatalf("read=%v protected=%d", err, protected.Load())
+		}
 	}
-	if !bytes.Equal(payload, got) || protected.Load() != 1 {
+	if !bytes.Equal(payload, got) || protected.Load() < 1 {
 		t.Fatal("traffic did not use the owned protected transport")
 	}
 	if err = <-served; err != nil {
