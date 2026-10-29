@@ -43,6 +43,11 @@ jobs:
           test "$(git -C android/tunnel/tools/amneziawg-tools rev-parse HEAD)" = ee0f0a9aa34ff0a0da4b3433b9512781cfe02843
           test "$(git -C android/tunnel/tools/elf-cleaner rev-parse HEAD)" = 7efc05090675ec6161b7def862728086a26c3b1f
           cp -a android-overlay/. android/
+      - name: Verify completed native acceptance for identical Android sources
+        id: emulator
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 reuse-android171-passed-native.py
       - name: Pure policy and archive tests
         run: |
           set -euo pipefail
@@ -74,11 +79,6 @@ jobs:
           export PATH="$JAVA_HOME/bin:$PATH"
           cd android
           ./gradlew --no-daemon --console=plain :ui:assembleRelease
-      - name: Verify completed native acceptance for identical Android sources
-        id: emulator
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 reuse-android171-passed-native.py
       - name: Check native Go dependencies without public finding details
         id: dependency_scan
         run: |

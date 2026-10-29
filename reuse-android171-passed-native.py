@@ -40,7 +40,8 @@ def read_archive(raw):
  validate_review(files);return files
 
 def main():
- root=pathlib.Path(__file__).resolve().parents[1]
+ root=pathlib.Path(__file__).resolve().parent
+ assert (root/"android-overlay").is_dir(), "Verifier must run from its own repository"
  for p,obj in PINS.items():assert subprocess.check_output(['git','rev-parse','HEAD:'+p],cwd=root,text=True).strip()==obj,'Native source changed; fresh acceptance required: '+p
  base='https://api.github.com/repos/2njz45z86r-commits/vpn013-wg-ios';headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'User-Agent':'VPN013-pinned-native-acceptance'}
  def get(path):
