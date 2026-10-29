@@ -68,9 +68,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        guard url.isFileURL else { return false }
-        unifiedVC?.importFile(url)
-        return unifiedVC != nil
+        guard let unified = unifiedVC else { return false }
+        if url.isFileURL { unified.importFile(url); return true }
+        guard url.scheme?.lowercased() == "vpn013" else { return false }
+        do {
+            let handoff = try VPN013ImportLink.parse(url)
+            DispatchQueue.main.async { unified.importConnection(kind: handoff.kind, text: handoff.text) }
+            return true
+        } catch { return false }
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {

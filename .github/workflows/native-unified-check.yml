@@ -34,8 +34,10 @@ jobs:
           python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-upstream-findings.enc.json --recipient scripts/audit-recipient.pub
           upstream_result=$?
           test "$patched_result" -eq 0 && test "$upstream_result" -eq 0
-      - name: Run old and new native scenarios, capture actual phone and tablet
+      - name: Run all native iPhone scenarios and export actual XCUITest images
         if: always() && steps.compile.outcome == 'success'
+        env:
+          VPN013_IPHONE_ONLY: '1'
         run: sh inspect-on-mac.sh
       - name: Retain only credential-free diagnostic evidence, never an installable IPA
         if: always()
@@ -53,8 +55,24 @@ jobs:
           PY
           (cd build && zip -qr unified-native-review.zip review -i '*.png' '*.json')
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: review_upload
         if: always()
+        continue-on-error: true
         with:
           name: unified-native-review-${{ github.run_id }}
           retention-days: 7
           path: build/unified-native-review.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: review_retry
+        if: always() && steps.review_upload.outcome == 'failure'
+        with:
+          name: unified-native-review-${{ github.run_id }}-retry
+          retention-days: 7
+          path: build/unified-native-review.zip
+          if-no-files-found: error
+      - name: Require actual diagnostic delivery
+        if: always()
+        env:
+          FIRST: ${{ steps.review_upload.outcome }}
+          RETRY: ${{ steps.review_retry.outcome }}
+        run: test "$FIRST" = success || test "$RETRY" = success

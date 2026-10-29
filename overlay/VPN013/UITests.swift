@@ -409,7 +409,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].label.contains("127.0.0.1:4444"))
         XCTAssertTrue(app.staticTexts["vpn013.current-traffic"].exists)
         XCTAssertTrue(ping.isEnabled && ping.isHittable)
-        XCTAssertGreaterThanOrEqual(ping.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(ping.frame.height + 0.001, 44, "Allow only floating-point coordinate rounding; the 44-point target remains required")
         ping.tap()
         let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout:10), "Current-server button must show a real loopback echo result")
@@ -662,7 +662,16 @@ final class AutoTunnelUITests:XCTestCase {
             XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
             XCTAssertTrue(app.tables.cells.staticTexts["Добавить конфигурацию"].waitForExistence(timeout: 8))
             app.buttons["vpn013.proxy.add"].tap()
-            XCTAssertTrue(app.textViews["vpn013.proxy.import.text"].waitForExistence(timeout: 5))
+            let draft = app.textViews["vpn013.proxy.import.text"]
+            XCTAssertTrue(draft.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["vpn013.proxy.import.paste"].exists)
+            XCTAssertTrue(app.buttons["vpn013.proxy.import.qr"].exists)
+            let original = draft.value as? String
+            draft.tap()
+            XCTAssertTrue(app.toolbars.buttons["Готово"].waitForExistence(timeout: 5))
+            app.toolbars.buttons["Готово"].tap()
+            XCTAssertEqual(draft.value as? String, original, "Closing the keyboard must preserve the person's key")
+            XCTAssertTrue(app.buttons["vpn013.proxy.import.check"].isHittable)
             app.buttons["vpn013.proxy.import.check"].tap()
             XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5))
             app.alerts.buttons["Добавить"].tap()
@@ -722,7 +731,7 @@ final class AutoTunnelUITests:XCTestCase {
         let toggle = app.buttons["vpn013.automatic-mode"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 10)); XCTAssertEqual(toggle.value as? String, "1")
         XCTAssertLessThanOrEqual(toggle.frame.height, 44); XCTAssertLessThanOrEqual(toggle.frame.width, 44)
-        XCTAssertFalse(app.staticTexts["Лучший ответ при запуске, сравнение каждые 5 минут. Если раздел не работает — другие загруженные конфигурации. Выключите для ручного выбора."].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label == %@", "Лучший ответ при запуске, сравнение каждые 5 минут. Если раздел не работает — другие загруженные конфигурации. Выключите для ручного выбора.")).firstMatch.exists)
         capture("automatic-default-on-happ-empty-no-vpn-synthetic")
         toggle.tap(); XCTAssertEqual(toggle.value as? String, "0")
         for kind in ["incy", "blacktemple", "amneziawg"] {

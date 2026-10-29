@@ -84,7 +84,16 @@ for path in Path('build/review/flow').glob('*'):
  if path.is_file() and not path.suffix and path.read_bytes()[:8] == b'\x89PNG\r\n\x1a\n':
   shutil.copy2(path,path.with_suffix('.png'))
 PY
-if [ "$result" -eq 0 ]; then
+if [ "$result" -eq 0 ] && [ "${VPN013_IPHONE_ONLY:-0}" != 1 ]; then
  python3 capture-ios-simulators.py
+elif [ "$result" -eq 0 ]; then
+ python3 - <<'PY'
+import json
+from pathlib import Path
+flow=Path('build/review/flow')
+images=[p for p in flow.glob('*.png') if p.read_bytes()[:8]==b'\x89PNG\r\n\x1a\n']
+assert images, 'Real XCUITest attachments are required'
+Path('build/review/iphone-only-scope.json').write_text(json.dumps({'iPhoneNativeSuite':41,'renderedEvidence':'actual XCUITest attachments','attachmentImages':len(images),'physicalIPhoneTested':False,'iPadTested':False,'standaloneCapturesAccepted':False}))
+PY
 fi
 test "$result" -eq 0

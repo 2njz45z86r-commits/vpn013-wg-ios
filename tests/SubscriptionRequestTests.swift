@@ -39,6 +39,20 @@ final class SyntheticSubscriptionProtocol: URLProtocol {
             do { _ = try VPN013SubscriptionRequest.importText("blacktemple://import/" + payload); preconditionFailure("Unsafe wrapped URL accepted") }
             catch { checks += 1 }
         }
+        for kind in [VPN013ConnectionKind.happ, .incy, .blacktemple] {
+            let target = original.absoluteString + "?key=a%2Bb&format=uri"
+            let payload = target.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+            let handoff = try VPN013ImportLink.parse(URL(string: "vpn013://import/" + kind.rawValue + "#" + payload)!)
+            expect(handoff.kind == kind && handoff.text == target)
+        }
+        expect(try VPN013ImportLink.parse(URL(string: "vpn013://import/amneziawg")!).kind == .amneziawg)
+        for link in ["vpn013://import/unknown", "vpn013://import/happ", "vpn013://import/happ#http%3A%2F%2Fexample.invalid", "vpn013://user@import/happ#https%3A%2F%2Fexample.invalid", "vpn013://import/amneziawg#https%3A%2F%2Fexample.invalid", "vpn013://import/happ?extra=1#https%3A%2F%2Fexample.invalid"] {
+            do { _ = try VPN013ImportLink.parse(URL(string: link)!); preconditionFailure("Invalid handoff accepted") }
+            catch { checks += 1 }
+        }
+        for prefix in ["happ://add/", "incy://import/"] {
+            expect(try VPN013SubscriptionRequest.importText(prefix + original.absoluteString + "?key=a%2Bb") == original.absoluteString + "?key=a%2Bb")
+        }
         identity = try VPN013SubscriptionIdentity.identifier(for: "Publisher.example.invalid", directory: directory)
         let repeated = try VPN013SubscriptionIdentity.identifier(for: "publisher.example.invalid", directory: directory)
         let other = try VPN013SubscriptionIdentity.identifier(for: "another.example.invalid", directory: directory)

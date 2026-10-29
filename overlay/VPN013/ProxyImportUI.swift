@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import UIKit
 import UniformTypeIdentifiers
+import AVFoundation
 
 final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegate {
     private let kind: VPN013ConnectionKind
@@ -8,6 +9,7 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
     private let submit = UIButton(type: .system)
     private let paste = UIButton(type: .system)
     private let file = UIButton(type: .system)
+    private let qr = UIButton(type: .system)
     private let progress = UIActivityIndicatorView(style: .medium)
     private let downloader = ProxySubscriptionDownload()
     private var initialText: String?
@@ -31,14 +33,19 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         input.autocorrectionType = .no; input.autocapitalizationType = .none; input.spellCheckingType = .no; input.smartDashesType = .no; input.smartQuotesType = .no
         input.accessibilityLabel = "Своя конфигурация"; input.accessibilityIdentifier = "vpn013.proxy.import.text"
         input.text = initialText
-        paste.setTitle("Вставить ключ", for: .normal); paste.addTarget(self, action: #selector(pasteText), for: .touchUpInside)
+        let keyboardBar = UIToolbar(); keyboardBar.sizeToFit()
+        keyboardBar.items = [UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil), UIBarButtonItem(title: "Готово", style: .done, target: self, action: #selector(hideKeyboard))]
+        input.inputAccessoryView = keyboardBar
+        paste.setTitle("Из буфера", for: .normal); paste.addTarget(self, action: #selector(pasteText), for: .touchUpInside)
         paste.accessibilityIdentifier = "vpn013.proxy.import.paste"
         file.setTitle("Выбрать файл", for: .normal); file.addTarget(self, action: #selector(pickFile), for: .touchUpInside)
-        submit.setTitle("Продолжить", for: .normal); submit.addTarget(self, action: #selector(validateInput), for: .touchUpInside)
+        qr.setTitle("QR-код", for: .normal); qr.addTarget(self, action: #selector(scanQR), for: .touchUpInside)
+        qr.accessibilityIdentifier = "vpn013.proxy.import.qr"
+        submit.setTitle("Загрузить конфигурацию", for: .normal); submit.addTarget(self, action: #selector(validateInput), for: .touchUpInside)
         submit.accessibilityIdentifier = "vpn013.proxy.import.check"
-        for button in [paste, file, submit] { button.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true; button.titleLabel?.font = .preferredFont(forTextStyle: .headline); button.titleLabel?.adjustsFontForContentSizeCategory = true; button.titleLabel?.numberOfLines = 0; button.tintColor = VPN013Theme.accent }
+        for button in [paste, qr, file, submit] { button.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true; button.titleLabel?.font = .preferredFont(forTextStyle: .headline); button.titleLabel?.adjustsFontForContentSizeCategory = true; button.titleLabel?.numberOfLines = 0; button.tintColor = VPN013Theme.accent }
         progress.hidesWhenStopped = true; progress.color = VPN013Theme.accent
-        let actions = UIStackView(arrangedSubviews: [paste, file]); actions.axis = .horizontal; actions.distribution = .fillEqually; actions.spacing = 12
+        let actions = UIStackView(arrangedSubviews: [paste, qr, file]); actions.axis = .horizontal; actions.distribution = .fillEqually; actions.spacing = 12
         paste.backgroundColor = VPN013Theme.accent; paste.setTitleColor(VPN013Theme.background, for: .normal); paste.layer.cornerRadius = 12
         input.layer.cornerRadius = 12; input.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 12, right: 10)
         let privacy = UILabel(); privacy.text = "При загрузке подписки сервис получает случайный идентификатор этой установки VPN013."
@@ -46,7 +53,7 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         let stack = UIStackView(arrangedSubviews: [explanation, actions, input, submit, progress, privacy]); stack.axis = .vertical; stack.spacing = 16
         let scroll = UIScrollView(); scroll.keyboardDismissMode = .interactive; scroll.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(scroll)
         stack.translatesAutoresizingMaskIntoConstraints = false; scroll.addSubview(stack)
-        NSLayoutConstraint.activate([scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor), scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor), stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20), stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 20), stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20), stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20), stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40), input.heightAnchor.constraint(equalToConstant: 132)])
+        NSLayoutConstraint.activate([scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor), scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuideIfAvailable), stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20), stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 20), stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -20), stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20), stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -40), input.heightAnchor.constraint(equalToConstant: 132)])
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") {
             input.text = "vless://00000000-0000-4000-8000-000000000001@demo.example.invalid:443?type=ws&security=tls&sni=demo.example.invalid&path=%2Fvpn#Demo%20server"
@@ -71,7 +78,17 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         guard let value = UIPasteboard.general.string else { show(ProxyProfileError.invalid); return }
         guard value.utf8.count <= ProxyImport.maximumBytes else { show(ProxyProfileError.tooLarge); return }
         input.text = value
-        validateInput()
+        view.endEditing(true)
+    }
+    @objc private func hideKeyboard() { view.endEditing(true) }
+    @objc private func scanQR() {
+        guard !isBusy else { return }; view.endEditing(true)
+        let scanner = VPN013QRImportController()
+        scanner.received = { [weak self] text in
+            guard let self = self, !self.isBusy else { return }
+            self.input.text = text
+        }
+        present(UINavigationController(rootViewController: scanner), animated: true)
     }
     @objc private func pickFile() {
         guard !isBusy else { return }
@@ -144,9 +161,54 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
                 else { ProxyProfilesManager.shared.add(values, completion: done) }
             }); alert.addAction(UIAlertAction(title: "Отмена", style: .cancel)); present(alert, animated: true)
     }
-    private func busy(_ value: Bool) { isBusy = value; submit.isEnabled = !value; paste.isEnabled = !value; file.isEnabled = !value; input.isEditable = !value; value ? progress.startAnimating() : progress.stopAnimating() }
+    private func busy(_ value: Bool) { isBusy = value; submit.isEnabled = !value; qr.isEnabled = !value; paste.isEnabled = !value; file.isEnabled = !value; input.isEditable = !value; value ? progress.startAnimating() : progress.stopAnimating() }
     private func show(_ error: Error) {
         let alert = UIAlertController(title: "Не удалось добавить", message: error.localizedDescription, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Понятно", style: .default)); present(alert, animated: true)
+    }
+}
+
+/// Captures only QR text after an explicit tap. No images or decoded keys are logged or persisted.
+private final class VPN013QRImportController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+    var received: ((String) -> Void)?
+    private let capture = AVCaptureSession()
+    private let queue = DispatchQueue(label: "VPN013.QR.capture")
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var consumed = false
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Сканировать QR-код"; view.backgroundColor = .black
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Отмена", style: .plain, target: self, action: #selector(cancel))
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] allowed in
+            DispatchQueue.main.async {
+                guard let self = self, self.view.window != nil else { return }
+                guard allowed else { self.unavailable(); return }
+                self.configure()
+            }
+        }
+    }
+    private func configure() {
+        guard let camera = AVCaptureDevice.default(for: .video), let input = try? AVCaptureDeviceInput(device: camera), capture.canAddInput(input) else { unavailable(); return }
+        capture.addInput(input)
+        let output = AVCaptureMetadataOutput()
+        guard capture.canAddOutput(output) else { unavailable(); return }
+        capture.addOutput(output); output.setMetadataObjectsDelegate(self, queue: .main); output.metadataObjectTypes = [.qr]
+        let layer = AVCaptureVideoPreviewLayer(session: capture); layer.videoGravity = .resizeAspectFill
+        view.layer.insertSublayer(layer, at: 0); previewLayer = layer; layer.frame = view.bounds
+        queue.async { [capture] in capture.startRunning() }
+    }
+    override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); previewLayer?.frame = view.bounds }
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated); queue.async { [capture] in capture.stopRunning() }
+    }
+    @objc private func cancel() { dismiss(animated: true) }
+    private func unavailable() {
+        let alert = UIAlertController(title: "Камера недоступна", message: "Разрешите камеру в настройках iPhone или добавьте ключ из буфера либо файла.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Понятно", style: .default) { [weak self] _ in self?.dismiss(animated: true) }); present(alert, animated: true)
+    }
+    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        guard !consumed, let text = objects.compactMap({ ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue }).first,
+              text.utf8.count <= ProxyImport.maximumBytes else { return }
+        consumed = true; let handler = received
+        dismiss(animated: true) { handler?(text) }
     }
 }

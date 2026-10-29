@@ -120,6 +120,21 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         UserDefaults.standard.set(kinds[selectedIndex].rawValue, forKey: "VPN013SelectedKind")
     }
+    func importConnection(kind: VPN013ConnectionKind, text: String?) {
+        loadViewIfNeeded()
+        guard presentedViewController == nil, let index = kinds.firstIndex(of: kind) else { return }
+        selectedIndex = index
+        UserDefaults.standard.set(kind.rawValue, forKey: "VPN013SelectedKind")
+        if kind == .amneziawg {
+            // ZIP stays an authenticated file download. iOS Open In imports it without exposing a new token.
+            awg.loadViewIfNeeded()
+            awg.tunnelsListVC?.presentViewControllerForFileImport()
+        } else if let navigation = selectedViewController as? UINavigationController {
+            // Keep a person's existing draft instead of replacing it with an incoming link.
+            guard !(navigation.topViewController is ProxyImportViewController) else { return }
+            navigation.pushViewController(ProxyImportViewController(kind: kind, text: text), animated: true)
+        }
+    }
     func importFile(_ url: URL) {
         if ["conf", "zip"].contains(url.pathExtension.lowercased()) {
             selectedIndex = 2; awg.importFromDisposableFile(url: url); return

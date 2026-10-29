@@ -58,8 +58,8 @@ enum VPN013SubscriptionRequest {
     /// Preserve escaped tokens/query bytes when an ordinary HTTPS URL is already present.
     static func importText(_ raw: String) throws -> String {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let prefix = "blacktemple://import/"
-        guard text.prefix(prefix.count).lowercased() == prefix else { return text }
+        let prefixes = ["blacktemple://import/", "happ://add/", "incy://import/"]
+        guard let prefix = prefixes.first(where: { text.prefix($0.count).lowercased() == $0 }) else { return text }
         guard text.utf8.count <= 16_384 else { throw ProxyProfileError.tooLarge }
         let payload = String(text.dropFirst(prefix.count))
         let result: String
@@ -93,5 +93,26 @@ enum VPN013SubscriptionRequest {
         request.setValue("ios", forHTTPHeaderField: "X-Device-OS")
         request.setValue("application/json, text/plain;q=0.9", forHTTPHeaderField: "Accept")
         return request
+    }
+}
+
+/// Explicit VPN013 links do not claim other apps' URL schemes, fetch on arrival or start a VPN.
+/// Payload is a percent-encoded HTTPS URL in the fragment; parsing decodes exactly once.
+enum VPN013ImportLink {
+    static func parse(_ url: URL) throws -> (kind: VPN013ConnectionKind, text: String?) {
+        guard url.absoluteString.utf8.count <= 16_384,
+              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              parts.scheme?.lowercased() == "vpn013", parts.host == "import",
+              parts.user == nil, parts.password == nil, parts.port == nil, parts.query == nil,
+              let kind = VPN013ConnectionKind(rawValue: String(parts.path.dropFirst())),
+              parts.path == "/" + kind.rawValue else { throw ProxyProfileError.invalid }
+        if kind == .amneziawg {
+            guard parts.fragment == nil || parts.fragment == "" else { throw ProxyProfileError.invalid }
+            return (kind, nil)
+        }
+        guard let text = parts.fragment, !text.isEmpty,
+              let target = URL(string: text), VPN013SubscriptionRequest.isSecure(target), target.fragment == nil,
+              !text.unicodeScalars.contains(where: { $0.value < 33 || $0.value == 127 }) else { throw ProxyProfileError.invalid }
+        return (kind, text)
     }
 }
