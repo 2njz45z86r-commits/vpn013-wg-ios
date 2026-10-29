@@ -1,5 +1,15 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testSharedOwnerProxyZIPSelectsIncyAndPreviewsProfile() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-owner-proxy-zip"]
+        app.launch()
+        let preview = app.alerts["Серверов: 1"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 20))
+        XCTAssertTrue(preview.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "INCY")).firstMatch.exists)
+        preview.buttons["Добавить"].tap()
+        XCTAssertTrue(app.tables.cells.staticTexts["Example"].waitForExistence(timeout: 20))
+    }
     func testInvitationReachableFromEveryProxySectionWithoutSharingProfiles() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]

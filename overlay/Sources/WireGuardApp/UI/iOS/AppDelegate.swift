@@ -53,6 +53,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         self.mainVC = mainVC
 
         #if targetEnvironment(simulator) && DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-owner-proxy-zip") {
+            do {
+                let fixture = FileManager.default.temporaryDirectory.appendingPathComponent("vpn013-proxy-fixture-" + UUID().uuidString + ".zip")
+                let subscription = Data("vless://00000000-0000-4000-8000-000000000001@server.example.org:443?type=tcp&security=tls#Example\n".utf8)
+                let entries: [(fileName: String, contents: Data)] = [
+                    ("iPhone/Подписка.txt", subscription), ("Android/Подписка.txt", subscription),
+                    ("iPhone/Инструкция.txt", Data("Тест · INCY · iPhone\n".utf8)),
+                    ("Android/Инструкция.txt", Data("Тест · INCY · Android\n".utf8))]
+                try ZipArchive.archive(inputs: entries, to: fixture)
+                DispatchQueue.main.async { _ = self.application(application, open: fixture) }
+            } catch { wg_log(.error, message: "Unable to prepare local proxy ZIP fixture") }
+        }
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-import") {
             // Exercise the same incoming-file handler as iOS Open In / Share.
             do {
