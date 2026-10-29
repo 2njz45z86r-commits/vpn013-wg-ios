@@ -19,8 +19,8 @@ def api(path): return json.loads(call('gh', 'api', 'repos/'+REPO+'/'+path))
 
 def wait_for_run():
     # The release recompilation may overlap the exact-source native UI run.
-    # Never promote a pending/failed run; wait at most twenty minutes.
-    cutoff = time.monotonic() + 1200
+    # Never promote a pending/failed run; wait at most forty-five minutes.
+    cutoff = time.monotonic() + 2700
     while True:
         run = api('actions/runs/'+str(RUN))
         require(run.get('id') == RUN and run.get('head_sha') == SOURCE and run.get('path') == '.github/workflows/build-ios.yml', 'Wrong native source/run')
