@@ -22,6 +22,7 @@ sudo chmod 666 /dev/kvm
 "$ANDROID_HOME/emulator/emulator" -avd R013CI -no-window -no-snapshot -no-audio -gpu swiftshader_indirect -no-boot-anim -memory 3072 -cores 2 > "$RUNNER_TEMP/r013-emulator.log" 2>&1 &
 emulator_pid=$!
 peer_pid=""
+proxy_pid=""
 route_echo_pid=""
 ru_alias_added=""
 control_alias_added=""
@@ -33,6 +34,7 @@ finish() {
   timeout 15s adb logcat -d -t 1200 -s Watchdog:E ActivityManager:E ConnectivityService:E AndroidRuntime:E > output/review/system-service-errors.txt 2>/dev/null || true
   cp "$RUNNER_TEMP/r013-emulator.log" output/review/emulator.log 2>/dev/null || true
   cp "$RUNNER_TEMP/r013-peer.log" output/review/synthetic-peer-build.log 2>/dev/null || true
+  if [ -n "$proxy_pid" ]; then kill "$proxy_pid" 2>/dev/null || true; fi
   if [ -n "$peer_pid" ]; then kill "$peer_pid" 2>/dev/null || true; fi
   if [ -n "$route_echo_pid" ]; then kill "$route_echo_pid" 2>/dev/null || true; fi
   if [ "$ru_alias_added" = yes ]; then sudo ip address del 2.56.24.1/32 dev lo 2>/dev/null || true; fi
@@ -110,6 +112,19 @@ python3 r013-ci/capture-russian-routes.py
 wait "$routing_test_pid"
 grep -E '^OK \(1 test\)[[:space:]]*$' output/review/russian-routing.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/russian-routing.txt
+# Verify the real Android TUN/native Xray path with an isolated ephemeral REALITY
+# server. Its only private destination is the nonce HTTP echo; public TCP443 and
+# Cloudflare DNS are used solely by the application's unchanged HTTPS204 health.
+(cd tunnel/tools/libwg-go && go build -o "$RUNNER_TEMP/r013-proxy-peer" ../../../r013-ci/proxy-peer.go)
+"$RUNNER_TEMP/r013-proxy-peer" > "$RUNNER_TEMP/r013-proxy-peer.log" 2>&1 &
+proxy_pid=$!
+for i in $(seq 1 30); do test -s "$RUNNER_TEMP/r013-proxy-fixture.json" && break; sleep 1; done
+test -s "$RUNNER_TEMP/r013-proxy-fixture.json"
+proxy_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-proxy-fixture.json")
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013ProxyRuntimeTest -e proxyFixture "$proxy_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/proxy-runtime.txt
+grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/proxy-runtime.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/proxy-runtime.txt
+unset proxy_fixture
 unset fixture candidate_fixture
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013NetworkRecoveryTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/network-recovery.txt
 grep -E '^OK \(3 tests\)[[:space:]]*$' output/review/network-recovery.txt
