@@ -147,6 +147,20 @@ func run() error {
 	if !waitUntil(20*time.Second, func() bool { _, e := net.InterfaceByName(adapter); return e == nil }) {
 		return errors.New("test TUN adapter did not start")
 	}
+	iface, err := net.InterfaceByName(adapter)
+	if err != nil {
+		return errors.New("test TUN adapter disappeared")
+	}
+	// Never send even synthetic requests until Windows confirms the exact
+	// benchmark destination selects the isolated adapter's single-host route.
+	routeCheck := fmt.Sprintf("$r = Find-NetRoute -RemoteIPAddress '%s' -ErrorAction Stop | Where-Object { $_.DestinationPrefix -eq '%s/32' -and $_.InterfaceIndex -eq %d }; if (-not $r) { exit 1 }", target, target, iface.Index)
+	if !waitUntil(20*time.Second, func() bool {
+		cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", routeCheck)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+		return cmd.Run() == nil
+	}) {
+		return errors.New("test route does not select isolated adapter")
+	}
 	transport := &http.Transport{Proxy: nil}
 	defer transport.CloseIdleConnections()
 	httpClient := &http.Client{Transport: transport, Timeout: 5 * time.Second}
