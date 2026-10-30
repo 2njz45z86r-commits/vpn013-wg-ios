@@ -1,5 +1,14 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    private func openUpdatesFromSettings(_ app: XCUIApplication) {
+        XCTAssertFalse(app.buttons["vpn013.updates"].exists, "AmneziaWG updates belong in Settings")
+        let settings = app.buttons["vpn013.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 20)); settings.tap()
+        let update = app.buttons["vpn013.settings.update-app"]
+        XCTAssertTrue(update.waitForExistence(timeout: 5))
+        for _ in 0..<5 { if update.isHittable { break }; app.tables.firstMatch.swipeUp() }
+        XCTAssertTrue(update.isHittable); update.tap()
+    }
     func testPowerTrafficAndPingPanelPresentInEveryProxySection() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-hold-ping-for-cancellation"]
@@ -259,8 +268,7 @@ final class AutoTunnelUITests:XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-direct-download"]
         app.launch()
-        XCTAssertTrue(app.buttons["vpn013.updates"].waitForExistence(timeout:20))
-        app.buttons["vpn013.updates"].tap()
+        openUpdatesFromSettings(app)
         let download = app.tables.cells.containing(.staticText, identifier: "Скачать IPA").firstMatch
         XCTAssertTrue(download.waitForExistence(timeout:5))
         XCTAssertFalse(app.staticTexts["Скачать обновление в боте"].exists)
@@ -892,9 +900,7 @@ final class AutoTunnelUITests:XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]
         app.launch()
-        let updates = app.buttons["vpn013.updates"]
-        XCTAssertTrue(updates.waitForExistence(timeout:20))
-        updates.tap()
+        openUpdatesFromSettings(app)
         XCTAssertTrue(app.staticTexts["Пока нет привязанных заявок"].waitForExistence(timeout:5))
         XCTAssertTrue(app.cells["vpn013.update-check"].exists)
         capture("17-updates-before-binding")
@@ -906,6 +912,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(passed.waitForExistence(timeout:15))
         capture("18-order-sync-invariants-passed-synthetic")
         app.navigationBars["Обновления"].buttons["Готово"].tap()
+        app.buttons["vpn013.settings.done"].tap()
         XCTAssertTrue(app.tables.cells.staticTexts["Managed 1"].waitForExistence(timeout:5))
         XCTAssertTrue(app.staticTexts["Профили · 17"].exists)
         XCTAssertTrue(app.tables.cells.staticTexts["Авто · 16 серверов"].exists)

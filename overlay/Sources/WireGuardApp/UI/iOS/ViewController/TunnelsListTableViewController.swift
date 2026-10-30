@@ -200,11 +200,9 @@ class TunnelsListTableViewController: UIViewController {
             let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addButtonTapped(sender:)))
             addButton.accessibilityIdentifier = "vpn013.add-profile"
             addButton.accessibilityLabel = "Добавить конфигурацию"
-            let updates = UIBarButtonItem(image: UIImage(systemName: "arrow.clockwise"), style: .plain, target: self, action: #selector(clientUpdatesTapped))
-            updates.accessibilityIdentifier = "vpn013.updates"
-            updates.accessibilityLabel = "Обновления"
-            navigationItem.rightBarButtonItems = [addButton, updates]
+            navigationItem.rightBarButtonItems = [addButton]
             let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(settingsButtonTapped(sender:)))
+            settings.accessibilityIdentifier = "vpn013.settings"
             settings.accessibilityLabel = tr("tunnelsListSettingsButtonTitle")
             navigationItem.leftBarButtonItems = [settings, UIBarButtonItem(customView: AutomaticModeRow())]
         case .rowSwiped:

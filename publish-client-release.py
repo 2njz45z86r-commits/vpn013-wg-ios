@@ -23,7 +23,7 @@ Path('build', public_name).write_bytes(ipa.read_bytes())
 value = dict(schema=1,app='vpn013-wg',platform='ios',version=verification['version'],build=int(info['CFBundleVersion']),
     downloadURL=f'https://github.com/{repository}/releases/download/unsigned-{run}/{public_name}',
     sha256=hashlib.sha256(ipa.read_bytes()).hexdigest(),
-    notes='VPN013 1.7.4: сокращённые единицы трафика и скорости, расчёт скорости по реальным счётчикам, совместимость импорта INCY/XHTTP и общие настройки. Существующие профили сохраняются при ошибке импорта. Для установки на iPhone требуется подпись владельца. Проверки на симуляторе не подтверждают VPN-трафик на физическом устройстве.')
+    notes='VPN013 1.7.4: панель подключения, статистики и пинга в Happ, INCY и BlackTemple; сокращённые единицы скорости по реальным счётчикам. Обновления доступны в настройках; лишняя кнопка в AmneziaWG убрана. Совместимость импорта INCY/XHTTP и ZIP сохранена. Существующие профили сохраняются при ошибке импорта. Для установки на iPhone требуется подпись владельца. Проверки на симуляторе не подтверждают VPN-трафик на физическом устройстве.')
 manifest = json.dumps(value,ensure_ascii=False,indent=2)+'\n'
 Path('build/client-release.json').write_text(manifest,encoding='utf-8')
 if '--prepare-only' in sys.argv:
