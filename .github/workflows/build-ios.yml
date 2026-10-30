@@ -65,6 +65,7 @@ jobs:
         id: native
         env:
           GH_TOKEN: ${{ github.token }}
+          NO_COLOR: '1'
         run: |
           if [ "$(git rev-parse HEAD:overlay)" = "fd5121b3ab451c4ba338e5717fac145286df07a2" ]; then
             python3 reuse-ios173-passed-ui.py

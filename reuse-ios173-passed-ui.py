@@ -50,7 +50,10 @@ def main():
         artifact=api('actions/artifacts/'+str(record['artifact']))
         require(artifact.get('workflow_run',{}).get('id') == record['run'] and artifact.get('workflow_run',{}).get('head_sha') == record['source'] and not artifact.get('expired'), 'Wrong/expired native evidence')
         require(artifact.get('digest') == 'sha256:'+record['digest'], 'Different native artifact')
-        execution_log=call('gh','api','repos/'+REPO+'/actions/jobs/'+str(record['job'])+'/logs')
+        # gh protects interactive terminals from escape codes in compiler logs.
+        # Capture to memory only, then discard control bytes before matching.
+        execution_log=call('gh','api','--allow-escape-sequences','repos/'+REPO+'/actions/jobs/'+str(record['job'])+'/logs')
+        execution_log=''.join(c for c in execution_log if ord(c)>=32 or c in '\n\t')
         executed=set(re.findall(r"Test Case '-\[AutoTunnelUITests\.AutoTunnelUITests (\w+)\]' passed",execution_log))
         expected={CASE} if record['count'] == 1 else selectors-{CASE}
         require(executed == expected, 'Every required selector must have actually passed')
