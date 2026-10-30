@@ -111,7 +111,7 @@ jobs:
           EMULATOR_OUTCOME: ${{ steps.emulator.outcome }}
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, re
           from pathlib import Path
           base=Path('android/output/review')
           base.mkdir(parents=True,exist_ok=True)
