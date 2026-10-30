@@ -1,0 +1,51 @@
+# Disposable test only: no signing, publishing, production secrets or deployment.
+name: Research Windows Xray TUN on disposable runner
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-tun:
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios'
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Build explicitly pinned upstream Xray in disposable workspace
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git clone --filter=blob:none --no-checkout https://github.com/amnezia-vpn/amnezia-xray-core.git "$env:RUNNER_TEMP/xray"
+          if ($LASTEXITCODE -ne 0) { throw 'Xray clone failed' }
+          git -C "$env:RUNNER_TEMP/xray" checkout 2ff4e4b48f5ccf8e5731b441fa274464bc54ea78
+          if ($LASTEXITCODE -ne 0 -or (git -C "$env:RUNNER_TEMP/xray" rev-parse HEAD) -ne '2ff4e4b48f5ccf8e5731b441fa274464bc54ea78') { throw 'Xray revision mismatch' }
+          Push-Location "$env:RUNNER_TEMP/xray"
+          try {
+            go build -trimpath -o "$env:RUNNER_TEMP/xray.exe" ./main
+            if ($LASTEXITCODE -ne 0) { throw 'Xray build failed' }
+          } finally { Pop-Location }
+      - name: Verify official signed Wintun archive and DLL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = "$env:RUNNER_TEMP/wintun.zip"
+          Invoke-WebRequest -Uri 'https://www.wintun.net/builds/wintun-0.14.1.zip' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51') { throw 'Wintun archive hash mismatch' }
+          Expand-Archive -LiteralPath $archive -DestinationPath "$env:RUNNER_TEMP/wintun"
+          $dll = "$env:RUNNER_TEMP/wintun/wintun/bin/amd64/wintun.dll"
+          if ((Get-AuthenticodeSignature -LiteralPath $dll).Status -ne 'Valid') { throw 'Wintun DLL signature invalid' }
+          Copy-Item -LiteralPath $dll -Destination "$env:RUNNER_TEMP/wintun.dll"
+      - name: Test one synthetic /32 route and local VLESS HTTP payload
+        shell: pwsh
+        env:
+          VPN013_DISPOSABLE_TUN_SMOKE: 'yes'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          go run scripts/windows-xray-tun-smoke/main.go "$env:RUNNER_TEMP/xray.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Disposable single-route TUN test failed' }
