@@ -343,7 +343,7 @@ enum ProxyImport {
         guard data.count <= maximumBytes else { throw ProxyProfileError.tooLarge }
         guard source != .amneziawg, let raw = String(data: data, encoding: .utf8) else { throw ProxyProfileError.invalid }
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.first != "{" && text.first != "[" && !text.hasPrefix("vless://") {
+        if text.first != "{" && text.first != "[" && !text.hasPrefix("vless://") && !text.hasPrefix("#") {
             let compact = text.filter { !$0.isWhitespace }
             guard compact.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "+/=_-".contains($0)) }) else { throw ProxyProfileError.unsupported }
             let padded = compact.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + String(repeating: "=", count: (4 - compact.count % 4) % 4)

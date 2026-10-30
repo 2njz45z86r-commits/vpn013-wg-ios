@@ -32,6 +32,11 @@ import Foundation
         let subscription = Data((uri + "\n" + uri.replacingOccurrences(of: "#Germany", with: "#Finland")).utf8).base64EncodedData()
         let decoded = try ProxyImport.profiles(subscription, source: .blacktemple)
         check(decoded.count == 2 && decoded[1].name == "Finland", "standard BlackTemple subscription")
+        let metadataRoster = "#profile-title: VPN013\n#subscription-userinfo: expire=1000\n#support-url: https://example.invalid/support\n" + uri
+        let metadataPlain = try ProxyImport.profiles(Data(metadataRoster.utf8), source: .happ)
+        let metadataEncoded = try ProxyImport.profiles(Data(metadataRoster.utf8).base64EncodedData(), source: .incy)
+        check(metadataPlain.count == 1 && metadataEncoded.count == 1, "issuer metadata accepted before VLESS roster")
+        rejects("metadata cannot mask a broken roster") { _ = try ProxyImport.profiles(Data((metadataRoster + "\ninvalid").utf8), source: .happ) }
         let config: [String: Any] = ["meta": ["serverName": "JSON server"], "outbounds": [try original[0].outbound()],
             "inbounds": [["listen": "0.0.0.0", "port": 12345, "protocol": "socks"]], "log": ["access": "/tmp/untrusted.log"], "api": ["tag": "external-api"]]
         let json = try JSONSerialization.data(withJSONObject: [config])
