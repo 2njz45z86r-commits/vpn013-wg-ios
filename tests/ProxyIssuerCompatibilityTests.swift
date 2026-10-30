@@ -43,6 +43,17 @@ import Foundation
             rejects { _ = try ProxyProfile.fromURI(link(["unreviewedOption": true]), source: section) }
             rejects { _ = try ProxyProfile.fromURI(link(["xPaddingBytes": "1000000000"]), source: section) }
             rejects { _ = try ProxyProfile.fromURI(link(["allowInsecure": true]), source: section) }
+            let serverOnly: [String: Any] = ["serverMaxHeaderBytes": 3932160, "scMaxBufferedPosts": 1000,
+                "scMaxEachPostBytes": 32768, "uplinkChunkSize": 4096,
+                "xmux": ["cMaxLifetimeMs": 0, "maxConnections": 8, "maxConcurrency": 0, "cMaxReuseTimes": "36-96"]]
+            let client = try ProxyProfile.fromURI(link(serverOnly), source: section)
+            let clientStream = try client.outbound()["streamSettings"] as! [String: Any]
+            let clientHTTP = clientStream["xhttpSettings"] as! [String: Any]
+            check(clientHTTP["serverMaxHeaderBytes"] == nil && clientHTTP["scMaxBufferedPosts"] == nil)
+            check((clientHTTP["xmux"] as! [String: Any])["cMaxLifetimeMs"] == nil && clientHTTP["scMaxEachPostBytes"] as? Int == 32768)
+            rejects { _ = try ProxyProfile.fromURI(link(["xmux": ["cMaxLifetimeMs": 1]]), source: section) }
+            rejects { _ = try ProxyProfile.fromURI(link(["scMaxBufferedPosts": true]), source: section) }
+            rejects { _ = try ProxyProfile.fromURI(link(["serverMaxHeaderBytes": -1]), source: section) }
         }
         print("Issuer XHTTP aliases: \(checks) checks passed; synthetic data only")
     }

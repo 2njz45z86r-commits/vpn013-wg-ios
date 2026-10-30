@@ -1,0 +1,235 @@
+{
+  "synthetic_uris": [
+    "vless://00000000-0000-4000-8000-000000000001@server1.example.invalid:443?encryption=none&fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-1",
+    "vless://00000000-0000-4000-8000-000000000002@server2.example.invalid:25192?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-2",
+    "vless://00000000-0000-4000-8000-000000000003@server3.example.invalid:25117?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-3",
+    "vless://00000000-0000-4000-8000-000000000004@server4.example.invalid:25617?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-4",
+    "vless://00000000-0000-4000-8000-000000000005@server5.example.invalid:25121?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-5",
+    "vless://00000000-0000-4000-8000-000000000006@server6.example.invalid:443?encryption=none&fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&mode=auto#Synthetic-6",
+    "vless://00000000-0000-4000-8000-000000000007@server7.example.invalid:25145?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-7",
+    "vless://00000000-0000-4000-8000-000000000008@server8.example.invalid:25901?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-8",
+    "vless://00000000-0000-4000-8000-000000000009@server9.example.invalid:25575?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-9",
+    "vless://00000000-0000-4000-8000-000000000010@server10.example.invalid:8443?encryption=none&fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&mode=auto#Synthetic-10",
+    "vless://00000000-0000-4000-8000-000000000011@server11.example.invalid:26277?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-11",
+    "vless://00000000-0000-4000-8000-000000000012@server12.example.invalid:25449?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-12",
+    "vless://00000000-0000-4000-8000-000000000013@server13.example.invalid:25113?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-13",
+    "vless://00000000-0000-4000-8000-000000000014@server14.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxLifetimeMs%22%3A0%2C%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%2C%22serverMaxHeaderBytes%22%3A3932160%2C%22scMaxBufferedPosts%22%3A1000%7D#Synthetic-14",
+    "vless://00000000-0000-4000-8000-000000000015@server15.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxLifetimeMs%22%3A0%2C%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%2C%22serverMaxHeaderBytes%22%3A3932160%2C%22scMaxBufferedPosts%22%3A1000%7D#Synthetic-15",
+    "vless://00000000-0000-4000-8000-000000000016@server16.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxLifetimeMs%22%3A0%2C%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%2C%22serverMaxHeaderBytes%22%3A3932160%2C%22scMaxBufferedPosts%22%3A1000%7D#Synthetic-16",
+    "vless://00000000-0000-4000-8000-000000000017@server17.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxLifetimeMs%22%3A0%2C%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%2C%22serverMaxHeaderBytes%22%3A3932160%2C%22scMaxBufferedPosts%22%3A1000%7D#Synthetic-17",
+    "vless://00000000-0000-4000-8000-000000000018@server18.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxLifetimeMs%22%3A0%2C%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%2C%22serverMaxHeaderBytes%22%3A3932160%2C%22scMaxBufferedPosts%22%3A1000%7D#Synthetic-18"
+  ],
+  "shape_only": true,
+  "real_credentials_included": false,
+  "summary": [
+    {
+      "index": 0,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 1,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 2,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 3,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 4,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 5,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 6,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 7,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 8,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 9,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 10,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 11,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 12,
+      "transport": "xhttp",
+      "security": "reality",
+      "numeric_options": {}
+    },
+    {
+      "index": 13,
+      "transport": "xhttp",
+      "security": "tls",
+      "numeric_options": {
+        "xPaddingBytes": "96-1040",
+        "uplinkChunkSize": 4096,
+        "xPaddingObfsMode": true,
+        "scMaxEachPostBytes": 32768,
+        "scMinPostsIntervalMs": 15,
+        "serverMaxHeaderBytes": 3932160,
+        "scMaxBufferedPosts": 1000,
+        "xmux": {
+          "cMaxLifetimeMs": 0,
+          "cMaxReuseTimes": "36-96",
+          "maxConcurrency": 0,
+          "maxConnections": 8,
+          "hMaxRequestTimes": "320-640",
+          "hMaxReusableSecs": "720-1800"
+        }
+      }
+    },
+    {
+      "index": 14,
+      "transport": "xhttp",
+      "security": "tls",
+      "numeric_options": {
+        "xPaddingBytes": "96-1040",
+        "uplinkChunkSize": 4096,
+        "xPaddingObfsMode": true,
+        "scMaxEachPostBytes": 32768,
+        "scMinPostsIntervalMs": 15,
+        "serverMaxHeaderBytes": 3932160,
+        "scMaxBufferedPosts": 1000,
+        "xmux": {
+          "cMaxLifetimeMs": 0,
+          "cMaxReuseTimes": "36-96",
+          "maxConcurrency": 0,
+          "maxConnections": 8,
+          "hMaxRequestTimes": "320-640",
+          "hMaxReusableSecs": "720-1800"
+        }
+      }
+    },
+    {
+      "index": 15,
+      "transport": "xhttp",
+      "security": "tls",
+      "numeric_options": {
+        "xPaddingBytes": "96-1040",
+        "uplinkChunkSize": 4096,
+        "xPaddingObfsMode": true,
+        "scMaxEachPostBytes": 32768,
+        "scMinPostsIntervalMs": 15,
+        "serverMaxHeaderBytes": 3932160,
+        "scMaxBufferedPosts": 1000,
+        "xmux": {
+          "cMaxLifetimeMs": 0,
+          "cMaxReuseTimes": "36-96",
+          "maxConcurrency": 0,
+          "maxConnections": 8,
+          "hMaxRequestTimes": "320-640",
+          "hMaxReusableSecs": "720-1800"
+        }
+      }
+    },
+    {
+      "index": 16,
+      "transport": "xhttp",
+      "security": "tls",
+      "numeric_options": {
+        "xPaddingBytes": "96-1040",
+        "uplinkChunkSize": 4096,
+        "xPaddingObfsMode": true,
+        "scMaxEachPostBytes": 32768,
+        "scMinPostsIntervalMs": 15,
+        "serverMaxHeaderBytes": 3932160,
+        "scMaxBufferedPosts": 1000,
+        "xmux": {
+          "cMaxLifetimeMs": 0,
+          "cMaxReuseTimes": "36-96",
+          "maxConcurrency": 0,
+          "maxConnections": 8,
+          "hMaxRequestTimes": "320-640",
+          "hMaxReusableSecs": "720-1800"
+        }
+      }
+    },
+    {
+      "index": 17,
+      "transport": "xhttp",
+      "security": "tls",
+      "numeric_options": {
+        "xPaddingBytes": "96-1040",
+        "uplinkChunkSize": 4096,
+        "xPaddingObfsMode": true,
+        "scMaxEachPostBytes": 32768,
+        "scMinPostsIntervalMs": 15,
+        "serverMaxHeaderBytes": 3932160,
+        "scMaxBufferedPosts": 1000,
+        "xmux": {
+          "cMaxLifetimeMs": 0,
+          "cMaxReuseTimes": "36-96",
+          "maxConcurrency": 0,
+          "maxConnections": 8,
+          "hMaxRequestTimes": "320-640",
+          "hMaxReusableSecs": "720-1800"
+        }
+      }
+    }
+  ],
+  "filtered_uris": [
+    "vless://00000000-0000-4000-8000-000000000001@server1.example.invalid:443?encryption=none&fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-1",
+    "vless://00000000-0000-4000-8000-000000000002@server2.example.invalid:25192?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-2",
+    "vless://00000000-0000-4000-8000-000000000003@server3.example.invalid:25117?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-3",
+    "vless://00000000-0000-4000-8000-000000000004@server4.example.invalid:25617?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-4",
+    "vless://00000000-0000-4000-8000-000000000005@server5.example.invalid:25121?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-5",
+    "vless://00000000-0000-4000-8000-000000000006@server6.example.invalid:443?encryption=none&fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&mode=auto#Synthetic-6",
+    "vless://00000000-0000-4000-8000-000000000007@server7.example.invalid:25145?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-7",
+    "vless://00000000-0000-4000-8000-000000000008@server8.example.invalid:25901?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-8",
+    "vless://00000000-0000-4000-8000-000000000009@server9.example.invalid:25575?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-9",
+    "vless://00000000-0000-4000-8000-000000000010@server10.example.invalid:8443?encryption=none&fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&mode=auto#Synthetic-10",
+    "vless://00000000-0000-4000-8000-000000000011@server11.example.invalid:26277?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-11",
+    "vless://00000000-0000-4000-8000-000000000012@server12.example.invalid:25449?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-12",
+    "vless://00000000-0000-4000-8000-000000000013@server13.example.invalid:25113?fp=firefox&host=&path=%2Fsynthetic&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=0000000000000000&sni=front.example.invalid&spx=%2Fsynthetic&support-x25519mlkem768=true&type=xhttp&x_padding_bytes=100-1000&mode=auto#Synthetic-13",
+    "vless://00000000-0000-4000-8000-000000000014@server14.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%7D",
+    "vless://00000000-0000-4000-8000-000000000015@server15.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%7D",
+    "vless://00000000-0000-4000-8000-000000000016@server16.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%7D",
+    "vless://00000000-0000-4000-8000-000000000017@server17.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%7D",
+    "vless://00000000-0000-4000-8000-000000000018@server18.example.invalid:443?alpn=h2%2Chttp%2F1.1&encryption=none&fp=firefox&host=&path=%2Fsynthetic&security=tls&sni=front.example.invalid&type=xhttp&mode=packet-up&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%2236-96%22%2C%22maxConcurrency%22%3A0%2C%22maxConnections%22%3A8%2C%22hMaxRequestTimes%22%3A%22320-640%22%2C%22hMaxReusableSecs%22%3A%22720-1800%22%7D%2C%22xPaddingKey%22%3A%22synthetic%22%2C%22xPaddingBytes%22%3A%2296-1040%22%2C%22xPaddingHeader%22%3A%22synthetic%22%2C%22xPaddingMethod%22%3A%22synthetic%22%2C%22uplinkChunkSize%22%3A4096%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingPlacement%22%3A%22synthetic%22%2C%22scMaxEachPostBytes%22%3A32768%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22scMinPostsIntervalMs%22%3A15%2C%22uplinkDataKey%22%3A%22synthetic%22%7D"
+  ],
+  "full_json": "[{\"remarks\": \"Synthetic 1\", \"outbounds\": [{\"tag\": \"synthetic-1\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server1.example.invalid\", \"port\": 443, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000001\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 2\", \"outbounds\": [{\"tag\": \"synthetic-2\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server2.example.invalid\", \"port\": 25192, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000002\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 3\", \"outbounds\": [{\"tag\": \"synthetic-3\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server3.example.invalid\", \"port\": 25117, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000003\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 4\", \"outbounds\": [{\"tag\": \"synthetic-4\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server4.example.invalid\", \"port\": 25617, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000004\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 5\", \"outbounds\": [{\"tag\": \"synthetic-5\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server5.example.invalid\", \"port\": 25121, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000005\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 6\", \"outbounds\": [{\"tag\": \"synthetic-6\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server6.example.invalid\", \"port\": 443, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000006\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 7\", \"outbounds\": [{\"tag\": \"synthetic-7\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server7.example.invalid\", \"port\": 25145, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000007\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 8\", \"outbounds\": [{\"tag\": \"synthetic-8\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server8.example.invalid\", \"port\": 25901, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000008\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 9\", \"outbounds\": [{\"tag\": \"synthetic-9\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server9.example.invalid\", \"port\": 25575, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000009\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 10\", \"outbounds\": [{\"tag\": \"synthetic-10\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server10.example.invalid\", \"port\": 8443, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000010\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 11\", \"outbounds\": [{\"tag\": \"synthetic-11\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server11.example.invalid\", \"port\": 26277, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000011\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 12\", \"outbounds\": [{\"tag\": \"synthetic-12\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server12.example.invalid\", \"port\": 25449, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000012\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 13\", \"outbounds\": [{\"tag\": \"synthetic-13\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server13.example.invalid\", \"port\": 25113, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000013\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"reality\", \"xhttpSettings\": {\"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"auto\", \"xPaddingBytes\": \"100-1000\"}, \"realitySettings\": {\"serverName\": \"front.example.invalid\", \"fingerprint\": \"firefox\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"0000000000000000\", \"spiderX\": \"/synthetic\"}}}]}, {\"remarks\": \"Synthetic 14\", \"outbounds\": [{\"tag\": \"synthetic-14\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server14.example.invalid\", \"port\": 443, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000014\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"tls\", \"xhttpSettings\": {\"xmux\": {\"cMaxLifetimeMs\": 0, \"cMaxReuseTimes\": \"36-96\", \"maxConcurrency\": 0, \"maxConnections\": 8, \"hMaxRequestTimes\": \"320-640\", \"hMaxReusableSecs\": \"720-1800\"}, \"xPaddingKey\": \"synthetic\", \"xPaddingBytes\": \"96-1040\", \"xPaddingHeader\": \"synthetic\", \"xPaddingMethod\": \"synthetic\", \"uplinkChunkSize\": 4096, \"uplinkHTTPMethod\": \"GET\", \"xPaddingObfsMode\": true, \"xPaddingPlacement\": \"synthetic\", \"scMaxEachPostBytes\": 32768, \"uplinkDataPlacement\": \"header\", \"scMinPostsIntervalMs\": 15, \"uplinkDataKey\": \"synthetic\", \"serverMaxHeaderBytes\": 3932160, \"scMaxBufferedPosts\": 1000, \"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"packet-up\"}, \"tlsSettings\": {\"serverName\": \"front.example.invalid\", \"allowInsecure\": false, \"fingerprint\": \"firefox\", \"alpn\": [\"h2\", \"http/1.1\"]}}}]}, {\"remarks\": \"Synthetic 15\", \"outbounds\": [{\"tag\": \"synthetic-15\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server15.example.invalid\", \"port\": 443, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000015\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"tls\", \"xhttpSettings\": {\"xmux\": {\"cMaxLifetimeMs\": 0, \"cMaxReuseTimes\": \"36-96\", \"maxConcurrency\": 0, \"maxConnections\": 8, \"hMaxRequestTimes\": \"320-640\", \"hMaxReusableSecs\": \"720-1800\"}, \"xPaddingKey\": \"synthetic\", \"xPaddingBytes\": \"96-1040\", \"xPaddingHeader\": \"synthetic\", \"xPaddingMethod\": \"synthetic\", \"uplinkChunkSize\": 4096, \"uplinkHTTPMethod\": \"GET\", \"xPaddingObfsMode\": true, \"xPaddingPlacement\": \"synthetic\", \"scMaxEachPostBytes\": 32768, \"uplinkDataPlacement\": \"header\", \"scMinPostsIntervalMs\": 15, \"uplinkDataKey\": \"synthetic\", \"serverMaxHeaderBytes\": 3932160, \"scMaxBufferedPosts\": 1000, \"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"packet-up\"}, \"tlsSettings\": {\"serverName\": \"front.example.invalid\", \"allowInsecure\": false, \"fingerprint\": \"firefox\", \"alpn\": [\"h2\", \"http/1.1\"]}}}]}, {\"remarks\": \"Synthetic 16\", \"outbounds\": [{\"tag\": \"synthetic-16\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server16.example.invalid\", \"port\": 443, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000016\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"tls\", \"xhttpSettings\": {\"xmux\": {\"cMaxLifetimeMs\": 0, \"cMaxReuseTimes\": \"36-96\", \"maxConcurrency\": 0, \"maxConnections\": 8, \"hMaxRequestTimes\": \"320-640\", \"hMaxReusableSecs\": \"720-1800\"}, \"xPaddingKey\": \"synthetic\", \"xPaddingBytes\": \"96-1040\", \"xPaddingHeader\": \"synthetic\", \"xPaddingMethod\": \"synthetic\", \"uplinkChunkSize\": 4096, \"uplinkHTTPMethod\": \"GET\", \"xPaddingObfsMode\": true, \"xPaddingPlacement\": \"synthetic\", \"scMaxEachPostBytes\": 32768, \"uplinkDataPlacement\": \"header\", \"scMinPostsIntervalMs\": 15, \"uplinkDataKey\": \"synthetic\", \"serverMaxHeaderBytes\": 3932160, \"scMaxBufferedPosts\": 1000, \"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"packet-up\"}, \"tlsSettings\": {\"serverName\": \"front.example.invalid\", \"allowInsecure\": false, \"fingerprint\": \"firefox\", \"alpn\": [\"h2\", \"http/1.1\"]}}}]}, {\"remarks\": \"Synthetic 17\", \"outbounds\": [{\"tag\": \"synthetic-17\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server17.example.invalid\", \"port\": 443, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000017\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"tls\", \"xhttpSettings\": {\"xmux\": {\"cMaxLifetimeMs\": 0, \"cMaxReuseTimes\": \"36-96\", \"maxConcurrency\": 0, \"maxConnections\": 8, \"hMaxRequestTimes\": \"320-640\", \"hMaxReusableSecs\": \"720-1800\"}, \"xPaddingKey\": \"synthetic\", \"xPaddingBytes\": \"96-1040\", \"xPaddingHeader\": \"synthetic\", \"xPaddingMethod\": \"synthetic\", \"uplinkChunkSize\": 4096, \"uplinkHTTPMethod\": \"GET\", \"xPaddingObfsMode\": true, \"xPaddingPlacement\": \"synthetic\", \"scMaxEachPostBytes\": 32768, \"uplinkDataPlacement\": \"header\", \"scMinPostsIntervalMs\": 15, \"uplinkDataKey\": \"synthetic\", \"serverMaxHeaderBytes\": 3932160, \"scMaxBufferedPosts\": 1000, \"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"packet-up\"}, \"tlsSettings\": {\"serverName\": \"front.example.invalid\", \"allowInsecure\": false, \"fingerprint\": \"firefox\", \"alpn\": [\"h2\", \"http/1.1\"]}}}]}, {\"remarks\": \"Synthetic 18\", \"outbounds\": [{\"tag\": \"synthetic-18\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"server18.example.invalid\", \"port\": 443, \"users\": [{\"id\": \"00000000-0000-4000-8000-000000000018\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"tls\", \"xhttpSettings\": {\"xmux\": {\"cMaxLifetimeMs\": 0, \"cMaxReuseTimes\": \"36-96\", \"maxConcurrency\": 0, \"maxConnections\": 8, \"hMaxRequestTimes\": \"320-640\", \"hMaxReusableSecs\": \"720-1800\"}, \"xPaddingKey\": \"synthetic\", \"xPaddingBytes\": \"96-1040\", \"xPaddingHeader\": \"synthetic\", \"xPaddingMethod\": \"synthetic\", \"uplinkChunkSize\": 4096, \"uplinkHTTPMethod\": \"GET\", \"xPaddingObfsMode\": true, \"xPaddingPlacement\": \"synthetic\", \"scMaxEachPostBytes\": 32768, \"uplinkDataPlacement\": \"header\", \"scMinPostsIntervalMs\": 15, \"uplinkDataKey\": \"synthetic\", \"serverMaxHeaderBytes\": 3932160, \"scMaxBufferedPosts\": 1000, \"path\": \"/synthetic\", \"host\": \"\", \"mode\": \"packet-up\"}, \"tlsSettings\": {\"serverName\": \"front.example.invalid\", \"allowInsecure\": false, \"fingerprint\": \"firefox\", \"alpn\": [\"h2\", \"http/1.1\"]}}}]}]"
+}

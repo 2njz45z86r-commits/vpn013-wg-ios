@@ -312,15 +312,21 @@ private enum ProxyXHTTPOptions {
         // excessive requests rather than clamping them or allocating unbounded
         // padding, buffers or simultaneous connections in the VPN extension.
         let limits = ["xPaddingBytes": 65_536, "scMaxEachPostBytes": 4_194_304, "scMinPostsIntervalMs": 600_000,
-                      "scStreamUpServerSecs": 3_600, "uplinkChunkSize": 1_048_576, "sessionIDLength": 256,
-                      "scMaxBufferedPosts": 256, "serverMaxHeaderBytes": 65_536]
+                      "scStreamUpServerSecs": 3_600, "uplinkChunkSize": 1_048_576, "sessionIDLength": 256]
         func text(_ value: Any, maximum: Int = 1024) -> Bool {
             guard let value = value as? String else { return false }
             return value.utf8.count <= maximum && !value.contains { $0.isNewline || $0.asciiValue.map { $0 < 32 || $0 == 127 } == true }
         }
+        var result = input
         for (key, value) in input {
             if ranges.contains(key) { guard range(value) else { throw ProxyProfileError.invalid } }
             if numbers.contains(key) { guard integer(value) else { throw ProxyProfileError.invalid } }
+            // Pinned SDK v1.260728.0 uses these limits only in the server's
+            // splithttp/hub.go (upload queue and HTTP server). This app builds
+            // client outbounds only; do not apply server caps to client memory.
+            if key == "scMaxBufferedPosts" || key == "serverMaxHeaderBytes" {
+                result.removeValue(forKey: key)
+            }
             if let limit = limits[key], upper(value) > limit { throw ProxyProfileError.unsupported }
             if strings.contains(key) { guard text(value) else { throw ProxyProfileError.invalid } }
             if flags.contains(key) { guard let value = value as? NSNumber, CFGetTypeID(value) == CFBooleanGetTypeID() else { throw ProxyProfileError.invalid } }
@@ -329,17 +335,24 @@ private enum ProxyXHTTPOptions {
                       headers.allSatisfy({ text($0.key, maximum: 128) && !$0.key.isEmpty && $0.key.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) } && $0.key.lowercased() != "host" && text($0.value) }) else { throw ProxyProfileError.invalid }
             }
             if key == "xmux" {
-                guard let xmux = value as? [String: Any], Set(xmux.keys).isSubset(of: ["maxConcurrency", "maxConnections", "cMaxReuseTimes", "hMaxRequestTimes", "hMaxReusableSecs", "hKeepAlivePeriod"]),
+                guard var xmux = value as? [String: Any] else { throw ProxyProfileError.invalid }
+                // This historical field is absent from the pinned SDK's
+                // XmuxConfig. Only the inert legacy zero is recognized.
+                if let legacy = xmux.removeValue(forKey: "cMaxLifetimeMs") {
+                    guard let number = legacy as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+                          number.doubleValue == 0 else { throw ProxyProfileError.unsupported }
+                }
+                guard Set(xmux.keys).isSubset(of: ["maxConcurrency", "maxConnections", "cMaxReuseTimes", "hMaxRequestTimes", "hMaxReusableSecs", "hKeepAlivePeriod"]),
                       xmux.allSatisfy({ $0.key == "hKeepAlivePeriod" ? integer($0.value, signed: true) : range($0.value) }) else { throw ProxyProfileError.invalid }
                 let budgets = ["maxConcurrency": 1_024, "maxConnections": 64, "cMaxReuseTimes": 1_000_000, "hMaxRequestTimes": 1_000_000, "hMaxReusableSecs": 86_400, "hKeepAlivePeriod": 3_600]
                 guard xmux.allSatisfy({ upper($0.value) <= (budgets[$0.key] ?? 0) }) else { throw ProxyProfileError.unsupported }
+                result[key] = xmux
             }
         }
         if let post = input["scMaxEachPostBytes"] {
             let lower = (post as? NSNumber)?.intValue ?? Int((post as? String ?? "").split(separator: "-").first ?? "") ?? 0
             guard lower > 0 else { throw ProxyProfileError.invalid }
         }
-        var result = input
         if let raw = input["downloadSettings"] {
             guard var download = raw as? [String: Any],
                   Set(download.keys).isSubset(of: ["address", "port", "network", "security", "tlsSettings", "realitySettings", "xhttpSettings", "splithttpSettings"]),
