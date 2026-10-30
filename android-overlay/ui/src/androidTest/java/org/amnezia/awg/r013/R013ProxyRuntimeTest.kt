@@ -112,7 +112,16 @@ class R013ProxyRuntimeTest {
             registry.setAutomaticEnabled(true);Pair(unavailable,available)
         }
         UnifiedAutoCoordinator.connect(context,UnifiedAutoCoordinator.Candidate("HAPP",ids.first))
-        await(65_000) { ProxyVpnService.activeId==ids.second && UnifiedAutoCoordinator.confirmedAt!=null && !UnifiedAutoCoordinator.busy }
+        val observations = linkedSetOf<String>()
+        try {
+            await(65_000) {
+                val active = when (ProxyVpnService.activeId) { ids.first -> "unavailable"; ids.second -> "available"; null -> "none"; else -> "other" }
+                observations.add("active=$active confirmed=${UnifiedAutoCoordinator.confirmedAt != null} busy=${UnifiedAutoCoordinator.busy} status=${UnifiedAutoCoordinator.status}")
+                ProxyVpnService.activeId==ids.second && UnifiedAutoCoordinator.confirmedAt!=null && !UnifiedAutoCoordinator.busy
+            }
+        } catch (failure: AssertionError) {
+            throw AssertionError("Synthetic auto fallback states: " + observations.joinToString(" | "), failure)
+        }
         exchange()
         assertEquals(ids.second,ProxyVpnService.activeId)
         capture("proxy-auto-cross-section")
