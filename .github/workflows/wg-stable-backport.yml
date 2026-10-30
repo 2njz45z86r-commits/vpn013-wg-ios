@@ -1,0 +1,36 @@
+name: Validate stable WireGuard stack security backport
+on:
+  push:
+    branches: [wg-stable-backport-20261030]
+permissions:
+  contents: read
+jobs:
+  stable-wireguard-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: XTLS/Xray-core
+          ref: b26a91de4f3294e26a0ad0a970b81a386a41f789
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Install pinned official scanner
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+      - name: Build and test uninstalled security backport
+        run: python3 network-diagnostics/core_stable_backport.py
+      - name: Preserve only inspected candidate and summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stable-wireguard-core-backport
+          path: stable-core-results/*
+          if-no-files-found: ignore
+          retention-days: 2
