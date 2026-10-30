@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import urllib.request
 
 SOURCE = 'b26a91de4f3294e26a0ad0a970b81a386a41f789'
 ROOT = Path.cwd()
@@ -75,6 +76,23 @@ try:
                   binary_scan_clear=scan.returncode==0 and not symbols,
                   symbol_finding_events=len(symbols), module_finding_events=len(findings),
                   scanner_configuration=[x['config'] for x in scan_events if 'config' in x])
+    # Upstream test.yml explicitly restores these assets before tests; this
+    # source checkout contains no resources directory. Use the SAME supplier
+    # as upstream scheduled-assets-update.yml, but pin its commit and hashes.
+    report['phase'] = 'test-fixtures'
+    fixture_commit = '9d1e09bb4c4ac2c797fea3a5d4fa6cfb3f882398'
+    fixtures = {'geoip.dat':'fbf747a085be25eb61ecac8c27140b4ab0bf8181af6fdb104caa325bd93cf117',
+                'geosite.dat':'5b7f02a431429140545e3b7f5fe542e30e346e98e6802c60c7fdef094412f7a6'}
+    resource = TREE/'resources'
+    resource.mkdir(exist_ok=True)
+    for name,digest in fixtures.items():
+        url = 'https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/'+fixture_commit+'/'+name
+        with urllib.request.urlopen(url, timeout=30) as response:
+            data = response.read(32*1024*1024+1)
+        assert len(data)<=32*1024*1024 and hashlib.sha256(data).hexdigest()==digest
+        (resource/name).write_bytes(data)
+    report['test_only_fixture_source_commit'] = fixture_commit
+    report['test_only_fixture_sha256'] = fixtures
     report['phase'] = 'tests'
     test = subprocess.run(['go','test','-mod=readonly','-json','-timeout=120s',
                            './proxy/wireguard','./app/proxyman/command','./app/router',
@@ -84,6 +102,7 @@ try:
     report.update(test_exit_code=test.returncode, tests_passed=test.returncode==0,
                   passed_test_events=sum(x.get('Action')=='pass' and bool(x.get('Test')) for x in ts),
                   failed_test_events=sum(x.get('Action')=='fail' and bool(x.get('Test')) for x in ts),
+                  failed_test_names=[x['Test'] for x in ts if x.get('Action')=='fail' and x.get('Test')],
                   packages=[{'package':x['Package'],'outcome':x['Action']} for x in ts
                             if x.get('Package') and not x.get('Test') and x.get('Action') in ('pass','fail','skip')])
     assert set(run(['git','diff','--name-only']).stdout.splitlines()) <= {'go.mod','go.sum'}
