@@ -284,6 +284,29 @@ final class ProxyRoutingProfilesViewController: UITableViewController {
     }
 }
 
+private final class ProxyServerListCell: UITableViewCell {
+    var openConfiguration: (() -> Void)?
+    private let configuration = UIButton(type: .system)
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: .subtitle, reuseIdentifier: reuseIdentifier)
+        configuration.setImage(UIImage(systemName: "chevron.right"), for: .normal)
+        configuration.tintColor = VPN013Theme.secondaryText
+        configuration.accessibilityIdentifier = "vpn013.proxy.configuration"
+        configuration.frame.size = CGSize(width: 64, height: 44)
+        configuration.addTarget(self, action: #selector(openTapped), for: .touchUpInside)
+        accessoryView = configuration
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // The entire right strip opens details, including above/below its
+        // chevron. The globe and central row remain the connect target.
+        configuration.frame = CGRect(x: bounds.width - 64, y: 0, width: 64, height: bounds.height)
+    }
+    func configure(name: String) { configuration.accessibilityLabel = "Открыть конфигурацию: " + name }
+    @objc private func openTapped() { openConfiguration?() }
+}
+
 private final class ProxyConnectionPanel: UIView {
     var powerAction: (() -> Void)?
     var pingAction: (() -> Void)?
@@ -370,6 +393,7 @@ final class ProxyListViewController: UITableViewController {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
         super.viewDidLoad(); navigationItem.title = "VPN013"; view.backgroundColor = VPN013Theme.background
+        tableView.register(ProxyServerListCell.self, forCellReuseIdentifier: "vpn013.proxy.server-cell")
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") { navigationItem.prompt = "Тестовые данные · VPN не запускается" }
         #endif
@@ -520,7 +544,7 @@ final class ProxyListViewController: UITableViewController {
         rows.isEmpty ? "Добавьте свою ссылку VLESS, файл JSON Xray или совместимую подписку. Потяните список вниз, чтобы восстановить серверы сохранённых подписок." : "Нажмите сервер, чтобы подключиться и настроить маршрутизацию. Потяните список вниз для обновления сохранённых подписок. Личные конфигурации остаются отдельно."
     }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        let cell = rows.isEmpty ? UITableViewCell(style: .subtitle, reuseIdentifier: nil) : tableView.dequeueReusableCell(withIdentifier: "vpn013.proxy.server-cell", for: indexPath)
         cell.backgroundColor = VPN013Theme.background; cell.textLabel?.textColor = VPN013Theme.text; cell.detailTextLabel?.textColor = VPN013Theme.secondaryText
         cell.textLabel?.font = .preferredFont(forTextStyle: .headline); cell.textLabel?.adjustsFontForContentSizeCategory = true
         cell.textLabel?.numberOfLines = 0; cell.detailTextLabel?.numberOfLines = 0
@@ -529,17 +553,27 @@ final class ProxyListViewController: UITableViewController {
             let entry = rows[indexPath.row]; cell.textLabel?.text = entry.value.profile.name
             cell.detailTextLabel?.text = entry.value.profile.endpoint + "\n" + ProxyDetailViewController.statusText(entry.status)
             if let result = pingValues[entry.value.profile.host] { cell.detailTextLabel?.text?.append("\nПинг адреса: " + result.text) }
-            cell.imageView?.image = UIImage(systemName: entry.inOperation ? "power.circle.fill" : "network")
+            cell.imageView?.image = UIImage(systemName: "globe", withConfiguration: UIImage.SymbolConfiguration(pointSize: 28, weight: .regular))
+            if let serverCell = cell as? ProxyServerListCell {
+                serverCell.configure(name: entry.value.profile.name)
+                serverCell.openConfiguration = { [weak self] in
+                    guard let self = self, let current = self.rows.first(where: { $0.value.profile.id == entry.value.profile.id }) else { return }
+                    UserDefaults.standard.set(current.value.profile.id.uuidString, forKey: "vpn013.panel.profile." + self.kind.rawValue)
+                    self.refreshPanel(); self.navigationController?.pushViewController(ProxyDetailViewController(id: current.value.profile.id), animated: true)
+                }
+            }
+            cell.accessibilityHint = "Нажмите строку для подключения. Кнопка справа открывает конфигурацию."
         }
-        cell.imageView?.tintColor = VPN013Theme.accent; cell.accessoryType = .disclosureIndicator
+        cell.imageView?.tintColor = VPN013Theme.accent; cell.accessoryType = rows.isEmpty ? .disclosureIndicator : .none
         return cell
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
         if rows.isEmpty { importTapped() }
         else {
             let entry = rows[indexPath.row]
             UserDefaults.standard.set(entry.value.profile.id.uuidString, forKey: "vpn013.panel.profile." + kind.rawValue)
-            refreshPanel(); navigationController?.pushViewController(ProxyDetailViewController(id: entry.value.profile.id), animated: true)
+            refreshPanel(); manager.toggle(entry)
         }
     }
     override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {

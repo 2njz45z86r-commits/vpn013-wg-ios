@@ -1,5 +1,28 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testProxyRowConnectsAndOnlyRightStripOpensConfiguration() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
+        app.launch()
+        for kind in ["happ", "incy", "blacktemple"] {
+            let tab = app.tabBars.buttons["vpn013.kind." + kind]
+            XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+            app.buttons["vpn013.proxy.add"].tap(); app.buttons["vpn013.proxy.import.check"].tap()
+            XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5)); app.alerts.buttons["Добавить"].tap()
+            let row = app.tables.cells.containing(.staticText, identifier: "Demo server").firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 8)); row.staticTexts["Demo server"].tap()
+            // The simulator refuses a real VPN start. Its controlled start
+            // error distinguishes the connect action from opening details.
+            XCTAssertTrue(app.alerts["Действие не завершено"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["vpn013.proxy.power"].exists); app.alerts.buttons["Понятно"].tap()
+            let arrow = row.buttons["vpn013.proxy.configuration"]
+            XCTAssertGreaterThanOrEqual(arrow.frame.width, 44); XCTAssertGreaterThanOrEqual(arrow.frame.height, 44)
+            arrow.tap(); XCTAssertTrue(app.buttons["vpn013.proxy.power"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.alerts["Действие не завершено"].exists)
+            capture("row-" + kind + "-right-strip-opens-configuration")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+        }
+    }
     func testRoutingSelectsMultipleServersAndPreservesUnselected() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-routing-roster"]
@@ -829,7 +852,7 @@ final class AutoTunnelUITests:XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
         app.launch(); app.tabBars.buttons["vpn013.kind.incy"].tap(); app.buttons["vpn013.proxy.add"].tap()
         app.buttons["vpn013.proxy.import.check"].tap(); app.alerts.buttons["Добавить"].tap()
-        let row = app.tables.cells.staticTexts["Demo server"]; XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        let row = app.tables.cells.containing(.staticText, identifier: "Demo server").firstMatch; XCTAssertTrue(row.waitForExistence(timeout: 8)); row.buttons["vpn013.proxy.configuration"].tap()
         XCTAssertTrue(app.tables.cells.staticTexts["Маршрутизация"].waitForExistence(timeout: 5)); app.tables.cells.staticTexts["Маршрутизация"].tap()
         app.buttons["vpn013.proxy.routing.mode"].tap()
         app.buttons["Выбранное — напрямую"].tap()
@@ -903,8 +926,8 @@ final class AutoTunnelUITests:XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-proxy-connected-missing"]
         app.launch(); app.tabBars.buttons["vpn013.kind.happ"].tap(); app.buttons["vpn013.proxy.add"].tap()
         app.buttons["vpn013.proxy.import.check"].tap(); app.alerts.buttons["Добавить"].tap()
-        let row = app.tables.cells.staticTexts["Demo server"]
-        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        let row = app.tables.cells.containing(.staticText, identifier: "Demo server").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.buttons["vpn013.proxy.configuration"].tap()
         let endpoint = app.cells["vpn013.proxy.current-endpoint"]
         XCTAssertTrue(endpoint.waitForExistence(timeout: 8))
         let explanation = endpoint.staticTexts["VPN-расширение пока не вернуло текущий сервер"]
