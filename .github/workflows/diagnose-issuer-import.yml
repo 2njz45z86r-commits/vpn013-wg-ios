@@ -1,13 +1,13 @@
-name: Verify complete sanitized issuer roster
+name: Validate issuer roster and native iPhone client
 on:
   push:
-    branches: [ios-issuer-roster-20261030]
+    branches: [ios-issuer-macos-20261030]
 permissions:
   contents: read
 jobs:
   models:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    runs-on: macos-15-intel
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -26,11 +26,29 @@ jobs:
           /tmp/vpn013-alias | tee build/issuer-evidence/alias.txt
           swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift overlay/VPN013/ProxyRouting.swift tests/ProxyProfileTests.swift -o /tmp/vpn013-profiles
           /tmp/vpn013-profiles | tee build/issuer-evidence/profile.txt
-          sha256sum overlay/VPN013/ProxyProfile.swift tests/ProxyIssuerCompatibilityTests.swift diagnostics/issuer-fixtures.json > build/issuer-evidence/source-sha256.txt
+          shasum -a 256 overlay/VPN013/ProxyProfile.swift tests/ProxyIssuerCompatibilityTests.swift diagnostics/issuer-fixtures.json > build/issuer-evidence/source-sha256.txt
+      - name: Validate host models and compile native iPhone app without publishing
+        run: |
+          set -eu
+          sh scripts/check_proxy_models.sh
+          sh build-on-mac.sh
+          (
+          if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
+          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1 GOFLAGS=-mod=readonly
+          export CC="$(xcrun --sdk iphoneos --find clang)"
+          export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -miphoneos-version-min=14.0"
+          export CGO_LDFLAGS="$CGO_CFLAGS"
+          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo
+          )
+          sh inspect-on-mac.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: ios-issuer-roster-${{ github.run_id }}
-          path: build/issuer-evidence/
+          path: |
+            build/issuer-evidence/
+            build/review/*.json
+            build/review/*.png
+            build/review/flow/**/*.png
           if-no-files-found: error
           retention-days: 7
