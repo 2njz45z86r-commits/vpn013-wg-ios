@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-10-30T12:28:35.836724+00:00",
-  "source_sha256": "ff57ad1107b5c1e5a8a94ad20c9a4b4657b3ce506bc572cac87ae103cb3bd2d5",
+  "reviewed_at": "2026-10-30T13:40:21.406659+00:00",
+  "source_sha256": "de4672aca50214e771d741b5b1028015cabd4bfde76845845fbd712750e2618e",
   "scope_complete": true,
   "private_report_ref": "private:VPN013-iPhone172-20261030",
   "checks": [
@@ -176,5 +176,5 @@
       "evidence_ref": "private:VPN013-iPhone172-20261030#6.7"
     }
   ],
-  "source_commit_reviewed": "e4f7c0be6bf0867b97f7c1ee4fe1082e1d161f01"
+  "source_commit_reviewed": "99a53cce173762c3ad9e074f9d596124f5ad97ae"
 }
