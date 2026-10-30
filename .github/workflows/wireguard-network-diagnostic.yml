@@ -1,16 +1,22 @@
-name: Upstream core binary security diagnostic
+name: Runtime dependency patch diagnostic
 on:
   push:
     branches: [wg-netcheck-20261030]
 permissions:
   contents: read
 jobs:
-  binary-scan:
+  patched-core:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: XTLS/Xray-core
+          ref: 0afec66085a85191e9dd2a4a6646c7c9a94688d1
+          path: upstream
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
@@ -18,13 +24,13 @@ jobs:
           cache: false
       - name: Install pinned official vulnerability scanner
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-      - name: Inspect pinned public binaries without starting them
-        run: python3 network-diagnostics/core_security_diagnostic.py
-      - name: Preserve diagnostic statuses only
+      - name: Build and inspect uninstalled candidate
+        run: python3 network-diagnostics/core_patch_diagnostic.py
+      - name: Preserve diagnostic candidate and statuses
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: upstream-core-security-statuses
-          path: core-security-results/*.json
+          name: patched-runtime-diagnostic
+          path: core-patch-results/*
           if-no-files-found: ignore
           retention-days: 2
