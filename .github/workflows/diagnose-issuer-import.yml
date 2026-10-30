@@ -1,12 +1,12 @@
 name: Diagnose issuer XHTTP import aliases
 on:
   push:
-    branches: [ios-issuer-import-20261030]
+    branches: [ios-issuer-linux-20261030]
 permissions:
   contents: read
 jobs:
   models:
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -21,7 +21,8 @@ jobs:
           /tmp/vpn013-issuer-before --expect-current-rejection | tee build/issuer-evidence/before.txt
           swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift tests/ProxyIssuerCompatibilityTests.swift -o /tmp/vpn013-issuer-after
           /tmp/vpn013-issuer-after | tee build/issuer-evidence/after.txt
-          sh scripts/check_proxy_models.sh | tee build/issuer-evidence/model-suite.txt
+          swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift overlay/VPN013/ProxyRouting.swift tests/ProxyProfileTests.swift -o /tmp/vpn013-profiles
+          /tmp/vpn013-profiles | tee build/issuer-evidence/model-suite.txt
           shasum -a 256 overlay/VPN013/ProxyProfile.swift tests/ProxyIssuerCompatibilityTests.swift scripts/check_proxy_models.sh > build/issuer-evidence/source-sha256.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
