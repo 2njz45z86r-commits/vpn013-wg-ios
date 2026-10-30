@@ -23,3 +23,6 @@ xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/ProxyProfi
 "$target/store"
 xcrun swiftc -swift-version 5 "$root/overlay/VPN013/LocalStatistics.swift" "$root/overlay/VPN013/tests/LocalStatisticsTests.swift" -o "$target/local"
 "$target/local"
+
+xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/TrafficDisplay.swift" "$root/tests/TrafficDisplayTests.swift" -o "$target/traffic"
+"$target/traffic"

@@ -12,6 +12,7 @@ final class CrossProtocolObserver {
     private var manager: NETunnelProviderManager?
     #if targetEnvironment(simulator) && DEBUG
     private var fixtureStopped = false
+    private let fixtureStarted = ProcessInfo.processInfo.systemUptime
     private var fixture: Bool { ProcessInfo.processInfo.arguments.contains("--vpn013-test-cross-runtime") }
     #endif
     func start() {
@@ -23,8 +24,12 @@ final class CrossProtocolObserver {
     func refresh() {
         #if targetEnvironment(simulator) && DEBUG
         if fixture {
+            let trafficFixture = ProcessInfo.processInfo.arguments.contains("--vpn013-test-cross-traffic")
+            let elapsed = max(0, ProcessInfo.processInfo.systemUptime - fixtureStarted)
+            let received = trafficFixture ? UInt64(2_000_000_000) + UInt64(elapsed * 250_000) : nil
+            let sent = trafficFixture ? UInt64(1_250_000) + UInt64(elapsed * 62_500) : nil
             let runtime = CrossProtocolRuntime(schema: 1, kind: .happ, name: "Резервный профиль", endpoint: "reserve.example.invalid:443",
-                phase: "Тестовые данные · VPN не запускается", received: nil, sent: nil, handshake: nil,
+                phase: "Тестовые данные · VPN не запускается", received: received, sent: sent, handshake: nil,
                 automaticEnabled: true, trafficVerified: false)
             changed?(fixtureStopped ? nil : runtime, !fixtureStopped); return
         }
@@ -79,6 +84,7 @@ final class CrossProtocolObserver {
 }
 
 final class CrossProtocolStatusView: UIView {
+    private var trafficSampler = VPN013TrafficSampler()
     var stop: (() -> Void)?
     private let title = UILabel()
     private let detail = UILabel()
@@ -88,7 +94,7 @@ final class CrossProtocolStatusView: UIView {
         title.font = .preferredFont(forTextStyle: .headline); title.textColor = VPN013Theme.text
         detail.font = .preferredFont(forTextStyle: .footnote); detail.textColor = VPN013Theme.secondaryText
         for label in [title, detail] { label.numberOfLines = 0; label.adjustsFontForContentSizeCategory = true }
-        title.numberOfLines = 2; detail.numberOfLines = 5
+        title.numberOfLines = 2; detail.numberOfLines = 0
         title.accessibilityIdentifier = "vpn013.cross.kind"; detail.accessibilityIdentifier = "vpn013.cross.current"
         power.setTitle("Выключить VPN", for: .normal); power.tintColor = VPN013Theme.accent
         power.titleLabel?.font = .preferredFont(forTextStyle: .headline)
@@ -103,7 +109,7 @@ final class CrossProtocolStatusView: UIView {
     func preferredHeight(width: CGFloat) -> CGFloat {
         let size = CGSize(width: max(1, width - 28), height: .greatestFiniteMagnitude)
         let heading = min(title.sizeThatFits(size).height, title.font.lineHeight * 2)
-        let body = min(detail.sizeThatFits(size).height, detail.font.lineHeight * 5)
+        let body = detail.sizeThatFits(size).height
         let button = max(44, (power.titleLabel?.sizeThatFits(size).height ?? 20) + 12)
         return ceil(heading + body + button + 36)
     }
@@ -112,9 +118,14 @@ final class CrossProtocolStatusView: UIView {
         if let value = value {
             var lines = [value.name, value.automaticEnabled ? value.phase : "Авто выключено · текущая конфигурация"]
             if let endpoint = value.endpoint { lines.append(endpoint) }
-            if let rx = value.received, let tx = value.sent { lines.append("↓ \(rx) байт · ↑ \(tx) байт") }
+            let rate = trafficSampler.sample(identity: value.kind.rawValue + "|" + value.name + "|" + (value.endpoint ?? ""),
+                time: ProcessInfo.processInfo.systemUptime, received: value.received, sent: value.sent)
+            if value.received != nil || value.sent != nil {
+                lines.append("Скорость: ↓ " + VPN013TrafficDisplay.speed(rate?.received) + " · ↑ " + VPN013TrafficDisplay.speed(rate?.sent))
+                lines.append("Всего: ↓ " + VPN013TrafficDisplay.amount(value.received) + " · ↑ " + VPN013TrafficDisplay.amount(value.sent))
+            }
             detail.text = lines.joined(separator: "\n")
-        } else { detail.text = "VPN запущен, но расширение пока не подтвердило текущую конфигурацию." }
+        } else { trafficSampler.reset(); detail.text = "VPN запущен, но расширение пока не подтвердило текущую конфигурацию." }
     }
     @objc private func stopTapped() { stop?() }
 }

@@ -22,6 +22,7 @@ sources = {
     'ProxyAutomaticAdapter.swift': extensions,
     'ProxyProfilesManager.swift': [app],
     'UnifiedClientUI.swift': [app],
+    'TrafficDisplay.swift': [app],
     'ProxyImportUI.swift': [app],
     'SubscriptionRequest.swift': [app],
     'ProxySubscriptionDownload.swift': [app],

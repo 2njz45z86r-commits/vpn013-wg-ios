@@ -1,5 +1,20 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testTrafficSummaryUsesAdaptiveUnits() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-unified", "--vpn013-test-cross-runtime", "--vpn013-test-cross-traffic", "--vpn013-test-auto-reset"]
+        app.launch()
+        let current = app.staticTexts["vpn013.cross.current"]
+        XCTAssertTrue(current.waitForExistence(timeout: 20))
+        XCTAssertTrue(current.label.contains("2 ГБ"))
+        XCTAssertFalse(current.label.contains("2000000000"))
+        let measured = NSPredicate { _, _ in current.label.contains("Скорость: ↓ 2 Мбит/с") }
+        expectation(for: measured, evaluatedWith: current)
+        waitForExpectations(timeout: 12)
+        XCTAssertTrue(current.label.contains("Тестовые данные"))
+        capture("traffic-rounded-gigabytes-and-megabits-synthetic-no-vpn")
+    }
+
     func testSettingsReachableInEveryProxySectionAndPreserveImportText() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]

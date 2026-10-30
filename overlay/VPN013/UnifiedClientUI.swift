@@ -378,6 +378,8 @@ final class ProxyDetailViewController: UITableViewController {
     private var observer: NSObjectProtocol?
     private var timer: Timer?
     private var traffic: ProxyTraffic?
+    private var trafficSampler = VPN013TrafficSampler()
+    private var trafficRate: VPN013TrafficSampler.Rate?
     private var trafficInFlight = false
     private var trafficRequest = UUID()
     init(id: UUID) { self.id = id; super.init(style: .insetGrouped) }
@@ -408,13 +410,18 @@ final class ProxyDetailViewController: UITableViewController {
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.readTraffic() }; readTraffic()
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); timer?.invalidate(); timer = nil; invalidateTraffic() }
-    private func invalidateTraffic() { trafficRequest = UUID(); trafficInFlight = false; traffic = nil }
+    private func invalidateTraffic() { trafficRequest = UUID(); trafficInFlight = false; traffic = nil; trafficSampler.reset(); trafficRate = nil }
     private func readTraffic() {
         guard viewIfLoaded?.window != nil, !trafficInFlight, let entry = entry, entry.status == .connected else { return }
         let request = UUID(); trafficRequest = request; trafficInFlight = true
         manager.traffic(entry) { [weak self] value in
             guard let self = self, self.trafficRequest == request, self.entry?.status == .connected else { return }
-            self.trafficInFlight = false; self.traffic = value; self.tableView.reloadData()
+            self.trafficInFlight = false; self.traffic = value
+            self.trafficRate = self.trafficSampler.sample(identity: self.id.uuidString + "|" + (value?.selectedEndpoint ?? ""),
+                time: ProcessInfo.processInfo.systemUptime,
+                received: value.flatMap { $0.running && $0.rx >= 0 ? UInt64($0.rx) : nil },
+                sent: value.flatMap { $0.running && $0.tx >= 0 ? UInt64($0.tx) : nil })
+            self.tableView.reloadData()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self = self, self.trafficRequest == request, self.trafficInFlight else { return }
@@ -445,7 +452,8 @@ final class ProxyDetailViewController: UITableViewController {
         case 3:
             cell.textLabel?.text = "Трафик"
             if entry.status == .connected, let value = traffic, value.running {
-                cell.detailTextLabel?.text = "Получено: " + ByteCountFormatter.string(fromByteCount: max(0, value.rx), countStyle: .binary) + " · Отправлено: " + ByteCountFormatter.string(fromByteCount: max(0, value.tx), countStyle: .binary)
+                cell.detailTextLabel?.text = "Скорость: ↓ " + VPN013TrafficDisplay.speed(trafficRate?.received) + " · ↑ " + VPN013TrafficDisplay.speed(trafficRate?.sent) +
+                    "\nВсего: ↓ " + VPN013TrafficDisplay.amount(value.rx >= 0 ? UInt64(value.rx) : nil) + " · ↑ " + VPN013TrafficDisplay.amount(value.tx >= 0 ? UInt64(value.tx) : nil)
             } else { cell.detailTextLabel?.text = entry.status == .connected ? "Статистика пока недоступна" : "Появится после подключения" }
         default: cell.textLabel?.text = "Маршрутизация"; cell.detailTextLabel?.text = entry.value.routing.mode.title; cell.accessoryType = .disclosureIndicator
         }

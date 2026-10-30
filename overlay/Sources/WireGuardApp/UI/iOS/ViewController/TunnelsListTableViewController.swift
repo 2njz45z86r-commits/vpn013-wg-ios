@@ -89,6 +89,7 @@ class TunnelsListTableViewController: UIViewController {
     private var summaryObservations: [NSKeyValueObservation] = []
     private var automaticSummaryTimer: Timer?
     private var automaticSummaryRequestInFlight = false
+    private var summaryTrafficSampler = VPN013TrafficSampler()
     private var automaticSummaryRequestID = UUID()
     private var automaticSummaryTunnel: TunnelContainer?
     private var automaticSummaryName: String?
@@ -714,6 +715,7 @@ class TunnelsListTableViewController: UIViewController {
     private func clearCurrentConnectionInfo() {
         cancelCurrentPing()
         currentRuntimeStatistics = nil
+        summaryTrafficSampler.reset()
         currentPingTarget = nil
         currentPingLabel.text = "Пинг адреса · —"
         currentPingButton.isEnabled = false
@@ -739,6 +741,7 @@ class TunnelsListTableViewController: UIViewController {
 
     private func showCurrentStatsUnavailable(for tunnel: TunnelContainer, issue: VPN013SnapshotIssue? = nil) {
         currentRuntimeStatistics = nil
+        summaryTrafficSampler.reset()
         updateCurrentPingTarget(for: tunnel, runtime: nil)
         summaryEndpointLabel.isHidden = false
         summaryEndpointLabel.text = currentPingTarget.map { "Адрес профиля: " + $0.endpoints.joined(separator: ", ") }
@@ -801,12 +804,13 @@ class TunnelsListTableViewController: UIViewController {
             self.summaryEndpointLabel.text = snapshot.endpoints.isEmpty ? "Адрес сервера недоступен"
                 : "Сервер: " + snapshot.endpoints.joined(separator: ", ")
             self.summaryTrafficLabel.isHidden = false
-            func bytes(_ value: UInt64?) -> String {
-                guard let value = value, value <= UInt64(Int64.max) else { return "—" }
-                return ByteCountFormatter.string(fromByteCount: Int64(value), countStyle: .binary)
-            }
+            let rate = self.summaryTrafficSampler.sample(
+                identity: tunnel.name + "|" + String(snapshot.revision) + "|" + snapshot.endpoints.joined(separator: ","),
+                time: ProcessInfo.processInfo.systemUptime,
+                received: snapshot.statistics.received, sent: snapshot.statistics.sent)
             self.summaryTrafficLabel.text = snapshot.statistics.hasCounters
-                ? "↓ " + bytes(snapshot.statistics.received) + "  ·  ↑ " + bytes(snapshot.statistics.sent)
+                ? "Скорость: ↓ " + VPN013TrafficDisplay.speed(rate?.received) + " · ↑ " + VPN013TrafficDisplay.speed(rate?.sent) +
+                  "\nВсего: ↓ " + VPN013TrafficDisplay.amount(snapshot.statistics.received) + " · ↑ " + VPN013TrafficDisplay.amount(snapshot.statistics.sent)
                 : "VPN-движок пока не передал счётчики трафика"
             self.summaryTrafficLabel.accessibilityLabel = self.summaryTrafficLabel.text
             self.summaryHandshakeLabel.isHidden = snapshot.statistics.handshake == nil
