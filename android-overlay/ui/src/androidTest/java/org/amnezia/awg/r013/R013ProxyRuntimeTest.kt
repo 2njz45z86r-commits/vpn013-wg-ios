@@ -88,16 +88,28 @@ class R013ProxyRuntimeTest {
     @Test fun actualRealityTrafficInAllThreeProxySectionsAndCompleteStop() = runBlocking {
         val store=ProxyRegistry(registry.vault)
         for (section in ProxyProfile.Section.values()) {
+            var stage = "import"
+            try {
             val id=withContext(Dispatchers.IO) { store.importText(section,fixture.getString("uri")).single() }
+            stage = "start"
             ProxyVpnService.start(context,id)
             await { ProxyVpnService.activeId == id }
+            stage = "traffic"
             exchange()
             assertEquals(id,ProxyVpnService.activeId)
+            stage = "capture"
             capture("proxy-"+section.name.lowercase())
+            stage = "stop"
             withContext(Dispatchers.IO) { ProxyVpnService.stopAndWait() }
             assertNull(ProxyVpnService.activeId)
             assertNull(ProxyVpnService.statistics())
+            stage = "delete"
             withContext(Dispatchers.IO) { store.delete(id) }
+            } catch (failure: Throwable) {
+                // Keep only the synthetic stage and type in retained evidence.
+                // Do not copy URI, host, key, nonce or core output to the summary.
+                throw AssertionError("Synthetic proxy section=${section.name} stage=$stage exception=${failure.javaClass.simpleName}", failure)
+            }
         }
     }
     @Test fun automaticFailureFallsBackToAnotherSectionAndStopsBothEngines() = runBlocking {
