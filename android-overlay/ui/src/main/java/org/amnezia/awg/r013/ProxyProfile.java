@@ -127,7 +127,7 @@ public final class ProxyProfile {
     public static List<ProxyProfile> parseList(String input, Section section) {
         if(input==null || input.getBytes(StandardCharsets.UTF_8).length>8_388_608) throw invalid();
         String text=input.trim();
-        if(!text.regionMatches(true,0,"vless://",0,8)) {
+        if(!text.regionMatches(true,0,"vless://",0,8) && !rosterMetadata(text)) {
             try {
                 String compact=text.replaceAll("[\\r\\n\\t ]", "");
                 byte[] bytes;
@@ -142,12 +142,20 @@ public final class ProxyProfile {
         for(String row:text.split("\\R")) {
             if(row.isBlank()) continue;
             if(++rows>300) throw invalid();
+            if(rosterMetadata(row.trim())) {
+                if(row.length()>2048 || row.chars().anyMatch(c -> c<32 || c==127)) throw invalid();
+                continue;
+            }
             ProxyProfile profile=parse(row,section);
             profiles.putIfAbsent(row.trim(),profile);
             if(profiles.size()>100) throw invalid();
         }
         if(profiles.isEmpty()) throw invalid();
         return List.copyOf(profiles.values());
+    }
+    private static boolean rosterMetadata(String row) {
+        return row.startsWith("#profile-title:") || row.startsWith("#subscription-userinfo:") ||
+               row.startsWith("#support-url:") || row.startsWith("#profile-web-page-url:");
     }
     @Override public String toString() { return "ProxyProfile["+section+", private]"; }
 }
