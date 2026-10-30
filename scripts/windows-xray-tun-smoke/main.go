@@ -188,7 +188,7 @@ func run() error {
 	if !waitUntil(20*time.Second, func() bool { _, e := net.InterfaceByName(adapter); return e != nil }) {
 		return errors.New("test adapter persisted after process termination")
 	}
-	routeGone := fmt.Sprintf("$r = Get-NetRoute -DestinationPrefix '%s/32' -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceIndex -eq %d }; if ($r) { exit 1 }", target, iface.Index)
+	routeGone := fmt.Sprintf("$r = Get-NetRoute -DestinationPrefix '%s/32' -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceIndex -eq %d }; if ($r) { exit 1 } else { exit 0 }", target, iface.Index)
 	if !waitUntil(20*time.Second, func() bool {
 		cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", routeGone)
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
