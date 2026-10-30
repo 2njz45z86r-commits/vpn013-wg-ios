@@ -1,10 +1,10 @@
 """Reuse only completed native acceptance for byte-identical Android sources."""
 import hashlib,io,json,os,pathlib,subprocess,urllib.error,urllib.request,zipfile
-SOURCE="26ee14bc356d36c1529166f705e81a2b59849ca5"
-RUN=40971119658
-ARTIFACT=12941995578
-DIGEST="c0c05cf1a2247d9f28faf6b4321e1951f31a286778a60e4a7cba8cacd30b72bd"
-PINS={'android-overlay': 'd5559daaa83b9a3755c3117aad881a54619ff5c8', '.github/workflows/native-android-check.yml': '4ad1e05d4025ce53c0e61862d525ddcc355f289b', 'scripts/build-previous-android-fixture.sh': 'e93f56ac6a122e0c123315b07197abf6c7631a2f', 'scripts/build-future-android-fixture.sh': '86b24eeee5c3de2aa6e3f3a006151932884a6e74', 'scripts/check_go_security.py': '25526bede0c3d524ae4188bcc02254c14e67f0fb', 'scripts/audit-envelope.go': 'a010cb69c8dcf2207fe7a6847ede977c95b50058', 'scripts/audit-recipient.pub': '97046bff2fbe54b06b6c0d86417fae6d99fa6ed7'}
+SOURCE="a31258160390d41492ac892cf8a953bd1e5b337f"
+RUN=40984123161
+ARTIFACT=12946598588
+DIGEST="7b4fa33bd1d8aefa4a2b6e06b134cac9ed39a73f97d4b3720effc84f0013a7f0"
+PINS={'android-overlay': 'f5977732ac2113a69dc547ce49c0929d2044a6a1', '.github/workflows/native-android-check.yml': '4ad1e05d4025ce53c0e61862d525ddcc355f289b', 'scripts/build-previous-android-fixture.sh': 'e93f56ac6a122e0c123315b07197abf6c7631a2f', 'scripts/build-future-android-fixture.sh': '86b24eeee5c3de2aa6e3f3a006151932884a6e74', 'scripts/check_go_security.py': '25526bede0c3d524ae4188bcc02254c14e67f0fb', 'scripts/audit-envelope.go': 'a010cb69c8dcf2207fe7a6847ede977c95b50058', 'scripts/audit-recipient.pub': '97046bff2fbe54b06b6c0d86417fae6d99fa6ed7'}
 COUNTS={'upgrade-before':1,'upgrade-after':1,'update-install-preflight':2,'update-install-flow':1,'native-trial-flow':5,'instrumentation':16,'proxy-runtime':2,'russian-routing':1,'network-recovery':3,'font-scale':1,'tablet':1}
 
 def validate_review(files):
@@ -48,7 +48,7 @@ def main():
  def get(path):
   with urllib.request.urlopen(urllib.request.Request(base+path,headers=headers),timeout=30) as r:return json.load(r)
  run=get('/actions/runs/'+str(RUN));assert run['head_sha']==SOURCE and run['status']=='completed' and run['conclusion']=='success'
- jobs=get('/actions/runs/'+str(RUN)+'/jobs')['jobs'];j=next(j for j in jobs if j['id']==123788346991)
+ jobs=get('/actions/runs/'+str(RUN)+'/jobs')['jobs'];j=next(j for j in jobs if j['id']==123830984080)
  required={'Compile Android backend, UI and instrumented scenarios','Exercise disposable VPN, upgrades, native switch and device classes','Inspect reachable native Android dependencies'}
  assert required.issubset({s['name'] for s in j['steps']})
  assert j['conclusion']=='success' and all(s['conclusion']=='success' for s in j['steps'] if s['name'] in required)
