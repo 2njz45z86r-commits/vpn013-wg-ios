@@ -1,12 +1,19 @@
 name: Compile Android development source without publication
 on:
   workflow_call:
+    inputs:
+      focus_runtime:
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 jobs:
   native:
     runs-on: ubuntu-24.04
     timeout-minutes: 65
+    env:
+      R013_FOCUS_RUNTIME: ${{ inputs.focus_runtime && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -126,12 +133,14 @@ jobs:
                   # Only retain exception class and owned test line; no messages,
                   # input URLs, fixture credentials or network endpoint details.
                   for line in text.splitlines():
+                      diagnostic=re.search(r'comparison-state: member=(?:slow|fast|none|other) phase=[a-z_]+ index=-?\d+ auto=(?:true|false)', line)
+                      if diagnostic: selected.append(diagnostic.group(0))
                       exception=re.search(r'\b(?:java|javax|kotlin|android)[\w.$]*(?:Exception|Error)\b', line)
                       location=re.search(r'R013ProxyRuntimeTest\.kt:\d+', line)
                       if exception: selected.append('exception-class: '+exception.group(0))
                       if location: selected.append('test-location: '+location.group(0))
                   path.with_suffix(path.suffix+'.summary.json').write_text(json.dumps(selected[-80:]))
-          (base/'development-summary.json').write_text(json.dumps({'source':os.environ['GITHUB_SHA'],'emulatorOutcome':os.environ['EMULATOR_OUTCOME'],'physicalDeviceVerified':False,'published':False}))
+          (base/'development-summary.json').write_text(json.dumps({'source':os.environ['GITHUB_SHA'],'emulatorOutcome':os.environ['EMULATOR_OUTCOME'],'focusedDiagnostic':os.environ.get('R013_FOCUS_RUNTIME')=='true','physicalDeviceVerified':False,'published':False}))
           PY
           (cd android/output && zip -qr android-development-review.zip review -i '*.png' '*.json' '*.xml')
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -608,7 +608,18 @@ class R013InstrumentedTest {
         // Same production coordinator; invoke its due work directly so the
         // synthetic HTTPS health failure can't win before the comparison.
         compare.invoke(backend,auto,members,policy,epoch,0)
-        assertEquals("B Fast Fixture",backend.automaticMemberName)
+        val observed = backend.automaticMemberName
+        val memberState = when (observed) { "A Slow Fixture" -> "slow"; "B Fast Fixture" -> "fast"; null -> "none"; else -> "other" }
+        val summary = backend.connectionView().hourlySummary().orEmpty()
+        val phase = when {
+            summary.contains("выбран более быстрый") -> "selected"
+            summary.contains("смена VPN не завершена") -> "switch_failed"
+            summary.contains("недоступно") -> "unavailable"
+            summary.contains("сравниваем") -> "comparing"
+            summary.contains("сравнено") -> "measured_no_choice"
+            else -> "unchanged"
+        }
+        assertEquals("comparison-state: member=$memberState phase=$phase index=${policy.current()} auto=${backend.isAutomaticRunning}", "B Fast Fixture", observed)
         assertEquals(1,policy.current())
         assertTrue(backend.connectionView().hourlySummary()!!.contains("выбран более быстрый"))
         waitFor(20000) { EndpointPing.measure("10.13.99.1") != null }

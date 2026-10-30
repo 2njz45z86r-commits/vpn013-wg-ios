@@ -52,6 +52,12 @@ adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard
 for setting in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global "$setting" 0; done
 adb shell cmd uimode night yes
+if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
+  adb install -r -t ui/build/outputs/apk/debug/ui-debug.apk
+  adb install -r -t ui/build/outputs/apk/androidTest/debug/ui-debug-androidTest.apk
+  adb shell appops set com.vpn013.awg.debug ACTIVATE_VPN allow
+  adb shell pm grant com.vpn013.awg.debug android.permission.POST_NOTIFICATIONS
+else
 # First install the historical app, seed its real encrypted vault, then replace
 # it without uninstalling. Both APKs use the same ephemeral runner debug key.
 python3 - <<'PY_SIZE'
@@ -87,14 +93,40 @@ adb shell pm grant com.vpn013.awg.debug android.permission.POST_NOTIFICATIONS
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013NativeTrialTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/native-trial-flow.txt
 grep -E '^OK \(5 tests\)[[:space:]]*$' output/review/native-trial-flow.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/native-trial-flow.txt
+fi
 (cd tunnel/tools/libwg-go && go run ../../../r013-ci/peer.go) > "$RUNNER_TEMP/r013-peer.log" 2>&1 &
 peer_pid=$!
 # The EXIT trap preserves native failure evidence before emulator teardown.
 for i in $(seq 1 90); do test -s "$RUNNER_TEMP/r013-synthetic.conf" && break; sleep 2; done
 test -s "$RUNNER_TEMP/r013-synthetic.conf"
 test -s "$RUNNER_TEMP/r013-synthetic-candidate.conf"
+start_proxy_fixture() {
+(cd tunnel/tools/libwg-go && go build -o "$RUNNER_TEMP/r013-proxy-peer" ../../../r013-ci/proxy-peer.go)
+"$RUNNER_TEMP/r013-proxy-peer" > "$RUNNER_TEMP/r013-proxy-peer.log" 2>&1 &
+proxy_pid=$!
+for i in $(seq 1 30); do test -s "$RUNNER_TEMP/r013-proxy-fixture.json" && break; sleep 1; done
+test -s "$RUNNER_TEMP/r013-proxy-fixture.json"
+proxy_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-proxy-fixture.json")
+}
 fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic.conf")
 candidate_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic-candidate.conf")
+if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
+  # Diagnostic scope is exactly one real coordinator case and both proxy
+  # runtime cases. It is never a complete acceptance result or release input.
+  adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest#jRealCoordinatorChoosesFasterPeerWithActualPolicyAndUnchangedProfiles -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/focused-coordinator.txt
+  coordinator_ok=false
+  if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/focused-coordinator.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/focused-coordinator.txt; then coordinator_ok=true; fi
+  sudo ip address add 198.18.0.1/32 dev lo
+  control_alias_added=yes
+  start_proxy_fixture
+  adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013ProxyRuntimeTest -e proxyFixture "$proxy_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/proxy-runtime.txt
+  proxy_ok=false
+  if grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/proxy-runtime.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/proxy-runtime.txt; then proxy_ok=true; fi
+  unset proxy_fixture fixture candidate_fixture
+  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedProxyCases":2,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
+  test "$coordinator_ok" = true && test "$proxy_ok" = true
+  exit $?
+fi
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
 grep -E '^OK \(16 tests\)[[:space:]]*$' output/review/instrumentation.txt
 grep -F 'test=bSubscriptionRefreshRestoresDeletedAndReconcilesTenTwentyFifteen' output/review/instrumentation.txt
@@ -115,12 +147,7 @@ grep -E '^OK \(1 test\)[[:space:]]*$' output/review/russian-routing.txt
 # Verify the real Android TUN/native Xray path with an isolated ephemeral REALITY
 # server. Its only private destination is the nonce HTTP echo; public TCP443 and
 # Cloudflare DNS are used solely by the application's unchanged HTTPS204 health.
-(cd tunnel/tools/libwg-go && go build -o "$RUNNER_TEMP/r013-proxy-peer" ../../../r013-ci/proxy-peer.go)
-"$RUNNER_TEMP/r013-proxy-peer" > "$RUNNER_TEMP/r013-proxy-peer.log" 2>&1 &
-proxy_pid=$!
-for i in $(seq 1 30); do test -s "$RUNNER_TEMP/r013-proxy-fixture.json" && break; sleep 1; done
-test -s "$RUNNER_TEMP/r013-proxy-fixture.json"
-proxy_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-proxy-fixture.json")
+start_proxy_fixture
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013ProxyRuntimeTest -e proxyFixture "$proxy_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/proxy-runtime.txt
 grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/proxy-runtime.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/proxy-runtime.txt

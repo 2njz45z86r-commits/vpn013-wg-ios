@@ -1,0 +1,13 @@
+name: Android focused runtime diagnosis without release
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/android-focused-runtime-diagnostic.yml'
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    uses: ./.github/workflows/native-android-check.yml
+    with:
+      focus_runtime: true
