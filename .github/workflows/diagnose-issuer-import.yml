@@ -1,0 +1,32 @@
+name: Diagnose issuer XHTTP import aliases
+on:
+  push:
+    branches: [ios-issuer-import-20261030]
+permissions:
+  contents: read
+jobs:
+  models:
+    runs-on: macos-15
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Reproduce old failures and verify corrected typed imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/issuer-evidence
+          swiftc -parse-as-library -swift-version 5 diagnostics/issuer-before.swift tests/ProxyIssuerCompatibilityTests.swift -o /tmp/vpn013-issuer-before
+          /tmp/vpn013-issuer-before --expect-current-rejection | tee build/issuer-evidence/before.txt
+          swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift tests/ProxyIssuerCompatibilityTests.swift -o /tmp/vpn013-issuer-after
+          /tmp/vpn013-issuer-after | tee build/issuer-evidence/after.txt
+          sh scripts/check_proxy_models.sh | tee build/issuer-evidence/model-suite.txt
+          shasum -a 256 overlay/VPN013/ProxyProfile.swift tests/ProxyIssuerCompatibilityTests.swift scripts/check_proxy_models.sh > build/issuer-evidence/source-sha256.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ios-issuer-import-${{ github.run_id }}
+          path: build/issuer-evidence/
+          if-no-files-found: error
+          retention-days: 7

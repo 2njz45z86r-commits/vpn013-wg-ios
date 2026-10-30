@@ -7,6 +7,8 @@ target=$(mktemp -d "${TMPDIR:-/tmp}/vpn013-models.XXXXXXXX")
 trap 'rm -rf "$target"' EXIT HUP INT TERM
 xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/ProxyProfile.swift" "$root/overlay/VPN013/ProxyRouting.swift" "$root/tests/ProxyProfileTests.swift" -o "$target/profiles"
 "$target/profiles"
+xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/ProxyProfile.swift" "$root/tests/ProxyIssuerCompatibilityTests.swift" -o "$target/issuer"
+"$target/issuer"
 xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/AutomaticMode.swift" "$root/tests/AutomaticModeTests.swift" -o "$target/automatic"
 "$target/automatic"
 xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/CrossProtocolSelection.swift" "$root/overlay/VPN013/CrossProtocolCoordinator.swift" "$root/tests/CrossProtocolTests.swift" -o "$target/cross-protocol"

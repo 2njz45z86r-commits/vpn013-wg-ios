@@ -146,8 +146,33 @@ struct ProxyProfile: Codable, Equatable {
                       let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ProxyProfileError.invalid }
                 extra = object
             }
+            // Issuers may repeat these transport fields inside `extra`. Move
+            // them into the typed model, accepting only an identical alias.
+            // Unknown extras still pass through the strict option validator.
+            for field in ["mode", "path", "host"] {
+                if let supplied = extra[field] {
+                    guard let text = supplied as? String,
+                          query[field] == nil || query[field] == text else { throw ProxyProfileError.invalid }
+                    switch field {
+                    case "mode": value.mode = text
+                    case "path": value.path = text
+                    default: value.httpHost = text
+                    }
+                    extra.removeValue(forKey: field)
+                }
+            }
             if let padding = query["x_padding_bytes"] {
-                guard extra["xPaddingBytes"] == nil else { throw ProxyProfileError.invalid }; extra["xPaddingBytes"] = padding
+                if let existing = extra["xPaddingBytes"] {
+                    let sameText = (existing as? String) == padding
+                    let number = existing as? NSNumber
+                    let sameInteger = number.map {
+                        CFGetTypeID($0) != CFBooleanGetTypeID() && $0.doubleValue.isFinite &&
+                        $0.doubleValue >= 0 && $0.doubleValue <= 65_536 &&
+                        $0.doubleValue.rounded(.towardZero) == $0.doubleValue && String($0.intValue) == padding
+                    } ?? false
+                    guard sameText || sameInteger else { throw ProxyProfileError.invalid }
+                }
+                extra["xPaddingBytes"] = padding
             }
             value.xhttpOptions = try ProxyXHTTPOptions.canonical(extra, source: source)
         }
