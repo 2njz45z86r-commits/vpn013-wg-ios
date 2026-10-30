@@ -12,6 +12,9 @@ class SettingsTableViewController: UITableViewController {
         case exportZipArchive
         case viewLog
         case inviteFriend
+        case routing
+        case refreshConfigurations
+        case updateApplication
 
         var localizedUIString: String {
             switch self {
@@ -20,22 +23,29 @@ class SettingsTableViewController: UITableViewController {
             case .exportZipArchive: return tr("settingsExportZipButtonTitle")
             case .viewLog: return tr("settingsViewLogButtonTitle")
             case .inviteFriend: return "Пригласить друга"
+            case .routing: return "Маршрутизация"
+            case .refreshConfigurations: return "Обновить конфигурации"
+            case .updateApplication: return "Проверить обновление приложения"
             }
         }
     }
 
     let settingsFieldsBySection: [[SettingsFields]] = [
-        [.iosAppVersion, .goBackendVersion],
+        [.iosAppVersion, .goBackendVersion, .updateApplication],
+        [.routing, .refreshConfigurations],
         [.exportZipArchive],
         [.viewLog],
         [.inviteFriend]
     ]
 
     let tunnelsManager: TunnelsManager?
+    private let connectionKind: VPN013ConnectionKind?
+    private var refreshingConfigurations = false
     var wireguardCaptionedImage: (view: UIView, size: CGSize)?
 
-    init(tunnelsManager: TunnelsManager?) {
+    init(tunnelsManager: TunnelsManager?, connectionKind: VPN013ConnectionKind? = nil) {
         self.tunnelsManager = tunnelsManager
+        self.connectionKind = connectionKind
         super.init(style: .grouped)
     }
 
@@ -49,6 +59,7 @@ class SettingsTableViewController: UITableViewController {
         tableView.backgroundColor = VPN013Theme.background
         title = tr("settingsViewTitle")
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
+        navigationItem.rightBarButtonItem?.accessibilityIdentifier = "vpn013.settings.done"
 
         tableView.estimatedRowHeight = 44
         tableView.rowHeight = UITableView.automaticDimension
@@ -123,6 +134,37 @@ class SettingsTableViewController: UITableViewController {
         navigationController?.pushViewController(logVC, animated: true)
 
     }
+
+    private func showUpdateMessage(_ text: String) {
+        let alert = UIAlertController(title: "Обновление конфигураций", message: text, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Понятно", style: .default)); present(alert, animated: true)
+    }
+
+    private func refreshConfigurations() {
+        guard !refreshingConfigurations, !ClientUpdateCoordinator.shared.busy, !ProxyProfilesManager.shared.working else { return }
+        if let kind = connectionKind, kind != .amneziawg {
+            refreshingConfigurations = true; tableView.reloadData()
+            ProxyProfilesManager.shared.refreshSubscriptions(kind) { [weak self] error in
+                guard let self = self else { return }
+                self.refreshingConfigurations = false; self.tableView.reloadData()
+                let known = error is ProxyProfileError || error is ProxyOperationError || error is ProxySubscriptionError || error is CrossProtocolError
+                self.showUpdateMessage(error.map { known ? $0.localizedDescription : ProxyOperationError.system.localizedDescription } ??
+                    "Проверка подписок завершена. Отдельные ключи и файлы без ссылки на обновление сохранены; для них нужен свежий исходный файл.")
+            }
+        } else if let manager = tunnelsManager {
+            ClientUpdateCoordinator.shared.presenter = self
+            ClientUpdateCoordinator.shared.check(manager: manager, manual: true)
+        } else { showUpdateMessage("Менеджер конфигураций ещё загружается. Повторите после его загрузки.") }
+    }
+
+    private func checkApplicationUpdate() {
+        guard !refreshingConfigurations, !ProxyProfilesManager.shared.working else { showUpdateMessage("Дождитесь завершения текущего обновления."); return }
+        guard let manager = tunnelsManager else { showUpdateMessage("Менеджер конфигураций ещё загружается. Повторите после его загрузки."); return }
+        let controller = ClientUpdatesViewController(manager: manager)
+        navigationController?.pushViewController(controller, animated: true)
+        ClientUpdateCoordinator.shared.presenter = controller
+        ClientUpdateCoordinator.shared.check(manager: manager, manual: false)
+    }
 }
 
 extension SettingsTableViewController {
@@ -139,8 +181,10 @@ extension SettingsTableViewController {
         case 0:
             return tr("settingsSectionTitleAbout")
         case 1:
-            return tr("settingsSectionTitleExportConfigurations")
+            return "Конфигурации"
         case 2:
+            return tr("settingsSectionTitleExportConfigurations")
+        case 3:
             return tr("settingsSectionTitleTunnelLog")
         default:
             return nil
@@ -163,6 +207,21 @@ extension SettingsTableViewController {
 //            else if field == .goBackendVersion {
 //                cell.value = WIREGUARD_GO_VERSION
 //            }
+            return cell
+        } else if field == .routing || field == .refreshConfigurations || field == .updateApplication {
+            let cell: ButtonCell = tableView.dequeueReusableCell(for: indexPath)
+            cell.buttonText = field == .refreshConfigurations && refreshingConfigurations ? "Проверяем…" : field.localizedUIString
+            cell.button.accessibilityIdentifier = field == .routing ? "vpn013.settings.routing" : field == .refreshConfigurations ? "vpn013.settings.refresh-configurations" : "vpn013.settings.update-app"
+            // ButtonCell is also reused by journal/export rows. Keep it enabled;
+            // the operation guard above rejects repeated refresh taps.
+            cell.button.isEnabled = true
+            cell.onTapped = { [weak self] in
+                guard let self = self else { return }
+                if field == .routing {
+                    self.navigationController?.pushViewController(ProxyRoutingProfilesViewController(kind: self.connectionKind == .amneziawg ? nil : self.connectionKind), animated: true)
+                } else if field == .refreshConfigurations { self.refreshConfigurations() }
+                else { self.checkApplicationUpdate() }
+            }
             return cell
         } else if field == .exportZipArchive {
             let cell: ButtonCell = tableView.dequeueReusableCell(for: indexPath)

@@ -1,13 +1,13 @@
 name: Validate issuer roster and native iPhone client
 on:
   push:
-    branches: [ios-issuer-macos-20261030]
+    branches: [ios-settings-native-20261030]
 permissions:
   contents: read
 jobs:
   models:
     runs-on: macos-15-intel
-    timeout-minutes: 40
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -27,10 +27,14 @@ jobs:
           swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift overlay/VPN013/ProxyRouting.swift tests/ProxyProfileTests.swift -o /tmp/vpn013-profiles
           /tmp/vpn013-profiles | tee build/issuer-evidence/profile.txt
           shasum -a 256 overlay/VPN013/ProxyProfile.swift tests/ProxyIssuerCompatibilityTests.swift diagnostics/issuer-fixtures.json > build/issuer-evidence/source-sha256.txt
-      - name: Validate host models and compile native iPhone app without publishing
+      - name: Parse changed UIKit sources and validate host models
         run: |
           set -eu
+          swiftc -frontend -parse overlay/VPN013/UnifiedClientUI.swift overlay/VPN013/ProxyImportUI.swift overlay/Sources/WireGuardApp/UI/iOS/ViewController/SettingsTableViewController.swift overlay/VPN013/UITests.swift
           sh scripts/check_proxy_models.sh
+      - name: Compile native iPhone app without publishing
+        run: |
+          set -eu
           sh build-on-mac.sh
           (
           if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
@@ -40,7 +44,10 @@ jobs:
           export CGO_LDFLAGS="$CGO_CFLAGS"
           python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo
           )
-          sh inspect-on-mac.sh
+      - name: Run actual iPhone simulator scenarios including global settings and retained import text
+        env:
+          VPN013_IPHONE_ONLY: '1'
+        run: sh inspect-on-mac.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

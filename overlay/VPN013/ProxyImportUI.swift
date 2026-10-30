@@ -26,6 +26,9 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
     }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Добавить · " + kind.title; view.backgroundColor = VPN013Theme.background
+        let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(openSettings))
+        settings.accessibilityLabel = "Настройки"; settings.accessibilityIdentifier = "vpn013.settings"
+        navigationItem.rightBarButtonItem = settings
         let explanation = UILabel(); explanation.text = "Вставьте ключ или ссылку подписки. VPN013 определит формат."
         explanation.numberOfLines = 0; explanation.font = .preferredFont(forTextStyle: .body); explanation.adjustsFontForContentSizeCategory = true; explanation.textColor = VPN013Theme.secondaryText
         input.font = .preferredFont(forTextStyle: .body); input.adjustsFontForContentSizeCategory = true
@@ -183,7 +186,8 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
                 else { ProxyProfilesManager.shared.add(values, completion: done) }
             }); alert.addAction(UIAlertAction(title: "Отмена", style: .cancel)); present(alert, animated: true)
     }
-    private func busy(_ value: Bool) { isBusy = value; submit.isEnabled = !value; qr.isEnabled = !value; paste.isEnabled = !value; file.isEnabled = !value; input.isEditable = !value; value ? progress.startAnimating() : progress.stopAnimating() }
+    @objc private func openSettings() { guard !isBusy else { return }; VPN013SettingsPresentation.show(from: self, kind: kind) }
+    private func busy(_ value: Bool) { isBusy = value; navigationItem.rightBarButtonItem?.isEnabled = !value; submit.isEnabled = !value; qr.isEnabled = !value; paste.isEnabled = !value; file.isEnabled = !value; input.isEditable = !value; value ? progress.startAnimating() : progress.stopAnimating() }
     private func show(_ error: Error) {
         let alert = UIAlertController(title: "Не удалось добавить", message: error.localizedDescription, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Понятно", style: .default)); present(alert, animated: true)

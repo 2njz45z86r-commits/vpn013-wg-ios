@@ -1,5 +1,32 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testSettingsReachableInEveryProxySectionAndPreserveImportText() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
+        app.launch()
+        for kind in ["happ", "incy", "blacktemple"] {
+            let tab = app.tabBars.buttons["vpn013.kind." + kind]
+            XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+            let settings = app.buttons["vpn013.settings"]
+            XCTAssertTrue(settings.waitForExistence(timeout: 8)); settings.tap()
+            XCTAssertTrue(app.buttons["vpn013.settings.routing"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["vpn013.settings.refresh-configurations"].exists)
+            XCTAssertTrue(app.buttons["vpn013.settings.update-app"].exists)
+            XCTAssertTrue(app.buttons["vpn013.view-log"].exists)
+            capture("settings-" + kind + "-routing-refresh-journal")
+            app.buttons["vpn013.settings.done"].tap()
+            app.buttons["vpn013.proxy.add"].tap()
+            let input = app.textViews["vpn013.proxy.import.text"]
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            let original = input.value as? String
+            XCTAssertFalse(original?.isEmpty ?? true)
+            app.buttons["vpn013.settings"].tap()
+            XCTAssertTrue(app.buttons["vpn013.settings.done"].waitForExistence(timeout: 5))
+            app.buttons["vpn013.settings.done"].tap()
+            XCTAssertEqual(input.value as? String, original)
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+        }
+    }
     func testSharedOwnerProxyZIPSelectsIncyAndPreviewsProfile() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-owner-proxy-zip"]

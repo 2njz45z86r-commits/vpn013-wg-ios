@@ -17,6 +17,7 @@ private func proxyError(_ error: Error, from controller: UIViewController) {
 /// Native top-level sections. Changing a tab never starts/stops a connection.
 final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerDelegate {
     private let awg: MainViewController
+    var settingsTunnelsManager: TunnelsManager? { awg.tunnelsManager }
     private let profiles = ProxyProfilesManager.shared
     private let kinds = VPN013ConnectionKind.allCases
     private var automaticObserver: NSObjectProtocol?
@@ -200,6 +201,51 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
 }
 extension Notification.Name { static let vpn013ProxyChanged = Notification.Name("VPN013ProxyChanged") }
 
+enum VPN013SettingsPresentation {
+    static func show(from controller: UIViewController, kind: VPN013ConnectionKind?) {
+        let unified = (controller.tabBarController as? VPN013UnifiedViewController) ??
+            (controller.view.window?.rootViewController as? VPN013UnifiedViewController)
+        let settings = SettingsTableViewController(tunnelsManager: unified?.settingsTunnelsManager, connectionKind: kind)
+        let navigation = UINavigationController(rootViewController: settings)
+        navigation.modalPresentationStyle = .formSheet
+        controller.present(navigation, animated: true)
+    }
+}
+
+/// Chooses an existing profile; opening settings never changes its routing.
+final class ProxyRoutingProfilesViewController: UITableViewController {
+    private let kind: VPN013ConnectionKind?
+    private var entries: [ProxyProfilesManager.Entry] {
+        ProxyProfilesManager.shared.entries.filter { kind == nil || $0.value.profile.source == kind }
+    }
+    init(kind: VPN013ConnectionKind?) { self.kind = kind; super.init(style: .insetGrouped) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Маршрутизация"
+        tableView.backgroundColor = VPN013Theme.background
+    }
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); tableView.reloadData() }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { max(1, entries.count) }
+    override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        "Выберите конфигурацию Happ, INCY или BlackTemple. Открытие списка не изменяет маршруты."
+    }
+    override func tableView(_ tableView: UITableView, cellForRowAt path: IndexPath) -> UITableViewCell {
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.backgroundColor = VPN013Theme.surface; cell.textLabel?.textColor = VPN013Theme.text
+        cell.textLabel?.numberOfLines = 0; cell.detailTextLabel?.textColor = VPN013Theme.secondaryText
+        guard !entries.isEmpty else { cell.textLabel?.text = "Сначала добавьте конфигурацию"; cell.selectionStyle = .none; return cell }
+        let entry = entries[path.row]
+        cell.textLabel?.text = entry.value.profile.name; cell.detailTextLabel?.text = entry.value.profile.source.title
+        cell.accessoryType = .disclosureIndicator
+        return cell
+    }
+    override func tableView(_ tableView: UITableView, didSelectRowAt path: IndexPath) {
+        tableView.deselectRow(at: path, animated: true)
+        guard entries.indices.contains(path.row) else { return }
+        navigationController?.pushViewController(ProxyRoutingViewController(entry: entries[path.row]), animated: true)
+    }
+}
+
 final class ProxyListViewController: UITableViewController {
     private let kind: VPN013ConnectionKind
     private let manager = ProxyProfilesManager.shared
@@ -220,10 +266,9 @@ final class ProxyListViewController: UITableViewController {
         let invite = UIBarButtonItem(image: UIImage(systemName: "person.badge.plus"), style: .plain, target: self, action: #selector(inviteFriend))
         invite.accessibilityLabel = "Пригласить друга"; invite.accessibilityIdentifier = "vpn013.invite"
         navigationItem.rightBarButtonItems = [add, invite]
-        let avatar = UIImageView(image: UIImage(named: "VPN013Avatar")); avatar.contentMode = .scaleAspectFit
-        NSLayoutConstraint.activate([avatar.widthAnchor.constraint(equalToConstant: 32), avatar.heightAnchor.constraint(equalToConstant: 32)])
-        avatar.isAccessibilityElement = true; avatar.accessibilityLabel = "VPN013"
-        navigationItem.leftBarButtonItems = [UIBarButtonItem(customView: avatar), UIBarButtonItem(customView: automaticHeader)]
+        let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(openSettings))
+        settings.accessibilityLabel = "Настройки"; settings.accessibilityIdentifier = "vpn013.settings"
+        navigationItem.leftBarButtonItems = [settings, UIBarButtonItem(customView: automaticHeader)]
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-subscription-roster") {
             navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Проверить подписки", style: .plain, target: self, action: #selector(testSubscriptionRoster))
@@ -249,6 +294,7 @@ final class ProxyListViewController: UITableViewController {
         }
     }
     @objc private func importTapped() { navigationController?.pushViewController(ProxyImportViewController(kind: kind), animated: true) }
+    @objc private func openSettings() { VPN013SettingsPresentation.show(from: self, kind: kind) }
     @objc private func inviteFriend() { navigationController?.pushViewController(InvitationViewController(), animated: true) }
     #if targetEnvironment(simulator) && DEBUG
     @objc private func testSubscriptionRoster() {
@@ -348,11 +394,15 @@ final class ProxyDetailViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad(); view.backgroundColor = VPN013Theme.background
         tableView.backgroundColor = VPN013Theme.background; tableView.separatorColor = VPN013Theme.separator
+        let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(openSettings))
+        settings.accessibilityLabel = "Настройки"; settings.accessibilityIdentifier = "vpn013.settings"
+        navigationItem.rightBarButtonItem = settings
         observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in
             guard let self = self else { return }; self.invalidateTraffic(); self.tableView.reloadData(); self.readTraffic()
         }
     }
     deinit { if let token = observer { NotificationCenter.default.removeObserver(token) }; timer?.invalidate() }
+    @objc private func openSettings() { VPN013SettingsPresentation.show(from: self, kind: entry?.value.profile.source) }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated); title = entry?.value.profile.name ?? "Подключение"
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.readTraffic() }; readTraffic()
