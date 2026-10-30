@@ -8,7 +8,7 @@ run = os.environ['GITHUB_RUN_ID']
 verification = json.loads(Path('build/review/bundle-verification.json').read_text())
 ipa = Path('build/VPN013AWG-unsigned.ipa')
 summary = json.loads(Path('build/review/test-summary.json').read_text())
-assert ipa.is_file() and summary.get('result') == 'Passed' and summary.get('failedTests') == 0 and summary.get('passedTests') == 45 and summary.get('totalTestCount') == 45 and summary.get('skippedTests', 0) == 0 and summary.get('testFailures') == [], 'Do not publish failed, incomplete or unverified native tests'
+assert ipa.is_file() and summary.get('result') == 'Passed' and summary.get('failedTests') == 0 and summary.get('passedTests') == 46 and summary.get('totalTestCount') == 46 and summary.get('skippedTests', 0) == 0 and summary.get('testFailures') == [], 'Do not publish failed, incomplete or unverified native tests'
 assert verification.get('appID') == 'com.vpn013.awg' and verification.get('extensionID') == 'com.vpn013.awg.network-extension'
 assert verification.get('adHocIntegrityChecked') is True and verification.get('customerKeysIncluded') is False
 with zipfile.ZipFile(ipa) as archive:
@@ -23,7 +23,7 @@ Path('build', public_name).write_bytes(ipa.read_bytes())
 value = dict(schema=1,app='vpn013-wg',platform='ios',version=verification['version'],build=int(info['CFBundleVersion']),
     downloadURL=f'https://github.com/{repository}/releases/download/unsigned-{run}/{public_name}',
     sha256=hashlib.sha256(ipa.read_bytes()).hexdigest(),
-    notes='VPN013 1.7.4: панель подключения, статистики и пинга в Happ, INCY и BlackTemple; сокращённые единицы скорости по реальным счётчикам. Обновления доступны в настройках; лишняя кнопка в AmneziaWG убрана. Совместимость импорта INCY/XHTTP и ZIP сохранена. Существующие профили сохраняются при ошибке импорта. Для установки на iPhone требуется подпись владельца. Проверки на симуляторе не подтверждают VPN-трафик на физическом устройстве.')
+    notes='VPN013 1.7.5: выбор нескольких серверов для общих правил маршрутизации; панель подключения, статистики и пинга в Happ, INCY и BlackTemple; сокращённые единицы скорости по реальным счётчикам. Обновления доступны в настройках; лишняя кнопка в AmneziaWG убрана. Совместимость импорта INCY/XHTTP и ZIP сохранена. Существующие профили сохраняются при ошибке импорта. Для установки на iPhone требуется подпись владельца. Проверки на симуляторе не подтверждают VPN-трафик на физическом устройстве.')
 manifest = json.dumps(value,ensure_ascii=False,indent=2)+'\n'
 Path('build/client-release.json').write_text(manifest,encoding='utf-8')
 if '--prepare-only' in sys.argv:

@@ -63,6 +63,9 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         #if targetEnvironment(simulator) && DEBUG
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified") {
             input.text = "vless://00000000-0000-4000-8000-000000000001@demo.example.invalid:443?type=ws&security=tls&sni=demo.example.invalid&path=%2Fvpn#Demo%20server"
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-routing-roster") {
+                input.text = (1...3).map { index in "vless://00000000-0000-4000-8000-000000000001@node\(index).example.invalid:443?type=ws&security=tls&sni=node\(index).example.invalid&path=%2Fvpn#Server%20\(index)" }.joined(separator: "\n")
+            }
             if ProcessInfo.processInfo.arguments.contains("--vpn013-test-unified-json"), let prototype = try? ProxyProfile.fromURI(input.text, source: kind) {
                 do {
                 let profiles = (0..<4).map { index -> ProxyProfile in var value = prototype; value.id = UUID(); value.host = "node\(index).example.invalid"; value.name = "Country \(index)"; return value }

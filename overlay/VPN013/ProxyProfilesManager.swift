@@ -3,7 +3,7 @@ import Foundation
 import NetworkExtension
 
 enum ProxyOperationError: LocalizedError {
-    case busy, stopFirst, unreadable, switching, system, automaticLimit
+    case busy, stopFirst, unreadable, switching, system, automaticLimit, routingPartial
     var errorDescription: String? {
         switch self {
         case .busy: return "Дождитесь завершения текущего действия."
@@ -12,6 +12,7 @@ enum ProxyOperationError: LocalizedError {
         case .switching: return "Предыдущее подключение не отключилось. Проверьте раздел VPN в настройках iPhone."
         case .system: return "iOS не завершила действие с VPN. Повторите попытку и разрешите добавление VPN в системном окне."
         case .automaticLimit: return "Для Авто доступно до 30 серверов в одном разделе. Выключите Авто для ручного подключения при большем списке."
+        case .routingPartial: return "Не все изменения маршрутизации удалось отменить. Проверьте настройки выбранных серверов и повторите сохранение."
         }
     }
 }
@@ -232,21 +233,59 @@ final class ProxyProfilesManager {
         }
     }
     func update(_ entry: Entry, routing: ProxyRoutingPolicy, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
-        if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.update(entry, routing: routing, sourcePrepared: true, completion: $0) }; return }
+        update([entry], routing: routing, sourcePrepared: sourcePrepared, completion: completion)
+    }
+    /// Only selected, unchanged, inactive owned profiles may be edited. Nothing
+    /// starts/stops a tunnel. Preference saves are not an OS transaction: if a
+    /// save fails, restore every attempted profile and surface rollback failure.
+    func update(_ selected: [Entry], routing: ProxyRoutingPolicy, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
         guard !working else { completion(ProxyOperationError.busy); return }
-        guard !entry.inOperation else { completion(ProxyOperationError.stopFirst); return }
-        var value = entry.value; value.routing = routing
-        let old = entry.manager.protocolConfiguration as? NETunnelProviderProtocol
+        guard !selected.isEmpty, selected.count <= 512,
+              Set(selected.map { $0.value.profile.id }).count == selected.count else { completion(ProxyOperationError.unreadable); return }
+        var current = [Entry]()
         do {
-            entry.manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old)
+            try routing.validate()
+            for snapshot in selected {
+                guard let entry = entries.first(where: { $0.value.profile.id == snapshot.value.profile.id }), entry.value == snapshot.value else { throw ProxyOperationError.unreadable }
+                guard !entry.inOperation else { throw ProxyOperationError.stopFirst }
+                guard entry.manager.protocolConfiguration is NETunnelProviderProtocol else { throw ProxyOperationError.unreadable }
+                var value = entry.value; value.routing = routing; try value.validate()
+                current.append(entry)
+            }
         } catch { completion(error); return }
+        if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.update(selected, routing: routing, sourcePrepared: true, completion: $0) }; return }
         working = true
-        persist(entry.manager) { error in
-            self.working = false
-            if error != nil { entry.manager.protocolConfiguration = old }
-            if error == nil, let index = self.entries.firstIndex(where: { $0.value.profile.id == value.profile.id }) { self.entries[index].value = value }
-            self.changed?(); completion(error)
+        var attempted = [(Entry, NETunnelProviderProtocol)]()
+        func finish(_ error: Error?) { self.working = false; self.changed?(); completion(error) }
+        func rollback(_ original: Error) {
+            var failed = false
+            func next() {
+                guard let (entry, old) = attempted.popLast() else {
+                    if failed { finish(ProxyOperationError.routingPartial); self.reload() } else { finish(original) }; return
+                }
+                guard !entry.inOperation else { failed = true; next(); return }
+                entry.manager.protocolConfiguration = old
+                self.persist(entry.manager) { error in if error != nil { failed = true }; next() }
+            }
+            next()
         }
+        var offset = 0
+        func saveNext() {
+            guard offset < current.count else {
+                for entry in current {
+                    if let index = self.entries.firstIndex(where: { $0.value.profile.id == entry.value.profile.id }) { self.entries[index].value.routing = routing }
+                }
+                finish(nil); return
+            }
+            let entry = current[offset]; offset += 1
+            guard !entry.inOperation, let old = (entry.manager.protocolConfiguration?.copy() as? NETunnelProviderProtocol) else { rollback(ProxyOperationError.stopFirst); return }
+            var value = entry.value; value.routing = routing
+            do { entry.manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old) }
+            catch { rollback(error); return }
+            attempted.append((entry, old))
+            self.persist(entry.manager) { error in if let error = error { rollback(error) } else { saveNext() } }
+        }
+        saveNext()
     }
     func remove(_ entry: Entry, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
         if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.remove(entry, sourcePrepared: true, completion: $0) }; return }

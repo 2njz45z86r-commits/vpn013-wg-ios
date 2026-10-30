@@ -212,9 +212,13 @@ enum VPN013SettingsPresentation {
     }
 }
 
-/// Chooses an existing profile; opening settings never changes its routing.
+/// Selection is local to this screen; only explicit Save in the next screen
+/// changes the selected profiles. Opening the picker never applies a rule.
 final class ProxyRoutingProfilesViewController: UITableViewController {
     private let kind: VPN013ConnectionKind?
+    private var selected = Set<UUID>()
+    private let selectAll = UIButton(type: .system)
+    private var nextButton: UIBarButtonItem!
     private var entries: [ProxyProfilesManager.Entry] {
         ProxyProfilesManager.shared.entries.filter { kind == nil || $0.value.profile.source == kind }
     }
@@ -223,11 +227,39 @@ final class ProxyRoutingProfilesViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Маршрутизация"
         tableView.backgroundColor = VPN013Theme.background
+        nextButton = UIBarButtonItem(title: "Далее", style: .done, target: self, action: #selector(nextTapped))
+        nextButton.accessibilityIdentifier = "vpn013.routing.next"; navigationItem.rightBarButtonItem = nextButton
+        let header = UIView(); selectAll.translatesAutoresizingMaskIntoConstraints = false; header.addSubview(selectAll)
+        selectAll.tintColor = VPN013Theme.accent; tableView.tintColor = VPN013Theme.accent
+        selectAll.titleLabel?.font = .preferredFont(forTextStyle: .headline); selectAll.titleLabel?.adjustsFontForContentSizeCategory = true
+        selectAll.titleLabel?.numberOfLines = 0; selectAll.contentHorizontalAlignment = .leading
+        selectAll.accessibilityIdentifier = "vpn013.routing.select-all"; selectAll.addTarget(self, action: #selector(selectAllTapped), for: .touchUpInside)
+        NSLayoutConstraint.activate([selectAll.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 20), selectAll.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -20), selectAll.topAnchor.constraint(equalTo: header.topAnchor, constant: 12), selectAll.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12), selectAll.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)])
+        tableView.tableHeaderView = header; refreshSelection()
     }
-    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); tableView.reloadData() }
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); selected.formIntersection(entries.map { $0.value.profile.id }); refreshSelection(); tableView.reloadData() }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews(); guard let header = tableView.tableHeaderView else { return }
+        let height = header.systemLayoutSizeFitting(CGSize(width: tableView.bounds.width, height: UIView.layoutFittingCompressedSize.height), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
+        if abs(header.frame.height - height) > 0.5 { header.frame.size = CGSize(width: tableView.bounds.width, height: height); tableView.tableHeaderView = header }
+    }
+    private func refreshSelection() {
+        selectAll.setTitle(!entries.isEmpty && selected.count == entries.count ? "Снять выбор" : "Выбрать все", for: .normal)
+        selectAll.isEnabled = !entries.isEmpty; nextButton.isEnabled = !selected.isEmpty
+        nextButton.title = selected.isEmpty ? "Далее" : "Далее (\(selected.count))"
+        navigationItem.prompt = (kind?.title ?? "Серверы") + " · Выбрано: \(selected.count)"
+    }
+    @objc private func selectAllTapped() {
+        selected = !entries.isEmpty && selected.count == entries.count ? [] : Set(entries.map { $0.value.profile.id })
+        refreshSelection(); tableView.reloadData()
+    }
+    @objc private func nextTapped() {
+        let targets = entries.filter { selected.contains($0.value.profile.id) }; guard !targets.isEmpty else { return }
+        navigationController?.pushViewController(ProxyRoutingViewController(entries: targets), animated: true)
+    }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { max(1, entries.count) }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        "Выберите конфигурацию Happ, INCY или BlackTemple. Открытие списка не изменяет маршруты."
+        "Отметьте нужные серверы и нажмите «Далее». Один набор правил применяется только к выбранным серверам после сохранения. Пока ничего не выбрано, маршруты остаются прежними."
     }
     override func tableView(_ tableView: UITableView, cellForRowAt path: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
@@ -236,13 +268,19 @@ final class ProxyRoutingProfilesViewController: UITableViewController {
         guard !entries.isEmpty else { cell.textLabel?.text = "Сначала добавьте конфигурацию"; cell.selectionStyle = .none; return cell }
         let entry = entries[path.row]
         cell.textLabel?.text = entry.value.profile.name; cell.detailTextLabel?.text = entry.value.profile.source.title
-        cell.accessoryType = .disclosureIndicator
+        let checked = selected.contains(entry.value.profile.id)
+        cell.accessoryType = checked ? .checkmark : .none
+        cell.accessibilityIdentifier = "vpn013.routing.server." + entry.value.profile.id.uuidString
+        cell.accessibilityValue = checked ? "Выбран" : "Не выбран"
+        if checked { cell.accessibilityTraits.insert(.selected) }
         return cell
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt path: IndexPath) {
         tableView.deselectRow(at: path, animated: true)
         guard entries.indices.contains(path.row) else { return }
-        navigationController?.pushViewController(ProxyRoutingViewController(entry: entries[path.row]), animated: true)
+        let id = entries[path.row].value.profile.id
+        if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
+        refreshSelection(); tableView.reloadRows(at: [path], with: .none)
     }
 }
 
@@ -608,15 +646,19 @@ final class ProxyDetailViewController: UITableViewController {
 }
 
 final class ProxyRoutingViewController: UIViewController {
-    private let entry: ProxyProfilesManager.Entry
+    private let entries: [ProxyProfilesManager.Entry]
+    private var entry: ProxyProfilesManager.Entry { entries[0] }
     private let modes = UIButton(type: .system)
     private var selectedMode: ProxyRoutingPolicy.Mode
     private let domains = UITextView(); private let networks = UITextView()
-    init(entry: ProxyProfilesManager.Entry) { self.entry = entry; selectedMode = entry.value.routing.mode; super.init(nibName: nil, bundle: nil) }
+    convenience init(entry: ProxyProfilesManager.Entry) { self.init(entries: [entry]) }
+    init(entries: [ProxyProfilesManager.Entry]) { precondition(!entries.isEmpty); self.entries = entries; selectedMode = entries[0].value.routing.mode; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Маршрутизация"; view.backgroundColor = VPN013Theme.background
+        if entries.count > 1 { navigationItem.prompt = "Один набор правил для серверов: \(entries.count)" }
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Сохранить", style: .done, target: self, action: #selector(save))
+        navigationItem.rightBarButtonItem?.accessibilityIdentifier = "vpn013.proxy.routing.save"
         updateModes()
         modes.showsMenuAsPrimaryAction = true; modes.contentHorizontalAlignment = .leading
         modes.titleLabel?.font = .preferredFont(forTextStyle: .headline); modes.titleLabel?.adjustsFontForContentSizeCategory = true; modes.titleLabel?.numberOfLines = 0
@@ -642,7 +684,7 @@ final class ProxyRoutingViewController: UIViewController {
         do {
             let policy = ProxyRoutingPolicy(mode: selectedMode, domains: try lines(domains.text).map(ProxyRoutingPolicy.domain), networks: lines(networks.text))
             try policy.validate()
-            ProxyProfilesManager.shared.update(entry, routing: policy) { [weak self] error in
+            ProxyProfilesManager.shared.update(entries, routing: policy) { [weak self] error in
                 guard let self = self else { return }
                 if let error = error { proxyError(error, from: self) } else { self.navigationController?.popViewController(animated: true) }
             }

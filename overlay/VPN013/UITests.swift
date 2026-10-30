@@ -1,5 +1,42 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testRoutingSelectsMultipleServersAndPreservesUnselected() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-routing-roster"]
+        app.launch()
+        for kind in ["happ", "incy", "blacktemple"] {
+            let tab = app.tabBars.buttons["vpn013.kind." + kind]
+            XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+            app.buttons["vpn013.proxy.add"].tap(); app.buttons["vpn013.proxy.import.check"].tap()
+            XCTAssertTrue(app.alerts["Серверов: 3"].waitForExistence(timeout: 5)); app.alerts.buttons["Добавить"].tap()
+            app.buttons["vpn013.settings"].tap(); app.buttons["vpn013.settings.routing"].tap()
+            let next = app.buttons["vpn013.routing.next"]
+            let all = app.buttons["vpn013.routing.select-all"]
+            XCTAssertTrue(next.waitForExistence(timeout: 5)); XCTAssertFalse(next.isEnabled)
+            let cells = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.routing.server."))
+            XCTAssertEqual(cells.count, 3)
+            all.tap(); XCTAssertEqual(next.label, "Далее (3)")
+            all.tap(); XCTAssertFalse(next.isEnabled)
+            cells.element(boundBy: 0).tap(); cells.element(boundBy: 1).tap()
+            XCTAssertEqual(next.label, "Далее (2)"); capture("routing-" + kind + "-two-selected-of-three")
+            next.tap(); app.buttons["vpn013.proxy.routing.mode"].tap(); app.buttons["Выбранное — напрямую"].tap()
+            let networks = app.textViews["IP-сети"]
+            for _ in 0..<5 { if networks.isHittable { break }; app.scrollViews.firstMatch.swipeUp() }
+            networks.tap(); networks.typeText("192.0.2.0/24")
+            app.buttons["vpn013.proxy.routing.save"].tap()
+            XCTAssertTrue(next.waitForExistence(timeout: 8))
+            for index in 0..<3 {
+                if all.label == "Снять выбор" { all.tap() } else { all.tap(); all.tap() }
+                cells.element(boundBy: index).tap(); next.tap()
+                let expected = index < 2 ? "Выбранное — напрямую" : "Весь трафик через VPN"
+                XCTAssertEqual(app.buttons["vpn013.proxy.routing.mode"].value as? String, expected)
+                XCTAssertEqual(app.textViews["IP-сети"].value as? String, index < 2 ? "192.0.2.0/24" : "")
+                app.navigationBars.buttons.element(boundBy: 0).tap()
+            }
+            capture("routing-" + kind + "-unselected-profile-unchanged")
+            app.navigationBars.buttons.element(boundBy: 0).tap(); app.buttons["vpn013.settings.done"].tap()
+        }
+    }
     private func openUpdatesFromSettings(_ app: XCUIApplication) {
         XCTAssertFalse(app.buttons["vpn013.updates"].exists, "AmneziaWG updates belong in Settings")
         let settings = app.buttons["vpn013.settings"]
