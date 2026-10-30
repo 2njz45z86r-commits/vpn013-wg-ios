@@ -44,6 +44,7 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeRussianIPRouteObjectsPreserveVPNAndPeers \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedSectionsImportAndIsolation \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testInvitationReachableFromEveryProxySectionWithoutSharingProfiles \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSettingsReachableInEveryProxySectionAndPreserveImportText \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedInvalidImportKeepsProfiles \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedRoutingPersistsTypedPolicy \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutomaticModeDefaultSharedAndPersistent \
@@ -74,7 +75,7 @@ if [ "$result" -eq 0 ]; then
 import json
 from pathlib import Path
 s=json.loads(Path('build/review/test-summary.json').read_text())
-assert s['result']=='Passed' and s['passedTests']==42 and s['failedTests']==0 and s['skippedTests']==0,s
+assert s['result']=='Passed' and s['passedTests']==43 and s['failedTests']==0 and s['skippedTests']==0,s
 PY
 fi
 # Keep failure screenshots with a PNG extension; never publish UI hierarchy text.
@@ -94,7 +95,7 @@ from pathlib import Path
 flow=Path('build/review/flow')
 images=[p for p in flow.glob('*.png') if p.read_bytes()[:8]==b'\x89PNG\r\n\x1a\n']
 assert images, 'Real XCUITest attachments are required'
-Path('build/review/iphone-only-scope.json').write_text(json.dumps({'iPhoneNativeSuite':42,'renderedEvidence':'actual XCUITest attachments','attachmentImages':len(images),'physicalIPhoneTested':False,'iPadTested':False,'standaloneCapturesAccepted':False}))
+Path('build/review/iphone-only-scope.json').write_text(json.dumps({'iPhoneNativeSuite':43,'renderedEvidence':'actual XCUITest attachments','attachmentImages':len(images),'physicalIPhoneTested':False,'iPadTested':False,'standaloneCapturesAccepted':False}))
 PY
 fi
 test "$result" -eq 0

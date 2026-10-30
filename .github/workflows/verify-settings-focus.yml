@@ -1,0 +1,52 @@
+name: Verify new iPhone settings case without repeating accepted regression suite
+on:
+  push:
+    branches: [ios-settings-focus-20261031]
+permissions:
+  contents: read
+jobs:
+  settings:
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile the identical app and extension for the focused native case
+        run: sh build-on-mac.sh
+      - name: Execute the added settings case and preserve its real screenshots
+        env:
+          VPN013_IPHONE_ONLY: '1'
+        run: |
+          set -eu
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          source=Path('inspect-on-mac.sh').read_text()
+          lines=re.findall(r'(?m)^ -only-testing:[^\n]+\n',source)
+          assert len(lines)==43
+          case='testSettingsReachableInEveryProxySectionAndPreserveImportText'
+          assert sum(case in line for line in lines)==1
+          focused=re.sub(r'(?m)^ -only-testing:[^\n]+\n',lambda match:match.group(0) if case in match.group(0) else '',source)
+          assert focused.count('-only-testing:')==1
+          focused=focused.replace("s['passedTests']==43","s['passedTests']==1")
+          focused=focused.replace("'iPhoneNativeSuite':43","'iPhoneNativeSuite':1,'focusedCase':'"+case+"','previousRegressionRun':41125942311")
+          Path('inspect-settings-only-on-mac.sh').write_text(focused)
+          PY
+          sh inspect-settings-only-on-mac.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('build/simulator-test.log').read_text(errors='replace')
+          assert 'testSettingsReachableInEveryProxySectionAndPreserveImportText' in text
+          assert any('testSettingsReachableInEveryProxySectionAndPreserveImportText' in line and ']\' passed' in line for line in text.splitlines())
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ios-settings-focused-${{ github.run_id }}
+          path: |
+            build/review/*.json
+            build/review/flow/*.png
+            build/review/flow/manifest.json
+          if-no-files-found: error
+          retention-days: 7
