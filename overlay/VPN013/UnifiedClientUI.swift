@@ -308,6 +308,11 @@ private final class ProxyServerListCell: UITableViewCell {
 }
 
 private final class ProxyConnectionPanel: UIView {
+    struct Presentation {
+        let name, status, detail, routing: String
+        let statistics: String?
+        let on, powerEnabled, pingEnabled, checkingPing: Bool
+    }
     var powerAction: (() -> Void)?
     var pingAction: (() -> Void)?
     private let name = proxyLabel("Нет конфигураций", style: .title1)
@@ -353,14 +358,14 @@ private final class ProxyConnectionPanel: UIView {
         NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20), stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20), stack.topAnchor.constraint(equalTo: topAnchor, constant: 12), stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -20)])
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func update(name title: String, status state: String, detail text: String, routing policy: String, statistics traffic: String?, on: Bool, powerEnabled: Bool, pingEnabled: Bool, checkingPing: Bool) {
-        name.text = title; status.text = state; detail.text = text; routing.text = policy
-        statistics.text = traffic; statistics.isHidden = traffic == nil
-        power.tintColor = on ? VPN013Theme.accent : VPN013Theme.secondaryText; power.isEnabled = powerEnabled
-        power.accessibilityLabel = on ? "Отключить VPN" : "Подключить VPN"
-        power.accessibilityValue = state
-        ping.isEnabled = pingEnabled; ping.alpha = pingEnabled ? 1 : 0.5
-        ping.setTitle(checkingPing ? "Отменить проверку пинга" : "Проверить пинг", for: .normal)
+    func update(_ value: Presentation) {
+        name.text = value.name; status.text = value.status; detail.text = value.detail; routing.text = value.routing
+        statistics.text = value.statistics; statistics.isHidden = value.statistics == nil
+        power.tintColor = value.on ? VPN013Theme.accent : VPN013Theme.secondaryText; power.isEnabled = value.powerEnabled
+        power.accessibilityLabel = value.on ? "Отключить VPN" : "Подключить VPN"
+        power.accessibilityValue = value.status
+        ping.isEnabled = value.pingEnabled; ping.alpha = value.pingEnabled ? 1 : 0.5
+        ping.setTitle(value.checkingPing ? "Отменить проверку пинга" : "Проверить пинг", for: .normal)
     }
     @objc private func powerTapped() { powerAction?() }
     @objc private func pingTapped() { pingAction?() }
@@ -441,9 +446,9 @@ final class ProxyListViewController: UITableViewController {
         if let host = pingHost, let result = pingValues[host] { detail += "\nПинг адреса: " + result.text }
         let policy = entry?.value.routing.mode.title ?? "Выберите конфигурацию ниже"
         let traffic = actual.map { value in "Скорость: ↓ " + VPN013TrafficDisplay.speed(panelRate?.received) + " · ↑ " + VPN013TrafficDisplay.speed(panelRate?.sent) + "\nВсего: ↓ " + VPN013TrafficDisplay.amount(value.rx >= 0 ? UInt64(value.rx) : nil) + " · ↑ " + VPN013TrafficDisplay.amount(value.tx >= 0 ? UInt64(value.tx) : nil) }
-        connectionPanel.update(name: title, status: state, detail: detail, routing: policy, statistics: traffic,
+        connectionPanel.update(.init(name: title, status: state, detail: detail, routing: policy, statistics: traffic,
             on: entry?.inOperation == true, powerEnabled: entry != nil && (entry?.inOperation == true || !manager.working),
-            pingEnabled: pingBusy || !rows.isEmpty, checkingPing: pingBusy)
+            pingEnabled: pingBusy || !rows.isEmpty, checkingPing: pingBusy))
         tableView.setNeedsLayout()
     }
     private func refreshPanel() {

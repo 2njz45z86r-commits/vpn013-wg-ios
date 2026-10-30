@@ -1,0 +1,48 @@
+name: Targeted Spain Georgia public TCP diagnosis
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/targeted-es-ge-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  public-connectivity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check two currently configured public endpoints without VPN credentials
+        run: |
+          python3 - <<'PY'
+          import concurrent.futures, datetime, json, socket, time
+          from pathlib import Path
+          cases = [('es1.vpn013.com', 25617), ('ge1.vpn013.com', 25117)]
+          def check(case):
+              domain, port = case
+              value = {'domain': domain, 'port': port, 'attempts': []}
+              try:
+                  value['addresses'] = sorted({x[4][0] for x in socket.getaddrinfo(domain, port, type=socket.SOCK_STREAM)})
+              except Exception as error:
+                  value['dnsError'] = type(error).__name__
+                  return value
+              for _ in range(2):
+                  try:
+                      started = time.monotonic()
+                      with socket.create_connection((domain, port), timeout=4):
+                          pass
+                      value['attempts'].append({'connected': True, 'tcpConnectMilliseconds': round((time.monotonic() - started) * 1000, 1)})
+                      break
+                  except Exception as error:
+                      value['attempts'].append({'connected': False, 'errorType': type(error).__name__})
+              return value
+          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+              rows = list(pool.map(check, cases))
+          result = {'checkedAtUTC': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'vantage': 'GitHub hosted Ubuntu', 'readOnly': True, 'vpnAuthenticationChecked': False, 'customerKeysUsed': False, 'targets': rows}
+          Path('public-connectivity.json').write_text(json.dumps(result, indent=2))
+          print(json.dumps(result))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: targeted-es-ge-public-${{ github.run_id }}
+          path: public-connectivity.json
+          retention-days: 3
