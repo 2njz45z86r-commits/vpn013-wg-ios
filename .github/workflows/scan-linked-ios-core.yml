@@ -1,0 +1,72 @@
+name: Scan exact linked iPhone proxy core without publication
+on:
+  push:
+    branches: [ios-linked-security-20261031]
+permissions:
+  contents: read
+jobs:
+  linked:
+    runs-on: macos-15-intel
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Reconstruct exact Go toolchain and reviewed owned-FD core
+        run: |
+          set -eu
+          mkdir -p build/review
+          python3 - <<'PY'
+          import hashlib,json,os,platform,tarfile,urllib.request
+          from pathlib import Path
+          if os.popen('go version 2>/dev/null').read().split()[2:3] and 'go1.26.10' in os.popen('go version').read():
+           print('Go 1.26 installed')
+          else:
+           data=json.load(urllib.request.urlopen('https://go.dev/dl/?mode=json&include=all',timeout=30))
+           release=next(x for x in data if x['version']=='go1.26.10')
+           arch='arm64' if platform.machine()=='arm64' else 'amd64'
+           f=next(f for f in release['files'] if f['os']=='darwin' and f['arch']==arch and f['kind']=='archive')
+           path=Path('build/go.tgz');urllib.request.urlretrieve('https://go.dev/dl/'+f['filename'],path)
+           assert hashlib.sha256(path.read_bytes()).hexdigest()==f['sha256']
+           with tarfile.open(path) as t:t.extractall('build/toolchain',filter='data')
+           Path('build/go-source.json').write_text(json.dumps({'version':release['version'],'sha256':f['sha256']}))
+          PY
+          export PATH="$PWD/build/toolchain/go/bin:$PATH"
+          git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git build/awg
+          cd build/awg
+          git checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('../../overlay')
+          files=[p for p in source.rglob('*') if p.is_file()]
+          assert len(files)==112
+          for p in files:
+              assert not p.is_symlink()
+              target=Path(p.relative_to(source)); target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(p.read_bytes())
+          PY
+          python3 VPN013/prepare_hourly_project.py
+          python3 VPN013/prepare_unified_project.py
+          python3 VPN013/add_uitest_target.py
+          cd ../..
+          python3 scripts/prepare_proxy_tun.py build/awg/Sources/WireGuardKitGo build/proxy-fd
+          cp build/proxy-fd/proxy-tun-provenance.json build/review/
+          shasum -a 256 build/proxy-fd/proxy-tun.mod build/proxy-fd/proxy-tun.sum > build/review/linked-module-sha256.txt
+      - name: Scan actual linked modfile and its native iOS symbols
+        run: |
+          set -eu
+          export PATH="$PWD/build/toolchain/go/bin:$PATH"
+          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1
+          export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
+          export CC="$(xcrun --sdk iphoneos --find clang)"
+          export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -miphoneos-version-min=14.0"
+          export CGO_LDFLAGS="$CGO_CFLAGS"
+          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/linked-findings.enc.json --recipient scripts/audit-recipient.pub
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ios-linked-security-${{ github.run_id }}
+          path: |
+            build/review/*.json
+            build/review/*.txt
+          if-no-files-found: error
+          retention-days: 7
