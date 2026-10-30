@@ -271,12 +271,11 @@ private final class ProxyConnectionPanel: UIView {
         let heading = UIStackView(arrangedSubviews: [name, status]); heading.axis = .horizontal; heading.spacing = 12; heading.alignment = .top
         name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         status.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
-        status.widthAnchor.constraint(lessThanOrEqualTo: card.widthAnchor, multiplier: 0.45).isActive = true
         let descriptions = UIStackView(arrangedSubviews: [detail, routing, statistics]); descriptions.axis = .vertical; descriptions.spacing = 8
         let body = UIStackView(arrangedSubviews: [descriptions, power]); body.axis = .horizontal; body.spacing = 14; body.alignment = .center
         let contents = UIStackView(arrangedSubviews: [heading, body]); contents.axis = .vertical; contents.spacing = 12
         contents.translatesAutoresizingMaskIntoConstraints = false; card.addSubview(contents)
-        NSLayoutConstraint.activate([contents.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16), contents.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16), contents.topAnchor.constraint(equalTo: card.topAnchor, constant: 16), contents.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)])
+        NSLayoutConstraint.activate([status.widthAnchor.constraint(lessThanOrEqualTo: card.widthAnchor, multiplier: 0.45), contents.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16), contents.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16), contents.topAnchor.constraint(equalTo: card.topAnchor, constant: 16), contents.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)])
         power.setImage(UIImage(systemName: "power", withConfiguration: UIImage.SymbolConfiguration(pointSize: 37, weight: .semibold)), for: .normal)
         power.backgroundColor = VPN013Theme.selected; power.layer.cornerRadius = 36
         power.accessibilityIdentifier = "vpn013.proxy.current.power"
