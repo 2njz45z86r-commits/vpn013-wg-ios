@@ -55,7 +55,7 @@ jobs:
           COMPILE_OUTCOME: ${{ steps.compile.outcome }}
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, re
           from pathlib import Path
           lines = Path('android-development.log').read_text(errors='replace').splitlines() if Path('android-development.log').exists() else []
           selected = [s for s in lines if s.startswith('e:') or 'error:' in s or 'BUILD SUCCESSFUL' in s or 'BUILD FAILED' in s]
@@ -119,6 +119,13 @@ jobs:
               if path.is_file() and path.suffix not in ('.png','.json','.xml'):
                   text=path.read_text(errors='replace')
                   selected=[s for s in text.splitlines() if s.startswith('OK (') or 'FAILURES' in s or 'test=' in s or 'INSTRUMENTATION_FAILED' in s or 'AssertionError' in s or 'Process crashed' in s or s.startswith('apkBytes=') or 'R013InstrumentedTest.kt:' in s or s.startswith('INSTRUMENTATION_STATUS_CODE:')]
+                  # Only retain exception class and owned test line; no messages,
+                  # input URLs, fixture credentials or network endpoint details.
+                  for line in text.splitlines():
+                      exception=re.search(r'\b(?:java|javax|kotlin|android)[\w.$]*(?:Exception|Error)\b', line)
+                      location=re.search(r'R013ProxyRuntimeTest\.kt:\d+', line)
+                      if exception: selected.append('exception-class: '+exception.group(0))
+                      if location: selected.append('test-location: '+location.group(0))
                   path.with_suffix(path.suffix+'.summary.json').write_text(json.dumps(selected[-80:]))
           (base/'development-summary.json').write_text(json.dumps({'source':os.environ['GITHUB_SHA'],'emulatorOutcome':os.environ['EMULATOR_OUTCOME'],'physicalDeviceVerified':False,'published':False}))
           PY
