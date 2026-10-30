@@ -223,6 +223,24 @@ class R013InstrumentedTest {
         }
         assertEquals(wrapped, ProxySubscription.normalizeInput("blacktemple://import/" + wrapped))
         assertEquals(wrapped, ProxySubscription.normalizeInput("blacktemple://import/" + java.net.URLEncoder.encode(wrapped, "UTF-8")))
+        // Simulate a successful provider response followed by parsing failure:
+        // the provider may already have bound this device ID. A retry must use
+        // that same ID, while the failed source and profiles remain rolled back.
+        val failedUrl = "https://failure.example.invalid/subscription"
+        val beforeSources = store.sources().size
+        val beforeIncy = store.list(ProxyProfile.Section.INCY).size
+        var failedHwid = ""
+        try {
+            OfflineChanges.apply {
+                failedHwid = store.source(ProxyProfile.Section.INCY, failedUrl).hwid
+                throw IllegalArgumentException("synthetic malformed response")
+            }
+            fail("Malformed response accepted")
+        } catch (_: IllegalArgumentException) { }
+        assertEquals(beforeSources, store.sources().size)
+        assertEquals(beforeIncy, store.list(ProxyProfile.Section.INCY).size)
+        assertTrue(failedHwid.isNotEmpty())
+        assertEquals(failedHwid, store.source(ProxyProfile.Section.INCY, failedUrl).hwid)
         val managed = store.source(ProxyProfile.Section.HAPP, "https://subscription.example.invalid/test")
         val otherSource = store.source(ProxyProfile.Section.INCY, "https://subscription.example.invalid/other")
         assertEquals(managed.hwid, otherSource.hwid)

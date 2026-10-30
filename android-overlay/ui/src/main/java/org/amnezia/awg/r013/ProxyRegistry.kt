@@ -48,7 +48,10 @@ class ProxyRegistry(private val vault: PrivateVault) {
             val origin = uri.host.lowercase(java.util.Locale.ROOT) + ":" + (if (uri.port == -1) 443 else uri.port)
             val origins = document.optJSONObject("proxyOrigins") ?: JSONObject().also { document.put("proxyOrigins", it) }
             val hash = ProfileRegistry.digest(origin)
-            val hwid = origins.optString(hash).takeIf { it.isNotEmpty() } ?: UUID.randomUUID().toString().also { origins.put(hash, it) }
+            val hwid = origins.optString(hash).takeIf { it.isNotEmpty() } ?: run {
+                check(origins.length() < 256) { "Достигнут предел источников подписок" }
+                UUID.randomUUID().toString().also { origins.put(hash, it) }
+            }
             val id = UUID.randomUUID().toString()
             sources.put(id, JSONObject().put("section", section.name).put("url", url).put("hwid", hwid))
             Source(id, section, url, hwid)
