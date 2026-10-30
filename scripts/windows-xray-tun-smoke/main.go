@@ -143,7 +143,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer stop(client)
+	defer func() { stop(client) }()
 	if !waitUntil(20*time.Second, func() bool { _, e := net.InterfaceByName(adapter); return e == nil }) {
 		return errors.New("test TUN adapter did not start")
 	}
@@ -181,6 +181,22 @@ func run() error {
 		return errors.New("synthetic HTTP payload did not traverse single-route TUN and VLESS")
 	}
 	fmt.Println("synthetic_windows_tun_vless_http_payload_ok")
+	// Model a crash or forced exit. Both the temporary interface and its owned
+	// /32 route must disappear; never clean up unrelated system routes.
+	stop(client)
+	client = nil
+	if !waitUntil(20*time.Second, func() bool { _, e := net.InterfaceByName(adapter); return e != nil }) {
+		return errors.New("test adapter persisted after process termination")
+	}
+	routeGone := fmt.Sprintf("$r = Get-NetRoute -DestinationPrefix '%s/32' -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceIndex -eq %d }; if ($r) { exit 1 }", target, iface.Index)
+	if !waitUntil(20*time.Second, func() bool {
+		cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", routeGone)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+		return cmd.Run() == nil
+	}) {
+		return errors.New("test route persisted after process termination")
+	}
+	fmt.Println("synthetic_windows_tun_crash_cleanup_ok")
 	return nil
 }
 func main() {
