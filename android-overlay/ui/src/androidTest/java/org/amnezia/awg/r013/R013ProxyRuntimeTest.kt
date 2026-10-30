@@ -65,6 +65,12 @@ class R013ProxyRuntimeTest {
     }
     private fun exchange() {
         val manager = context.getSystemService(ConnectivityManager::class.java)
+        // Service startup and Android's publication of the default VPN network
+        // are separate events, particularly when immediately restarting it.
+        // Wait for the actual system capability; never replace it with the
+        // service flag, a fixed delay or an assumed connected state.
+        await { manager.getNetworkCapabilities(manager.activeNetwork)
+            ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true }
         assertTrue("The application must use the actual VPN network",manager.getNetworkCapabilities(manager.activeNetwork)
             ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true)
         Socket().use { socket ->
