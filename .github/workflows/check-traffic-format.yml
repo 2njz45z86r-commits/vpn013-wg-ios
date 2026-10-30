@@ -1,0 +1,35 @@
+name: Check adaptive traffic units and real counter deltas
+on:
+  push:
+    branches: [traffic-format-models-20261031]
+permissions:
+  contents: read
+jobs:
+  model:
+    runs-on: macos-15-intel
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile and execute the Swift numeric model without an app or tunnel
+        run: |
+          set -eu
+          mkdir -p build
+          xcrun swiftc -swift-version 5 -parse-as-library overlay/VPN013/TrafficDisplay.swift tests/TrafficDisplayTests.swift -o "$RUNNER_TEMP/vpn013-traffic-check"
+          "$RUNNER_TEMP/vpn013-traffic-check" | tee build/traffic-tests.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          text=Path('build/traffic-tests.txt').read_text()
+          assert text.strip()=='TrafficDisplayTests: 34 checks passed'
+          Path('build/traffic-proof.json').write_text(json.dumps({'modelChecks':34,'nativeUIValidated':False,'source':'TrafficDisplay.swift','published':False}))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: traffic-model-${{ github.run_id }}
+          path: |
+            build/traffic-tests.txt
+            build/traffic-proof.json
+          if-no-files-found: error
+          retention-days: 7
