@@ -14,10 +14,10 @@ final class AutoTunnelUITests:XCTestCase {
             // The simulator refuses a real VPN start. Its controlled start
             // error distinguishes the connect action from opening details.
             XCTAssertTrue(app.alerts["Действие не завершено"].waitForExistence(timeout: 5))
-            XCTAssertFalse(app.buttons["vpn013.proxy.power"].exists); app.alerts.buttons["Понятно"].tap()
+            XCTAssertFalse(app.cells["vpn013.proxy.power"].exists); app.alerts.buttons["Понятно"].tap()
             let arrow = row.buttons["vpn013.proxy.configuration"]
             XCTAssertGreaterThanOrEqual(arrow.frame.width, 44); XCTAssertGreaterThanOrEqual(arrow.frame.height, 44)
-            arrow.tap(); XCTAssertTrue(app.buttons["vpn013.proxy.power"].waitForExistence(timeout: 5))
+            arrow.tap(); XCTAssertTrue(app.cells["vpn013.proxy.power"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.alerts["Действие не завершено"].exists)
             capture("row-" + kind + "-right-strip-opens-configuration")
             app.navigationBars.buttons.element(boundBy: 0).tap()

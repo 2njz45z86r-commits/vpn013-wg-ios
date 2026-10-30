@@ -571,6 +571,7 @@ final class ProxyListViewController: UITableViewController {
         tableView.deselectRow(at: indexPath, animated: true)
         if rows.isEmpty { importTapped() }
         else {
+            guard rows.indices.contains(indexPath.row) else { return }
             let entry = rows[indexPath.row]
             UserDefaults.standard.set(entry.value.profile.id.uuidString, forKey: "vpn013.panel.profile." + kind.rawValue)
             refreshPanel(); manager.toggle(entry)
