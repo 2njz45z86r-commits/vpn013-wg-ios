@@ -11,6 +11,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import org.amnezia.awg.Application
 import org.amnezia.awg.BuildConfig
 import org.amnezia.awg.backend.GoBackend
@@ -18,6 +19,8 @@ import org.amnezia.awg.backend.Tunnel
 import org.amnezia.awg.backend.R013SocketRoutes
 import androidx.annotation.Keep
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.amnezia.awg.crypto.KeyPair
 import org.json.JSONArray
 import org.json.JSONObject
@@ -241,6 +244,28 @@ class R013InstrumentedTest {
         assertEquals(beforeIncy, store.list(ProxyProfile.Section.INCY).size)
         assertTrue(failedHwid.isNotEmpty())
         assertEquals(failedHwid, store.source(ProxyProfile.Section.INCY, failedUrl).hwid)
+        // Cancellation during an import must complete rollback too. The server
+        // may already have bound the generated ID, so it must survive the retry.
+        val cancelledUrl = "https://cancel.example.invalid/subscription"
+        val sourcesBeforeCancel = store.sources().size
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        var cancelledHwid = ""
+        val cancelled = launch(Dispatchers.Default) {
+            OfflineChanges.apply {
+                cancelledHwid = store.source(ProxyProfile.Section.INCY, cancelledUrl).hwid
+                started.countDown()
+                check(release.await(10, TimeUnit.SECONDS))
+            }
+        }
+        try {
+            assertTrue(withContext(Dispatchers.IO) { started.await(10, TimeUnit.SECONDS) })
+            cancelled.cancel()
+        } finally { release.countDown() }
+        cancelled.join()
+        assertEquals(sourcesBeforeCancel, store.sources().size)
+        assertTrue(cancelledHwid.isNotEmpty())
+        assertEquals(cancelledHwid, store.source(ProxyProfile.Section.INCY, cancelledUrl).hwid)
         val managed = store.source(ProxyProfile.Section.HAPP, "https://subscription.example.invalid/test")
         val otherSource = store.source(ProxyProfile.Section.INCY, "https://subscription.example.invalid/other")
         assertEquals(managed.hwid, otherSource.hwid)

@@ -2,6 +2,7 @@
 package org.amnezia.awg.r013
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -38,11 +39,13 @@ object OfflineChanges {
             val result = withContext(Dispatchers.IO) { block() }
             manager.reloadPrivateStore(); result
         } catch (e: Exception) {
-            withContext(Dispatchers.IO) {
-                runCatching { retainNewOriginIds(before, registry.vault.read()) }
-                registry.vault.write(before)
+            withContext(NonCancellable) {
+                withContext(Dispatchers.IO) {
+                    runCatching { retainNewOriginIds(before, registry.vault.read()) }
+                    registry.vault.write(before)
+                }
+                manager.reloadPrivateStore()
             }
-            manager.reloadPrivateStore()
             throw e
         }
     }
