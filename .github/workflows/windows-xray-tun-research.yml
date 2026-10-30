@@ -1,7 +1,7 @@
 # Disposable test only: no signing, publishing, production secrets or deployment.
 name: Research Windows Xray TUN on disposable runner
 on:
-  workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:

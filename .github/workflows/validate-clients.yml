@@ -8,7 +8,7 @@ on:
     inputs:
       platform:
         type: choice
-        options: [all, ios, android, windows]
+        options: [all, ios, android, windows, windows-xray-research]
         default: all
         required: true
       validation_authorized:
@@ -22,6 +22,11 @@ concurrency:
   group: client-validation-${{ github.ref }}-${{ inputs.platform }}
   cancel-in-progress: false
 jobs:
+  windows-xray-research:
+    if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && inputs.platform == 'windows-xray-research'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-xray-tun-research.yml
   ios:
     if: github.repository == '2njz45z86r-commits/vpn013-wg-ios' && inputs.validation_authorized == true && (inputs.platform == 'all' || inputs.platform == 'ios')
     runs-on: macos-15
