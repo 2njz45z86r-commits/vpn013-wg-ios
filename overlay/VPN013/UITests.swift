@@ -1,5 +1,31 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testPowerTrafficAndPingPanelPresentInEveryProxySection() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-hold-ping-for-cancellation"]
+        app.launch()
+        for kind in ["happ", "incy", "blacktemple"] {
+            let tab = app.tabBars.buttons["vpn013.kind." + kind]
+            XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+            let power = app.buttons["vpn013.proxy.current.power"]
+            let ping = app.buttons["vpn013.proxy.current.ping"]
+            XCTAssertTrue(power.waitForExistence(timeout: 8)); XCTAssertFalse(power.isEnabled)
+            XCTAssertTrue(ping.exists); XCTAssertFalse(ping.isEnabled)
+            app.buttons["vpn013.proxy.add"].tap()
+            app.buttons["vpn013.proxy.import.check"].tap()
+            XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5))
+            app.alerts.buttons["Добавить"].tap()
+            XCTAssertTrue(app.tables.cells.staticTexts["Demo server"].waitForExistence(timeout: 8))
+            XCTAssertTrue(power.isEnabled); XCTAssertTrue(ping.isEnabled)
+            XCTAssertEqual(app.staticTexts["vpn013.proxy.current.name"].label, "Demo server")
+            XCTAssertEqual(app.staticTexts["vpn013.proxy.current.status"].label, "Не подключено")
+            capture("proxy-panel-" + kind + "-power-and-ping-offline")
+            ping.tap()
+            XCTAssertTrue(app.buttons["Отменить проверку пинга"].waitForExistence(timeout: 3))
+            ping.tap()
+            XCTAssertEqual(app.staticTexts["vpn013.proxy.current.status"].label, "Не подключено", "Ping must not activate a VPN")
+        }
+    }
     func testTrafficSummaryUsesAdaptiveUnits() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-unified", "--vpn013-test-cross-runtime", "--vpn013-test-cross-traffic", "--vpn013-test-auto-reset"]
