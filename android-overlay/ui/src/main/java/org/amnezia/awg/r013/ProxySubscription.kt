@@ -32,7 +32,7 @@ object ProxySubscription {
         return section to text
     }
     fun fetch(source: ProxyRegistry.Source): String {
-        val uri = URI(source.url)
+        val uri = URI(SubscriptionRequest.compatibilityURL(source.url))
         require(uri.scheme.equals("https", true) && uri.host != null && uri.rawUserInfo == null && uri.rawFragment == null)
         val connection = uri.toURL().openConnection() as HttpURLConnection
         val deadline = System.nanoTime() + 12_000_000_000L

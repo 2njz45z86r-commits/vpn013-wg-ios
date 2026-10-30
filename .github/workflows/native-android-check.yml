@@ -35,6 +35,8 @@ jobs:
           java -cp output/models HourlyScheduleTest
           javac -encoding UTF-8 -d output/models ui/src/main/java/org/amnezia/awg/r013/ProxyProfile.java r013-tests/ProxyProfileTest.java
           java -cp output/models ProxyProfileTest
+          javac -encoding UTF-8 -d output/models ui/src/main/java/org/amnezia/awg/r013/SubscriptionRequest.java r013-tests/SubscriptionRequestTest.java
+          java -cp output/models SubscriptionRequestTest
           (cd tunnel/tools/libwg-go && go test -race -mod=readonly ./r013proxy)
       - name: Compile Android backend, UI and instrumented scenarios
         id: compile
