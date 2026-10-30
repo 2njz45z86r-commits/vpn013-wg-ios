@@ -1,0 +1,37 @@
+name: Verify isolated patched standard WireGuard server
+on:
+  push:
+    branches: [wg-patched-control-20261030]
+permissions:
+  contents: read
+jobs:
+  patched-network-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.27.3'
+          cache-dependency-path: network-diagnostics/go.sum
+      - name: Compile independent upstream standard WireGuard client
+        working-directory: network-diagnostics
+        run: |
+          go mod verify
+          go build -o plain-wg-check .
+          go vet ./...
+      - name: Verify dedicated ordinary WireGuard handshake and real TLS traffic
+        working-directory: network-diagnostics
+        env:
+          CANARY_CONFIG: ${{ secrets.VPN013_WG_PATCHED_CONTROL_20261030 }}
+        run: python3 run_check.py
+      - name: Preserve sanitized network proof only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: patched-standard-wireguard-network-control
+          path: network-diagnostics/proof.json
+          if-no-files-found: ignore
+          retention-days: 2
