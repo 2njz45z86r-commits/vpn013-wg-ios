@@ -1,0 +1,39 @@
+name: Diagnose read-only native evidence transport
+on:
+  push:
+    branches: [ios173-evidence-transport-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Inspect only API transport status without releasing files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import subprocess,json,time,urllib.request,urllib.error,os,re
+          path='repos/2njz45z86r-commits/vpn013-wg-ios/actions/jobs/124304366783/logs'
+          for suffix in ['', '?fresh='+str(time.time_ns())]:
+           result=subprocess.run(['gh','api',path+suffix],capture_output=True,text=True,timeout=45)
+           message=None
+           if result.returncode:
+            try:message=json.loads(result.stdout).get('message')
+            except Exception:message=' '.join(result.stderr.split())[:200]
+           print(json.dumps({'cache_busted':bool(suffix),'exit':result.returncode,'stdout_bytes':len(result.stdout),'passed_cases':len(re.findall(r"Test Case '-\[AutoTunnelUITests\.AutoTunnelUITests (\w+)\]' passed",result.stdout)),'error':message}))
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+           def redirect_request(self,*args,**kwargs):return None
+          opener=urllib.request.build_opener(NoRedirect())
+          request=urllib.request.Request('https://api.github.com/'+path+'?fresh='+str(time.time_ns()),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'User-Agent':'VPN013-read-only-evidence'})
+          try:
+           with opener.open(request,timeout=30) as response:print(json.dumps({'api_status':response.status}))
+          except urllib.error.HTTPError as error:
+           info={'api_status':error.code,'redirect_hostname':urllib.parse.urlsplit(error.headers.get('Location','')).hostname}
+           if error.code not in (301,302,303,307,308):
+            try:info['error']=json.load(error).get('message')
+            except Exception:info['error']='non-json response'
+           print(json.dumps(info))
+          PY
