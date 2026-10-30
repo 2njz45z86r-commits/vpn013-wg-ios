@@ -17,11 +17,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/issuer-evidence
+          swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift diagnostics/IssuerRosterTests.swift -o /tmp/vpn013-new-roster
+          /tmp/vpn013-new-roster diagnostics/issuer-fixtures.json --current-unfiltered | tee build/issuer-evidence/current-unfiltered.txt
           swiftc -parse-as-library -swift-version 5 diagnostics/issuer-before.swift diagnostics/IssuerRosterTests.swift -o /tmp/vpn013-legacy-roster
           /tmp/vpn013-legacy-roster diagnostics/issuer-fixtures.json --legacy-unfiltered | tee build/issuer-evidence/legacy-before.txt
           /tmp/vpn013-legacy-roster diagnostics/issuer-fixtures.json --legacy-filtered | tee build/issuer-evidence/legacy-filtered.txt
-          swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift diagnostics/IssuerRosterTests.swift -o /tmp/vpn013-new-roster
-          /tmp/vpn013-new-roster diagnostics/issuer-fixtures.json --current-unfiltered | tee build/issuer-evidence/current-unfiltered.txt
           swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift tests/ProxyIssuerCompatibilityTests.swift -o /tmp/vpn013-alias
           /tmp/vpn013-alias | tee build/issuer-evidence/alias.txt
           swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift overlay/VPN013/ProxyRouting.swift tests/ProxyProfileTests.swift -o /tmp/vpn013-profiles

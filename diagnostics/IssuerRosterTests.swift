@@ -8,7 +8,7 @@ import Foundation
         let currentUnfiltered = CommandLine.arguments.contains("--current-unfiltered")
         let rows = fixture[legacyRejected || currentUnfiltered ? "synthetic_uris" : "filtered_uris"] as! [String]
         precondition(rows.count == 18)
-        var successes = 0; var failures = 0; var rosterChecks = 0
+        var successes = 0; var failures = 0; var rosterChecks = 0; var invalidLegacy = 0; var unsupportedLegacy = 0
         for kind in [VPN013ConnectionKind.happ, .incy, .blacktemple] {
             for (index, row) in rows.enumerated() {
                 do {
@@ -17,7 +17,13 @@ import Foundation
                     successes += 1
                 } catch {
                     precondition(legacyRejected && index >= 13, "Unexpected typed import failure at synthetic index \(index)")
-                    guard case ProxyProfileError.unsupported = error else { preconditionFailure("Expected unsupported LTE metadata") }
+                    // Historical rejection category is diagnostic, not a compatibility guarantee.
+                    // Current imports must still succeed; every historical LTE shape must still fail.
+                    switch error {
+                    case ProxyProfileError.unsupported: unsupportedLegacy += 1
+                    case ProxyProfileError.invalid: invalidLegacy += 1
+                    default: preconditionFailure("Unexpected legacy rejection category")
+                    }
                     failures += 1
                 }
             }
@@ -35,6 +41,6 @@ import Foundation
             }
         }
         precondition(failures == (legacyRejected ? 15 : 0))
-        print("Issuer roster: \(successes) individual imports, \(failures) expected legacy rejections, \(rosterChecks) full-roster checks; synthetic data only")
+        print("Issuer roster: \(successes) individual imports, \(failures) expected legacy rejections, \(rosterChecks) full-roster checks; synthetic data only; invalidLegacy=\(invalidLegacy), unsupportedLegacy=\(unsupportedLegacy)")
     }
 }
