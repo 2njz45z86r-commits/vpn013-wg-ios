@@ -1,0 +1,37 @@
+name: Dedicated standard WireGuard network control
+on:
+  push:
+    branches: [wg-netcheck-20261030]
+permissions:
+  contents: read
+jobs:
+  network-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: network-diagnostics/go.sum
+      - name: Compile independent upstream WireGuard client
+        working-directory: network-diagnostics
+        run: |
+          go mod verify
+          go build -o plain-wg-check .
+          go vet ./...
+      - name: Verify dedicated public network path
+        working-directory: network-diagnostics
+        env:
+          CANARY_CONFIG: ${{ secrets.VPN013_WG_NETWORK_CANARY_20261030 }}
+        run: python3 run_check.py
+      - name: Preserve public test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wireguard-public-network-control
+          path: network-diagnostics/proof.json
+          if-no-files-found: ignore
+          retention-days: 2
