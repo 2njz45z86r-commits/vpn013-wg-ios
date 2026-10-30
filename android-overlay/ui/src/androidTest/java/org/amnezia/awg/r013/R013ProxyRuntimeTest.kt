@@ -87,7 +87,7 @@ class R013ProxyRuntimeTest {
     }
     @Test fun actualRealityTrafficInAllThreeProxySectionsAndCompleteStop() = runBlocking {
         val store=ProxyRegistry(registry.vault)
-        for (section in ProxyProfile.Section.values()) {
+        for (section in ProxyProfile.Section.values().toList() + ProxyProfile.Section.values().toList()) {
             var stage = "import"
             try {
             val id=withContext(Dispatchers.IO) { store.importText(section,fixture.getString("uri")).single() }

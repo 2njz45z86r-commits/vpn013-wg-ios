@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong
 class ProxyVpnService : VpnService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Mutex()
+    private val destroyed = CompletableDeferred<Unit>()
     private var tun: ParcelFileDescriptor? = null
     private var gate: ProxySocketGate? = null
     private var started = false
@@ -41,7 +42,10 @@ class ProxyVpnService : VpnService() {
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val token = intent?.getLongExtra("epoch", -1) ?: -1
-        if (token != revision.get()) return START_NOT_STICKY
+        if (token != revision.get()) {
+            if (requestedId == null && activeId == null) stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
         val id = intent?.getStringExtra("profile")
         scope.launch {
             lock.withLock {
@@ -68,7 +72,7 @@ class ProxyVpnService : VpnService() {
                         tun = descriptor
                         check(token == revision.get() && captured.current()) { "Сеть изменилась" }
                         check(Native.r013ProxyStart(ticket, ProxyConfiguration.tunnel(record.profile, address), descriptor.fd, captured) == 0) { "Не удалось запустить подключение" }
-                        started = true; activeId = id; lastError = null; requestedId = null
+                        started = true; activeOwner = this@ProxyVpnService; activeId = id; lastError = null; requestedId = null
                     } finally { Native.r013PrimaryEnd(ticket) }
                 } catch (_: Exception) {
                     stopNative(); activeId = null; requestedId = null; lastError = "Подключение не удалось. Проверьте конфигурацию и доступность сети."; stopSelf()
@@ -84,16 +88,21 @@ class ProxyVpnService : VpnService() {
             try { check(Native.r013ProxyStop(ticket) == 0); started = false }
             finally { Native.r013PrimaryEnd(ticket) }
         }
-        tun?.close(); tun = null; gate = null; activeId = null
+        tun?.close(); tun = null; gate = null
+        if (activeOwner === this) { activeId = null; activeOwner = null }
     }
     override fun onRevoke() { revision.incrementAndGet(); scope.launch { lock.withLock { stopNative(); stopSelf() } }; super.onRevoke() }
     override fun onDestroy() {
-        revision.incrementAndGet()
-        scope.launch { lock.withLock { stopNative(); if (instance === this@ProxyVpnService) instance = null }; scope.cancel() }
+        if (instance === this) revision.incrementAndGet()
+        scope.launch {
+            try { lock.withLock { stopNative(); if (instance === this@ProxyVpnService) instance = null } }
+            finally { destroyed.complete(Unit); scope.cancel() }
+        }
         super.onDestroy()
     }
     companion object {
         @Volatile private var instance: ProxyVpnService? = null
+        @Volatile private var activeOwner: ProxyVpnService? = null
         @Volatile var activeId: String? = null; private set
         @Volatile var requestedId: String? = null; private set
         @Volatile var lastError: String? = null; private set
@@ -107,7 +116,15 @@ class ProxyVpnService : VpnService() {
         suspend fun stopAndWait() = withContext(Dispatchers.IO) {
             revision.incrementAndGet()
             requestedId = null
-            instance?.let { service -> service.lock.withLock { service.stopNative(); service.stopSelf() } }
+            instance?.let { service ->
+                service.lock.withLock { service.stopNative(); service.stopSelf() }
+                // stopSelf schedules onDestroy on the main thread. Starting
+                // again before it completes lets the old service cancel the
+                // new command's revision or clear its published active state.
+                check(withTimeoutOrNull(10_000) { service.destroyed.await(); true } == true) {
+                    "Прежний VPN ещё завершается"
+                }
+            }
         }
         fun statistics(): JSONObject? = try { if (activeId == null) null else Native.r013ProxyStats()?.let(::JSONObject) } catch (_: Exception) { null }
         suspend fun measure(profile: ProxyProfile): Long? = withContext(Dispatchers.IO) {

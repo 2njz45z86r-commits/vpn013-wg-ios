@@ -117,12 +117,13 @@ object UnifiedAutoCoordinator {
             tunnel.setStateAsync(Tunnel.State.UP); true
         } else {
             ProxyVpnService.start(context, candidate.id)
-            withTimeout(20_000) {
+            withTimeoutOrNull(20_000) {
                 while (ProxyVpnService.activeId != candidate.id) {
                     if (ProxyVpnService.lastError != null || generation != epoch.get()) error("Connection stopped")
                     delay(50)
                 }
-            }; true
+                true
+            } ?: false
         }
     } catch (_: CancellationException) { throw CancellationException() } catch (_: Exception) { false }
 
