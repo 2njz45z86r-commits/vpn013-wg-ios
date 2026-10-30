@@ -42,10 +42,26 @@ object ProxyImport {
             if (documents.length() !in 1..100) invalid()
             // Only collapse the provider's documented failover bundle. Ordinary
             // multi-document Xray input may legitimately contain several nodes.
-            val providerBundle = documents.length() > 1 && (0 until documents.length()).all { index ->
-                val doc = documents.optJSONObject(index)
-                doc?.optJSONObject("meta")?.optString("serverDescription") == "Автоматический резерв"
-            } && documents.optJSONObject(0)?.optString("remarks") == "⚡ Авто · минимальный пинг"
+            val reserveDescriptions = setOf("Автоматический резерв", "Россия напрямую · Автоматический резерв", "Маршрутизация сайтов · Автоматический резерв")
+            fun description(index: Int): String = documents.optJSONObject(index)?.optJSONObject("meta")
+                ?.optString("serverDescription", "")?.substringBefore(". Тест на ") ?: ""
+            val autoDescription = description(0)
+            val autoIsProvider = autoDescription == "Автовыбор по задержке" ||
+                reserveDescriptions.any { autoDescription == "Автовыбор по задержке · $it" }
+            val providerBundle = documents.length() > 1 && autoIsProvider &&
+                documents.optJSONObject(0)?.optString("remarks") == "⚡ Авто · минимальный пинг" &&
+                (1 until documents.length()).all { index ->
+                    val doc = documents.optJSONObject(index)
+                    val outbounds = doc?.optJSONArray("outbounds")
+                    val primary = outbounds?.optJSONObject(0)
+                    description(index) in reserveDescriptions && doc != null && outbounds != null && primary != null &&
+                        primary.optString("protocol") == "vless" && primary.optString("tag") == doc.optString("remarks") &&
+                        (1 until outbounds.length()).all { j ->
+                            val outbound = outbounds.optJSONObject(j)
+                            outbound != null && (outbound.optString("protocol") != "vless" ||
+                                listOf("backup-", "lte-entry-").any { outbound.optString("tag").startsWith(it) })
+                        }
+                }
             val result = mutableListOf<ProxyProfile>()
             for (i in 0 until documents.length()) {
                 val document = documents.optJSONObject(i) ?: invalid()
