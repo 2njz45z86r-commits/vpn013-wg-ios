@@ -79,6 +79,7 @@ class R013HomeActivity : AppCompatActivity() {
     }
     private var listSignature = ""
     private var currentIdentity = ""
+    private val trafficSampler = TrafficDisplay.Sampler()
     private var currentHost: String? = null
     private var currentMeasurement: Pair<String, Long?>? = null
     private var pingJob: Job? = null
@@ -438,7 +439,8 @@ class R013HomeActivity : AppCompatActivity() {
             summaryDetails.text = buildString {
                 record?.profile?.let { append(UnifiedAutoCoordinator.label(it.section.name)); append(" · ${it.host}:${it.port}\n") }
                 append(UnifiedAutoCoordinator.status ?: "Проверяется подключение")
-                stats?.let { append("\n↓ ${bytes(it.optLong("rx"))}  ↑ ${bytes(it.optLong("tx"))}") }
+                append(trafficLines("proxy:$id:${ProxyVpnService.trafficRevision()}",
+                    stats?.let { counter(it, "rx") }, stats?.let { counter(it, "tx") }))
             }
             routingDetails.text = if (android.os.Build.VERSION.SDK_INT >= 33) "Российские IP-сети — напрямую; остальные — через VPN"
                 else "Все IP-сети — через VPN; исключения российских сетей требуют Android 13 или новее"
@@ -463,11 +465,12 @@ class R013HomeActivity : AppCompatActivity() {
         if (identity != currentIdentity) { currentIdentity = identity; currentHost = snapshot.host; pingJob?.cancel(); currentMeasurement = null; listSignature = ""; currentPing.text = ""; currentPing.icon = getDrawable(R.drawable.ic_r013_ping) }
         summaryTitle.text = snapshot.member ?: snapshot.profile ?: "VPN отключён"
         currentPing.isEnabled = snapshot.host != null && pingJob?.isActive != true
+        if (snapshot.profile == null) trafficSampler.reset()
         summaryDetails.text = if (snapshot.profile == null) "Выберите профиль ниже" else buildString {
             if (snapshot.member != null) append("${snapshot.profile} · ")
             append(if (snapshot.host == null) "Подключение к серверу…" else if (snapshot.handshake != null) "Рукопожатие подтверждено" else "VPN запущен · рукопожатие не подтверждено")
             if (snapshot.endpoints.isNotEmpty()) append("\n" + snapshot.endpoints.joinToString(", "))
-            if (snapshot.received != null && snapshot.sent != null) append("\n↓ ${bytes(snapshot.received)}  ↑ ${bytes(snapshot.sent)}")
+            append(trafficLines("awg:$identity", snapshot.received, snapshot.sent))
             currentMeasurement?.takeIf { it.first == currentIdentity }?.let { append(it.second?.let { ms -> "\nПинг адреса: $ms мс" } ?: "\nПинг адреса недоступен") }
             snapshot.handshake?.let { append("\nРукопожатие: ${DateFormat.getTimeInstance(DateFormat.MEDIUM).format(Date(it))}") }
             snapshot.hourly?.let { append("\n$it") }
@@ -609,7 +612,16 @@ class R013HomeActivity : AppCompatActivity() {
             } finally { allPing.text = "Проверить пинг"; allPing.isEnabled = true }
         }
     }
-    private fun bytes(n: Long): String = if (n < 1024) "$n Б" else if (n < 1_048_576) "${n / 1024} КБ" else "${n / 1_048_576} МБ"
+    private fun counter(stats: org.json.JSONObject, key: String): Long? {
+        val value = when (val raw = stats.opt(key)) { is Long -> raw; is Int -> raw.toLong(); else -> null }
+        return value?.takeIf { it >= 0 }
+    }
+    private fun trafficLines(identity: String, received: Long?, sent: Long?): String {
+        val rate = trafficSampler.sample(identity, android.os.SystemClock.elapsedRealtimeNanos() / 1_000_000_000.0, received, sent)
+        if (received == null && sent == null) return "\nСтатистика VPN пока недоступна"
+        return "\nСкорость: ↓ ${TrafficDisplay.speed(rate?.received)} · ↑ ${TrafficDisplay.speed(rate?.sent)}" +
+            "\nВсего: ↓ ${TrafficDisplay.amount(received)} · ↑ ${TrafficDisplay.amount(sent)}"
+    }
     private fun color(id: Int) = getColor(id)
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun vertical() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

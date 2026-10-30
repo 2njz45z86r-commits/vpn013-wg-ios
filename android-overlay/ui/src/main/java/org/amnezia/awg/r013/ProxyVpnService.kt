@@ -126,6 +126,7 @@ class ProxyVpnService : VpnService() {
                 }
             }
         }
+        fun trafficRevision(): Long = revision.get()
         fun statistics(): JSONObject? = try { if (activeId == null) null else Native.r013ProxyStats()?.let(::JSONObject) } catch (_: Exception) { null }
         suspend fun measure(profile: ProxyProfile): Long? = withContext(Dispatchers.IO) {
             val captured = instance?.gate ?: return@withContext null

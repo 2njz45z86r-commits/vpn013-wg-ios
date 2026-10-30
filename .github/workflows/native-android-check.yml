@@ -33,8 +33,10 @@ jobs:
           javac -encoding UTF-8 -d output/models tunnel/src/main/java/org/amnezia/awg/r013/AutoPolicy.java tunnel/src/main/java/org/amnezia/awg/r013/HourlySchedule.java r013-tests/AutoPolicyTest.java r013-tests/HourlyScheduleTest.java
           java -cp output/models AutoPolicyTest
           java -cp output/models HourlyScheduleTest
-          javac -encoding UTF-8 -d output/models ui/src/main/java/org/amnezia/awg/r013/ProxyProfile.java r013-tests/ProxyProfileTest.java
+          javac -encoding UTF-8 -d output/models ui/src/main/java/org/amnezia/awg/r013/ProxyProfile.java ui/src/main/java/org/amnezia/awg/r013/TrafficDisplay.java r013-tests/ProxyProfileTest.java r013-tests/ProxyIssuerAliasTest.java r013-tests/TrafficDisplayTest.java
           java -cp output/models ProxyProfileTest
+          java -cp output/models ProxyIssuerAliasTest
+          java -cp output/models TrafficDisplayTest
           javac -encoding UTF-8 -d output/models ui/src/main/java/org/amnezia/awg/r013/SubscriptionRequest.java r013-tests/SubscriptionRequestTest.java
           java -cp output/models SubscriptionRequestTest
           (cd tunnel/tools/libwg-go && go test -race -mod=readonly ./r013proxy)

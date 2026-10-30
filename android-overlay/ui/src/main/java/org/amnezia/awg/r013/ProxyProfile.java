@@ -17,7 +17,8 @@ public final class ProxyProfile {
     public final int port;
     public final Map<String, String> options;
     private static final Set<String> ALLOWED = Set.of("type", "security", "encryption", "sni", "fp", "pbk", "sid",
-            "flow", "path", "host", "serviceName", "mode", "alpn", "authority", "spx", "pqv", "x_padding_bytes");
+            "flow", "path", "host", "serviceName", "mode", "alpn", "authority", "spx", "pqv", "x_padding_bytes",
+            "headerType", "allowInsecure", "insecure", "skipTLSVerify", "support-x25519mlkem768");
 
     private ProxyProfile(Section section, String name, String host, int port, String userId,
                          String transport, String security, String serverName, Map<String,String> options) {
@@ -85,9 +86,22 @@ public final class ProxyProfile {
                 String key=decode(pair[0]), value=decode(pair[1]);
                 if(!ALLOWED.contains(key) || q.putIfAbsent(key,value)!=null) throw invalid();
             }
-            String transport=q.getOrDefault("type","tcp"), security=q.getOrDefault("security","tls");
+            String transport=q.getOrDefault("type","tcp").toLowerCase(Locale.ROOT);
+            if(transport.equals("raw")) transport="tcp";
+            if(transport.equals("splithttp")) transport="xhttp";
+            String security=q.getOrDefault("security","tls").toLowerCase(Locale.ROOT);
             if(!Set.of("tcp","ws","grpc","xhttp").contains(transport) || !Set.of("tls","reality").contains(security) ||
                     !"none".equals(q.getOrDefault("encryption","none"))) throw invalid();
+            // Issuer aliases describe the same supported transport. TLS remains
+            // verified by the typed configuration builder; unsafe flags never pass.
+            for(String flag:List.of("allowInsecure","insecure","skipTLSVerify"))
+                if(q.containsKey(flag) && !Set.of("0","false").contains(q.get(flag).toLowerCase(Locale.ROOT))) throw invalid();
+            if(q.containsKey("support-x25519mlkem768") &&
+                    !Set.of("0","1","false","true").contains(q.get("support-x25519mlkem768").toLowerCase(Locale.ROOT))) throw invalid();
+            if(q.containsKey("headerType") && (!transport.equals("tcp") || !q.get("headerType").equals("none"))) throw invalid();
+            q.put("type",transport); q.put("security",security);
+            // Capability hints do not select a cipher or bypass certificate checks.
+            for(String flag:List.of("headerType","allowInsecure","insecure","skipTLSVerify","support-x25519mlkem768")) q.remove(flag);
             String endpoint=host(uri.getHost()), sni=host(q.getOrDefault("sni",endpoint));
             String flow=q.getOrDefault("flow", "");
             if(!Set.of("", "xtls-rprx-vision").contains(flow) || (!flow.isEmpty() && !transport.equals("tcp"))) throw invalid();
