@@ -65,6 +65,7 @@ adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard
 for setting in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global "$setting" 0; done
 adb shell cmd uimode night yes
+bash r013-ci/build-routing-probe.sh
 if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
   test -s ui/build/outputs/apk/debug/ui-debug.apk
   test -s ui/build/outputs/apk/androidTest/debug/ui-debug-androidTest.apk

@@ -4,10 +4,6 @@ package org.amnezia.awg.r013
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.ParcelFileDescriptor
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.ResultReceiver
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -31,9 +27,7 @@ import android.widget.TextView
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
+import java.util.UUID
 
 /** Hosted disposable peers only. Never receives provider or customer credentials. */
 @RunWith(AndroidJUnit4::class)
@@ -100,37 +94,43 @@ class R013ProxyRuntimeTest {
         await { val stats=ProxyVpnService.statistics(); stats != null && stats.optLong("rx")>0 && stats.optLong("tx")>0 }
     }
     private fun verifyOtherApplication(throughVPN: Boolean) {
-        val testPackage = "com.vpn013.awg.debug.test"
+        val testPackage = "com.vpn013.routingprobe"
         val nonce = fixture.getString("nonce"); val port = fixture.getInt("port")
-        check(fixture.getString("host") == "198.18.0.1" && port in 1..65535 && nonce.matches(Regex("[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}")))
+        check(fixture.getString("host") == "198.18.0.1" && port in 1024..65535 && nonce.matches(Regex("[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}")))
         fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).use { stream ->
             val bytes = stream.readNBytes(16385); check(bytes.size <= 16384); String(bytes, Charsets.UTF_8)
         }
-        val bootstrap = "$testPackage/org.amnezia.awg.r013.R013RoutingProbeBootstrapService"
-        // A normal service in the TEST APK runs under that APK's own UID.
-        // This avoids restarting or attaching a second instrumentation runner.
-        val received = AtomicReference<Bundle?>()
-        val ready = CountDownLatch(1)
-        val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
-            override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
-                if (resultCode == android.app.Activity.RESULT_OK) received.set(resultData)
-                ready.countDown()
-            }
-        }
-        val request = Intent().setClassName(testPackage, "org.amnezia.awg.r013.R013RoutingProbeBootstrapService")
-            .putExtra("r013_probe_reply", receiver).putExtra("r013_probe_port", port).putExtra("r013_probe_nonce", nonce)
+        val request = UUID.randomUUID().toString()
+        // Shell has DUMP permission; the receiver runs as a separate installed app,
+        // writes only its own private fixed result and accepts no arbitrary URL.
+        val broadcast = shell("am broadcast -f 0x20 -n $testPackage/.RoutingProbeReceiver --es request $request --es nonce $nonce --ei port $port")
+        var result: JSONObject? = null
+        var reads = 0; var parseable = false; var stale = false
         try {
-            instrumentation.uiAutomation.adoptShellPermissionIdentity(android.Manifest.permission.DUMP)
-            try { checkNotNull(context.startForegroundService(request)) }
-            finally { instrumentation.uiAutomation.dropShellPermissionIdentity() }
-            assertTrue("Independent UID service must return its measured result", ready.await(10, TimeUnit.SECONDS))
-        } finally { shell("am stopservice -n $bootstrap") }
-        fun value(key: String): String? = received.get()?.getString(key)
+            assertTrue("Independent UID probe broadcast must complete", broadcast.contains("Broadcast completed") && !broadcast.contains("Permission Denial"))
+            await(10_000) {
+                reads++
+                val candidate = runCatching { JSONObject(shell("run-as $testPackage cat files/probe.json")) }.getOrNull()
+                if (candidate != null) parseable = true
+                if (candidate?.optString("requestID") == request) { result = candidate; true }
+                else { if (candidate != null) stale = true; false }
+            }
+        } catch (failure: AssertionError) {
+            val folder = File(context.getExternalFilesDir(null), "review").apply { mkdirs() }
+            File(folder, "independent-uid-probe-failure.json").writeText(JSONObject()
+                .put("expectedVPN", throughVPN).put("broadcastCompleted", broadcast.contains("Broadcast completed"))
+                .put("permissionDenied", broadcast.contains("Permission Denial"))
+                .put("reads", reads).put("parseableResult", parseable).put("staleResultSeen", stale).toString())
+            throw failure
+        }
+        val proof = checkNotNull(result)
         val otherUID = context.packageManager.getApplicationInfo(testPackage, 0).uid
         assertNotEquals("The probe must have a different application UID", context.applicationInfo.uid, otherUID)
-        assertEquals("The second package must actually run under its own UID", otherUID.toString(), value("r013_probe_uid"))
-        assertEquals("The OS must publish the expected network for that UID", throughVPN.toString(), value("r013_probe_vpn"))
-        assertEquals("The independent UID must exchange the unpredictable nonce only when routed into VPN", throughVPN.toString(), value("r013_probe_nonce"))
+        assertNotEquals("The probe must also differ from the instrumentation UID", context.packageManager.getApplicationInfo("com.vpn013.awg.debug.test", 0).uid, otherUID)
+        assertEquals("The second package must actually run under its own UID", otherUID, proof.getInt("uid"))
+        assertEquals("The OS must publish the expected network for that UID", throughVPN, proof.getBoolean("vpn"))
+        assertEquals("The independent UID must exchange the unpredictable nonce only when routed into VPN", throughVPN, proof.getBoolean("matched"))
+        if (throughVPN) assertEquals("The routed probe must complete without socket errors", "", proof.getString("errorClass"))
     }
     private fun capture(name: String) {
         val folder=File(context.getExternalFilesDir(null),"review").apply { mkdirs() }
@@ -159,7 +159,7 @@ class R013ProxyRuntimeTest {
             val id=withContext(Dispatchers.IO) { store.importText(section,fixture.getString(if (transport == "tcp") "uri" else "xhttpURI")).single() }
             val applicationMode = if (transport == "tcp") "only" else "bypass"
             OfflineChanges.apply {
-                val packages = setOf("com.vpn013.awg.debug.test")
+                val packages = setOf("com.vpn013.routingprobe")
                 val selection = if (applicationMode == "only") ApplicationRoutingStore.Selection("only", only = packages)
                     else ApplicationRoutingStore.Selection("bypass", bypass = packages)
                 ApplicationRoutingStore.save(registry.vault, section.name, setOf(id), selection)

@@ -2,5 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <queries>
         <package android:name="com.vpn013.awg.debug.test" />
+        <package android:name="com.vpn013.routingprobe" />
     </queries>
 </manifest>

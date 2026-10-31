@@ -5,6 +5,9 @@ import android.content.Intent
 import android.app.Instrumentation
 import android.app.Activity
 import android.graphics.Bitmap
+import android.graphics.Rect
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -100,6 +103,26 @@ class R013RoutingSurfaceTest {
         assertTrue(message, predicate())
     }
     private fun tap(text: String, description: Boolean = false) {
+        try { tapChecked(text, description) } catch (failure: AssertionError) {
+            if (text == "Установленные приложения") captureButtonDiagnostics()
+            throw failure
+        }
+    }
+    private fun captureButtonDiagnostics() {
+        val folder = File(context.getExternalFilesDir(null), "review").apply { mkdirs() }
+        instrumentation.uiAutomation.takeScreenshot()?.also { bitmap ->
+            File(folder, "routing-app-button-failure.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+        }
+        val labels = listOf("Маршрутизация сервисов", "Установленные приложения", "VPN только для выбранных сервисов", "Выбранные сервисы без VPN")
+        val safe = org.json.JSONArray()
+        for (label in labels) node { it.text?.toString() == label }?.let { item ->
+            val bounds = Rect(); item.getBoundsInScreen(bounds)
+            safe.put(JSONObject().put("label", label).put("enabled", item.isEnabled).put("visible", item.isVisibleToUser)
+                .put("clickable", item.isClickable).put("bounds", listOf(bounds.left, bounds.top, bounds.right, bounds.bottom)))
+        }
+        File(folder, "routing-app-button-failure.json").writeText(JSONObject().put("nodes", safe).toString())
+    }
+    private fun tapChecked(text: String, description: Boolean) {
         var direction = AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
         await("Native routing UI target was not visible: $text") {
             val target = node { (if (description) it.contentDescription else it.text)?.toString() == text }
@@ -114,7 +137,18 @@ class R013RoutingSurfaceTest {
         }
         var target = node { (if (description) it.contentDescription else it.text)?.toString() == text }!!
         while (!target.isClickable && target.parent != null) target = target.parent
-        assertTrue(target.isEnabled && target.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        assertTrue("Native routing UI target must be enabled: $text", target.isEnabled)
+        if (!target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            if (text == "Установленные приложения") captureButtonDiagnostics()
+            val bounds = Rect(); target.getBoundsInScreen(bounds)
+            val windowBounds = Rect(); instrumentation.uiAutomation.rootInActiveWindow?.getBoundsInScreen(windowBounds)
+            assertTrue("Native routing UI target must have visible bounds: $text", target.isVisibleToUser && !bounds.isEmpty && bounds.intersect(windowBounds))
+            val now = SystemClock.uptimeMillis()
+            val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, bounds.exactCenterX(), bounds.exactCenterY(), 0)
+            val up = MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP, bounds.exactCenterX(), bounds.exactCenterY(), 0)
+            try { instrumentation.sendPointerSync(down); instrumentation.sendPointerSync(up) }
+            finally { down.recycle(); up.recycle() }
+        }
     }
     @Test fun bNativeSelectorsAndExclusiveOffDefaultModesRunInEverySection() = runBlocking {
         activity = instrumentation.startActivitySync(Intent(context, R013HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as R013HomeActivity
