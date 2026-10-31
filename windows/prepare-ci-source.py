@@ -56,6 +56,7 @@ for before, after in private_log_replacements.items():
 assert 'username, domain' not in manager_text
 assert 'if accType != windows.SidTypeUser {' in manager_text
 manager_service.write_text(manager_text, encoding='utf-8', newline='\n')
+subprocess.run([sys.executable, str(workspace / 'windows/patch-private-diagnostics.py'), str(root)], check=True)
 
 # Add the update offer state to the exact existing native page. The button
 # does not replace the order/configuration refresh action.
@@ -132,6 +133,8 @@ subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/stage-hourly-i
 subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/refresh-go-dependencies.py'),str(workspace),str(root)],check=True)
 subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/patch-service-ipc.py'),str(root)],check=True)
 subprocess.run([sys.executable,str(workspace/'windows/russian-routing/patch-native.py'),str(root)],check=True)
+subprocess.run([sys.executable, str(workspace/'scripts/patch-primary-resource-safety.py'), str(root)], check=True)
+subprocess.run([sys.executable, str(workspace/'windows/patch-primary-resource-safety.py'), str(root)], check=True)
 manifest = []
 files = []
 for path in sorted(root.rglob('*')):

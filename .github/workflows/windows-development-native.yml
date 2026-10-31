@@ -42,6 +42,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) {throw 'Toolchain preparation failed'}
           ./scripts/bootstrap-driver.ps1
           ./scripts/bootstrap-installer.ps1
+      - name: Verify patched primary resource rejection on the fenced Windows device
+        working-directory: vpn013-wg-windows
+        run: |
+          ./.deps/go/bin/go.exe test -mod=vendor -count=1 -timeout=90s -run '^TestPrimary' -v github.com/amnezia-vpn/amneziawg-go/v3/device
+          if ($LASTEXITCODE -ne 0) {throw 'Fenced primary resource verification failed'}
+          ./.deps/go/bin/go.exe test -mod=vendor -tags r013_resource_fixture -count=1 -timeout=60s -v ./r013resource
+          if ($LASTEXITCODE -ne 0) {throw 'Actual import resource/privacy verification failed'}
       - name: Verify actual default Data permissions with SYSTEM and LocalService
         working-directory: vpn013-wg-windows
         env:
