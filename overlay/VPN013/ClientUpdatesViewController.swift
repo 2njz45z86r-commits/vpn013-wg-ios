@@ -23,7 +23,11 @@ final class ClientUpdatesViewController: UITableViewController {
         coordinator.presenter = self
     }
     deinit { if let observer = observer { NotificationCenter.default.removeObserver(observer) } }
-    @objc private func close() { dismiss(animated: true) }
+    @objc private func close() {
+        if let navigation = navigationController, navigation.viewControllers.first !== self {
+            navigation.popViewController(animated: true)
+        } else { dismiss(animated: true) }
+    }
     override func numberOfSections(in tableView: UITableView) -> Int { 3 }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         #if DEBUG && targetEnvironment(simulator)

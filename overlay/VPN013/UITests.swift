@@ -1,5 +1,9 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    override func tearDown() {
+        if let run = testRun, run.failureCount > 0 { capture("failed-" + name) }
+        super.tearDown()
+    }
     func testServiceCatalogGroupsExclusiveModesAndRememberedSelection() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
@@ -19,7 +23,7 @@ final class AutoTunnelUITests:XCTestCase {
             openCatalog()
             let only = app.switches["vpn013.services.only"], bypass = app.switches["vpn013.services.bypass"]
             XCTAssertEqual(only.value as? String, "0"); XCTAssertEqual(bypass.value as? String, "0")
-            XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.services.group.")).count > 0)
+            XCTAssertGreaterThan(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.services.group.")).count, 0)
             capture("catalog-" + kind + "-groups-default-off")
             only.tap(); XCTAssertEqual(only.value as? String, "1"); XCTAssertEqual(bypass.value as? String, "0")
             let search = app.searchFields.firstMatch

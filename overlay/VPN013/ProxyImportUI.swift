@@ -15,14 +15,27 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
     private var initialText: String?
     private var isBusy = false
     private var previewGeneration = UUID()
+    private var appeared = false
+    private var pendingFileAction: (() -> Void)?
     init(kind: VPN013ConnectionKind, text: String? = nil) { self.kind = kind; initialText = text; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     deinit { downloader.cancel() }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated); appeared = true; drainFileAction()
+    }
     override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
+        super.viewWillDisappear(animated); appeared = false
         if isMovingFromParent || navigationController?.isBeingDismissed == true {
-            downloader.cancel(); previewGeneration = UUID()
+            downloader.cancel(); previewGeneration = UUID(); pendingFileAction = nil
         }
+    }
+    private func drainFileAction() {
+        guard appeared, viewIfLoaded?.window != nil, pendingFileAction != nil else { return }
+        if let picker = presentedViewController as? UIDocumentPickerViewController {
+            picker.dismiss(animated: true) { [weak self] in self?.drainFileAction() }; return
+        }
+        guard presentedViewController == nil else { return }
+        let action = pendingFileAction; pendingFileAction = nil; action?()
     }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Добавить · " + kind.title; view.backgroundColor = VPN013Theme.background
@@ -127,13 +140,19 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
                 let subscriptions = entries.filter { $0.fileBaseName == "Подписка" }.map { $0.contents }
                 guard let data = subscriptions.first, subscriptions.allSatisfy({ $0 == data }),
                       let text = String(data: data, encoding: .utf8) else { throw ProxyProfileError.invalid }
-                input.text = text; validateInput(); return
+                input.text = text
+                // Incoming Open In may push this form before its navigation
+                // transition finishes. UIKit refuses an alert at that point.
+                pendingFileAction = { [weak self] in self?.validateInput() }
+                drainFileAction(); return
             }
             let file = try FileHandle(forReadingFrom: url); defer { try? file.close() }
             let data = try file.read(upToCount: ProxyImport.maximumBytes + 1) ?? Data()
             guard data.count <= ProxyImport.maximumBytes else { throw ProxyProfileError.tooLarge }
             guard let text = String(data: data, encoding: .utf8) else { throw ProxyProfileError.invalid }
-            if data.count > 131_072 { input.text = ""; preview(data) }
+            if data.count > 131_072 {
+                input.text = ""; pendingFileAction = { [weak self] in self?.preview(data) }; drainFileAction()
+            }
             else { input.text = text }
         } catch { show(error is ProxyProfileError ? error : ProxyProfileError.invalid) }
     }

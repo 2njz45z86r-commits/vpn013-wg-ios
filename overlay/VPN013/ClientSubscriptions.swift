@@ -119,6 +119,10 @@ final class ClientUpdateCoordinator {
         check(manager: manager, manual: false)
     }
     func check(manager: TunnelsManager, manual: Bool) {
+        // UI fixtures supply their own release/registry. Opening the screen
+        // must not replace synthetic data with a live public catalog response.
+        // Physical builds always return false from quietForTests().
+        guard manual || !quietForTests() else { return }
         guard !busy else { return }
         guard loadingError == nil else { publish("Защищённое хранилище недоступно. Прежние профили сохранены."); return }
         busy = true; attemptedAt = Date(); subscriptionMessages = []; publish("Проверяем обновления…")
