@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [core49, added5]
+        shard: [coreA, coreB, coreC, added5]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -122,27 +122,29 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Download both same-run shard artifacts
+      - name: Download all four same-run shard artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          mkdir -p build/shards/core49 build/shards/added5
-          for shard in core49 added5; do
+          mkdir -p build/shards/coreA build/shards/coreB build/shards/coreC build/shards/added5
+          for shard in coreA coreB coreC added5; do
             name="unified-native-review-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${shard}"
             if ! gh run download "$GITHUB_RUN_ID" --name "$name" --dir "build/shards/$shard"; then
               gh run download "$GITHUB_RUN_ID" --name "$name-retry" --dir "build/shards/$shard"
             fi
             test -f "build/shards/$shard/unified-native-review.zip"
           done
-      - name: Require two successful jobs and 54 unique actual same-source tests
+      - name: Require four successful jobs and 54 unique actual same-source tests
         env:
           MATRIX_RESULT: ${{ needs.native.result }}
         run: |
           set -eu
           test "$MATRIX_RESULT" = success
           python3 scripts/native_ui_shards.py aggregate \
-            --core build/shards/core49/unified-native-review.zip \
+            --core-a build/shards/coreA/unified-native-review.zip \
+            --core-b build/shards/coreB/unified-native-review.zip \
+            --core-c build/shards/coreC/unified-native-review.zip \
             --added build/shards/added5/unified-native-review.zip \
             --output build/unified-native-review.zip \
             --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
@@ -152,7 +154,7 @@ jobs:
               summary = json.loads(archive.read('review/test-summary.json'))
               scope = json.loads(archive.read('review/iphone-only-scope.json'))
           assert summary['passedTests'] == summary['totalTestCount'] == scope['iPhoneNativeSuite'] == 54
-          message = f"54/54 actual selectors passed in core49 + added5; source {summary['sourceSha']}; run {summary['runId']}; {scope['attachmentImages']} XCUITest images"
+          message = f"54/54 actual selectors passed in coreA + coreB + coreC + added5; source {summary['sourceSha']}; run {summary['runId']}; {scope['attachmentImages']} XCUITest images"
           print(message)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
               out.write('### Native iPhone UI aggregate\n\n' + message + '\n')

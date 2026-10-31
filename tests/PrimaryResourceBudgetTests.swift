@@ -24,13 +24,13 @@ enum PrimaryResourceBudgetTests {
         check(false, VPN013PrimaryResourceBudget.valid(paddings: [0, 0, 0, 0, 0]),
               "more than four S fields")
         check(false, VPN013PrimaryResourceBudget.valid(initialPackets: ["<r -1>"]), "negative I allocation")
-        check(false, VPN013PrimaryResourceBudget.valid(initialPackets: ["<r 999999999999999999999999999999999>"],
+        check(false, VPN013PrimaryResourceBudget.valid(initialPackets: ["<r 999999999999999999999999999999999>"]),
               "overflowing I allocation")
         check(false, VPN013PrimaryResourceBudget.valid(initialPackets: ["<r 4097>"]), "oversize I allocation")
         check(false, VPN013PrimaryResourceBudget.valid(initialPackets: ["<unknown 1>"]), "unknown I tag")
         check(false, VPN013PrimaryResourceBudget.valid(initialPackets: ["<b 0x0>"]), "invalid I hex")
         check(false, VPN013PrimaryResourceBudget.valid(initialPackets: ["<r 3000><b " +
-                                             Array(repeating: "aa", count: 1_097).joined() + ">"],
+                                             Array(repeating: "aa", count: 1_097).joined() + ">"]),
               "combined I chain over 4096 bytes")
         check(false, VPN013PrimaryResourceBudget.valid(initialPackets: ["<r 1"]), "unclosed I tag")
         check(false, VPN013PrimaryResourceBudget.valid(initialPackets: [Array(repeating: "<d>", count: 129).joined()]),

@@ -270,6 +270,13 @@ final class AutoTunnelUITests:XCTestCase {
         }
     }
     private func nativeTrialApp(_ variant: String = "") -> XCUIApplication {
+        addUIInterruptionMonitor(withDescription: "Notification authorization") { alert in
+            for title in ["Allow", "Разрешить", "Don’t Allow", "Не разрешать"] {
+                let button = alert.buttons[title]
+                if button.exists { button.tap(); return true }
+            }
+            return false
+        }
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-native-trial" + variant]
         app.launch(); XCTAssertTrue(app.buttons["vpn013.add-profile"].waitForExistence(timeout:20)); return app

@@ -8,8 +8,10 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import signal
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 
@@ -23,9 +25,10 @@ ADDED = frozenset({
     "testCreateAutomaticFromThirteenImportedFixtures",
 })
 PREFIX = "AutoTunnelUITests/AutoTunnelUITests/"
+SHARDS = ("coreA", "coreB", "coreC", "added5")
 # The 54 UI method bodies and the native WireGuard fixture assertions must
 # remain the reviewed b9ecff4 sources. Updating them requires a new review.
-UI_TEST_SOURCE_SHA256 = "aa06bd4abcf6d2267127eb3973a2d952e4f9da78898c79d42eb3a67533b7f5ea"
+UI_TEST_SOURCE_SHA256 = "707ffc71eef6c1c3bc55eb36adbabf2b9c9014ebee1374113c7f9f9a4613faad"
 WG_FIXTURE_SHA256 = "042857ae089e4ec98d5b2d3da4e3079c1373656429800b4cda22ddf87f568be1"
 CASE = re.compile(r"Test Case '-\[AutoTunnelUITests\.AutoTunnelUITests (test[A-Za-z0-9_]+)\]' (started|passed|failed)")
 
@@ -61,11 +64,11 @@ def selectors():
 
 def expected(shard):
     all_names = selectors()
-    if shard == "core49":
-        names = tuple(name for name in all_names if name not in ADDED)
-        if len(names) != 49:
+    if shard in ("coreA", "coreB", "coreC", "core49"):
+        core = tuple(name for name in all_names if name not in ADDED)
+        if len(core) != 49:
             raise ValueError("core shard is not 49 tests")
-        return names
+        return {"coreA": core[:17], "coreB": core[17:33], "coreC": core[33:], "core49": core}[shard]
     if shard == "added5":
         return tuple(name for name in all_names if name in ADDED)
     if shard == "all54":
@@ -142,6 +145,8 @@ def from_artifact(path, shard, source_sha, run_id, attempt):
             raise ValueError(f"{shard}: duplicate archive member")
         for name in names_in_zip:
             safe_review_member(name)
+        if any(stat.S_ISLNK(info.external_attr >> 16) for info in archive.infolist()):
+            raise ValueError(f"{shard}: symbolic links are not allowed")
         members = set(names_in_zip)
         required = {"review/shard-proof.json", "review/test-summary.json"}
         if not required.issubset(members):
@@ -167,28 +172,28 @@ def from_artifact(path, shard, source_sha, run_id, attempt):
         return proof, summary, raw, images, diagnostic
 
 
-def aggregate(core_path, added_path, output, source_sha, run_id, attempt):
+def aggregate(core_a_path, core_b_path, core_c_path, added_path, output, source_sha, run_id, attempt):
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha) or not run_id.isdecimal() or not attempt.isdecimal():
         raise ValueError("invalid source SHA, run ID, or attempt")
-    core = from_artifact(core_path, "core49", source_sha, run_id, attempt)
-    added = from_artifact(added_path, "added5", source_sha, run_id, attempt)
-    all_names = core[0]["passedSelectors"] + added[0]["passedSelectors"]
+    items = [(shard, from_artifact(path, shard, source_sha, run_id, attempt)) for shard, path in zip(
+        SHARDS, (core_a_path, core_b_path, core_c_path, added_path))]
+    all_names = [name for _shard, item in items for name in item[0]["passedSelectors"]]
     if len(all_names) != 54 or set(all_names) != set(selectors()) or len(set(all_names)) != 54:
         raise ValueError("combined shards do not cover each of the 54 selectors exactly once")
-    attachments = len(core[3]) + len(added[3])
+    attachments = sum(len(item[3]) for _shard, item in items)
     merged = {
         "result": "Passed", "passedTests": 54, "totalTestCount": 54,
         "failedTests": 0, "skippedTests": 0, "expectedFailures": 0, "testFailures": [],
-        "source": "two actual current-source xcresult summaries", "sourceSha": source_sha,
-        "runId": run_id, "runAttempt": attempt, "shards": ["core49", "added5"],
+        "source": "four actual current-source xcresult summaries", "sourceSha": source_sha,
+        "runId": run_id, "runAttempt": attempt, "shards": list(SHARDS),
         "title": "Aggregated Test - VPN013Auto",
         "devicesAndConfigurations": [
             dict(item[1]["devicesAndConfigurations"][0], shard=shard)
-            for shard, item in (("core49", core), ("added5", added))
+            for shard, item in items
         ],
     }
     scope = {
-        "iPhoneNativeSuite": 54, "renderedEvidence": "actual XCUITest attachments from two current-source shards",
+        "iPhoneNativeSuite": 54, "renderedEvidence": "actual XCUITest attachments from four current-source shards",
         "attachmentImages": attachments, "physicalIPhoneTested": False,
         "iPadTested": False, "standaloneCapturesAccepted": False,
         "sourceSha": source_sha, "runId": run_id, "runAttempt": attempt,
@@ -197,7 +202,7 @@ def aggregate(core_path, added_path, output, source_sha, run_id, attempt):
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("review/test-summary.json", json.dumps(merged, indent=2) + "\n")
         archive.writestr("review/iphone-only-scope.json", json.dumps(scope, indent=2) + "\n")
-        for shard, item in (("core49", core), ("added5", added)):
+        for shard, item in items:
             proof, _summary, raw, images, diagnostic = item
             archive.writestr(f"review/shard-proof-{shard}.json", json.dumps(proof, indent=2) + "\n")
             archive.writestr(f"review/test-summary-{shard}.json", raw)
@@ -222,6 +227,8 @@ def verify_combined(path, source_sha, run_id, attempt, review=None, require_curr
         if len(set(names_in_zip)) != len(names_in_zip):
             raise ValueError("duplicate combined artifact member")
         relative_members = {name: safe_review_member(name) for name in names_in_zip}
+        if any(stat.S_ISLNK(info.external_attr >> 16) for info in archive.infolist()):
+            raise ValueError("symbolic links are not allowed in combined artifact")
         members = set(names_in_zip)
         required = {"review/test-summary.json", "review/iphone-only-scope.json"}
         if not required.issubset(members):
@@ -232,12 +239,12 @@ def verify_combined(path, source_sha, run_id, attempt, review=None, require_curr
         if any(summary.get(key) != value for key, value in {
             "result": "Passed", "passedTests": 54, "totalTestCount": 54,
             "failedTests": 0, "skippedTests": 0, "expectedFailures": 0, "testFailures": [],
-            "source": "two actual current-source xcresult summaries", "sourceSha": source_sha,
-            "runId": run_id, "runAttempt": attempt, "shards": ["core49", "added5"],
+            "source": "four actual current-source xcresult summaries", "sourceSha": source_sha,
+            "runId": run_id, "runAttempt": attempt, "shards": list(SHARDS),
         }.items()):
             raise ValueError("combined summary is stale or incomplete")
         rows = summary.get("devicesAndConfigurations")
-        if not isinstance(rows, list) or len(rows) != 2:
+        if not isinstance(rows, list) or len(rows) != len(SHARDS):
             raise ValueError("combined simulator rows are incomplete")
         if any(scope.get(key) != value for key, value in {
             "iPhoneNativeSuite": 54, "physicalIPhoneTested": False, "iPadTested": False,
@@ -247,7 +254,7 @@ def verify_combined(path, source_sha, run_id, attempt, review=None, require_curr
             raise ValueError("combined scope is stale or inaccurate")
         seen = []
         image_count = 0
-        for index, shard in enumerate(("core49", "added5")):
+        for index, shard in enumerate(SHARDS):
             proof_name = f"review/shard-proof-{shard}.json"
             result_name = f"review/test-summary-{shard}.json"
             if proof_name not in members or result_name not in members:
@@ -298,8 +305,78 @@ def verify_combined(path, source_sha, run_id, attempt, review=None, require_curr
     return raw_summary
 
 
+def watchdog_diagnostics(shard, seconds, group_stopped=True):
+    """Best-effort diagnostics only; a timeout never creates a passing proof."""
+    review = ROOT / "build/review"
+    if review.is_symlink():
+        raise ValueError("review destination cannot be a symlink")
+    review.mkdir(parents=True, exist_ok=True)
+    (review / "shard-proof.json").unlink(missing_ok=True)
+    for name in ("watchdog-xcresult-summary.json", "watchdog-state.json"):
+        target = review / name
+        if target.is_symlink() or not target.resolve().is_relative_to(review.resolve()):
+            raise ValueError("watchdog output escapes review directory")
+    state = {"shard": shard, "timedOut": True, "seconds": seconds, "groupStopped": group_stopped, "proofAvailable": False,
+             "summaryExported": False, "attachmentImages": 0, "attachmentBytes": 0}
+    result = ROOT / "build/AutoTunnel.xcresult"
+    if group_stopped and result.is_dir() and not result.is_symlink():
+        with tempfile.TemporaryDirectory(prefix="vpn013-watchdog-") as temporary:
+            folder = Path(temporary)
+            summary = folder / "summary.json"
+            try:
+                with summary.open("wb") as output:
+                    completed = subprocess.run(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(result)],
+                        stdout=output, stderr=subprocess.DEVNULL, timeout=25, check=False)
+                if completed.returncode == 0 and 0 < summary.stat().st_size <= 8 * 1024 * 1024:
+                    raw = summary.read_bytes()
+                    if isinstance(json.loads(raw), dict):
+                        (review / "watchdog-xcresult-summary.json").write_bytes(raw)
+                        state["summaryExported"] = True
+            except (OSError, ValueError, subprocess.TimeoutExpired):
+                pass
+            exported = folder / "flow"
+            try:
+                completed = subprocess.run(["xcrun", "xcresulttool", "export", "attachments", "--path", str(result), "--output-path", str(exported)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=35, check=False)
+                if completed.returncode == 0 and exported.is_dir() and not exported.is_symlink():
+                    flow = review / "watchdog-flow"
+                    if flow.is_symlink():
+                        raise ValueError("watchdog image destination cannot be a symlink")
+                    for directory, dirs, files in os.walk(exported, followlinks=False):
+                        dirs[:] = [name for name in dirs if not (Path(directory) / name).is_symlink()]
+                        for name in sorted(files):
+                            image = Path(directory) / name
+                            if image.is_symlink() or not image.is_file() or image.stat().st_size > 20 * 1024 * 1024:
+                                continue
+                            data = image.read_bytes()
+                            if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+                                continue
+                            if state["attachmentBytes"] + len(data) > 100 * 1024 * 1024:
+                                continue
+                            flow.mkdir(parents=True, exist_ok=True)
+                            target = flow / f"attachment-{state['attachmentImages']:03d}.png"
+                            if target.is_symlink() or not target.resolve().is_relative_to(review.resolve()):
+                                raise ValueError("watchdog image escapes review directory")
+                            target.write_bytes(data)
+                            state["attachmentImages"] += 1
+                            state["attachmentBytes"] += len(data)
+                            if state["attachmentImages"] >= 200:
+                                break
+                        if state["attachmentImages"] >= 200:
+                            break
+            except (OSError, ValueError, subprocess.TimeoutExpired):
+                pass
+    (review / "watchdog-state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+
+
 def run(shard, seconds):
+    if shard not in SHARDS or not 1 <= seconds <= 2400:
+        raise ValueError("invalid native shard or watchdog bound")
     log = ROOT / "build/simulator-test.log"
+    proof = ROOT / "build/review/shard-proof.json"
+    if proof.is_symlink() or proof.parent.is_symlink():
+        raise ValueError("review proof destination cannot be a symlink")
+    proof.unlink(missing_ok=True)
     env = dict(os.environ, VPN013_UI_SHARD=shard)
     process = subprocess.Popen(["sh", "inspect-on-mac.sh"], cwd=ROOT, env=env, start_new_session=True)
     deadline = time.monotonic() + seconds
@@ -323,13 +400,28 @@ def run(shard, seconds):
     while process.poll() is None:
         progress()
         if time.monotonic() >= deadline:
-            os.killpg(process.pid, signal.SIGTERM)
+            try: os.killpg(process.pid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError): pass
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
+                pass
+            # The shell may have exited while xcodebuild still owns the group.
+            try: os.killpg(process.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError): pass
+            try: process.wait(timeout=10)
+            except subprocess.TimeoutExpired: pass
+            group_stopped = False
+            for _ in range(50):
+                try: os.killpg(process.pid, 0)
+                except ProcessLookupError:
+                    group_stopped = True
+                    break
+                except PermissionError:
+                    break
+                time.sleep(0.1)
             progress()
+            watchdog_diagnostics(shard, seconds, group_stopped)
             print(f"Native UI {shard}: timed out after {seconds} seconds; diagnostic artifact should still upload", flush=True)
             return 124
         time.sleep(10)
@@ -341,13 +433,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     choose = sub.add_parser("selectors")
-    choose.add_argument("shard", choices=("core49", "added5", "all54"))
+    choose.add_argument("shard", choices=SHARDS + ("core49", "all54"))
     verify_cmd = sub.add_parser("verify")
-    verify_cmd.add_argument("shard", choices=("core49", "added5", "all54"))
+    verify_cmd.add_argument("shard", choices=SHARDS + ("core49", "all54"))
     verify_cmd.add_argument("--review", type=Path, default=ROOT / "build/review")
     verify_cmd.add_argument("--log", type=Path, default=ROOT / "build/simulator-test.log")
     combine = sub.add_parser("aggregate")
-    combine.add_argument("--core", type=Path, required=True)
+    combine.add_argument("--core-a", type=Path, required=True)
+    combine.add_argument("--core-b", type=Path, required=True)
+    combine.add_argument("--core-c", type=Path, required=True)
     combine.add_argument("--added", type=Path, required=True)
     combine.add_argument("--output", type=Path, required=True)
     combine.add_argument("--source-sha", required=True)
@@ -360,7 +454,7 @@ def main():
     release.add_argument("--attempt", required=True)
     release.add_argument("--review", type=Path)
     drive = sub.add_parser("run")
-    drive.add_argument("shard", choices=("core49", "added5"))
+    drive.add_argument("shard", choices=SHARDS)
     drive.add_argument("--seconds", type=int, default=2400)
     args = parser.parse_args()
     try:
@@ -369,7 +463,7 @@ def main():
         elif args.command == "verify":
             verify(args.shard, args.review, args.log)
         elif args.command == "aggregate":
-            aggregate(args.core, args.added, args.output, args.source_sha, args.run_id, args.attempt)
+            aggregate(args.core_a, args.core_b, args.core_c, args.added, args.output, args.source_sha, args.run_id, args.attempt)
         elif args.command == "verify-combined":
             verify_combined(args.artifact, args.source_sha, args.run_id, args.attempt, args.review)
         else:

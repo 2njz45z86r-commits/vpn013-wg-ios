@@ -40,13 +40,13 @@ final class NativeTrialCoordinator: NSObject, UNUserNotificationCenterDelegate {
         generation = nil; network?.cancel(); network = nil; poll?.cancel(); poll = nil
         progress?.dismiss(animated: false); progress = nil
     }
-    private func message(_ title: String, _ text: String, from vc: UIViewController) {
+    private func message(_ title: String, _ text: String, from vc: UIViewController, onDismiss: (() -> Void)? = nil) {
         var detail = text
         #if DEBUG && targetEnvironment(simulator)
         if Self.fixture != nil { detail += "\nСинтетический стенд: выдач \(fixtureCreates), загрузок \(fixtureDownloads)." }
         #endif
         let alert = UIAlertController(title: title, message: detail, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Готово", style: .cancel)); vc.present(alert, animated: true)
+        alert.addAction(UIAlertAction(title: "Готово", style: .cancel) { _ in onDismiss?() }); vc.present(alert, animated: true)
     }
     func show(manager: TunnelsManager, presenter: UIViewController) {
         guard generation == nil, !ClientUpdateCoordinator.shared.busy else { return }
@@ -143,12 +143,13 @@ final class NativeTrialCoordinator: NSObject, UNUserNotificationCenterDelegate {
                             if let error = error { self.failed(error, stamp: stamp); return }
                             self.scheduleNotifications()
                             self.finish(stamp: stamp) {
-                                self.notifications.requestAuthorization(options: [.alert, .sound]) { allowed, _ in DispatchQueue.main.async {
-                                    self.scheduleNotifications()
-                                    guard let presenter = self.presenter else { return }
-                                    let deadline = Date(timeIntervalSince1970: Double(info.expiresAt) / 1000)
-                                    self.message(info.isTrial ? "Тестовые профили добавлены" : "Конфигурации обновлены", "Добавлено профилей: \(doc.snapshot.servers.count). Доступ до " + DateFormatter.localizedString(from: deadline, dateStyle: .medium, timeStyle: .short) + ". Выберите сервер и включите VPN." + (allowed ? "" : " Уведомления отключены; продление доступно в приложении."), from: presenter)
-                                } }
+                                guard let presenter = self.presenter else { return }
+                                let deadline = Date(timeIntervalSince1970: Double(info.expiresAt) / 1000)
+                                self.message(info.isTrial ? "Тестовые профили добавлены" : "Конфигурации обновлены", "Добавлено профилей: \(doc.snapshot.servers.count). Доступ до " + DateFormatter.localizedString(from: deadline, dateStyle: .medium, timeStyle: .short) + ". Выберите сервер и включите VPN. Для напоминаний разрешите уведомления; продление доступно в приложении.", from: presenter) {
+                                    self.notifications.requestAuthorization(options: [.alert, .sound]) { _, _ in
+                                        DispatchQueue.main.async { self.scheduleNotifications() }
+                                    }
+                                }
                             }
                         }
                     } catch { self.failed(error, stamp: stamp) }
