@@ -14,12 +14,15 @@ on:
     paths:
       - 'overlay/**'
       - 'build-on-mac.sh'
+      - 'inspect-on-mac.sh'
       - 'publish-client-release.py'
       - 'capture-ios-simulators.py'
-      - 'reuse-passed-ios159-tests.py'
+      - 'scripts/native_ui_shards.py'
+      - 'scripts/tests/test_native_ui_shards.py'
       - '.github/workflows/build-ios.yml'
+      - '.github/workflows/native-unified-check.yml'
 permissions:
-  contents: write
+  contents: read
   actions: read
 concurrency:
   group: vpn013-ios-${{ inputs.development_check && 'development' || 'release' }}
@@ -28,11 +31,19 @@ jobs:
   security-review:
     if: inputs.development_check != true
     uses: ./.github/workflows/security-review.yml
+  native-ui:
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/native-unified-check.yml
   build:
     if: inputs.development_check != true
-    needs: [security-review]
+    needs: [security-review, native-ui]
     runs-on: macos-15-intel
     timeout-minutes: 65
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -61,39 +72,32 @@ jobs:
           python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-upstream-findings.enc.json --recipient scripts/audit-recipient.pub
           upstream_result=$?
           test "$patched_result" -eq 0 && test "$upstream_result" -eq 0
-      - name: Verify native checks and appearances
+      - name: Verify this run's combined 54-selector native evidence
         id: native
         env:
           GH_TOKEN: ${{ github.token }}
-          NO_COLOR: '1'
         run: |
-          if [ "$(git rev-parse HEAD:overlay)" = "fd5121b3ab451c4ba338e5717fac145286df07a2" ]; then
-            python3 reuse-ios173-passed-ui.py
-          elif [ "$(git rev-parse HEAD:overlay)" = "ee18933eb450cd1ad7b52e8ef95799ea56be47d7" ]; then
-            python3 reuse-ios172-passed-ui.py
-          elif [ "$(git rev-parse HEAD:overlay)" = "ff6dd5ba2b107d465b07509c58092fdad9c51c91" ]; then
-            python3 reuse-ios171-passed-ui.py
-          elif [ "$(git rev-parse HEAD:overlay)" = "c2180d18a45cceca98f12af6d8fc369df17f0906" ]; then
-            python3 reuse-ios17-passed-ui.py
-          elif [ "$(git rev-parse HEAD:overlay)" = "f80ad4e4f8dd23ae3737e8869ea61ced1c5d5ce5" ]; then
-            python3 reuse-complete-unified-review.py
-          elif [ "$(git rev-parse HEAD:overlay)" = "7831fa62836b83a3b4abe2dd3e5dd21cdfe4847d" ] && [ "$(git rev-parse HEAD:build-on-mac.sh)" = "d526fbb1a457c3683747e2c23347153b747749fa" ] && [ "$(git rev-parse HEAD:inspect-on-mac.sh)" = "4deaae0abd6399f249a2af4842d596eb3219533a" ] && [ "$(git rev-parse HEAD:publish-client-release.py)" = "af5bd9febff562a1898585b825e8bdd386facd3b" ]; then
-            python3 reuse-passed-ios159-tests.py
-          elif [ "$(git rev-parse HEAD:overlay)" = "e1011585812b85d7b6292a6816085a18eed139d2" ]; then
-            python3 reuse-complete-routing-review.py
-          elif [ "$(git rev-parse HEAD:overlay)" = "3827104e3a60539a4cd8e4eff7b1f3a7828bfbcd" ] && [ "$(git rev-parse HEAD:build-on-mac.sh)" = "bb14b80743baf457674855b2286e8cbe0c03da04" ] && [ "$(git rev-parse HEAD:inspect-on-mac.sh)" = "a35ee4de8dc5244e15cf62a2d7589c6f75bf64f5" ]; then
-            if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
-            python3 reuse-reviewed-ios-validation.py
-          elif [ "$(git rev-parse HEAD:overlay)" = "adb8f91595889440912b7a2b3a29de081628b2fa" ]; then
-            python3 reuse-verified-native-review.py
-          else
-            sh inspect-on-mac.sh
-          fi
+          set -eu
+          mkdir -p build/native-ui-artifact
+          gh run download "$GITHUB_RUN_ID" \
+            --name "unified-native-review-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --dir build/native-ui-artifact
+          python3 scripts/native_ui_shards.py verify-combined \
+            --artifact build/native-ui-artifact/unified-native-review.zip \
+            --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --review build/review
       - name: Package credential-free inspection evidence
         if: always()
         run: |
           mkdir -p build/review
-          (cd build && zip -qr native-review.zip review -i '*.png' '*.json')
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          with zipfile.ZipFile('build/native-review.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              for path in Path('build/review').rglob('*'):
+                  if path.is_file() and path.suffix in ('.png', '.json'):
+                      archive.write(path, path.as_posix().removeprefix('build/'))
+          PY
       - name: Prepare verified IPA and exact public metadata
         if: success()
         run: |
@@ -136,8 +140,3 @@ jobs:
       - name: Export credential-free development files for verification
         if: always()
         run: python3 export-build-evidence.py
-  unified-development:
-    if: github.event_name == 'workflow_dispatch' && inputs.development_check == true
-    permissions:
-      contents: read
-    uses: ./.github/workflows/native-unified-check.yml

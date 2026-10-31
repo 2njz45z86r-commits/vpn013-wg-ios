@@ -7,63 +7,19 @@ device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;v=
 xcrun simctl boot "$device" || true
 xcrun simctl bootstatus "$device" -b
 cd build/awg
+# Prove the compiled UI cases and native persistence fixture are the reviewed
+# overlay bytes before selecting either shard.
+cmp -s VPN013/UITests.swift ../../overlay/VPN013/UITests.swift
+cmp -s Sources/WireGuardApp/Tunnel/TunnelsManager.swift ../../overlay/Sources/WireGuardApp/Tunnel/TunnelsManager.swift
+shard=${VPN013_UI_SHARD:-all54}
+case "$shard" in core49|added5|all54) ;; *) echo "Invalid native UI shard" >&2; exit 2 ;; esac
+# The helper checks the exact 54 source methods and assigns every selector once.
+selector_args=$(python3 ../../scripts/native_ui_shards.py selectors "$shard")
+set -- $selector_args
 set +e
 xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug -sdk iphonesimulator \
  -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testTwoPersonalServers \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testThirtyPersonalServers \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testFivePersonalServers \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testFourteenPersonalServers \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testMoreThanThirteenPersonalServers \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSinglePersonalServerExplainsNoReserve \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCreateAutomaticFromThirteenImportedFixtures \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testEmptyListDisablesAutomaticCreation \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCenteredAddShowsPurchaseAndThreeDayTrial \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayTrialImportsFullZIPWithoutBrowser \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayRepeatedButtonKeepsSameProfiles \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayUnsafeZIPPreservesExistingProfiles \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayExpiredOffersPersonalRenewalWithoutImport \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedZipImportsThirteenWithoutDuplicateError \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedOwnerProxyZIPSelectsIncyAndPreviewsProfile \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testRedesignedListKeepsNativeControls \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAddMenuKeepsAllActions \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testDeveloperFooterAvailable \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testDarkEmptyListKeepsDeveloperFooter \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testLargeTextKeepsSwitchAndDeveloperFooter \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnavailableLogStopsSpinnerAndShowsExplanation \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingButtonMeasuresActualLoopbackWithoutStartingVPN \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPingCancellationIsAvailable \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUpdatesScreenAndOrderSynchronization \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUpdateDownloadUsesDirectIPAInsteadOfTelegram \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSettingsBrandWordmarkAndVersionUseShortName \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutoPinnedFirstWithCurrentMemberAndPing \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentServerPingAndInfo \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualHandshakeSummaryUsesReturnedRuntimeData \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithMissingRuntime \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithRuntimeTimeout \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutoMissingRuntimeDoesNotPingSeed \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCurrentPowerButtonRemembersManualProfile \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCurrentPowerButtonControlsAutoWithoutRuntime \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCurrentPowerButtonEmptyAndLargeType \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCurrentPowerButtonDisabledDuringTransition \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeRussianIPRouteObjectsPreserveVPNAndPeers \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedSectionsImportAndIsolation \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testInvitationReachableFromEveryProxySectionWithoutSharingProfiles \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSettingsReachableInEveryProxySectionAndPreserveImportText \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testTrafficSummaryUsesAdaptiveUnits \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testPowerTrafficAndPingPanelPresentInEveryProxySection \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testRoutingSelectsMultipleServersAndPreservesUnselected \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testProxyRowConnectsAndOnlyRightStripOpensConfiguration \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testServiceCatalogGroupsExclusiveModesAndRememberedSelection \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testWireGuardServicesUseOwnServersAndKeepUnselectedConfiguration \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedInvalidImportKeepsProfiles \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedRoutingPersistsTypedPolicy \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutomaticModeDefaultSharedAndPersistent \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testFullJSONImportsVisibleRosterWithoutBackupDuplicates \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testProxySubscriptionRosterRestoresDeletedAndPreservesOtherSources \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testProxyMissingRuntimeNeverDisplaysAutomaticSeedAsCurrentServer \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedRemembersSelectedSection \
- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCrossProtocolRuntimeUsesActualSectionAndGlobalStop \
+ "$@" \
  -derivedDataPath ../SimulatorDerivedData -resultBundlePath ../AutoTunnel.xcresult CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= \
  test > ../simulator-test.log 2>&1
 result=$?
@@ -80,15 +36,6 @@ if [ -d build/AutoTunnel.xcresult ]; then
  xcrun xcresulttool export attachments --path build/AutoTunnel.xcresult --output-path build/review/flow
  xcrun xcresulttool get test-results summary --path build/AutoTunnel.xcresult > build/review/test-summary.json || true
 fi
-# A missing selector must never silently reduce the required native suite.
-if [ "$result" -eq 0 ]; then
- python3 - <<'PY'
-import json
-from pathlib import Path
-s=json.loads(Path('build/review/test-summary.json').read_text())
-assert s['result']=='Passed' and s['passedTests']==54 and s['totalTestCount']==54 and s['failedTests']==0 and s['skippedTests']==0 and s.get('testFailures')==[],s
-PY
-fi
 # Keep failure screenshots with a PNG extension; never publish UI hierarchy text.
 python3 - <<'PY'
 from pathlib import Path
@@ -97,16 +44,20 @@ for path in Path('build/review/flow').glob('*'):
  if path.is_file() and not path.suffix and path.read_bytes()[:8] == b'\x89PNG\r\n\x1a\n':
   shutil.copy2(path,path.with_suffix('.png'))
 PY
-if [ "$result" -eq 0 ] && [ "${VPN013_IPHONE_ONLY:-0}" != 1 ]; then
+if [ "$result" -eq 0 ]; then
+ python3 scripts/native_ui_shards.py verify "$shard"
+fi
+if [ "$result" -eq 0 ] && [ "$shard" = all54 ] && [ "${VPN013_IPHONE_ONLY:-0}" != 1 ]; then
  python3 capture-ios-simulators.py
 elif [ "$result" -eq 0 ]; then
+ export VPN013_UI_SHARD="$shard"
  python3 - <<'PY'
 import json
 from pathlib import Path
 flow=Path('build/review/flow')
 images=[p for p in flow.glob('*.png') if p.read_bytes()[:8]==b'\x89PNG\r\n\x1a\n']
 assert images, 'Real XCUITest attachments are required'
-Path('build/review/iphone-only-scope.json').write_text(json.dumps({'iPhoneNativeSuite':54,'renderedEvidence':'actual XCUITest attachments','attachmentImages':len(images),'physicalIPhoneTested':False,'iPadTested':False,'standaloneCapturesAccepted':False}))
+Path('build/review/iphone-only-scope.json').write_text(json.dumps({'iPhoneNativeSuite':{'core49':49,'added5':5,'all54':54}[__import__('os').environ['VPN013_UI_SHARD']],'renderedEvidence':'actual XCUITest attachments','attachmentImages':len(images),'physicalIPhoneTested':False,'iPadTested':False,'standaloneCapturesAccepted':False}))
 PY
 fi
 test "$result" -eq 0

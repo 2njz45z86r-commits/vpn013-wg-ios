@@ -4,6 +4,7 @@ on:
   workflow_call:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: vpn013-unified-development
   cancel-in-progress: false
@@ -11,10 +12,18 @@ jobs:
   native:
     runs-on: macos-15-intel
     timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [core49, added5]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Check exact shard partition and evidence rejection guards
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -m unittest scripts.tests.test_native_ui_shards -q
       - name: Compile the exact app and extension in an isolated development runner
         id: compile
         run: sh build-on-mac.sh
@@ -34,11 +43,11 @@ jobs:
           python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-upstream-findings.enc.json --recipient scripts/audit-recipient.pub
           upstream_result=$?
           test "$patched_result" -eq 0 && test "$upstream_result" -eq 0
-      - name: Run all native iPhone scenarios and export actual XCUITest images
+      - name: Run exact native iPhone UI shard and export actual XCUITest images
         if: always() && steps.compile.outcome == 'success'
         env:
           VPN013_IPHONE_ONLY: '1'
-        run: sh inspect-on-mac.sh
+        run: python3 scripts/native_ui_shards.py run '${{ matrix.shard }}' --seconds 2400
       - name: Retain only credential-free diagnostic evidence, never an installable IPA
         if: always()
         run: |
@@ -53,20 +62,48 @@ jobs:
                   selected = [s for s in lines if 'error:' in s or 'XCTAssert' in s or 'Test Case ' in s or '** TEST' in s or 'BUILD ' in s]
                   (Path('build/review') / (source + '.summary.json')).write_text(json.dumps(selected[-160:]))
           PY
-          (cd build && zip -qr unified-native-review.zip review -i '*.png' '*.json')
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, os, zipfile
+          review = Path('build/review')
+          (review / 'run-state.json').write_text(json.dumps({
+              'sourceSha': os.environ['GITHUB_SHA'], 'runId': os.environ['GITHUB_RUN_ID'],
+              'runAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'jobId': os.environ['GITHUB_JOB'],
+              'shard': '${{ matrix.shard }}',
+              'proofAvailable': (review / 'shard-proof.json').is_file(),
+          }, indent=2))
+          with zipfile.ZipFile('build/unified-native-review.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              for path in review.rglob('*'):
+                  if path.is_file() and path.suffix in ('.json', '.png'):
+                      archive.write(path, path.as_posix().removeprefix('build/'))
+          PY
+      - name: Record per-shard result for the run summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, os
+          proof = Path('build/review/shard-proof.json')
+          label = '${{ matrix.shard }}'
+          result = json.loads(proof.read_text()) if proof.exists() else None
+          message = f"{label}: {result['passedTests']}/{result['passedTests']} actual tests, SHA {result['sourceSha']}" if result else f'{label}: no verified shard proof; inspect diagnostics'
+          print(message)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('### Native iPhone UI shard\n\n' + message + '\n')
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         id: review_upload
         if: always()
         continue-on-error: true
         with:
-          name: unified-native-review-${{ github.run_id }}
+          name: unified-native-review-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
           retention-days: 7
           path: build/unified-native-review.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         id: review_retry
         if: always() && steps.review_upload.outcome == 'failure'
         with:
-          name: unified-native-review-${{ github.run_id }}-retry
+          name: unified-native-review-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}-retry
           retention-days: 7
           path: build/unified-native-review.zip
           if-no-files-found: error
@@ -76,3 +113,54 @@ jobs:
           FIRST: ${{ steps.review_upload.outcome }}
           RETRY: ${{ steps.review_retry.outcome }}
         run: test "$FIRST" = success || test "$RETRY" = success
+  aggregate:
+    if: always()
+    needs: [native]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Download both same-run shard artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          mkdir -p build/shards/core49 build/shards/added5
+          for shard in core49 added5; do
+            name="unified-native-review-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${shard}"
+            if ! gh run download "$GITHUB_RUN_ID" --name "$name" --dir "build/shards/$shard"; then
+              gh run download "$GITHUB_RUN_ID" --name "$name-retry" --dir "build/shards/$shard"
+            fi
+            test -f "build/shards/$shard/unified-native-review.zip"
+          done
+      - name: Require two successful jobs and 54 unique actual same-source tests
+        env:
+          MATRIX_RESULT: ${{ needs.native.result }}
+        run: |
+          set -eu
+          test "$MATRIX_RESULT" = success
+          python3 scripts/native_ui_shards.py aggregate \
+            --core build/shards/core49/unified-native-review.zip \
+            --added build/shards/added5/unified-native-review.zip \
+            --output build/unified-native-review.zip \
+            --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+          python3 - <<'PY'
+          import json, os, zipfile
+          with zipfile.ZipFile('build/unified-native-review.zip') as archive:
+              summary = json.loads(archive.read('review/test-summary.json'))
+              scope = json.loads(archive.read('review/iphone-only-scope.json'))
+          assert summary['passedTests'] == summary['totalTestCount'] == scope['iPhoneNativeSuite'] == 54
+          message = f"54/54 actual selectors passed in core49 + added5; source {summary['sourceSha']}; run {summary['runId']}; {scope['attachmentImages']} XCUITest images"
+          print(message)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('### Native iPhone UI aggregate\n\n' + message + '\n')
+          PY
+      - name: Retain combined review with the legacy 54-test summary path
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unified-native-review-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: error
+          path: build/unified-native-review.zip

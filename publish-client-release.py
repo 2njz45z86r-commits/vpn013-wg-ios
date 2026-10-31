@@ -1,10 +1,15 @@
 """Publish public, credential-free metadata only after successful native tests."""
 import base64, hashlib, json, os, plistlib, subprocess, zipfile, sys, re
 from pathlib import Path
+from scripts.native_ui_shards import verify_combined
 
 repository = os.environ['GITHUB_REPOSITORY']
 assert repository == '2njz45z86r-commits/vpn013-wg-ios'
 run = os.environ['GITHUB_RUN_ID']
+attempt = os.environ['GITHUB_RUN_ATTEMPT']
+combined_summary = verify_combined(Path('build/native-ui-artifact/unified-native-review.zip'),
+    os.environ['GITHUB_SHA'], run, attempt)
+assert Path('build/review/test-summary.json').read_bytes() == combined_summary, 'Native summary differs from verified same-run artifact'
 verification = json.loads(Path('build/review/bundle-verification.json').read_text())
 ipa = Path('build/VPN013AWG-unsigned.ipa')
 summary = json.loads(Path('build/review/test-summary.json').read_text())
