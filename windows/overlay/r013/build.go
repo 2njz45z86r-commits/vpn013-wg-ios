@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
 package r013
 
-// Matches the shared release catalog for Windows1.5.6.
-const CurrentBuild = 9
+// Candidate Windows 1.5.7 advertises build 10 after a signed catalog update.
+const CurrentBuild = 10

@@ -54,8 +54,25 @@ jobs:
           $env:CGO_ENABLED='1'
           $env:CC='x86_64-w64-mingw32-gcc'
           $env:GOFLAGS='-mod=vendor'
-          python "$env:GITHUB_WORKSPACE/scripts/check_go_security.py" "$PWD" --level symbol
-          if ($LASTEXITCODE -ne 0) {throw 'Private Go dependency review required'}
+          $report=Join-Path $env:RUNNER_TEMP 'windows-go-findings.enc.json'
+          $recipient=Join-Path $env:GITHUB_WORKSPACE 'scripts/audit-recipient.pub'
+          $provenancePath=Join-Path $env:RUNNER_TEMP 'windows-go-provenance.json'
+          $scanInfo=[ordered]@{schema=1;sourceCommit=$env:GITHUB_SHA;runId=$env:GITHUB_RUN_ID;scanLevel='symbol';goVersion=(& go version);goModSHA256=(Get-FileHash -LiteralPath 'go.mod' -Algorithm SHA256).Hash.ToLower();goSumSHA256=(Get-FileHash -LiteralPath 'go.sum' -Algorithm SHA256).Hash.ToLower();recipientSHA256=(Get-FileHash -LiteralPath $recipient -Algorithm SHA256).Hash.ToLower();all34ControlsApproved=$false;status='started'}
+          $scanInfo | ConvertTo-Json | Set-Content -LiteralPath $provenancePath -Encoding utf8
+          $scanOutput=@(& python "$env:GITHUB_WORKSPACE/scripts/check_go_security.py" "$PWD" --level symbol --encrypted-report $report --recipient $recipient)
+          $scanExit=$LASTEXITCODE
+          if (Test-Path -LiteralPath $report) {$scanInfo['encryptedReportSHA256']=(Get-FileHash -LiteralPath $report -Algorithm SHA256).Hash.ToLower()}
+          $scanInfo['status']=if ($scanExit -eq 0) {'pass'} else {'blocked'}
+          if ($scanExit -eq 0) {
+            $summary=($scanOutput -join "`n") | ConvertFrom-Json
+            if ($summary.goSecurityScan -ne 'pass' -or $summary.all34ControlsApproved -ne $false -or $null -eq $summary.moduleOnlyRecordsForPrivateReview) {throw 'Invalid private scan summary'}
+            $scanInfo['moduleOnlyRecordsForPrivateReview']=[int]$summary.moduleOnlyRecordsForPrivateReview
+          }
+          $scanInfo | ConvertTo-Json | Set-Content -LiteralPath $provenancePath -Encoding utf8
+          if ($scanExit -ne 0 -or !(Test-Path -LiteralPath $report)) {throw 'Private Go dependency review required'}
+          $envelope=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($envelope.Version -ne 1 -or [Convert]::FromBase64String($envelope.Ephemeral).Length -ne 32 -or [Convert]::FromBase64String($envelope.Nonce).Length -ne 12 -or [Convert]::FromBase64String($envelope.Ciphertext).Length -lt 16) {throw 'Encrypted dependency report is invalid'}
+          Write-Output ("Go dependency scan completed; {0} module-only records require private review." -f $scanInfo['moduleOnlyRecordsForPrivateReview'])
       - name: Prepare exact inert owner catalog for mandatory no-skip tests
         run: |
           $catalog=Join-Path $env:RUNNER_TEMP 'pinned-service-catalog'
@@ -63,6 +80,9 @@ jobs:
           Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogUI.json" -Destination "$catalog/catalog-ui.json"
           Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogRules.json" -Destination "$catalog/catalog-rules.private.json"
           Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogGroups.json" -Destination "$catalog/catalog-groups.json"
+          foreach ($item in @(@('catalog-ui.json','4fbaf9d8985c50b47465034165180393e11546c396027e5ded57e7c53f5475a3'),@('catalog-rules.private.json','f69a0c79f3077981dca0600657b49a4a085610f76ef407a5f5e0d4874083476b'),@('catalog-groups.json','a88d52da61ab4e596bb6050843bf11619148de40235a00a8162c660aba1ab882'))) {
+            if ((Get-FileHash -LiteralPath (Join-Path $catalog $item[0]) -Algorithm SHA256).Hash.ToLower() -ne $item[1]) {throw 'Pinned owner catalog mismatch'}
+          }
           "VPN013_ROUTING_CATALOG_TEST_DIR=$catalog" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Verify actual hourly product and complete native safety inventory
         working-directory: vpn013-wg-windows
@@ -124,4 +144,7 @@ jobs:
             ${{ runner.temp }}/r013-power-*.png
             ${{ runner.temp }}/r013-traffic-*.png
             ${{ runner.temp }}/r013-services.png
+            ${{ runner.temp }}/r013-in-place-upgrade.json
+            ${{ runner.temp }}/windows-go-findings.enc.json
+            ${{ runner.temp }}/windows-go-provenance.json
           if-no-files-found: error

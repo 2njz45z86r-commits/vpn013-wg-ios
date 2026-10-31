@@ -14,7 +14,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: windows-1.5.6
+  group: windows-1.5.7
   cancel-in-progress: false
 jobs:
   security-review:
@@ -23,7 +23,7 @@ jobs:
     needs: [security-review]
     if: github.repository == '2njz45z86r-commits/vpn013-wg-ios'
     runs-on: windows-2025
-    timeout-minutes: 40
+    timeout-minutes: 65
     defaults:
       run:
         shell: pwsh
@@ -63,8 +63,36 @@ jobs:
           $env:CGO_ENABLED='1'
           $env:CC='x86_64-w64-mingw32-gcc'
           $env:GOFLAGS='-mod=vendor'
-          python "$env:GITHUB_WORKSPACE/scripts/check_go_security.py" "$PWD" --level symbol
-          if ($LASTEXITCODE -ne 0) {throw 'Private Go dependency review required'}
+          $report=Join-Path $env:RUNNER_TEMP 'windows-go-findings.enc.json'
+          $recipient=Join-Path $env:GITHUB_WORKSPACE 'scripts/audit-recipient.pub'
+          $provenancePath=Join-Path $env:RUNNER_TEMP 'windows-go-provenance.json'
+          $scanInfo=[ordered]@{schema=1;sourceCommit=$env:GITHUB_SHA;runId=$env:GITHUB_RUN_ID;scanLevel='symbol';goVersion=(& go version);goModSHA256=(Get-FileHash -LiteralPath 'go.mod' -Algorithm SHA256).Hash.ToLower();goSumSHA256=(Get-FileHash -LiteralPath 'go.sum' -Algorithm SHA256).Hash.ToLower();recipientSHA256=(Get-FileHash -LiteralPath $recipient -Algorithm SHA256).Hash.ToLower();all34ControlsApproved=$false;status='started'}
+          $scanInfo | ConvertTo-Json | Set-Content -LiteralPath $provenancePath -Encoding utf8
+          $scanOutput=@(& python "$env:GITHUB_WORKSPACE/scripts/check_go_security.py" "$PWD" --level symbol --encrypted-report $report --recipient $recipient)
+          $scanExit=$LASTEXITCODE
+          if (Test-Path -LiteralPath $report) {$scanInfo['encryptedReportSHA256']=(Get-FileHash -LiteralPath $report -Algorithm SHA256).Hash.ToLower()}
+          $scanInfo['status']=if ($scanExit -eq 0) {'pass'} else {'blocked'}
+          if ($scanExit -eq 0) {
+            $summary=($scanOutput -join "`n") | ConvertFrom-Json
+            if ($summary.goSecurityScan -ne 'pass' -or $summary.all34ControlsApproved -ne $false -or $null -eq $summary.moduleOnlyRecordsForPrivateReview) {throw 'Invalid private scan summary'}
+            $scanInfo['moduleOnlyRecordsForPrivateReview']=[int]$summary.moduleOnlyRecordsForPrivateReview
+          }
+          $scanInfo | ConvertTo-Json | Set-Content -LiteralPath $provenancePath -Encoding utf8
+          if ($scanExit -ne 0 -or !(Test-Path -LiteralPath $report)) {throw 'Private Go dependency review required'}
+          $envelope=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($envelope.Version -ne 1 -or [Convert]::FromBase64String($envelope.Ephemeral).Length -ne 32 -or [Convert]::FromBase64String($envelope.Nonce).Length -ne 12 -or [Convert]::FromBase64String($envelope.Ciphertext).Length -lt 16) {throw 'Encrypted dependency report is invalid'}
+          Write-Output ("Go dependency scan completed; {0} module-only records require private review." -f $scanInfo['moduleOnlyRecordsForPrivateReview'])
+      - name: Prepare exact inert owner catalog for mandatory no-skip tests
+        run: |
+          $catalog=Join-Path $env:RUNNER_TEMP 'pinned-service-catalog'
+          New-Item -ItemType Directory -Force -Path $catalog | Out-Null
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogUI.json" -Destination "$catalog/catalog-ui.json"
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogRules.json" -Destination "$catalog/catalog-rules.private.json"
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogGroups.json" -Destination "$catalog/catalog-groups.json"
+          foreach ($item in @(@('catalog-ui.json','4fbaf9d8985c50b47465034165180393e11546c396027e5ded57e7c53f5475a3'),@('catalog-rules.private.json','f69a0c79f3077981dca0600657b49a4a085610f76ef407a5f5e0d4874083476b'),@('catalog-groups.json','a88d52da61ab4e596bb6050843bf11619148de40235a00a8162c660aba1ab882'))) {
+            if ((Get-FileHash -LiteralPath (Join-Path $catalog $item[0]) -Algorithm SHA256).Hash.ToLower() -ne $item[1]) {throw 'Pinned owner catalog mismatch'}
+          }
+          "VPN013_ROUTING_CATALOG_TEST_DIR=$catalog" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Verify actual hourly product and complete native safety inventory
         working-directory: vpn013-wg-windows
         run: |
@@ -75,7 +103,7 @@ jobs:
           $env:CC='x86_64-w64-mingw32-gcc'
           $env:R013_CI_WINTUN_DLL=Join-Path $PWD 'amd64/wintun.dll'
           $env:R013_CI_CLIENT_EXE=Join-Path $PWD 'amd64/VPN013WG.exe'
-          python "$env:GITHUB_WORKSPACE/windows/release-check-hourly.py" "$env:RUNNER_TEMP/hourly-product-report" 'windows'
+          python "$env:GITHUB_WORKSPACE/windows/release-check-hourly.py" "$env:RUNNER_TEMP/hourly-product-report" 'windows' 'service-routing-139'
           if ($LASTEXITCODE -ne 0) {throw 'Actual hourly product acceptance failed'}
       - name: Test protocol, keys, recovery, policy and real ICMP
         working-directory: vpn013-wg-windows
@@ -86,6 +114,18 @@ jobs:
           $env:CC='x86_64-w64-mingw32-gcc'
           ./.deps/go/bin/go.exe test -mod=vendor -v ./r013 ./manager
           if ($LASTEXITCODE -ne 0) {throw 'Core tests failed'}
+      - name: Execute adaptive rate and actual owner catalog checks
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $catalog=Join-Path $env:RUNNER_TEMP 'pinned-service-catalog'
+          New-Item -ItemType Directory -Force -Path $catalog | Out-Null
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogUI.json" -Destination "$catalog/catalog-ui.json"
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogRules.json" -Destination "$catalog/catalog-rules.private.json"
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogGroups.json" -Destination "$catalog/catalog-groups.json"
+          $env:VPN013_ROUTING_CATALOG_TEST_DIR=$catalog
+          ./.deps/go/bin/go.exe test -mod=vendor -v ./r013traffic ./r013routing
+          if ($LASTEXITCODE -ne 0) {throw 'Traffic and catalog model checks failed'}
       - name: Test native current-card scenarios without customer VPN
         working-directory: vpn013-wg-windows
         run: |
@@ -106,33 +146,51 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: windows-1.5.6-native-evidence
+          name: windows-1.5.7-native-evidence
           path: |
             ${{ runner.temp }}/hourly-product-report
             ${{ runner.temp }}/r013-ui-*.json
             ${{ runner.temp }}/r013-power-*.png
+            ${{ runner.temp }}/r013-traffic-*.png
+            ${{ runner.temp }}/r013-services.png
+            ${{ runner.temp }}/r013-in-place-upgrade.json
+            ${{ runner.temp }}/windows-go-findings.enc.json
+            ${{ runner.temp }}/windows-go-provenance.json
           if-no-files-found: error
       - name: Prepare tested Windows build and source
         working-directory: vpn013-wg-windows
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.5.6-amd64.msi'
-          $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.5.6-windows-source.zip'
-          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.5.6';build=9;sourceSHA256=(Get-FileHash -LiteralPath $sourceNamed -Algorithm SHA256).Hash.ToLower();msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true;nativeCurrentCardScenarios=4;nativePowerButtonScenarios=10;nativeUpdateOfferScenario=$true;inPlaceUpgradeFrom155=$true;autoPinnedFirst=$true;currentPing=$true;hourlyInactiveVPNComparison=$true;actualHourlyTests=112;nativeThreeDayTrial=$true;nativeTrialDurationSeconds=259200;actualHourlyFirstDelaySeconds=30;actualHourlyIntervalSeconds=3600}
+          $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.5.7-amd64.msi'
+          $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.5.7-windows-source.zip'
+          $native=Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'hourly-product-report/verification.json') -Raw | ConvertFrom-Json
+          if ($native.top_level -ne 139 -or $native.fail -ne 0 -or $native.skip -ne 0) {throw 'Incomplete native service-routing inventory'}
+          $upgrade=Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'r013-in-place-upgrade.json') -Raw | ConvertFrom-Json
+          if ($upgrade.from -ne '1.5.6' -or $upgrade.to -ne '1.5.7' -or $upgrade.oldMSISHA256 -ne '4b3e1e94ad2c2df1fd441a5857693a6b1eefb4cd5cc808e8da606b1eb3d1d68c' -or !$upgrade.sameUpgradeCode -or !$upgrade.singleInstalledProduct -or !$upgrade.withoutUninstall -or !$upgrade.existingDataBytesPreserved -or !$upgrade.syntheticDPAPIDecrypts) {throw 'In-place 1.5.6 upgrade evidence incomplete'}
+          $scenarios=@('manual-no-stats','auto','auto-no-stats','update-offer','power','traffic','services')
+          foreach ($scenario in $scenarios) {
+            $ui=Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP ("r013-ui-"+$scenario+".json")) -Raw | ConvertFrom-Json
+            if (!$ui.passed -or $ui.scenario -ne $scenario) {throw 'Native UI evidence incomplete'}
+          }
+          foreach ($capture in @('r013-traffic-adaptive.png','r013-services.png')) {
+            if (!(Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP $capture))) {throw 'Required native UI capture missing'}
+          }
+          $goEvidence=Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'windows-go-provenance.json') -Raw | ConvertFrom-Json
+          $encryptedReport=Join-Path $env:RUNNER_TEMP 'windows-go-findings.enc.json'
+          if ($goEvidence.sourceCommit -ne $env:GITHUB_SHA -or $goEvidence.runId -ne $env:GITHUB_RUN_ID -or $goEvidence.status -ne 'pass' -or $goEvidence.all34ControlsApproved -ne $false -or $goEvidence.goModSHA256 -ne (Get-FileHash -LiteralPath 'go.mod' -Algorithm SHA256).Hash.ToLower() -or $goEvidence.goSumSHA256 -ne (Get-FileHash -LiteralPath 'go.sum' -Algorithm SHA256).Hash.ToLower() -or $goEvidence.encryptedReportSHA256 -ne (Get-FileHash -LiteralPath $encryptedReport -Algorithm SHA256).Hash.ToLower()) {throw 'Go dependency evidence differs from tested source'}
+          $provenance=[ordered]@{app='vpn013-wg';platform='windows';version='1.5.7';build=10;sourceSHA256=(Get-FileHash -LiteralPath $sourceNamed -Algorithm SHA256).Hash.ToLower();msiSHA256=(Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLower();exeSHA256=(Get-FileHash -LiteralPath 'amd64/VPN013WG.exe' -Algorithm SHA256).Hash.ToLower();runId=$env:GITHUB_RUN_ID;commit=$env:GITHUB_SHA;nativeHandshakeAndICMP=$true;installerPreservedData=$true;nativeUIScenarios=$scenarios.Count;serviceChooserChecks=8;adaptiveTrafficChecks=8;nativePowerButtonChecks=10;nativeUpdateOfferScenario=$true;inPlaceUpgradeFrom='1.5.6';upgradeSourceMSISHA256=$upgrade.oldMSISHA256;serviceWFPOnlyBypassAndCleanup=$true;nativeTopLevelTests=$native.top_level;nativeSubtests=$native.subtests;nativeTestFailures=$native.fail;nativeTestSkips=$native.skip;goModSHA256=$goEvidence.goModSHA256;goSumSHA256=$goEvidence.goSumSHA256;goModuleOnlyRecordsForPrivateReview=$goEvidence.moduleOnlyRecordsForPrivateReview;hourlyInactiveVPNComparison=$true;actualHourlyFirstDelaySeconds=30;actualHourlyIntervalSeconds=3600}
           $provenance | ConvertTo-Json | Set-Content -LiteralPath 'installer/dist/windows-build-provenance.json' -Encoding utf8
           $notes=@'
-          VPN013 Windows x64 1.5.6.
+          VPN013 Windows x64 1.5.7 (build 10).
 
-          Verified on a disposable Windows runner: native MSI install/repair/uninstall; preservation of existing and stock-app data; a real native Wintun tunnel with an obfuscated AmneziaWG handshake and in-tunnel ICMP response against an ephemeral memory-only peer. Protocol, scoped roster updates, key preservation, rollback, release signatures, Auto policy and IPv4/IPv6 ICMP tests passed.
+          The disposable Windows runner tests an in-place upgrade from the exact released 1.5.6 MSI, preservation of existing data and synthetic protected data, native AWG traffic, repair and uninstall. The service-routing inventory requires all 139 top-level tests with no failures or skips, including actual WFP ONLY/BYPASS and cleanup. Seven native UI scenarios include the service chooser and adaptive traffic display; captures are retained for review.
 
-          A prominent native power button in the current card starts the selected profile and stops the actual active profile, including Auto. Transition/unknown/empty states disable commands; duplicate clicks coalesce; start failure supports retry. Ten actual native preview checks and four captured native states are required. Auto is pinned first. A separate current-connection card follows the active session independently of row selection, measures its endpoint, uses manual stored-endpoint fallback when runtime statistics are unavailable, refuses an unknown Auto seed and clears stale results. Four native current-card UI fixtures verify these cases with real loopback ICMP; no customer VPN is started by the UI fixtures.
+          Service routing supports the owner catalog for eligible full-IPv4 WireGuard profiles. Only-selected and bypass-selected modes are mutually exclusive and off by default; original profile keys and configuration remain unchanged. IPv6 retains its existing policy. Domain-only catalog entries cannot be applied by this WireGuard engine, and an oversized selection is rejected before applying changes.
 
-          Registered Russian IPv4/IPv6 destination networks bypass the VPN; other original VPN destinations remain tunneled. The same release-pinned RIPE NCC RU dataset is embedded in iPhone/Android/Windows. Saved keys and profiles are retained. Native controlled routing and narrow WFP admission fixtures must pass; publisher signing remains absent.
+          Auto candidates retain the logical Auto profile's service policy, with source-revision and candidate checks. The controlled fixture exercises candidate scanning and a switch on the same Wintun interface; it does not establish owner-device or public-WAN behavior. A backend change can interrupt packets.
 
-          Import, manual profiles, Auto (1–30 full-IPv4 profiles), visible endpoint Ping, native three-day full-ZIP trial import and personal same-key renewal after manual purchase approval, developer contact, order-bound refresh and signed app updates are included. Auto now measures inactive VPN candidates without stopping the primary during Scan: first comparison after30seconds, then3600seconds after completion. Current and candidates use the same authenticated DNS challenge/target/warmup/median3 with current before+after baselines,90seconds total including preparation,6seconds per candidate and partial rotation. Choices use a concrete observed routing/SCM lifecycle guard and exact immutable member revisions; the service owns health and hourly work, with read-only manager supervision. A selected backend change retains the same Wintun but may lose packets during that change. Native disposable compiled-service tests verify primary traffic during candidate Scan, faster-peer selection, real working-seed persistence, rollback and stop cancellation. WAN/owner-PC/hardware sleep-wake are not claimed. DNS latency is not a universal proof of every internet service.
-
-          Independent R013 client, not an official Amnezia/WireGuard release. Application/MSI publisher signature is absent; Wintun retains its original valid vendor signature. Corresponding source and original license texts are attached/included. No customer keys or configurations are present.
+          This independent R013 client is not an official Amnezia or WireGuard release. The application and MSI have no publisher signature; the original Wintun driver retains its vendor signature. Corresponding source and license texts are included. No customer keys or configurations are included.
           '@
           $notes | Set-Content -LiteralPath 'installer/dist/release-notes.md' -Encoding utf8
       - name: Retain checked installer and corresponding source for final review
@@ -142,17 +200,17 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           path: |
-            vpn013-wg-windows/installer/dist/VPN013WG-1.5.6-amd64.msi
+            vpn013-wg-windows/installer/dist/VPN013WG-1.5.7-amd64.msi
             vpn013-wg-windows/installer/dist/windows-build-provenance.json
             vpn013-wg-windows/installer/dist/release-notes.md
-            ${{ runner.temp }}/VPN013WG-1.5.6-windows-source.zip
+            ${{ runner.temp }}/VPN013WG-1.5.7-windows-source.zip
       - name: Publish checked Windows installer only when explicitly requested
         if: success() && github.event_name == 'workflow_dispatch' && inputs.publish_release == true
         working-directory: vpn013-wg-windows
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.5.6-amd64.msi'
-          $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.5.6-windows-source.zip'
-          gh release create windows-1.5.6 $msi $sourceNamed 'installer/dist/windows-build-provenance.json' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'VPN013 Windows 1.5.6' --notes-file 'installer/dist/release-notes.md'
+          $msi=Join-Path $PWD 'installer/dist/VPN013WG-1.5.7-amd64.msi'
+          $sourceNamed=Join-Path $env:RUNNER_TEMP 'VPN013WG-1.5.7-windows-source.zip'
+          gh release create windows-1.5.7 $msi $sourceNamed 'installer/dist/windows-build-provenance.json' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title 'VPN013 Windows 1.5.7' --notes-file 'installer/dist/release-notes.md'
           if ($LASTEXITCODE -ne 0) {throw 'Release publication failed'}
