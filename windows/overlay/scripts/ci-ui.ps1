@@ -16,7 +16,7 @@ foreach($scenario in @('manual-no-stats','auto','auto-no-stats','update-offer','
   }
   if (!(Test-Path -LiteralPath $env:VPN013_PREVIEW_VERIFY)) {throw "Missing UI report: $scenario"}
   $report=Get-Content -LiteralPath $env:VPN013_PREVIEW_VERIFY -Raw | ConvertFrom-Json
-  if ($process.ExitCode -ne 0 -or !$report.passed) {throw "Native UI fixture failed $scenario : $($report.failure)"}
+  if ($process.ExitCode -ne 0 -or !$report.passed) {throw "Native UI fixture failed $scenario : exitCode=$($process.ExitCode) reportPassed=$($report.passed) failure=$($report.failure)"}
   $expectedChecks=5
   if ($scenario -eq 'auto-no-stats') {$expectedChecks=3}
   if ($scenario -eq 'update-offer') {$expectedChecks=6}
