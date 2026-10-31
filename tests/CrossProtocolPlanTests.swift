@@ -25,6 +25,10 @@ struct PrivateTunnelPayload: Codable {
     var builtinAutomatic: AutoTunnelProfile?
     var proxy: Data?
     var crossProtocol: CrossProtocolPlan?
+    // Already-decoded policy identity is a seam of this ownership/persistence
+    // double. Production JSON normalization is exercised by native WG fixtures.
+    var routingIdentity: Data? = nil
+    func serviceRoutingIdentity() throws -> Data? { routingIdentity }
 }
 struct PrivateTunnelStore {
     struct Envelope { let id: String; let ciphertext: Data }
@@ -146,6 +150,19 @@ final class NETunnelProviderManager {
         let encodedRuntime = try JSONEncoder().encode(runtime)
         expect(CrossProtocolRuntime.read(encodedRuntime) != nil, "bounded runtime accepted")
         expect(CrossProtocolRuntime.read(Data(repeating: 0, count: 32769)) == nil, "oversized runtime rejected")
+        let wgPrimary = try manager(PrivateTunnelPayload(configuration: "WG primary", routingIdentity: Data([1])))
+        let wgMatching = try manager(PrivateTunnelPayload(configuration: "WG matching", routingIdentity: Data([1])))
+        let wgDifferent = try manager(PrivateTunnelPayload(configuration: "WG unselected", routingIdentity: Data([2])))
+        let proxyMatching = try manager(PrivateTunnelPayload(proxy: JSONEncoder().encode(ProxyTunnelPayload(profile: happ)), routingIdentity: Data([1])))
+        let wgProto = wgPrimary.protocolConfiguration as! NETunnelProviderProtocol
+        try CrossProtocolPlan.attach(to: wgProto, managers: [wgPrimary, wgMatching, wgDifferent, proxyMatching])
+        let scoped = try wgProto.privatePayload()!.crossProtocol!
+        expect(scoped.groups.count == 2 && scoped.groups.allSatisfy { $0.kind == .amneziawg }, "Active WG routes cannot fall back to an unselected policy or a proxy engine")
+        let legacy = try manager(PrivateTunnelPayload(configuration: "WG legacy"))
+        let legacyProto = legacy.protocolConfiguration as! NETunnelProviderProtocol
+        try CrossProtocolPlan.attach(to: legacyProto, managers: [wgPrimary])
+        let legacyPlan = try legacyProto.privatePayload()!.crossProtocol
+        expect(legacyPlan == nil, "Legacy policy cannot silently acquire another server's service overlay")
         print("Cross-protocol ownership and mutation: \(checks) checks passed; synthetic preferences only, no system VPN or real credentials")
     }
 }
