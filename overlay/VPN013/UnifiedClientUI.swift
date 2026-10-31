@@ -444,7 +444,7 @@ final class ProxyListViewController: UITableViewController {
         var detail = entry == nil ? "Добавьте конфигурацию кнопкой +" : running ? actual?.selectedEndpoint ?? "Ожидаем данные текущего сервера" : "Нажмите кнопку питания, чтобы подключиться."
         let pingHost = actual.flatMap { value in entry?.value.candidates.first(where: { $0.endpoint == value.selectedEndpoint })?.host } ?? (running ? nil : entry?.value.profile.host)
         if let host = pingHost, let result = pingValues[host] { detail += "\nПинг адреса: " + result.text }
-        let policy = entry?.value.routing.mode.title ?? "Выберите конфигурацию ниже"
+        let policy = entry?.value.routing.displayTitle ?? "Выберите конфигурацию ниже"
         let traffic = actual.map { value in "Скорость: ↓ " + VPN013TrafficDisplay.speed(panelRate?.received) + " · ↑ " + VPN013TrafficDisplay.speed(panelRate?.sent) + "\nВсего: ↓ " + VPN013TrafficDisplay.amount(value.rx >= 0 ? UInt64(value.rx) : nil) + " · ↑ " + VPN013TrafficDisplay.amount(value.tx >= 0 ? UInt64(value.tx) : nil) }
         connectionPanel.update(.init(name: title, status: state, detail: detail, routing: policy, statistics: traffic,
             on: entry?.inOperation == true, powerEnabled: entry != nil && (entry?.inOperation == true || !manager.working),
@@ -674,7 +674,7 @@ final class ProxyDetailViewController: UITableViewController {
                 cell.detailTextLabel?.text = "Скорость: ↓ " + VPN013TrafficDisplay.speed(trafficRate?.received) + " · ↑ " + VPN013TrafficDisplay.speed(trafficRate?.sent) +
                     "\nВсего: ↓ " + VPN013TrafficDisplay.amount(value.rx >= 0 ? UInt64(value.rx) : nil) + " · ↑ " + VPN013TrafficDisplay.amount(value.tx >= 0 ? UInt64(value.tx) : nil)
             } else { cell.detailTextLabel?.text = entry.status == .connected ? "Статистика пока недоступна" : "Появится после подключения" }
-        default: cell.textLabel?.text = "Маршрутизация"; cell.detailTextLabel?.text = entry.value.routing.mode.title; cell.accessoryType = .disclosureIndicator
+        default: cell.textLabel?.text = "Маршрутизация"; cell.detailTextLabel?.text = entry.value.routing.displayTitle; cell.accessoryType = .disclosureIndicator
         }
         return cell
     }
@@ -704,10 +704,23 @@ final class ProxyRoutingViewController: UIViewController {
         modes.titleLabel?.font = .preferredFont(forTextStyle: .headline); modes.titleLabel?.adjustsFontForContentSizeCategory = true; modes.titleLabel?.numberOfLines = 0
         modes.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
         modes.accessibilityIdentifier = "vpn013.proxy.routing.mode"
+        let services = UIButton(type: .system)
+        services.setTitle("Выбрать сервисы из каталога", for: .normal)
+        services.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        services.titleLabel?.adjustsFontForContentSizeCategory = true; services.titleLabel?.numberOfLines = 0
+        services.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+        services.accessibilityIdentifier = "vpn013.services.open"
+        services.addAction(UIAction { [weak self] _ in
+            guard let self = self else { return }
+            do {
+                let catalog = try ServiceRoutingCatalog.shared.get()
+                self.navigationController?.pushViewController(ServiceRoutingViewController(entries: self.entries, catalog: catalog), animated: true)
+            } catch { proxyError(ServiceCatalogError.invalid, from: self) }
+        }, for: .touchUpInside)
         domains.text = entry.value.routing.domains.joined(separator: "\n"); networks.text = entry.value.routing.networks.joined(separator: "\n")
         let info = proxyLabel("Исключения идут напрямую; в режиме «Только выбранное» остальной трафик идёт напрямую. Домены определяются по доступному имени соединения; для точного правила добавьте IP-сеть. Выбор отдельных установленных приложений на обычном iPhone недоступен.", style: .footnote)
         info.textColor = VPN013Theme.secondaryText
-        let stack = UIStackView(arrangedSubviews: [modes, info, proxyLabel("Домены, по одному в строке", style: .headline), domains, proxyLabel("IP-сети, например 192.0.2.0/24", style: .headline), networks])
+        let stack = UIStackView(arrangedSubviews: [services, modes, info, proxyLabel("Домены, по одному в строке", style: .headline), domains, proxyLabel("IP-сети, например 192.0.2.0/24", style: .headline), networks])
         stack.axis = .vertical; stack.spacing = 16
         let scroll = UIScrollView(); scroll.keyboardDismissMode = .interactive; scroll.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scroll); stack.translatesAutoresizingMaskIntoConstraints = false; scroll.addSubview(stack)

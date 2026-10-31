@@ -66,11 +66,11 @@ jobs:
       - name: Validate unified client profile imports without network or real keys
         if: runner.os == 'macOS'
         run: |
-          xcrun swiftc -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/tests/ProxyProfileTests.swift" -o "$RUNNER_TEMP/r013-profile-check"
+          xcrun swiftc -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ServiceRoutingCatalog.swift" "$GITHUB_WORKSPACE/tests/ProxyProfileTests.swift" -o "$RUNNER_TEMP/r013-profile-check"
           "$RUNNER_TEMP/r013-profile-check"
           xcrun swiftc -parse-as-library -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/AutomaticMode.swift" "$GITHUB_WORKSPACE/tests/AutomaticModeTests.swift" -o "$RUNNER_TEMP/r013-automatic-check"
           "$RUNNER_TEMP/r013-automatic-check"
-          xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROXY_AUTO_TESTING "$GITHUB_WORKSPACE/overlay/VPN013/AutomaticMode.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyAutomaticAdapter.swift" "$GITHUB_WORKSPACE/tests/ProxyAutoLifecycleTests.swift" -o "$RUNNER_TEMP/r013-proxy-auto-lifecycle"
+          xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROXY_AUTO_TESTING "$GITHUB_WORKSPACE/overlay/VPN013/AutomaticMode.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ServiceRoutingCatalog.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyAutomaticAdapter.swift" "$GITHUB_WORKSPACE/tests/ProxyAutoLifecycleTests.swift" -o "$RUNNER_TEMP/r013-proxy-auto-lifecycle"
           "$RUNNER_TEMP/r013-proxy-auto-lifecycle"
           xcrun swiftc -parse-as-library -swift-version 5 "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/SubscriptionRequest.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxySubscriptionDownload.swift" "$GITHUB_WORKSPACE/tests/SubscriptionRequestTests.swift" -o "$RUNNER_TEMP/r013-subscription-check"
           "$RUNNER_TEMP/r013-subscription-check"
@@ -114,7 +114,7 @@ jobs:
           cd "$GITHUB_WORKSPACE/experiments/inactive-probe"
           xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROBE_TESTING -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/r013_bridge.h" platform/ProbeCoordinator.swift platform/ControllerNativeCheck.swift "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-merged-check"
           "$RUNNER_TEMP/r013-merged-check"
-          xcrun swiftc -parse-as-library -swift-version 5 -I "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo" -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/wireguard.h" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/tests/ProxyCoreNativeCheck.swift" "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-proxy-core-check"
+          xcrun swiftc -parse-as-library -swift-version 5 -I "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo" -import-objc-header "$RUNNER_TEMP/r013-client-core/Sources/WireGuardKitGo/wireguard.h" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyProfile.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ProxyRouting.swift" "$GITHUB_WORKSPACE/overlay/VPN013/ServiceRoutingCatalog.swift" "$GITHUB_WORKSPACE/tests/ProxyCoreNativeCheck.swift" "$RUNNER_TEMP/r013-client-core.a" -framework Foundation -framework Security -framework CoreFoundation -framework Network -lresolv -o "$RUNNER_TEMP/r013-proxy-core-check"
           "$RUNNER_TEMP/r013-proxy-core-check"
       - name: Verify the actual app five-minute coordinator and lifecycle deadlines
         if: runner.os == 'macOS'

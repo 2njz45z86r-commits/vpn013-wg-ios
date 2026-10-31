@@ -239,13 +239,30 @@ final class ProxyProfilesManager {
     /// starts/stops a tunnel. Preference saves are not an OS transaction: if a
     /// save fails, restore every attempted profile and surface rollback failure.
     func update(_ selected: [Entry], routing: ProxyRoutingPolicy, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
+        var policies = [UUID: ProxyRoutingPolicy]()
+        for entry in selected { policies[entry.value.profile.id] = routing }
+        update(selected, policies: policies, sourcePrepared: sourcePrepared, completion: completion)
+    }
+    /// Catalog switches overlay each selected server's own manual baseline.
+    /// Turning them off restores that baseline, rather than copying server one.
+    func update(_ selected: [Entry], services: ServiceRoutingSelection, completion: @escaping (Error?) -> Void) {
+        var policies = [UUID: ProxyRoutingPolicy]()
+        for entry in selected {
+            var policy = entry.value.routing; policy.serviceSelection = services
+            policies[entry.value.profile.id] = policy
+        }
+        update(selected, policies: policies, completion: completion)
+    }
+    private func update(_ selected: [Entry], policies: [UUID: ProxyRoutingPolicy], sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
         guard !working else { completion(ProxyOperationError.busy); return }
         guard !selected.isEmpty, selected.count <= 512,
               Set(selected.map { $0.value.profile.id }).count == selected.count else { completion(ProxyOperationError.unreadable); return }
         var current = [Entry]()
         do {
-            try routing.validate()
+            guard Set(policies.keys) == Set(selected.map { $0.value.profile.id }) else { throw ProxyOperationError.unreadable }
             for snapshot in selected {
+                guard let routing = policies[snapshot.value.profile.id] else { throw ProxyOperationError.unreadable }
+                try routing.validate()
                 guard let entry = entries.first(where: { $0.value.profile.id == snapshot.value.profile.id }), entry.value == snapshot.value else { throw ProxyOperationError.unreadable }
                 guard !entry.inOperation else { throw ProxyOperationError.stopFirst }
                 guard entry.manager.protocolConfiguration is NETunnelProviderProtocol else { throw ProxyOperationError.unreadable }
@@ -253,7 +270,7 @@ final class ProxyProfilesManager {
                 current.append(entry)
             }
         } catch { completion(error); return }
-        if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.update(selected, routing: routing, sourcePrepared: true, completion: $0) }; return }
+        if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.update(selected, policies: policies, sourcePrepared: true, completion: $0) }; return }
         working = true
         var attempted = [(Entry, NETunnelProviderProtocol)]()
         func finish(_ error: Error?) { self.working = false; self.changed?(); completion(error) }
@@ -273,12 +290,13 @@ final class ProxyProfilesManager {
         func saveNext() {
             guard offset < current.count else {
                 for entry in current {
-                    if let index = self.entries.firstIndex(where: { $0.value.profile.id == entry.value.profile.id }) { self.entries[index].value.routing = routing }
+                    if let index = self.entries.firstIndex(where: { $0.value.profile.id == entry.value.profile.id }), let routing = policies[entry.value.profile.id] { self.entries[index].value.routing = routing }
                 }
                 finish(nil); return
             }
             let entry = current[offset]; offset += 1
             guard !entry.inOperation, let old = (entry.manager.protocolConfiguration?.copy() as? NETunnelProviderProtocol) else { rollback(ProxyOperationError.stopFirst); return }
+            guard let routing = policies[entry.value.profile.id] else { rollback(ProxyOperationError.unreadable); return }
             var value = entry.value; value.routing = routing
             do { entry.manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old) }
             catch { rollback(error); return }

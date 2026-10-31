@@ -20,6 +20,23 @@ struct ProxyRoutingPolicy: Codable, Equatable {
     var mode: Mode = .all
     var domains: [String] = []
     var networks: [String] = []
+    var serviceSelection: ServiceRoutingSelection? = nil
+
+    var displayTitle: String {
+        switch serviceSelection?.mode {
+        case .only: return "VPN только для выбранных сервисов"
+        case .bypass: return "Выбранные сервисы — без VPN"
+        default: return mode.title
+        }
+    }
+
+    func resolved() throws -> (mode: Mode, domains: [String], networks: [String]) {
+        if let selection = serviceSelection,
+           let plan = try ServiceRoutingCatalog.shared.get().resolve(selection) {
+            return (plan.mode == .only ? .only : .bypass, plan.domains, plan.networks)
+        }
+        return (mode, domains, networks)
+    }
 
     static func domain(_ raw: String) throws -> String {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -41,6 +58,7 @@ struct ProxyRoutingPolicy: Codable, Equatable {
               try domains.allSatisfy({ try Self.domain($0) == $0 }),
               networks.allSatisfy(Self.validNetwork),
               mode == .all || !domains.isEmpty || !networks.isEmpty else { throw ProxyProfileError.invalid }
+        _ = try resolved()
     }
 }
 
@@ -83,12 +101,13 @@ struct ProxyTunnelPayload: Codable, Equatable {
         var v4 = in_addr(); var v6 = in6_addr()
         guard inet_pton(AF_INET, resolvedHost, &v4) == 1 || inet_pton(AF_INET6, resolvedHost, &v6) == 1 else { throw ProxyProfileError.invalid }
         var rules: [[String: Any]] = [["type": "field", "port": "53", "outboundTag": "vpn013-proxy"]]
-        let selectedTag = routing.mode == .bypass ? "vpn013-direct" : "vpn013-proxy"
-        if routing.mode != .all {
-            if !routing.domains.isEmpty { rules.append(["type": "field", "domain": routing.domains.map { "domain:" + $0 }, "outboundTag": selectedTag]) }
-            if !routing.networks.isEmpty { rules.append(["type": "field", "ip": routing.networks, "outboundTag": selectedTag]) }
+        let plan = try routing.resolved()
+        let selectedTag = plan.mode == .bypass ? "vpn013-direct" : "vpn013-proxy"
+        if plan.mode != .all {
+            if !plan.domains.isEmpty { rules.append(["type": "field", "domain": plan.domains.map { "domain:" + $0 }, "outboundTag": selectedTag]) }
+            if !plan.networks.isEmpty { rules.append(["type": "field", "ip": plan.networks, "outboundTag": selectedTag]) }
         }
-        rules.append(["type": "field", "network": "tcp,udp", "outboundTag": routing.mode == .only ? "vpn013-direct" : "vpn013-proxy"])
+        rules.append(["type": "field", "network": "tcp,udp", "outboundTag": plan.mode == .only ? "vpn013-direct" : "vpn013-proxy"])
         let object: [String: Any] = [
             "log": ["loglevel": "none"], "stats": [:],
             "policy": ["system": ["statsInboundUplink": true, "statsInboundDownlink": true], "levels": ["0": ["bufferSize": 64, "connIdle": 120]]],

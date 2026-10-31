@@ -1,5 +1,47 @@
 import XCTest
 final class AutoTunnelUITests:XCTestCase {
+    func testServiceCatalogGroupsExclusiveModesAndRememberedSelection() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
+        app.launch()
+        func openCatalog() {
+            if !app.buttons["vpn013.settings.routing"].exists { app.buttons["vpn013.settings"].tap() }
+            app.buttons["vpn013.settings.routing"].tap()
+            app.buttons["vpn013.routing.select-all"].tap(); app.buttons["vpn013.routing.next"].tap()
+            app.buttons["vpn013.services.open"].tap()
+            XCTAssertTrue(app.switches["vpn013.services.only"].waitForExistence(timeout: 8))
+        }
+        for kind in ["happ", "incy", "blacktemple"] {
+            let tab = app.tabBars.buttons["vpn013.kind." + kind]
+            XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
+            app.buttons["vpn013.proxy.add"].tap(); app.buttons["vpn013.proxy.import.check"].tap()
+            XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5)); app.alerts.buttons["Добавить"].tap()
+            openCatalog()
+            let only = app.switches["vpn013.services.only"], bypass = app.switches["vpn013.services.bypass"]
+            XCTAssertEqual(only.value as? String, "0"); XCTAssertEqual(bypass.value as? String, "0")
+            XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.services.group.")).count > 0)
+            capture("catalog-" + kind + "-groups-default-off")
+            only.tap(); XCTAssertEqual(only.value as? String, "1"); XCTAssertEqual(bypass.value as? String, "0")
+            let search = app.searchFields.firstMatch
+            search.tap(); search.typeText("Facebook")
+            let service = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.services.item.")).firstMatch
+            XCTAssertTrue(service.waitForExistence(timeout: 5)); XCTAssertTrue(service.label.contains("Facebook"))
+            service.tap(); XCTAssertEqual(service.value as? String, "Выбрано")
+            bypass.tap(); XCTAssertEqual(only.value as? String, "0"); XCTAssertEqual(bypass.value as? String, "1")
+            XCTAssertEqual(service.value as? String, "Не выбрано"); service.tap()
+            bypass.tap(); XCTAssertEqual(only.value as? String, "0"); XCTAssertEqual(bypass.value as? String, "0")
+            app.buttons["vpn013.services.save"].tap()
+            openCatalog(); only.tap()
+            let savedSearch = app.searchFields.firstMatch
+            savedSearch.tap(); savedSearch.typeText("Facebook")
+            let saved = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.services.item.")).firstMatch
+            XCTAssertTrue(saved.waitForExistence(timeout: 5)); XCTAssertEqual(saved.value as? String, "Выбрано")
+            capture("catalog-" + kind + "-remembered-choice-no-vpn-started")
+            only.tap(); app.buttons["vpn013.services.save"].tap()
+            let close = app.buttons["vpn013.settings.done"]
+            if close.exists { close.tap() }
+        }
+    }
     func testProxyRowConnectsAndOnlyRightStripOpensConfiguration() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]

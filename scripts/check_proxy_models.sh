@@ -5,7 +5,7 @@ set -eu
 root=$(pwd)
 target=$(mktemp -d "${TMPDIR:-/tmp}/vpn013-models.XXXXXXXX")
 trap 'rm -rf "$target"' EXIT HUP INT TERM
-xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/ProxyProfile.swift" "$root/overlay/VPN013/ProxyRouting.swift" "$root/tests/ProxyProfileTests.swift" -o "$target/profiles"
+xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/ProxyProfile.swift" "$root/overlay/VPN013/ProxyRouting.swift" "$root/overlay/VPN013/ServiceRoutingCatalog.swift" "$root/tests/ProxyProfileTests.swift" -o "$target/profiles"
 "$target/profiles"
 xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/ProxyProfile.swift" "$root/tests/ProxyIssuerCompatibilityTests.swift" -o "$target/issuer"
 "$target/issuer"
@@ -13,9 +13,9 @@ xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/AutomaticM
 "$target/automatic"
 xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/CrossProtocolSelection.swift" "$root/overlay/VPN013/CrossProtocolCoordinator.swift" "$root/tests/CrossProtocolTests.swift" -o "$target/cross-protocol"
 "$target/cross-protocol"
-xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/AutomaticMode.swift" "$root/overlay/VPN013/ProxyProfile.swift" "$root/overlay/VPN013/ProxyRouting.swift" "$root/overlay/VPN013/CrossProtocolPlan.swift" "$root/tests/CrossProtocolPlanTests.swift" -o "$target/cross-plan"
+xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/AutomaticMode.swift" "$root/overlay/VPN013/ProxyProfile.swift" "$root/overlay/VPN013/ProxyRouting.swift" "$root/overlay/VPN013/ServiceRoutingCatalog.swift" "$root/overlay/VPN013/CrossProtocolPlan.swift" "$root/tests/CrossProtocolPlanTests.swift" -o "$target/cross-plan"
 "$target/cross-plan"
-xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROXY_AUTO_TESTING "$root/overlay/VPN013/AutomaticMode.swift" "$root/overlay/VPN013/ProxyProfile.swift" "$root/overlay/VPN013/ProxyRouting.swift" "$root/overlay/VPN013/ProxyAutomaticAdapter.swift" "$root/tests/ProxyAutoLifecycleTests.swift" -o "$target/lifecycle"
+xcrun swiftc -parse-as-library -swift-version 5 -D R013_PROXY_AUTO_TESTING "$root/overlay/VPN013/AutomaticMode.swift" "$root/overlay/VPN013/ProxyProfile.swift" "$root/overlay/VPN013/ProxyRouting.swift" "$root/overlay/VPN013/ServiceRoutingCatalog.swift" "$root/overlay/VPN013/ProxyAutomaticAdapter.swift" "$root/tests/ProxyAutoLifecycleTests.swift" -o "$target/lifecycle"
 "$target/lifecycle"
 xcrun swiftc -parse-as-library -swift-version 5 "$root/overlay/VPN013/ProxyProfile.swift" "$root/overlay/VPN013/SubscriptionRequest.swift" "$root/overlay/VPN013/ProxySubscriptionDownload.swift" "$root/tests/SubscriptionRequestTests.swift" -o "$target/requests"
 "$target/requests"

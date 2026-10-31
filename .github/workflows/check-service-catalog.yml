@@ -1,0 +1,25 @@
+name: Validate pinned service catalog and actual routing compilation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/check-service-catalog.yml'
+      - 'overlay/VPN013/ServiceRoutingCatalog.swift'
+      - 'tests/ServiceRoutingCatalogTests.swift'
+permissions:
+  contents: read
+jobs:
+  models:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile and execute real catalog and routing model checks
+        run: |
+          cp overlay/VPN013/ServiceCatalog*.json "$RUNNER_TEMP/"
+          xcrun swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift overlay/VPN013/ProxyRouting.swift overlay/VPN013/ServiceRoutingCatalog.swift tests/ServiceRoutingCatalogTests.swift -o "$RUNNER_TEMP/catalog-models"
+          "$RUNNER_TEMP/catalog-models" "$GITHUB_WORKSPACE/overlay/VPN013"
+      - name: Recheck existing proxy models, encrypted storage and compatibility
+        run: sh scripts/check_proxy_models.sh
