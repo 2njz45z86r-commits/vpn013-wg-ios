@@ -783,6 +783,11 @@ public final class GoBackend implements Backend {
         if (state == State.DOWN && tunnel != currentTunnel) return originalState;
         final List<AutoMember> autoMembers = state == State.UP ? Collections.unmodifiableList(new java.util.ArrayList<>(automaticSource.members(tunnel.getName()))) : Collections.emptyList();
         if (autoMembers.size() > 30) throw new IllegalArgumentException("Invalid Auto membership");
+        if (state == State.UP) {
+            if (config == null && autoMembers.isEmpty()) throw new BackendException(Reason.TUNNEL_MISSING_CONFIG);
+            if (config != null) config.getInterface().validateResourceLimits();
+            for (final AutoMember member : autoMembers) member.config().getInterface().validateResourceLimits();
+        }
         // Validate a replacement before invalidating the working Auto owner.
         cancelAutomatic();
         if (state == State.UP) {

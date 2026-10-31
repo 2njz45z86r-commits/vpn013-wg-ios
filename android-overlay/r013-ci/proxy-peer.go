@@ -66,7 +66,12 @@ func instance(object any) *core.Instance {
 }
 func main() {
 	self := len(os.Args) == 2 && os.Args[1] == "--self-test"
+	isolated := !self && os.Getenv("R013_ISOLATED_FIXTURE") == "true"
 	host := "198.18.0.1"
+	listenHost := "127.0.0.1"
+	if isolated {
+		listenHost = "10.254.197.2"
+	}
 	if self {
 		host = "127.0.0.1"
 	}
@@ -140,12 +145,12 @@ func main() {
 	}
 	user := uuid.NewString()
 	short := "ab12"
-	reserve, err := net.Listen("tcp", "127.0.0.1:0")
+	reserve, err := net.Listen("tcp", listenHost+":0")
 	if err != nil {
 		panic("fixture port")
 	}
 	port := reserve.Addr().(*net.TCPAddr).Port
-	xreserve, err := net.Listen("tcp", "127.0.0.1:0")
+	xreserve, err := net.Listen("tcp", listenHost+":0")
 	if err != nil {
 		panic("fixture xhttp port")
 	}
@@ -157,7 +162,7 @@ func main() {
 		if network == "xhttp" {
 			stream["xhttpSettings"] = map[string]any{"path": "/native-xhttp", "mode": "stream-one", "xPaddingBytes": "16-32"}
 		}
-		return map[string]any{"listen": "127.0.0.1", "port": listenPort, "protocol": "vless", "settings": map[string]any{"clients": []any{map[string]any{"id": user}}, "decryption": "none"}, "streamSettings": stream}
+		return map[string]any{"listen": listenHost, "port": listenPort, "protocol": "vless", "settings": map[string]any{"clients": []any{map[string]any{"id": user}}, "decryption": "none"}, "streamSettings": stream}
 	}
 	server := instance(map[string]any{"log": map[string]any{"loglevel": "none"}, "inbounds": []any{inbound("tcp", port), inbound("xhttp", xport)}, "outbounds": []any{map[string]any{"protocol": "freedom", "settings": map[string]any{"finalRules": []any{map[string]any{"action": "allow", "ip": []string{host + "/32"}, "network": "tcp", "port": fmt.Sprint(echoPort)}, map[string]any{"action": "allow", "network": "tcp", "port": "443"}, map[string]any{"action": "allow", "ip": []string{"1.1.1.1/32"}, "network": "udp", "port": "53"}, map[string]any{"action": "block"}}}}}})
 	defer server.Close()
@@ -171,7 +176,7 @@ func main() {
 	extra := map[string]any{"xPaddingBytes": "16-32", "xmux": map[string]any{"maxConnections": 1, "cMaxLifetimeMs": 0}, "scMaxBufferedPosts": 8}
 	extraJSON, _ := json.Marshal(extra)
 	xhttpURI := fmt.Sprintf("vless://%s@%s:%d?security=reality&type=xhttp&sni=localhost&fp=chrome&pbk=%s&sid=%s&mode=stream-one&path=%%2Fnative-xhttp&extra=%s#NativeXHTTP", user, endpoint, xport, base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()), short, url.QueryEscape(string(extraJSON)))
-	if self {
+	if self || isolated {
 		for _, transport := range []struct {
 			network string
 			port    int
@@ -180,7 +185,7 @@ func main() {
 			if transport.network == "xhttp" {
 				stream["xhttpSettings"] = map[string]any{"path": "/native-xhttp", "mode": "stream-one", "xPaddingBytes": "16-32", "xmux": map[string]any{"maxConnections": 1}}
 			}
-			client := instance(map[string]any{"log": map[string]any{"loglevel": "none"}, "outbounds": []any{map[string]any{"protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": endpoint, "port": transport.port, "users": []any{map[string]any{"id": user, "encryption": "none"}}}}}, "streamSettings": stream}}})
+			client := instance(map[string]any{"log": map[string]any{"loglevel": "none"}, "outbounds": []any{map[string]any{"protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": listenHost, "port": transport.port, "users": []any{map[string]any{"id": user, "encryption": "none"}}}}}, "streamSettings": stream}}})
 			defer client.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 			defer cancel()
@@ -202,7 +207,9 @@ func main() {
 			_ = conn.Close()
 			_ = client.Close()
 		}
-		return
+		if self {
+			return
+		}
 	}
 	folder := os.Getenv("RUNNER_TEMP")
 	if folder == "" {

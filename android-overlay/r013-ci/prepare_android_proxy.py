@@ -1,5 +1,6 @@
 """Patch only an isolated pinned module copy; retain explicit fd ownership on Android."""
 import hashlib,json,pathlib,shutil,subprocess,sys
+from prepare_primary_awg import prepare_primary_awg
 root=pathlib.Path(sys.argv[1]).resolve();output=pathlib.Path(sys.argv[2]).resolve()
 output.mkdir(parents=True,exist_ok=True)
 subprocess.run(['go','mod','download'],cwd=root,check=True)
@@ -27,5 +28,6 @@ for directive in ('//go:linkname zoneCache net.zoneCache','//go:linkname zoneCac
 anet_local=output/'anet-owned';shutil.copytree(pathlib.Path(anet['Dir']),anet_local,copy_function=shutil.copyfile)
 (anet_local/'interface_android.go').write_text(anet_patched)
 subprocess.run(['go','mod','edit','-modfile='+str(modfile),'-replace=github.com/wlynxg/anet='+str(anet_local)],cwd=root,check=True)
-(output/'proxy-tun-provenance.json').write_text(json.dumps({'module':info['Path'],'version':info['Version'],'originalSHA256':hashlib.sha256(original.encode()).hexdigest(),'patchedSHA256':hashlib.sha256(patched.encode()).hexdigest(),'moduleCacheUnchanged':True,'anetVersion':'v0.0.5','anetOriginalSHA256':hashlib.sha256(anet_original.encode()).hexdigest(),'anetPatchedSHA256':hashlib.sha256(anet_patched.encode()).hexdigest(),'linkerChecksDisabled':False,'numericProtectedEndpointsOnly':True}))
+primary=prepare_primary_awg(root,output,modfile)
+(output/'proxy-tun-provenance.json').write_text(json.dumps({'primaryAWG':primary,'module':info['Path'],'version':info['Version'],'originalSHA256':hashlib.sha256(original.encode()).hexdigest(),'patchedSHA256':hashlib.sha256(patched.encode()).hexdigest(),'moduleCacheUnchanged':True,'anetVersion':'v0.0.5','anetOriginalSHA256':hashlib.sha256(anet_original.encode()).hexdigest(),'anetPatchedSHA256':hashlib.sha256(anet_patched.encode()).hexdigest(),'linkerChecksDisabled':False,'numericProtectedEndpointsOnly':True}))
 print('Prepared isolated Android TUN ownership overlay')

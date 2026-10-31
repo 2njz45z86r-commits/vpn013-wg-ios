@@ -34,6 +34,7 @@ jobs:
           test "$(git -C android/tunnel/tools/amneziawg-tools rev-parse HEAD)" = ee0f0a9aa34ff0a0da4b3433b9512781cfe02843
           test "$(git -C android/tunnel/tools/elf-cleaner rev-parse HEAD)" = 7efc05090675ec6161b7def862728086a26c3b1f
           cp -a android-overlay/. android/
+          cp scripts/prepare_primary_awg.py scripts/patch-primary-resource-safety.py android/r013-ci/
           mkdir -p android/output/review
           cp android-hosted-disk-preflight.json android/output/review/
       - name: Check pause, selection and five-minute schedule
@@ -151,7 +152,7 @@ jobs:
                       diagnostic=re.search(r'comparison-state: member=(?:slow|fast|none|other) phase=[a-z_]+ index=-?\d+ auto=(?:true|false)', line)
                       if diagnostic: selected.append(diagnostic.group(0))
                       exception=re.search(r'\b(?:java|javax|kotlin|android)[\w.$]*(?:Exception|Error)\b', line)
-                      location=re.search(r'(?:R013ProxyRuntimeTest|R013RoutingSurfaceTest|R013ServiceRoutingTest|R013RoutingProbeInstrumentation)\.kt:\d+', line)
+                      location=re.search(r'(?:R013ProxyRuntimeTest|R013RoutingSurfaceTest|R013ServiceRoutingTest|R013PrimaryResourceTest|R013RoutingProbeInstrumentation)\.kt:\d+', line)
                       if exception: selected.append('exception-class: '+exception.group(0))
                       if location: selected.append('test-location: '+location.group(0))
                   path.with_suffix(path.suffix+'.summary.json').write_text(json.dumps(selected[-80:]))

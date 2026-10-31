@@ -30,6 +30,16 @@ sudo chmod 666 /dev/kvm
 emulator_pid=$!
 peer_pid=""
 proxy_pid=""
+proxy_relay_pid=""
+proxy_ns=""
+proxy_ns_created=""
+proxy_veth_created=""
+proxy_blackhole_added=""
+proxy_nat_added=""
+proxy_forward_out_added=""
+proxy_forward_in_added=""
+proxy_forward_changed=""
+proxy_forward_before=""
 route_echo_pid=""
 ru_alias_added=""
 control_alias_added=""
@@ -47,10 +57,21 @@ finish() {
   cp "$RUNNER_TEMP/r013-emulator.log" output/review/emulator.log 2>/dev/null || true
   cp "$RUNNER_TEMP/r013-peer.log" output/review/synthetic-peer-build.log 2>/dev/null || true
   if [ -n "$proxy_pid" ]; then kill "$proxy_pid" 2>/dev/null || true; fi
+  if [ -n "$proxy_relay_pid" ]; then kill "$proxy_relay_pid" 2>/dev/null || true; fi
   if [ -n "$peer_pid" ]; then kill "$peer_pid" 2>/dev/null || true; fi
   if [ -n "$route_echo_pid" ]; then kill "$route_echo_pid" 2>/dev/null || true; fi
   if [ "$ru_alias_added" = yes ]; then sudo ip address del 2.56.24.1/32 dev lo 2>/dev/null || true; fi
   if [ "$control_alias_added" = yes ]; then sudo ip address del 198.18.0.1/32 dev lo 2>/dev/null || true; fi
+  if [ "$proxy_forward_in_added" = yes ]; then sudo iptables -w -D FORWARD -o r013vh -d 10.254.197.2/32 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || true; fi
+  if [ "$proxy_forward_out_added" = yes ]; then sudo iptables -w -D FORWARD -i r013vh -s 10.254.197.2/32 -j ACCEPT 2>/dev/null || true; fi
+  if [ "$proxy_nat_added" = yes ]; then sudo iptables -w -t nat -D POSTROUTING -s 10.254.197.2/32 -j MASQUERADE 2>/dev/null || true; fi
+  if [ "$proxy_blackhole_added" = yes ]; then sudo ip -4 route del blackhole 198.18.0.1/32 2>/dev/null || true; fi
+  if [ "$proxy_ns_created" = yes ]; then
+    while read -r pid; do case "$pid" in ''|*[!0-9]*) continue;; esac; sudo kill "$pid" 2>/dev/null || true; done < <(sudo ip netns pids "$proxy_ns" 2>/dev/null || true)
+    sudo ip netns del "$proxy_ns" 2>/dev/null || true
+  fi
+  if [ "$proxy_veth_created" = yes ]; then sudo ip link del r013vh 2>/dev/null || true; fi
+  if [ "$proxy_forward_changed" = yes ]; then sudo sysctl -q -w "net.ipv4.ip_forward=$proxy_forward_before" 2>/dev/null || true; fi
   kill "$emulator_pid" 2>/dev/null || true
   python3 r013-ci/protect-native-diagnostics.py
 }
@@ -117,15 +138,54 @@ for i in $(seq 1 90); do test -s "$RUNNER_TEMP/r013-synthetic.conf" && break; sl
 test -s "$RUNNER_TEMP/r013-synthetic.conf"
 test -s "$RUNNER_TEMP/r013-synthetic-candidate.conf"
 start_proxy_fixture() {
+test -n "${RUNNER_TEMP:-}"
+rm -f "$RUNNER_TEMP/r013-proxy-fixture.json" "$RUNNER_TEMP/r013-proxy-relay.ready"
 (cd tunnel/tools/libwg-go && go build -o "$RUNNER_TEMP/r013-proxy-peer" ../../../r013-ci/proxy-peer.go)
 timeout 30s "$RUNNER_TEMP/r013-proxy-peer" --self-test > "$RUNNER_TEMP/r013-proxy-self-test.log" 2>&1
 grep -Fx 'Disposable REALITY/VLESS tcp fixture nonce exchange passed' "$RUNNER_TEMP/r013-proxy-self-test.log"
 grep -Fx 'Disposable REALITY/VLESS xhttp fixture nonce exchange passed' "$RUNNER_TEMP/r013-proxy-self-test.log"
 printf '%s\n' '{"hostFixtureTCPNonce":true,"hostFixtureXHTTPNonce":true,"androidTrafficVerified":false}' > output/review/proxy-host-self-test.json
-"$RUNNER_TEMP/r013-proxy-peer" > "$RUNNER_TEMP/r013-proxy-peer.log" 2>&1 &
+# The control address is local only inside this owned network namespace. A
+# host blackhole prevents QEMU's physical network from reaching that address.
+test -z "$(ip -4 route show exact 198.18.0.1/32)"
+test -z "$(ip -4 route show table local exact 198.18.0.1/32)"
+test -z "$(ip -4 route show exact 10.254.197.0/30)"
+if ip link show r013vh >/dev/null 2>&1; then echo 'CI probe interface already exists' >&2; return 1; fi
+proxy_ns="r013proxy-${GITHUB_RUN_ID:-$$}"
+sudo ip netns add "$proxy_ns"
+proxy_ns_created=yes
+sudo ip link add r013vh type veth peer name r013vn
+proxy_veth_created=yes
+sudo ip link set r013vn netns "$proxy_ns"
+sudo ip address add 10.254.197.1/30 dev r013vh
+sudo ip link set r013vh up
+sudo ip -n "$proxy_ns" link set lo up
+sudo ip -n "$proxy_ns" address add 198.18.0.1/32 dev lo
+sudo ip -n "$proxy_ns" address add 10.254.197.2/30 dev r013vn
+sudo ip -n "$proxy_ns" link set r013vn up
+sudo ip -n "$proxy_ns" route add default via 10.254.197.1 dev r013vn
+sudo ip -4 route add blackhole 198.18.0.1/32
+proxy_blackhole_added=yes
+proxy_forward_before=$(cat /proc/sys/net/ipv4/ip_forward)
+case "$proxy_forward_before" in 0) sudo sysctl -q -w net.ipv4.ip_forward=1; proxy_forward_changed=yes;; 1) ;; *) return 1;; esac
+sudo iptables -w -t nat -A POSTROUTING -s 10.254.197.2/32 -j MASQUERADE
+proxy_nat_added=yes
+sudo iptables -w -I FORWARD 1 -i r013vh -s 10.254.197.2/32 -j ACCEPT
+proxy_forward_out_added=yes
+sudo iptables -w -I FORWARD 1 -o r013vh -d 10.254.197.2/32 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+proxy_forward_in_added=yes
+sudo ip netns exec "$proxy_ns" sudo -u "$(id -un)" env RUNNER_TEMP="$RUNNER_TEMP" R013_ISOLATED_FIXTURE=true "$RUNNER_TEMP/r013-proxy-peer" > "$RUNNER_TEMP/r013-proxy-peer.log" 2>&1 &
 proxy_pid=$!
-for i in $(seq 1 30); do test -s "$RUNNER_TEMP/r013-proxy-fixture.json" && break; sleep 1; done
+for i in $(seq 1 40); do test -s "$RUNNER_TEMP/r013-proxy-fixture.json" && break; sleep 1; done
 test -s "$RUNNER_TEMP/r013-proxy-fixture.json"
+grep -Fx 'Disposable REALITY/VLESS tcp fixture nonce exchange passed' "$RUNNER_TEMP/r013-proxy-peer.log"
+grep -Fx 'Disposable REALITY/VLESS xhttp fixture nonce exchange passed' "$RUNNER_TEMP/r013-proxy-peer.log"
+printf '%s\n' '{"isolatedFixtureTCPNonce":true,"isolatedFixtureXHTTPNonce":true,"androidTrafficVerified":false}' > output/review/proxy-isolated-vless-preflight.json
+python3 r013-ci/proxy-relay.py "$RUNNER_TEMP/r013-proxy-fixture.json" "$RUNNER_TEMP/r013-proxy-relay.ready" > "$RUNNER_TEMP/r013-proxy-relay.log" 2>&1 &
+proxy_relay_pid=$!
+for i in $(seq 1 20); do test -s "$RUNNER_TEMP/r013-proxy-relay.ready" && break; sleep 1; done
+test -s "$RUNNER_TEMP/r013-proxy-relay.ready"
+python3 r013-ci/proxy-isolation-preflight.py "$RUNNER_TEMP/r013-proxy-fixture.json"
 proxy_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-proxy-fixture.json")
 }
 fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic.conf")
@@ -158,15 +218,16 @@ if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
   focused_instrument output/review/service-routing.txt -e class org.amnezia.awg.r013.R013ServiceRoutingTest
   services_ok=false
   if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/service-routing.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/service-routing.txt; then services_ok=true; fi
-  sudo ip address add 198.18.0.1/32 dev lo
-  control_alias_added=yes
+  focused_instrument output/review/primary-resource.txt -e class org.amnezia.awg.r013.R013PrimaryResourceTest
+  resources_ok=false
+  if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/primary-resource.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/primary-resource.txt; then resources_ok=true; fi
   start_proxy_fixture
   focused_instrument output/review/proxy-runtime.txt -e class org.amnezia.awg.r013.R013ProxyRuntimeTest -e proxyFixture "$proxy_fixture"
   proxy_ok=false
   if grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/proxy-runtime.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/proxy-runtime.txt; then proxy_ok=true; fi
   unset proxy_fixture fixture candidate_fixture
-  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedSemanticCases":1,"expectedSurfaceCases":2,"expectedServiceCases":1,"expectedProxyCases":2,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
-  test "$coordinator_ok" = true && test "$semantic_ok" = true && test "$surface_ok" = true && test "$services_ok" = true && test "$proxy_ok" = true
+  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedSemanticCases":1,"expectedSurfaceCases":2,"expectedServiceCases":1,"expectedProxyCases":2,"expectedPrimaryResourceCases":1,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
+  test "$coordinator_ok" = true && test "$semantic_ok" = true && test "$surface_ok" = true && test "$services_ok" = true && test "$proxy_ok" = true && test "$resources_ok" = true
   exit $?
 fi
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
@@ -179,6 +240,9 @@ grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/routing-surface.txt
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013ServiceRoutingTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/service-routing.txt
 grep -E '^OK \(1 test\)[[:space:]]*$' output/review/service-routing.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/service-routing.txt
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013PrimaryResourceTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/primary-resource.txt
+grep -E '^OK \(1 test\)[[:space:]]*$' output/review/primary-resource.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/primary-resource.txt
 sudo ip address add 2.56.24.1/32 dev lo
 ru_alias_added=yes
 sudo ip address add 198.18.0.1/32 dev lo
@@ -192,6 +256,9 @@ python3 r013-ci/capture-russian-routes.py
 wait "$routing_test_pid"
 grep -E '^OK \(1 test\)[[:space:]]*$' output/review/russian-routing.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/russian-routing.txt
+if [ -n "$route_echo_pid" ]; then kill "$route_echo_pid" 2>/dev/null || true; wait "$route_echo_pid" 2>/dev/null || true; route_echo_pid=""; fi
+sudo ip address del 198.18.0.1/32 dev lo
+control_alias_added=""
 # Verify the real Android TUN/native Xray path with an isolated ephemeral REALITY
 # server. Its only private destination is the nonce HTTP echo; public TCP443 and
 # Cloudflare DNS are used solely by the application's unchanged HTTPS204 health.
