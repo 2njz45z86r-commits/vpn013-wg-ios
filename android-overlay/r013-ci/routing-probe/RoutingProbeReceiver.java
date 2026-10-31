@@ -30,7 +30,7 @@ public final class RoutingProbeReceiver extends BroadcastReceiver {
         if (!uuid(request) || !uuid(nonce) || port < 1024 || port > 65535) return;
         final PendingResult pending = goAsync();
         final Context owner = context.getApplicationContext();
-        new Thread(() -> {
+        new Thread(new Runnable() { @Override public void run() {
             boolean vpn = false, matched = false;
             String errorClass = "";
             try {
@@ -64,6 +64,6 @@ public final class RoutingProbeReceiver extends BroadcastReceiver {
                 catch (Exception failure) { if (stream != null) output.failWrite(stream); }
             } catch (Exception ignored) { }
             finally { pending.finish(); }
-        }, "vpn013-ci-probe").start();
+        } }, "vpn013-ci-probe").start();
     }
 }
