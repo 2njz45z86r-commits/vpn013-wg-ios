@@ -1,0 +1,117 @@
+# Development validation only. No MSI/EXE/source archive is retained or published.
+# This workflow cannot certify a release or replace the current 34-control audit.
+name: Windows development native acceptance without publication
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/windows-development-native.yml'
+permissions:
+  contents: read
+concurrency:
+  group: windows-development-native
+  cancel-in-progress: false
+jobs:
+  development:
+    runs-on: windows-2025
+    timeout-minutes: 65
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fetch exact reviewed corresponding source
+        run: |
+          $archive=Join-Path $env:RUNNER_TEMP 'windows-source.zip'
+          curl.exe --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --output $archive 'https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/windows-source-1.4.0/VPN013WG-1.4.0-windows-source.zip'
+          if ($LASTEXITCODE -ne 0) {throw 'Source download failed'}
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower() -ne 'f7c4a928eecc6e40a1d7b0bcf37bf26d7b6de1b449a2ca26f7cf1ffc2bd83e35') {throw 'Source hash mismatch'}
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:GITHUB_WORKSPACE
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Apply public overlays and preserve exact corresponding source
+        run: python windows/prepare-ci-source.py
+      - name: Prepare hash-pinned official dependencies
+        working-directory: vpn013-wg-windows
+        run: |
+          python scripts/bootstrap.py
+          if ($LASTEXITCODE -ne 0) {throw 'Toolchain preparation failed'}
+          ./scripts/bootstrap-driver.ps1
+          ./scripts/bootstrap-installer.ps1
+      - name: Build native application and MSI
+        working-directory: vpn013-wg-windows
+        run: |
+          ./scripts/build-r013.ps1
+          ./scripts/build-installer.ps1
+      - name: Check pinned Go dependencies without public finding details
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:PATH=(Join-Path $PWD '.deps/go/bin')+';'+(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          $env:GOFLAGS='-mod=vendor'
+          python "$env:GITHUB_WORKSPACE/scripts/check_go_security.py" "$PWD" --level symbol
+          if ($LASTEXITCODE -ne 0) {throw 'Private Go dependency review required'}
+      - name: Verify actual hourly product and complete native safety inventory
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOTOOLCHAIN='local'
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/go/bin')+';'+(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          $env:R013_CI_WINTUN_DLL=Join-Path $PWD 'amd64/wintun.dll'
+          $env:R013_CI_CLIENT_EXE=Join-Path $PWD 'amd64/VPN013WG.exe'
+          python "$env:GITHUB_WORKSPACE/windows/release-check-hourly.py" "$env:RUNNER_TEMP/hourly-product-report" 'windows'
+          if ($LASTEXITCODE -ne 0) {throw 'Actual hourly product acceptance failed'}
+      - name: Test protocol, keys, recovery, policy and real ICMP
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./.deps/go/bin/go.exe test -mod=vendor -v ./r013 ./manager
+          if ($LASTEXITCODE -ne 0) {throw 'Core tests failed'}
+      - name: Execute adaptive rate and actual owner catalog checks
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $catalog=Join-Path $env:RUNNER_TEMP 'pinned-service-catalog'
+          New-Item -ItemType Directory -Force -Path $catalog | Out-Null
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogUI.json" -Destination "$catalog/catalog-ui.json"
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogRules.json" -Destination "$catalog/catalog-rules.private.json"
+          $env:VPN013_ROUTING_CATALOG_TEST_DIR=$catalog
+          ./.deps/go/bin/go.exe test -mod=vendor -v ./r013traffic ./r013routing
+          if ($LASTEXITCODE -ne 0) {throw 'Traffic and catalog model checks failed'}
+      - name: Test native current-card scenarios without customer VPN
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./scripts/ci-ui.ps1
+      - name: Test install, native AWG traffic, repair and uninstall
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./scripts/ci-installer.ps1
+      - name: Preserve complete native and UI evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-development-native-evidence
+          path: |
+            ${{ runner.temp }}/hourly-product-report
+            ${{ runner.temp }}/r013-ui-*.json
+            ${{ runner.temp }}/r013-power-*.png
+            ${{ runner.temp }}/r013-traffic-*.png
+          if-no-files-found: error

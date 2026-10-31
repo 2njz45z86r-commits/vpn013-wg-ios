@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/amnezia-vpn/amneziawg-windows-client/manager"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013"
+	"github.com/amnezia-vpn/amneziawg-windows-client/r013traffic"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
 	"github.com/lxn/walk"
 	"sync/atomic"
@@ -13,15 +14,18 @@ import (
 )
 
 type r013CurrentSnapshot struct {
-	name, detail string
-	target       r013.CurrentPingTarget
-	active       bool
-	controlName  string
-	controlState manager.TunnelState
-	controlKnown bool
+	name, detail   string
+	received, sent *uint64
+	target         r013.CurrentPingTarget
+	active         bool
+	controlName    string
+	controlState   manager.TunnelState
+	controlKnown   bool
 }
 
 type r013CurrentCard struct {
+	trafficSampler     r013traffic.Sampler
+	trafficOrigin      time.Time
 	owner              *ManageTunnelsWindow
 	group              *walk.GroupBox
 	detail             *walk.TextLabel
@@ -169,7 +173,9 @@ func readR013Current(ctx context.Context) r013CurrentSnapshot {
 		} else {
 			shot.detail += " · рукопожатие " + time.Unix(0, int64(peer.LastHandshakeTime)).Local().Format("15:04:05")
 		}
-		shot.detail += fmt.Sprintf(" · ↓ %s · ↑ %s", peer.RxBytes.String(), peer.TxBytes.String())
+		received, sent := uint64(peer.RxBytes), uint64(peer.TxBytes)
+		shot.received, shot.sent = &received, &sent
+		shot.detail += fmt.Sprintf(" · Всего: ↓ %s · ↑ %s", r013traffic.Amount(received), r013traffic.Amount(sent))
 	} else {
 		shot.detail += " · статистика недоступна"
 	}
@@ -233,7 +239,20 @@ func (c *r013CurrentCard) apply(shot r013CurrentSnapshot, revision uint64) {
 		title = "Текущее подключение · " + shot.name
 	}
 	c.group.SetTitle(title)
-	c.detail.SetText(shot.detail)
+	if c.trafficOrigin.IsZero() {
+		c.trafficOrigin = time.Now()
+	}
+	identity := fmt.Sprintf("%s|%d", shot.target.Identity, revision)
+	rate := c.trafficSampler.Sample(identity, time.Since(c.trafficOrigin).Seconds(), shot.received, shot.sent)
+	detail := shot.detail
+	if shot.received != nil && shot.sent != nil {
+		received, sent := "—", "—"
+		if rate != nil {
+			received, sent = r013traffic.Speed(rate.Received), r013traffic.Speed(rate.Sent)
+		}
+		detail += "\nСкорость: ↓ " + received + " · ↑ " + sent
+	}
+	c.detail.SetText(detail)
 	c.button.SetEnabled(shot.active && shot.target.Host != "" && (c.pingCancel != nil || !c.pingInFlight.Load()))
 	c.updatePowerButton()
 }
