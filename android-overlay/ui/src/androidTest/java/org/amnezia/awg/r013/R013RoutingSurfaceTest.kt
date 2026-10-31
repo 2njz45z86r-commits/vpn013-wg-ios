@@ -137,7 +137,7 @@ class R013RoutingSurfaceTest {
                 (if (description) match.contentDescription else match.text)?.toString() != text) {
                 false
             } else {
-                var target = match
+                var target: AccessibilityNodeInfo = match
                 while (!target.isClickable) {
                     val parent = target.parent ?: break
                     target = parent
