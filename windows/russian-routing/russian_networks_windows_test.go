@@ -29,6 +29,10 @@ import (
 
 var russianFixtureService bool
 
+func fixtureSelectedTarget(child bool, target, selected string) bool {
+	return child && target != "" && target == selected
+}
+
 // WFP intentionally requires the actual unrestricted service SID. A normal
 // runner process cannot stand in for that production identity.
 func TestMain(m *testing.M) {
@@ -93,7 +97,11 @@ func TestRussianRoutingNative(t *testing.T) {
 		if target != "2.56.24.2" && target != "198.18.0.2" && target != "2001:640::2" && target != "2001:db8:130::2" {
 			// Catalog-derived destination is allowed only when an exact /32 is
 			// installed on this fixture's own TUN on the authorized CI runner.
-			if os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Getenv("GITHUB_REPOSITORY") != "2njz45z86r-commits/vpn013-wg-ios" || target != os.Getenv("R013_RU_NATIVE_SELECTED") {
+			// The actual SYSTEM service may not inherit the runner process's
+			// GITHUB_* environment. Require its fixture identity and exact
+			// selected target here, then independently prove the /32 belongs
+			// to the fixture TUN below before sending a packet.
+			if !fixtureSelectedTarget(child, target, os.Getenv("R013_RU_NATIVE_SELECTED")) {
 				t.Fatal("only owned synthetic targets permitted")
 			}
 			address, e := netip.ParseAddr(target)
@@ -584,6 +592,11 @@ func russianFixtureChecksum(p []byte) uint16 {
 }
 
 func TestServiceWFPDestinationPolicyModel(t *testing.T) {
+	// SCM children may lack runner GITHUB_* variables. Identity and exact
+	// target remain mandatory before the separate actual TUN route proof.
+	if !fixtureSelectedTarget(true, "203.0.113.1", "203.0.113.1") || fixtureSelectedTarget(false, "203.0.113.1", "203.0.113.1") || fixtureSelectedTarget(true, "203.0.113.1", "203.0.113.2") || fixtureSelectedTarget(true, "", "") {
+		t.Fatal("fixture target identity guard")
+	}
 	cat, err := r013routing.OwnerCatalog()
 	if err != nil {
 		t.Fatal(err)

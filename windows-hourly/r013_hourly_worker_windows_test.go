@@ -337,9 +337,57 @@ func TestCompiledAutoServiceRunsReal30sScanWithoutStoppingPrimary(t *testing.T) 
 		t.Fatal(err)
 	}
 	defer service.Close()
-	defer func() { service.Control(svc.Stop); service.Delete() }()
+	// Never send an unnecessary STOP after a successful receipt: the fixture
+	// handler is already returning and its SCM process must exit naturally
+	// before testing.TempDir removes the crash-output file.
+	var worker windows.Handle
+	defer func() {
+		if worker == 0 {
+			_, _ = service.Control(svc.Stop)
+		}
+		_ = service.Delete()
+	}()
 	if err = service.Start(); err != nil {
 		t.Fatal(err)
+	}
+	for until := time.Now().Add(8 * time.Second); time.Now().Before(until); time.Sleep(20 * time.Millisecond) {
+		status, e := service.Query()
+		if e != nil {
+			t.Fatal("query owned hourly fixture", e)
+		}
+		if status.ProcessId == 0 {
+			if status.State == svc.Stopped {
+				break
+			}
+			continue
+		}
+		worker, e = windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.PROCESS_TERMINATE|windows.SYNCHRONIZE, false, status.ProcessId)
+		if e != nil {
+			t.Fatal("open owned hourly fixture", e)
+		}
+		var image [32768]uint16
+		size := uint32(len(image))
+		if e = windows.QueryFullProcessImageName(worker, 0, &image[0], &size); e != nil || !strings.EqualFold(filepath.Clean(windows.UTF16ToString(image[:size])), filepath.Clean(exe)) {
+			windows.CloseHandle(worker)
+			worker = 0
+			t.Fatal("hourly fixture process image mismatch", e)
+		}
+		break
+	}
+	if worker != 0 {
+		defer func() {
+			defer windows.CloseHandle(worker)
+			state, e := windows.WaitForSingleObject(worker, 15000)
+			if e == nil && state == windows.WAIT_OBJECT_0 {
+				return
+			}
+			// The retained, image-verified handle belongs to this unique
+			// disposable fixture. Forced cleanup always fails acceptance.
+			status, statusErr := service.Query()
+			killErr := windows.TerminateProcess(worker, 125)
+			state, e = windows.WaitForSingleObject(worker, 5000)
+			t.Errorf("owned hourly fixture did not exit naturally: SCM=%d win32=%d specific=%d query=%v forced=%v wait=%d/%v", status.State, status.Win32ExitCode, status.ServiceSpecificExitCode, statusErr, killErr, state, e)
+		}()
 	}
 	var receipt hourlyReceipt
 	until := time.Now().Add(190 * time.Second)
