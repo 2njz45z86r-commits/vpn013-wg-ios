@@ -4,6 +4,7 @@
 package ui
 
 import (
+	"image"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -13,6 +14,15 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013"
 	"github.com/lxn/walk"
 )
+
+// BI_RGB window captures have no meaningful alpha channel. Walk forwards that
+// unused byte into RGBA; PNG would then discard real native RGB text pixels.
+// Normalize alpha before encoding, retaining every captured RGB value exactly.
+func r013OpaquePreviewCapture(value *image.RGBA) {
+	for offset := 3; offset < len(value.Pix); offset += 4 {
+		value.Pix[offset] = 255
+	}
+}
 
 // Actual native controls receive synthetic counter snapshots in the separately
 // tagged fixture. No owner tunnel or network setting is used by this scenario.
@@ -72,6 +82,7 @@ func verifyR013TrafficPreview(window *ManageTunnelsWindow, destination string, s
 			return
 		}
 		defer file.Close()
+		r013OpaquePreviewCapture(image)
 		if png.Encode(file, image) != nil {
 			failure = "Native traffic PNG encoding failed"
 		}

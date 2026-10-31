@@ -169,6 +169,7 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 				return
 			}
 			defer file.Close()
+			r013OpaquePreviewCapture(image)
 			if png.Encode(file, image) != nil {
 				failure = "Native PNG encoding failed"
 			}
