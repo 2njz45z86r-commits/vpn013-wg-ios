@@ -135,6 +135,27 @@ subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/patch-service-
 subprocess.run([sys.executable,str(workspace/'windows/russian-routing/patch-native.py'),str(root)],check=True)
 subprocess.run([sys.executable, str(workspace/'scripts/patch-primary-resource-safety.py'), str(root)], check=True)
 subprocess.run([sys.executable, str(workspace/'windows/patch-primary-resource-safety.py'), str(root)], check=True)
+# This extracted source is an owned build stage. Preserve the independently
+# patched VPN core while replacing only the pinned UI dependency packages.
+ui_marker = workspace / '.vpn013-ui-private-stage'
+assert not ui_marker.is_symlink()
+if ui_marker.exists():
+    assert ui_marker.read_text(encoding='ascii') == 'VPN013_UI_PRIVATE_STAGE\n'
+else:
+    ui_marker.write_text('VPN013_UI_PRIVATE_STAGE\n', encoding='ascii', newline='\n')
+go_executable = shutil.which('go')
+assert go_executable, 'Pinned Go build tool is unavailable'
+# Windows checkouts may supply these otherwise identical files as CRLF.
+# Canonicalize only the six independently compared inputs; the UI migration
+# still checks the exact reviewed bytes of all 27 inputs before applying.
+gofmt_executable = Path(go_executable).with_name('gofmt.exe' if os.name == 'nt' else 'gofmt')
+assert gofmt_executable.is_file()
+ui_canonical_inputs = ('ui/listview.go', 'ui/managewindow.go', 'ui/r013_brand.go',
+                       'ui/r013_native_trial.go', 'ui/r013_power.go', 'ui/r013_updates.go')
+subprocess.run([str(gofmt_executable), '-w', *[str(root/name) for name in ui_canonical_inputs]], check=True)
+subprocess.run([sys.executable, str(workspace/'windows/patch-maintained-ui.py'),
+                '--stage', str(root), '--private-root', str(workspace),
+                '--go', go_executable], check=True)
 manifest = []
 files = []
 for path in sorted(root.rglob('*')):

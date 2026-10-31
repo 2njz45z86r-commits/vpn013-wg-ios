@@ -1,0 +1,1068 @@
+{
+  "source_go_mod_sha256": "86a4fc96098a41d7906bbcedd29afa3d20021768e78f44560404221194478e17",
+  "walk_commit": "28b80ea70d3b99005a6189e34aa4a6fda6da4af2",
+  "win_commit": "2d76c33a64c12457b1ad06b57d40124e76f30087",
+  "replacements": [
+    {
+      "path": "ui/aboutdialog.go",
+      "old_sha256": "b96f3cfbe7fbc3ea1dabdf90f1e643129c612eb334985014ee981fb7a9ccbe8d",
+      "new_sha256": "7414cf9ebf2a3be78fa14abdafbfaa6feb2d274e4a9b7eef950572aa1f97464a"
+    },
+    {
+      "path": "ui/confview.go",
+      "old_sha256": "af111d77a5970c6653171cbae8fa80cfa5d895a7eeccdadc8342717f408904fe",
+      "new_sha256": "bdb4cd0068d6c779c01473126dc145b20d98a94cf6e3a6ea545c82083ae73561"
+    },
+    {
+      "path": "ui/editdialog.go",
+      "old_sha256": "087767e513ad3f69135c4f53227b197f3ef788b4126bd8bcea198c1b99a5cd3f",
+      "new_sha256": "14b3aed95f45b87b214ab4b01ea9e6ad55532c25acee922d7db2f9fb31968adb"
+    },
+    {
+      "path": "ui/filesave.go",
+      "old_sha256": "c29570d7438c9b65643753484e778cbd9ffdcd423912ce132169c4f9ce1957f9",
+      "new_sha256": "2047fd589230338c316c8b750c757d72415dbe15156d3855e94e7c43ad4cea45"
+    },
+    {
+      "path": "ui/iconprovider.go",
+      "old_sha256": "16123b0e341d8b949c87a60d6371f31e1f82f0151903141c60811b09136bedd9",
+      "new_sha256": "3b420a215b17cdda2273e8c54cad1f4cc0feab5428c0113b2dae1270e576838f"
+    },
+    {
+      "path": "ui/listview.go",
+      "old_sha256": "c8d7a21ced8374b81b29b691c41a6bc0c9b6d2d8c0f2c4ed85896e0641e932ec",
+      "new_sha256": "25cdcf2d09f9d37d9d049c8ac60ec3af7d774cce0cceee9895eae542f7c89678"
+    },
+    {
+      "path": "ui/logpage.go",
+      "old_sha256": "ea88a6e774ad05a5de35e7d87610f81c96a842a07682524006d518fbd326303c",
+      "new_sha256": "43add5c59e1743239add6b4e683b35abbfe5f672f496cc1fcf5c86cac763925f"
+    },
+    {
+      "path": "ui/managewindow.go",
+      "old_sha256": "b7fcaba4a1b0c5942b58e9d6537ee6ad0fb095fc542d33696da64c9fbfd6d02d",
+      "new_sha256": "2019a68ad4c1b10bfc6effcfc2ab453a538cf894d0ad1ada43073cea906feab6"
+    },
+    {
+      "path": "ui/r013_brand.go",
+      "old_sha256": "1b5adc78c63b18a69d45d0a705136b54898941e52df607dbcf2b51a09fa2ee47",
+      "new_sha256": "f6874e77e54ffc0132277c49dcbecd981dc6d4c820b8711f6b935bbf7cda406e"
+    },
+    {
+      "path": "ui/r013_current.go",
+      "old_sha256": "324f2c79efedaaddd4b7191b871b0ed3d9622cd4c823338297f32d7fcdde4837",
+      "new_sha256": "007b555d16395da62fa079dce9c5a5c3942375b438dd326f858504541760284b"
+    },
+    {
+      "path": "ui/r013_features.go",
+      "old_sha256": "56c6fce780082d8ffa8f194d3bec67b673b986aab51a70554db3a0afdf6d90be",
+      "new_sha256": "3dc6ac1964f2338fbc64dba4ced31dcaaeb11ae24abeef29ca7cbb7d119f869f"
+    },
+    {
+      "path": "ui/r013_native_trial.go",
+      "old_sha256": "caa1dd34667d30f49104fe2f2873bbb39394b6e2504884601b016a9a71bd3618",
+      "new_sha256": "93550fe8ec1471ea99ad99c39184713bad1fd58839647ab13fa5545ae6f1434f"
+    },
+    {
+      "path": "ui/r013_power.go",
+      "old_sha256": "8ce0d024549a1b386bac04ca9a1a00ab11e041c5c93c5b8dd50858f9be4e7a87",
+      "new_sha256": "60c1003db89a8fb9f70dc3ff13738790c28900b23e0a8d9957e0306e0e5edf78"
+    },
+    {
+      "path": "ui/r013_preview_windows.go",
+      "old_sha256": "43455b8121813118f356cdecf242926f8021ec59c8d63b729e7fe928800af030",
+      "new_sha256": "797f033b2a1cf7299956e3e37253b1129f951b50b9d8e3c24feb90970ffcbfa5"
+    },
+    {
+      "path": "ui/r013_services_preview_windows.go",
+      "old_sha256": "a58437c4a4fd2463773b7944ecc92dfac425ce2970135a10f690b965c6ef39fd",
+      "new_sha256": "3d04ab6e7bcf5501206111426fa6a4948d3925a7dd4aba591dddf4d5531b8ba4"
+    },
+    {
+      "path": "ui/r013_services.go",
+      "old_sha256": "fb35c99399fb26e55853d7004347e9286e2575758de7d6bdb6dc6c354f930867",
+      "new_sha256": "3565c42eaf4344f50868e992f91c2226f1f54750633b0e487fb82d7cbff451d6"
+    },
+    {
+      "path": "ui/r013_traffic_preview_windows.go",
+      "old_sha256": "53e82b0faaa2de4b82af039f0ef98d3ed94f0db666fb5afda5919781cfc71166",
+      "new_sha256": "ed59b1850421db6dcf7e3bb3ed11c006b2ac420f60b293f27a8b140cb07b1c79"
+    },
+    {
+      "path": "ui/r013_updates.go",
+      "old_sha256": "9b7a6e5f9f2780eb74dd4421cdb7413825d65dc42b9ca2d7cef075306cc4e1be",
+      "new_sha256": "3f26fcc183e43163d7b8058b4b99632a2ea9ec331f8108534d2fbc6b6f838ce7"
+    },
+    {
+      "path": "ui/raise.go",
+      "old_sha256": "7266b212eaa21e3b9d031a4fd87f1459fcc03a66d4746d42877765ea82fb70c5",
+      "new_sha256": "345a0f4b7752fcd1269746b931cfda92d58abeed4531f0af2462f1ff85ec0918"
+    },
+    {
+      "path": "ui/tray.go",
+      "old_sha256": "f39bc61058bea149600e289ce4b8843ba871330c3ed6f4f955feff9ae7e65770",
+      "new_sha256": "0573d8aef134981e267c0de2503a279655fb2f252dfd4ad3e3f5ecc425c79c80"
+    },
+    {
+      "path": "ui/tunnelspage.go",
+      "old_sha256": "14c0b16379550deb634dc056fb7024663445814d065f90a21c7a6db25280dfef",
+      "new_sha256": "115aca0f7e87e41ec796a777d10d293ea501ff99d8290c9b9cd42cd7dddad837"
+    },
+    {
+      "path": "ui/ui.go",
+      "old_sha256": "2c90a5705f227abb336274507facfc8cdba853b9302cdce6065cfe650fcacefa",
+      "new_sha256": "440764e427ca6875159d78cc328636b48be6d18a52285b8d4e4aab186c37ff9f"
+    },
+    {
+      "path": "ui/updatepage.go",
+      "old_sha256": "c9f0b39b386b0367131ed2591f81bdcf465236f9573a09b63fd1aa5fb7a669d6",
+      "new_sha256": "41a448811e59cc2b90e878723008daf384ce031beece1310b440cd6b0a589a0c"
+    },
+    {
+      "path": "ui/syntax/syntaxedit.go",
+      "old_sha256": "5f7e8d1f5baf2d2470381352886b79618fe21ac477248fe3f9c715017d741d16",
+      "new_sha256": "966654a25c5b6ac03d62b7f58f654a7496bcf26e124cb2ac45727bf2d3ce8e2a"
+    },
+    {
+      "path": "go.mod",
+      "old_sha256": "86a4fc96098a41d7906bbcedd29afa3d20021768e78f44560404221194478e17",
+      "new_sha256": "437c15c63f9b9ae15a371143da5bf1a6efe95cd86df2ee433ee224bdd82e7ccd"
+    },
+    {
+      "path": "go.sum",
+      "old_sha256": "73291adaf20325ea1e380e4a190884c2459bca772df0e586dc374ed1f047b531",
+      "new_sha256": "d2d89f89e1fbc4b00fb4dedbb78e03579e22085da17170ae530426450d500d66"
+    },
+    {
+      "path": "vendor/modules.txt",
+      "old_sha256": "5632bbba4d8b9f5ad84fc0403b7ea0946c5834b316a9be07bfca3e81f15bfe3c",
+      "new_sha256": "07fee6abf0dc98e681ec2319dbe01e786b307e251d390ca2d87217484febc5c4"
+    }
+  ],
+  "additions": [
+    {
+      "path": "vendor/github.com/tailscale/walk/accessibility.go",
+      "new_sha256": "69e9ef13b050e0c3318fb0baaff54f0f4ecb5f8e746397185ce8e780c6520252"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/action.go",
+      "new_sha256": "d9568db8a87ec96a05ed799ae58348ea7761485c14884e74b664463ffdf969f3"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/actionlist.go",
+      "new_sha256": "57f5fb69d0b49198a1f75e46d6882918aee7c81742594f6a785068d24f9e9755"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/application.go",
+      "new_sha256": "4939a3945be8f2d4adc595e0172843b76449b8fd20d9b8cab27c7b4852d497fa"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/AUTHORS",
+      "new_sha256": "f2bd27d065dbf723a499a43cc6bb5f9df29bc40173c2a8e40fa8e52363e38f0e"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/bitmap.go",
+      "new_sha256": "dbac6711f8172631f7cfb2b8e41344f5974729d00aaaff6f0ecb5023514a0adc"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/boxlayout.go",
+      "new_sha256": "d0fb302e7070742365e537c699611f9d0e9a618dc755a30362f0a7aa709c7cd3"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/brush.go",
+      "new_sha256": "4336845e29ec2eb7540470a9b89add76f59a9442da6902a91df15c7b93cc26d0"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/bufferedpaint.go",
+      "new_sha256": "d4f02b2d445ee1fc5d107e36ca67c0ed98172b2f3f25f6afe0578a476364aa71"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/button.go",
+      "new_sha256": "49a7cc6658ce9404bc16a9dd49678d148947094266562fc2c4d805fc94e8c283"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/cancelevent.go",
+      "new_sha256": "863af164f11079712209e82a5131c6cd430361f5d1d13a2cb4a976242d677b02"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/canvas.go",
+      "new_sha256": "7fbaf9e4f1d50867bf07c350807a379371f275537e05e7fb681e7b2be0612f17"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/checkbox.go",
+      "new_sha256": "defd72a6e5ca0dd2ca67c2ea6fd85d85adb59110294abdd2505f36bb84cab101"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/clipboard.go",
+      "new_sha256": "689f8fc9d419b92df60fcf7f8e3d2b7176bad1e0a6c75b99e2e026300107ea76"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/closeevent.go",
+      "new_sha256": "6434380b99f5351c74f87154707dfb52f1f444fa07a71f8f3880048a079db6d2"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/color.go",
+      "new_sha256": "2cc2f41af5c3e8cfa632271f667be30940b73cb9f0fc43cafbea351c23e32e25"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/combobox.go",
+      "new_sha256": "95517eb186903da02feb44b9d0bd6803d43658180f28a1174e5c2c5731e0b700"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/commondialogs.go",
+      "new_sha256": "3116316e8d804dfeab9a66e0f30d55a5a993f835f957ed2dc9719c7eabdde345"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/composite.go",
+      "new_sha256": "181b1be99ebd4f907dd52d63fd51b47108c104bf3e2c90c751f812de1db96ad0"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/condition.go",
+      "new_sha256": "23684119c408079dce798a3951e8e522319170d9767edb802fed3b0f92f7796c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/container.go",
+      "new_sha256": "fda4ac8ec53696818eb3a26e5ed2a7229b2ff3ae52bb72426b6dc7b0d5237d2f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/cursor.go",
+      "new_sha256": "2e1f02d531378885216ffdf832d41a81174df845815d9dadbf8bc4d737028fae"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/customwidget.go",
+      "new_sha256": "b53461ad04c2dcf21480ccb13038c8dc07d8f4b47f1a08296454fdaa4efacc56"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/databinding.go",
+      "new_sha256": "a88b80e9514b8b3377f0d8628567166622d1cff91ad211c17f0104107a00091a"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/dateedit.go",
+      "new_sha256": "15892c76f40fb4f4b2955370b6bc677d31726d3e8b9c912982b23305d762f61d"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/datelabel.go",
+      "new_sha256": "4a85ecb64308907d074503d1127ca55ea50586efe6b2c6c80a62f6d4c80d62ba"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/dialog.go",
+      "new_sha256": "0b48c49abda52f78e594756835915d142b53d87f88c27789d85034e10339efb1"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/dialogex.go",
+      "new_sha256": "e088358ccf9632ff3572ac94516f76f5269d27c976fce9915a5793a70f88b192"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/dropfilesevent.go",
+      "new_sha256": "c018b61f1d77a8704dda4f1c910e3d03b9d18f3b720b8be93a2ab281343d8e4e"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/error.go",
+      "new_sha256": "a63036a6399b1755073c92fb3b5206d8e6ce9f6ac84f31e900c8aef5f919339f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/errorevent.go",
+      "new_sha256": "53afe3eeef2cc23820c4b687ea0c43fa28f3628a9a1ac7e5c1574e5a6da87ca1"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/event.go",
+      "new_sha256": "d76e674d80e908c59e0e7c9d0efe7ea4bb6d8a1680d2be5e1ce5f5d690e69507"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/expression.go",
+      "new_sha256": "66dfd7fce964d661ad088cbbfd662388a775e50fa8466ee77208a09271f1fe9a"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/flowlayout.go",
+      "new_sha256": "41129454e1d14e851d5bce16ed7deb0f21469f40b2dc7d888f30d3083487a58c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/font.go",
+      "new_sha256": "5f070eaafb393f6535db84cb4c7eafe46b8149099d1f2f2b6f3fad5f62ea675b"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/fontresource.go",
+      "new_sha256": "5c49931345655ef21e7d95cf468d5f016aa49ff9fb0c3a41213b81e19e9451f4"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/form.go",
+      "new_sha256": "a931f414de5726f76712112b47ed762f065c9ff74bc12ef4a5390430407af136"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/gdiplus.go",
+      "new_sha256": "7e0ab5058fa74d77e1c22943632f6fe4918d3dbc767904ed19bd6b9a9547fec8"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/gradientcomposite.go",
+      "new_sha256": "3d34ac6ade92f5fe91cdf9692f2bbe92a7ee9180545e18b39f7bbb668c03600f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/graphicseffects.go",
+      "new_sha256": "a8fc2d143ea851eca062ff158e4cbc10eb1ec7d75821164c6557c0268880498a"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/gridlayout.go",
+      "new_sha256": "e0629a83528b1f5ee6383c9d4da5c57ed5e497f02f8219a57639c9c6974239a3"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/groupbox.go",
+      "new_sha256": "5cfc20d608c320a2459df5fee29ffd54f193adead0b16c13746c870215cd48e8"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/icon.go",
+      "new_sha256": "9a077218dab034913e382745aa9089cd6527fd8b60698802a696ef268e9b091c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/iconcache.go",
+      "new_sha256": "6470506f41bdfa61c069be29bca813cce085becc439f16d5f645398b56b57a96"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/image.go",
+      "new_sha256": "8dbee41cec710cc970beb310dccaaedf88bd9a98896976c6f7d02ddfaf48513f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/imagelist.go",
+      "new_sha256": "aa8691ef111689196713dcdb8aa61ce52a5184a0c39fc62887ec91f29e16f9c5"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/imageview.go",
+      "new_sha256": "185586eef6d839a446a60046d73d892182812d9fa02449dafd11e79a75604063"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/inifilesettings.go",
+      "new_sha256": "68987b199efa42eab33e68340d24ac7ec43851b2408726a31d58246c1222c2eb"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/intevent.go",
+      "new_sha256": "1775983d637d9f4ec326418b2aad132c4acc7d7340196a5cebe80e3e03e42c28"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/intrangeevent.go",
+      "new_sha256": "ea02ead065e65240cd101a5461029d2d8b09186b99b230e90b77ed404fb88505"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/keyboard.go",
+      "new_sha256": "4b926408e3135c64c0e5ecb133610530ea8fc9ce72b6edc96f7ad70660f33730"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/keyevent.go",
+      "new_sha256": "4c3f227bab5af697b2cd4462bab205792423943bfe78ebdb1a4e082b1a10c94d"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/label.go",
+      "new_sha256": "bebb49ca316ef629ab9e61b43d46cef258c8b8087884102a68609ae416625e2f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/layout.go",
+      "new_sha256": "e277f58349a64f500757efc365badccfea14d1121905801b9ec86e64a19f0c32"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/LICENSE",
+      "new_sha256": "e5eb49344b2714fdc0f2536a7ff682c3ee2d38bfac020201052817069e1fffa3"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/lineedit.go",
+      "new_sha256": "04504e0997ea1082327a6b6be43b705cf783dc8a7f8405cd27a005e489cb212e"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/linklabel.go",
+      "new_sha256": "542d4bfb928b8effec60890f01dc1b1ecc3e56b1649c3d8652248d0379bb5c68"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/listbox.go",
+      "new_sha256": "be060a919bfc1bbe37cbc782a1c18f585a10e1440967a88940e50b1b941f673c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/mainwindow.go",
+      "new_sha256": "9e39cd88909a3985a54d6e8df24beae8fd9d0cfeeb09eab3f600732607128127"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/maptablemodel.go",
+      "new_sha256": "2d4fa6979b35c2e4b92b96cdc67ecbb37cc029dd05444da326e0445d3067d0eb"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/menu.go",
+      "new_sha256": "04cb6afaf69a98965b5826a4bf50a311bfaa59ed22515db135bbea1956c73478"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/menuownerdraw.go",
+      "new_sha256": "170dcc1fe7b30c2018058a8f3b78f371c38b7f9d2cca148f978503df3fd38faa"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/messagebox.go",
+      "new_sha256": "2538bc2229cc790cdfaa243bb0b9c8fe46d5f34d507df3d553516dd17588e9b2"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/metafile.go",
+      "new_sha256": "abba639395eea52f2483453d87eb8f2a960e39c1e8cb92072431db27715644fc"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/minwin.go",
+      "new_sha256": "6812379c13fa0aeca0d3f243abf547729c450e3df46eb424ee07bdeb6e7778c0"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/models.go",
+      "new_sha256": "d4dff8060047bc0db57757a440ed9ba184c8d928a37bbf44817358bed89b5f64"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/monitor.go",
+      "new_sha256": "e4863ce99874041276d4f1e5cbf443026aed9efa69d9ea9e499d812194c794e5"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/mouseevent.go",
+      "new_sha256": "28e47b6806f4e9c8ab20a69f4178a4ca4f6d083ff0033a64fbec4a1fa842d04c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/notifyicon.go",
+      "new_sha256": "bdb332dda3bda8d4f06e1cd4ad3f5ae023c232166eb054dd823d8f6329d074e2"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/numberedit.go",
+      "new_sha256": "dc202fb92a4e900244b7b695da7ac6317495adec76fbfd148bbd8582a046c7d2"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/numberlabel.go",
+      "new_sha256": "c727369b0c68380ffcef441c855667348e3d98cc50e3294f2fa5f84af44fa1a9"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/path.go",
+      "new_sha256": "1569badf1027f6b0a90447f7a3d95cbe88758802a9f75ccdd0b2972f1e46bde6"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/pen.go",
+      "new_sha256": "7352cca331fe08f4ca76c1242934d5db3f9b1be459172e1a39eaa9a6530a9083"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/point.go",
+      "new_sha256": "9c1e1c88f24691894eb3c4c02be12d9c047089ffa3e5764d8a5637dd396f83a9"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/proceedevent.go",
+      "new_sha256": "9ece432a53a14f0135811a0b58bc062efe2f5b3fe5a9d4075d0c8e31bc3efeb4"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/progressbar.go",
+      "new_sha256": "10089e5cf809bb9af55a42abe32c561fd01f87e21985485f95afa296420e4ec8"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/progressindicator.go",
+      "new_sha256": "ac4fba02f730f67f889c1ffc576724c2d9ac3f593c37430b256174b308bf6d35"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/property.go",
+      "new_sha256": "726e66da8c1bd830627aa348cad62f0a1d2d850ce5ea2aab948e60cee7bad806"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/pushbutton.go",
+      "new_sha256": "c84d2508d4f706a10da4c78aeb1ea42da501177ed8331b0e7faca1ee1a458079"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/radiobutton.go",
+      "new_sha256": "a4fb9be03184e6f0a812eea2ae1aedc7af85ab251b8c7bfe088ac34bba9b5331"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/README.mdown",
+      "new_sha256": "fd1407fae6826e83a6af3b29665a81477f603a38fcd72a8747a33d03440d5d4b"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/rectangle.go",
+      "new_sha256": "c63c9f52f423b8545ca521ce588c0ca998f6655b6c8744572f6af5c263e3763c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/reflectmodels.go",
+      "new_sha256": "1d4cd50231db3d4bdaba44fa0da03b33ac43b4ca7f2a55fbf6edc94ae642047c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/registry.go",
+      "new_sha256": "9afb7673fea6e12e5eaa7f2cb339a086aee6996ec7de73dad1008aa74e619115"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/resource.go",
+      "new_sha256": "dc8ef077320cc2625ed8d900092ec501674afc1e05132e0269ee5288defa3039"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/resourcemanager.go",
+      "new_sha256": "fffcc2d5b4d85742d1b1533aad1709e7e141a470d0826b32c98379591860d3d6"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/scrollview.go",
+      "new_sha256": "2cef47292ef19e9c8748875141eb8fc2d449b158f0c4167202dcf2ccafd4c030"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/separator.go",
+      "new_sha256": "0d2733e7ad06c83cd7539d8792076b23005cd13e6d9d7ea4632302330bbe785c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/simpletypes.go",
+      "new_sha256": "cf32d762cfd0ed5c20b171c6c5a6dda6365db8e7bd7f098ed39cccc1af432d0f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/size.go",
+      "new_sha256": "16c8b614ad8065066c2be91ea06b3ea7894d7ffb85e0538beb1b83c7df104e9b"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/slider.go",
+      "new_sha256": "e91348aca1f9dd926a276ff7bd81cafc69fbff493eba8cf4c34b9e9a2a4825cd"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/spacer.go",
+      "new_sha256": "995b334a18ffa7d72711b7ce082dd46b0ce188aa07ac00133aed0114cc9320e7"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/splitbutton.go",
+      "new_sha256": "b047d1fbeb91176ba3d9c2991391dda23f162347cb55fb3dd43bd128cf33eab3"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/splitter.go",
+      "new_sha256": "37cc3de4c3e9be96b123c6c1e913a24666a4669d0d56d6ebd328b01c4024aaf8"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/splitterhandle.go",
+      "new_sha256": "dcd4763147b83acadb897221711399adb6f2a362ed2bf98428d10cb4fd14940e"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/splitterlayout.go",
+      "new_sha256": "72582883ca432513389f932c32d28cbf9d96b0ff1da175c6307b99e4cf5a55ab"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/static.go",
+      "new_sha256": "f8288d144d682e8d0ea5be4587f145ab0b9c3d8a49ab8b26f6c1c0fa3c8e5c7d"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/statusbar.go",
+      "new_sha256": "c552de6bd72448c28f50d7d4018e967f914ec6d7dd01c3afdf75aa7e409dde60"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/stopwatch.go",
+      "new_sha256": "1259ad8ca1654474cebcfd1d34a459198a4e2df66f6e63524e675a5f875be103"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/stringevent.go",
+      "new_sha256": "26955101ce9f7ff7a7302b10887754dfb6400a9d690c8bac2731fd81c93855f2"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/tableview.go",
+      "new_sha256": "7979825f4a2cf8f9c52a99ac35fc2817e80f0f163d1d49d74f041aa827793360"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/tableviewcolumn.go",
+      "new_sha256": "c57c48396db629dfd083d6bc8a7009618889b9d01dbc86e654c8b14abb48641a"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/tableviewcolumnlist.go",
+      "new_sha256": "6b7f06978668d86a5ef036f2626d6410f6daffa8aeb8d0aba96f377e857f13a3"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/tabpage.go",
+      "new_sha256": "40c11ec416968822705d05eb64f8be79713c1a71ff09b0aeaada921b794f26d9"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/tabpagelist.go",
+      "new_sha256": "1c8f3b927afa0913b1a673adb16b6bc13cf4f91f63e3cd046f8e443fd643ea75"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/tabwidget.go",
+      "new_sha256": "201a35bb524bcedf0889abf91b621f9c2904feff406126a101c97f63b94c6501"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/taskdialog.go",
+      "new_sha256": "dfa7da1d2b86aa59d4f7c96a33f21315b216f79f80ddd211c030a9492e2299cd"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/textedit.go",
+      "new_sha256": "636ef6890a49aab48be0c9a47cb5d7d5d37d53f3a04591554a9c6121c642ae69"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/textlabel.go",
+      "new_sha256": "15b430dae8610c96e180f261de463aa8e2d9a7672433cbb3932a4fcf6b27f1d1"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/theme.go",
+      "new_sha256": "108e9b734b8977594b97676a7ae7db9801adc25e72d5ba1bad3ccd65b8e5dc71"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/toolbar.go",
+      "new_sha256": "079bc358f5d1ee838615385aad80b393f616f70cced52ff52007c07c24da9a4c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/toolbutton.go",
+      "new_sha256": "2e609f26d96ac2e9c6df357264418fc9630c5fe016e193c3af2de7176f251371"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/tooltip.go",
+      "new_sha256": "a1084951b1b1d0cb2821b2a60bcdf1a6d315b74def07ef6c8e69c9cc4c00b49c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/tooltiperrorpresenter.go",
+      "new_sha256": "732c8ee197b31eb99e87d8c2feb4ecfdb160e198303935cf18d6993e57548dd9"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/treeitemevent.go",
+      "new_sha256": "5e6cdd257fb21fa7abb63fc237c6dea15e6d19f6e4371d87f8999d94193fec46"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/treeview.go",
+      "new_sha256": "b8777195a2c2e580a305f27ebe725c04351f337dbc28e0816157d338d3ee4447"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/util.go",
+      "new_sha256": "46d134075bad5140e7852e91814c7709c498405cd712f725e5ff3d68563c918c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/validators.go",
+      "new_sha256": "98d2c094336812c1c93e956c9c671794813a5bd3688203c9b2a2eda8ebaffeb9"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/walk.go",
+      "new_sha256": "7fa49dcb70f60eb44407fdfb3608912e247d619ab146a07a46cf6cb80c5cc800"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/webview_dwebbrowserevents2.go",
+      "new_sha256": "46b6b5e893452ae49854240596d700620cdee1120714101f6a521ab5fda9f039"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/webview_events.go",
+      "new_sha256": "16c6732372279520d5d8feac9e0e0e48293a8a3715ab9eb9fd40856657993cd2"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/webview_idochostuihandler.go",
+      "new_sha256": "fb0dde3382c625f0703dcbaa4895be243b79eb78beeeb0f35edb157dd3ffbfa8"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/webview_ioleclientsite.go",
+      "new_sha256": "f100e88fe317328a327233fc0f76324b36b62106c1e5bde8aef57840f9fc614b"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/webview_ioleinplaceframe.go",
+      "new_sha256": "51c4718aac59f0600013cdf63a1a4da7ea73a60e344a439d9e8b8b4f64c611e5"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/webview_ioleinplacesite.go",
+      "new_sha256": "5b12f5758baf91c44a2f038eeb33f10fd800cf02b1ae158806a84d44460515e8"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/webview.go",
+      "new_sha256": "e02ecc25d9efcd064fd848ef4ead0cec7f7a0a0cafc5b84551a3458640088516"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/widget.go",
+      "new_sha256": "f96b80e1ddd2a0afc09e6e36c10dc6437e1191829a550544a147674a3a9f52fb"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/widgetlist.go",
+      "new_sha256": "46b19f07aaa3f3004bf834caee9bf67d5416648a4726790e2bd5ff213df80185"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/win32window.go",
+      "new_sha256": "5fa2515261496accd6b2c40847c4d8bdff83e5c8f045fc06408a022e50135980"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/window.go",
+      "new_sha256": "9d50c137ff63dc4bbd8e6c963d44a2ff2af720f165087acd77193cc56dd47b4e"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/dpicache/dpicache.go",
+      "new_sha256": "64d2a41756119075e178d75c6f1d42e42273972be9aaee0e7f5ba4b4646fe226"
+    },
+    {
+      "path": "vendor/github.com/tailscale/walk/idalloc/idalloc.go",
+      "new_sha256": "3fc669cdb0e90096e2b41b92fc56b79ecad526e920f58abbf4ca7e0ff7439e4a"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/advapi32.go",
+      "new_sha256": "a954e07966c79f33b6c333305d823533be57cc96b7e0204d60e78d0d5acc67e1"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/AUTHORS",
+      "new_sha256": "4ad60fbf9d5ea12b46c4e383be47be2b7f8e5012c29dc21e87c6e1a829ef427e"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/combobox.go",
+      "new_sha256": "d9be4f89ec4f2e62bf961bc083d842a2534931e3341f3994c9127412607fb018"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/comctl32_386.go",
+      "new_sha256": "19e6b6a85d629ad58c70e5e1db4b5966fc8ef76d6163ecc08e079606e64b865f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/comctl32_not386.go",
+      "new_sha256": "aa3220172aba86150c217346c621131ae4f05f1ce00f751d4a2a8fb1c241c921"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/comctl32.go",
+      "new_sha256": "2c41060053e83a5af919326abeea20012f330f1b62c18ca3b4775af9ab61130a"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/comdlg32.go",
+      "new_sha256": "a4039ea77e1fa25d7b520716ca108130c1ee1890d6e101458f73a395de67ca7e"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/datetimepicker.go",
+      "new_sha256": "a0fb6f66cb1858228007f5f5a655313234aefcabcf98223feedb4fc6f08f200f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/dwmapi.go",
+      "new_sha256": "3a32ba7cadef86a7c9a25c6ed0b0d6ca0a1bdfb50c5256e871cf9db332ad9508"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/edit.go",
+      "new_sha256": "873c37b1cf08d2a79d3dba6e2913fd4536b525a5227f81495ef140463d2f536c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/gdi32.go",
+      "new_sha256": "0aab6e538ac8ef9bc0a6999389f16b95107dadfd010472ceb6df6e85ec1a72f7"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/gdiplus.go",
+      "new_sha256": "fe46819a488fce7e9e871b8c79addba0f4b9086af5f669bbf4f23ba07c4851c5"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/header.go",
+      "new_sha256": "899fe0006f64d8a35966e00a951868ae6c23451107c24aab48892d2baa3743f9"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/help.go",
+      "new_sha256": "5a4be71dcff8b48f90f29db4e0ababe143836589181c632c47c1556e6a77f708"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/kernel32.go",
+      "new_sha256": "59d19e7879a339c9a29929f3bf4ae25bddf11325bb3379c2a58ee224e023b98f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/LICENSE",
+      "new_sha256": "477325a745ae8d13ecc36399645c702a16062e8e05952a2286b46e74ff51d0a8"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/listbox.go",
+      "new_sha256": "f8e75e17c30f2de708f2150ef57adb62634ddd7eac5736317128d78d68e8ee25"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/listview.go",
+      "new_sha256": "b4a2fae4c707520e9269960522e629ac82eccd91e6a65c6770708da16debb7b8"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/menu.go",
+      "new_sha256": "51a54454db0e7cc955e9ea509a6dd7f62478e9df22cb685b20601342a043e70c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/mksyscall.go",
+      "new_sha256": "44faeb73f6ccc550ca0db040169863287d7fd3bb28f7e95fe345a5e23dfb202d"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/oaidl.go",
+      "new_sha256": "b42642a3ed97cc5b16577a7c4cc43d80ef7f84d13c46c7b37fb5fe191d5c6796"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/objidl.go",
+      "new_sha256": "3e5287fe9dbf4e4d94f268513680b035909cfe90493eb8702f57c46aa34ec598"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/ole32.go",
+      "new_sha256": "951598058abf63b254ed60b3217be324cb23fa0d07f1b2a403045d067e87446d"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/oleacc_32.go",
+      "new_sha256": "b8639e262d21874048ff6bd14cedcb6f6f6c31f4d2282898200b16147a3f13f5"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/oleacc_amd64.go",
+      "new_sha256": "d04904beefe0fe9c75e8463ac53e9e72d08e218a523de8e21e3abb1282c4fb1f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/oleacc_arm64.go",
+      "new_sha256": "b3e5a8bc1bd103d9ff5c7ca356e61f593314da19fbafefd0374d56374eaced7a"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/oleacc.go",
+      "new_sha256": "d158c9b667c7e8125fa77d243d0b5e22dd813b213ee5fabd72aee9b929dac196"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/oleaut32_32.go",
+      "new_sha256": "484b7099babff417536b79e8839c6571ff9c1d3636f4298500aabab012c50e0f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/oleaut32_64.go",
+      "new_sha256": "95354d742e3682697af094039333b005eefe373781dac337f678dc63d9da1241"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/oleaut32.go",
+      "new_sha256": "1ca1990b7fb7d0d18e1a3dced2754a453e9ccd32a9502b8a30da8528efffb2c9"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/opengl32.go",
+      "new_sha256": "77e570d40f221fa7c1d266db6e946555573cae152cf9c37098f61ca65ed2589a"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/pdh.go",
+      "new_sha256": "c289667ee1b9d78333ecf41f068026e0d0555a86c2a34651e392da1164f57e18"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/README.mdown",
+      "new_sha256": "91e01be8cfbad87cc7f1db44f98e02d3c6fed76db22b04ff54253a4f50018398"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/richedit.go",
+      "new_sha256": "ce2caa09f34ca51b70fda6a3f5e3a9f11ba11378a593f99720675ad75a6fa55d"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/richole.go",
+      "new_sha256": "9681a2fd700f9168768ed76aad8fe2003d6f29dd6dc8b10f8122b8a0c83f349f"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/shcore.go",
+      "new_sha256": "b254042eb166fd13897a16c8a78312eaa995cb64c37dd7dcdd631f4fef8c958a"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/shdocvw.go",
+      "new_sha256": "5894ba29fe76c9f44a02b9e056540bc96b955f406f61daa7e2cfa539221b25ee"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/shell32.go",
+      "new_sha256": "38545d973af80cb1226792d0f459c438ccb64b25aabb0c1f5f81b8d259467bfe"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/shobj_32.go",
+      "new_sha256": "1fd59d6941026a0826ed2e12b9cd2253c5365f5a911d8e5fa4b31b410b3af634"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/shobj_64.go",
+      "new_sha256": "c220bcb60b5a56eb33e2e0ddfdb2893bb8ad978d11aad3de54c8ad765609fa15"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/shobj.go",
+      "new_sha256": "1c85e07717acde2d876df9942c0ddd310c5925ed8a0550027eb95a8f07afc455"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/statusbar.go",
+      "new_sha256": "a12507f8a179a1509670720c4553210c5487158332b95b94246aa2e7b2d3f9b8"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/syslink.go",
+      "new_sha256": "d43024dd784914783d51db74bc9a75f66f9ca04d1a224cfd2f4ff0865d038c7d"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/tab.go",
+      "new_sha256": "222030ed186cba9dc9faca52ca3c026d43a49be3d1d7058ea80b06ab6dbacd82"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/tom.go",
+      "new_sha256": "b8fa5e0a1beb86ef01dc1cb44c785ffe93af1e937aba86590b929d7432c4916c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/toolbar.go",
+      "new_sha256": "d86a0fa1505da5edbe22c6184c2290ce02a705f0c46e4b39f14bb7460e1358df"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/tooltip.go",
+      "new_sha256": "a5392927a3763317eef25d5549032ec285e97b131cb76ec7fe2fc47b93c2f96e"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/treeview.go",
+      "new_sha256": "f92098453d73ed016247feb29bd7cec2787f26a39c7e1fe1912d76c1b6c7e710"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/updown.go",
+      "new_sha256": "95ed09edcb452eefec35ceabf93bb9f5a40a7d7b6d01381c644c0b3bfd21952c"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/user32.go",
+      "new_sha256": "1bd1b0d14c73ce41bf6c4af73360eaa7abbdb4338cd7263b100f5492a0a9b5c7"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/uxtheme.go",
+      "new_sha256": "4a387a794aaa25885d9f7372650842e1ef44ff6857c92c5154fb53c49a0dde82"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/vsstyle.go",
+      "new_sha256": "5b05aea9e2fe83533355aef1aece10235062e8aee709dabfd0d4f1642cbcec20"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/vssym32.go",
+      "new_sha256": "0258ffad7c1bfca3cbcab447728ad78c3d40ef420c340430a152d26640076672"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/win.go",
+      "new_sha256": "e38a7f04eb47d264338a95303e0e3fbe5629431acd15fd896a00566071b3a927"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/winnls.go",
+      "new_sha256": "a16d0e17700e73b00517f20d4a19debb5afc1098ad832bbd1bf4838e7cd7efc7"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/winspool.go",
+      "new_sha256": "14bc17786943e84f70567628151f2f09704f996737c8f1101bcbcbfc5d101180"
+    },
+    {
+      "path": "vendor/github.com/tailscale/win/zsyscall_windows.go",
+      "new_sha256": "7fb9333bfa426cf2ca4d6e8e564c4396992c145f709b1a8fdf419c8da008bac5"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/.gitignore",
+      "new_sha256": "a7c4b36aec0096916831d71c3cef2305af3b1609ee4e93c4fdf41147427ecbab"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/error.go",
+      "new_sha256": "38256148c772d58f658679ca4f5d6cd7e2b57d313d7a9374d6974322feab12f8"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/guid_notwindows.go",
+      "new_sha256": "6678811480befeee0e64eac17f0bdb978b7fa91172182d4ba81fd5a7472e13f0"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/guid_windows.go",
+      "new_sha256": "265207d3075f64c3c4559a59ebc42dd7b8fbf9842f3ab5e4b993895d7facfe67"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/guid.go",
+      "new_sha256": "1581913749b12506285691a7dad9aef2646695b775533921211e1a0f4c44aaed"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/hresult.go",
+      "new_sha256": "6a578ffd256b3a3c7ce021611ba7505f112a434ebf5f2ff9614ee99c25a7bb91"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/LICENSE",
+      "new_sha256": "d92e8b4d5e41d2effe12a1df45143765c2256bb915553a4515a16ffd9603c06a"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/osversion.go",
+      "new_sha256": "38a4d37723afaa44c014b6021bdee086ab7927704b18c9bba8ce7b3cb415c0e6"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/README.md",
+      "new_sha256": "1678d3914e35f2319a8eaa15e0b3e3e2b4c2004dac6f12181b5dbfe6210c82b0"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/time.go",
+      "new_sha256": "feea4ca5e6d5e8fcc23898db163735ac7e2d3f41e232d4172d2255df3f70f7e1"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/util.go",
+      "new_sha256": "7e93533fae87db77e19b29ed6410314f14fc5b270c7de2a7fe1190a21c36dc30"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/api.go",
+      "new_sha256": "8478bb53d207f78e47abe17c8b198b5a1d0e4a32003c9f682f013cf255883bc9"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/com.go",
+      "new_sha256": "1c31466ee8bbc2f70b3cfb1b477bf33062142c90d78935dfd50bf3dd161cf676"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/globalopts.go",
+      "new_sha256": "0e3e3931e4b212c0ea5be7f2c7ce58cced17684261710795e2af82b3cccb5ea3"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/guid.go",
+      "new_sha256": "0dcacf09911c06d8e1a0ad6b3dcd646b0fc02d796c3804af64f0179e50f641c3"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/interface.go",
+      "new_sha256": "aa7399e52dc732f1b07bc9b102839a657e589b38cd2b7f7cb889a518a5e88a6a"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/mksyscall.go",
+      "new_sha256": "60fb3bb110d9abb6cfb8097ff3879c1f5a361ecfc83a596e69bf6aa834de2f28"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/object.go",
+      "new_sha256": "ed7a3027e1d902e72fed36c38aee8a7df665d97d630005110f5eb0f9f9363c4d"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/process.go",
+      "new_sha256": "0b470349dbe1681b63fcc221f6d66861485b8d301627d9510e038d13f79fc0b7"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/stream_not386.go",
+      "new_sha256": "95534d12e7c54a7b3db302172fba57a294841b99e9b85bd6ff0ef0db13bb3fb9"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/stream_windows_386.go",
+      "new_sha256": "38f3ed9e2faed56b2f59d5c14fd834e1ddcd0f2d5dd70a0697f84beeeb8c6fd6"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/stream.go",
+      "new_sha256": "3666b4abf616b392700d693943af233f4c2c855bd96013b2f43f3a46aa3563f5"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/types.go",
+      "new_sha256": "164f21435f6444caae27fb6181e876e88a185c03af1a793480b893f8fe761e37"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/unknown.go",
+      "new_sha256": "e69adaf4e7948f85069491f50a98f5853e8fd31b2e82f8d94c59abecad4995bc"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/com/zsyscall_windows.go",
+      "new_sha256": "119a87ea7363f0f93d68ad9e4784d679df0da86235f586c7deec60dd7bc8f2d3"
+    },
+    {
+      "path": "vendor/github.com/dblohm7/wingoes/internal/types.go",
+      "new_sha256": "df70f9bd209fa02cf820bc7b3480d6c14fe29e8b31035ccb8ec44a948bf18052"
+    },
+    {
+      "path": "vendor/golang.org/x/exp/LICENSE",
+      "new_sha256": "2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067"
+    },
+    {
+      "path": "vendor/golang.org/x/exp/PATENTS",
+      "new_sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+    },
+    {
+      "path": "vendor/golang.org/x/exp/constraints/constraints.go",
+      "new_sha256": "df47f0b0b0a132deb00b6aebe0a5d752a7c8214827494bc910e576d445bbd5d4"
+    }
+  ],
+  "modules": [
+    {
+      "go_mod_sum": "h1:9Kzibqz+6ANk3Bqj4MXHqyWvbGw0Wy+e5S5xFKsGzp0=",
+      "version": "v0.0.0-20260702185836-28b80ea70d3b",
+      "path": "github.com/tailscale/walk",
+      "sum": "h1:bB3RTsRQPZ0SaJoYoDwloiKsh7iVyCDLtZZ+2VdmKpE="
+    },
+    {
+      "go_mod_sum": "h1:vwG7VvIPzIYNJd0Nio6PZW7yr8KNNFEc8EVQ+J/B4bk=",
+      "version": "v0.0.0-20260619195133-2d76c33a64c1",
+      "path": "github.com/tailscale/win",
+      "sum": "h1:QzOW7bZOlg5/hi1W6dStSN9qazTHkHj5kO7sTA5aymY="
+    },
+    {
+      "go_mod_sum": "h1:6NCrWM5jRefaG7iN0iMShPalLsljHWBh9v1zxM2f8Xs=",
+      "version": "v0.0.0-20231019175336-f6e33aa7cc34",
+      "path": "github.com/dblohm7/wingoes",
+      "sum": "h1:FBMro26TLQwBk+n4fbTSmSf3QUKb09pvW4fz49lxpl0="
+    },
+    {
+      "go_mod_sum": "h1:XtvwrStGgqGPLc4cjQfWqZHG1YFdYs6swckp8vpsjnc=",
+      "version": "v0.0.0-20240506185415-9bf2ced13842",
+      "path": "golang.org/x/exp",
+      "sum": "h1:vr/HnozRka3pE4EsMEg1lgkXJkTFJCVUX+S/ZT6wYzM="
+    }
+  ],
+  "vendor_modules_b64": "IyBnaXRodWIuY29tL2FtbmV6aWEtdnBuL2FtbmV6aWF3Zy1nby92MyB2My4xLjIwMjYwODE0CiMjIGV4cGxpY2l0OyBnbyAxLjI1LjAKZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctZ28vdjMvY29ubgpnaXRodWIuY29tL2FtbmV6aWEtdnBuL2FtbmV6aWF3Zy1nby92My9jb25uL3dpbnJpbwpnaXRodWIuY29tL2FtbmV6aWEtdnBuL2FtbmV6aWF3Zy1nby92My9kZXZpY2UKZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctZ28vdjMvaXBjCmdpdGh1Yi5jb20vYW1uZXppYS12cG4vYW1uZXppYXdnLWdvL3YzL2lwYy9uYW1lZHBpcGUKZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctZ28vdjMvcmF0ZWxpbWl0ZXIKZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctZ28vdjMvcmVwbGF5CmdpdGh1Yi5jb20vYW1uZXppYS12cG4vYW1uZXppYXdnLWdvL3YzL3J3Y2FuY2VsCmdpdGh1Yi5jb20vYW1uZXppYS12cG4vYW1uZXppYXdnLWdvL3YzL3RhaTY0bgpnaXRodWIuY29tL2FtbmV6aWEtdnBuL2FtbmV6aWF3Zy1nby92My90dW4KIyBnaXRodWIuY29tL2FtbmV6aWEtdnBuL2FtbmV6aWF3Zy13aW5kb3dzL3YzIHYzLjEuMjAyNjA4MTQKIyMgZXhwbGljaXQ7IGdvIDEuMjUuMApnaXRodWIuY29tL2FtbmV6aWEtdnBuL2FtbmV6aWF3Zy13aW5kb3dzL3YzL2NvbmYKZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctd2luZG93cy92My9jb25mL2RwYXBpCmdpdGh1Yi5jb20vYW1uZXppYS12cG4vYW1uZXppYXdnLXdpbmRvd3MvdjMvZWxldmF0ZQpnaXRodWIuY29tL2FtbmV6aWEtdnBuL2FtbmV6aWF3Zy13aW5kb3dzL3YzL2wxOG4KZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctd2luZG93cy92My9yaW5nbG9nZ2VyCmdpdGh1Yi5jb20vYW1uZXppYS12cG4vYW1uZXppYXdnLXdpbmRvd3MvdjMvc2VydmljZXMKZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctd2luZG93cy92My90dW5uZWwKZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctd2luZG93cy92My90dW5uZWwvZmlyZXdhbGwKZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctd2luZG93cy92My90dW5uZWwvd2luaXBjZmcKZ2l0aHViLmNvbS9hbW5lemlhLXZwbi9hbW5lemlhd2ctd2luZG93cy92My92ZXJzaW9uCiMgZ2l0aHViLmNvbS9kYmxvaG03L3dpbmdvZXMgdjAuMC4wLTIwMjMxMDE5MTc1MzM2LWY2ZTMzYWE3Y2MzNAojIyBleHBsaWNpdDsgZ28gMS4xOApnaXRodWIuY29tL2RibG9obTcvd2luZ29lcwpnaXRodWIuY29tL2RibG9obTcvd2luZ29lcy9jb20KZ2l0aHViLmNvbS9kYmxvaG03L3dpbmdvZXMvaW50ZXJuYWwKIyBnaXRodWIuY29tL3RhaWxzY2FsZS93YWxrIHYwLjAuMC0yMDI2MDcwMjE4NTgzNi0yOGI4MGVhNzBkM2IKIyMgZXhwbGljaXQ7IGdvIDEuMjQuMApnaXRodWIuY29tL3RhaWxzY2FsZS93YWxrCmdpdGh1Yi5jb20vdGFpbHNjYWxlL3dhbGsvZHBpY2FjaGUKZ2l0aHViLmNvbS90YWlsc2NhbGUvd2Fsay9pZGFsbG9jCiMgZ2l0aHViLmNvbS90YWlsc2NhbGUvd2luIHYwLjAuMC0yMDI2MDYxOTE5NTEzMy0yZDc2YzMzYTY0YzEKIyMgZXhwbGljaXQ7IGdvIDEuMjQuMApnaXRodWIuY29tL3RhaWxzY2FsZS93aW4KIyBnb2xhbmcub3JnL3gvY3J5cHRvIHYwLjU0LjAKIyMgZXhwbGljaXQ7IGdvIDEuMjUuMApnb2xhbmcub3JnL3gvY3J5cHRvL2JsYWtlMmIKZ29sYW5nLm9yZy94L2NyeXB0by9ibGFrZTJzCmdvbGFuZy5vcmcveC9jcnlwdG8vY2hhY2hhMjAKZ29sYW5nLm9yZy94L2NyeXB0by9jaGFjaGEyMHBvbHkxMzA1CmdvbGFuZy5vcmcveC9jcnlwdG8vY3VydmUyNTUxOQpnb2xhbmcub3JnL3gvY3J5cHRvL2ludGVybmFsL2FsaWFzCmdvbGFuZy5vcmcveC9jcnlwdG8vaW50ZXJuYWwvcG9seTEzMDUKZ29sYW5nLm9yZy94L2NyeXB0by9wb2x5MTMwNQojIGdvbGFuZy5vcmcveC9leHAgdjAuMC4wLTIwMjQwNTA2MTg1NDE1LTliZjJjZWQxMzg0MgojIyBleHBsaWNpdDsgZ28gMS4yMApnb2xhbmcub3JnL3gvZXhwL2NvbnN0cmFpbnRzCiMgZ29sYW5nLm9yZy94L21vZCB2MC4zNy4wCiMjIGV4cGxpY2l0OyBnbyAxLjI1LjAKZ29sYW5nLm9yZy94L21vZC9zZW12ZXIKIyBnb2xhbmcub3JnL3gvbmV0IHYwLjU3LjAKIyMgZXhwbGljaXQ7IGdvIDEuMjUuMApnb2xhbmcub3JnL3gvbmV0L2JwZgpnb2xhbmcub3JnL3gvbmV0L2Rucy9kbnNtZXNzYWdlCmdvbGFuZy5vcmcveC9uZXQvaW50ZXJuYWwvaWFuYQpnb2xhbmcub3JnL3gvbmV0L2ludGVybmFsL3NvY2tldApnb2xhbmcub3JnL3gvbmV0L2lwdjQKZ29sYW5nLm9yZy94L25ldC9pcHY2CiMgZ29sYW5nLm9yZy94L3N5bmMgdjAuMjIuMAojIyBleHBsaWNpdDsgZ28gMS4yNS4wCmdvbGFuZy5vcmcveC9zeW5jL2Vycmdyb3VwCiMgZ29sYW5nLm9yZy94L3N5cyB2MC40Ny4wCiMjIGV4cGxpY2l0OyBnbyAxLjI1LjAKZ29sYW5nLm9yZy94L3N5cy9jcHUKZ29sYW5nLm9yZy94L3N5cy91bml4CmdvbGFuZy5vcmcveC9zeXMvd2luZG93cwpnb2xhbmcub3JnL3gvc3lzL3dpbmRvd3MvcmVnaXN0cnkKZ29sYW5nLm9yZy94L3N5cy93aW5kb3dzL3N2Ywpnb2xhbmcub3JnL3gvc3lzL3dpbmRvd3Mvc3ZjL21ncgojIGdvbGFuZy5vcmcveC90ZXh0IHYwLjQwLjAKIyMgZXhwbGljaXQ7IGdvIDEuMjUuMApnb2xhbmcub3JnL3gvdGV4dC9jb2xsYXRlCmdvbGFuZy5vcmcveC90ZXh0L2VuY29kaW5nCmdvbGFuZy5vcmcveC90ZXh0L2VuY29kaW5nL2ludGVybmFsCmdvbGFuZy5vcmcveC90ZXh0L2VuY29kaW5nL2ludGVybmFsL2lkZW50aWZpZXIKZ29sYW5nLm9yZy94L3RleHQvZW5jb2RpbmcvdW5pY29kZQpnb2xhbmcub3JnL3gvdGV4dC9mZWF0dXJlL3BsdXJhbApnb2xhbmcub3JnL3gvdGV4dC9pbnRlcm5hbApnb2xhbmcub3JnL3gvdGV4dC9pbnRlcm5hbC9jYXRtc2cKZ29sYW5nLm9yZy94L3RleHQvaW50ZXJuYWwvY29sbHRhYgpnb2xhbmcub3JnL3gvdGV4dC9pbnRlcm5hbC9mb3JtYXQKZ29sYW5nLm9yZy94L3RleHQvaW50ZXJuYWwvZ2VuCmdvbGFuZy5vcmcveC90ZXh0L2ludGVybmFsL2xhbmd1YWdlCmdvbGFuZy5vcmcveC90ZXh0L2ludGVybmFsL2xhbmd1YWdlL2NvbXBhY3QKZ29sYW5nLm9yZy94L3RleHQvaW50ZXJuYWwvbnVtYmVyCmdvbGFuZy5vcmcveC90ZXh0L2ludGVybmFsL3N0cmluZ3NldApnb2xhbmcub3JnL3gvdGV4dC9pbnRlcm5hbC90YWcKZ29sYW5nLm9yZy94L3RleHQvaW50ZXJuYWwvdXRmOGludGVybmFsCmdvbGFuZy5vcmcveC90ZXh0L2xhbmd1YWdlCmdvbGFuZy5vcmcveC90ZXh0L21lc3NhZ2UKZ29sYW5nLm9yZy94L3RleHQvbWVzc2FnZS9jYXRhbG9nCmdvbGFuZy5vcmcveC90ZXh0L21lc3NhZ2UvcGlwZWxpbmUKZ29sYW5nLm9yZy94L3RleHQvcnVuZXMKZ29sYW5nLm9yZy94L3RleHQvdHJhbnNmb3JtCmdvbGFuZy5vcmcveC90ZXh0L3VuaWNvZGUvY2xkcgpnb2xhbmcub3JnL3gvdGV4dC91bmljb2RlL25vcm0KIyBnb2xhbmcub3JnL3gvdG9vbHMgdjAuNDcuMAojIyBleHBsaWNpdDsgZ28gMS4yNS4wCmdvbGFuZy5vcmcveC90b29scy9nby9hc3QvYXN0dXRpbApnb2xhbmcub3JnL3gvdG9vbHMvZ28vYXN0L2VkZ2UKZ29sYW5nLm9yZy94L3Rvb2xzL2dvL2FzdC9pbnNwZWN0b3IKZ29sYW5nLm9yZy94L3Rvb2xzL2dvL2J1aWxkdXRpbApnb2xhbmcub3JnL3gvdG9vbHMvZ28vY2FsbGdyYXBoCmdvbGFuZy5vcmcveC90b29scy9nby9jYWxsZ3JhcGgvY2hhCmdvbGFuZy5vcmcveC90b29scy9nby9jYWxsZ3JhcGgvaW50ZXJuYWwvY2hhdXRpbApnb2xhbmcub3JnL3gvdG9vbHMvZ28vZ2NleHBvcnRkYXRhCmdvbGFuZy5vcmcveC90b29scy9nby9pbnRlcm5hbC9jZ28KZ29sYW5nLm9yZy94L3Rvb2xzL2dvL2xvYWRlcgpnb2xhbmcub3JnL3gvdG9vbHMvZ28vcGFja2FnZXMKZ29sYW5nLm9yZy94L3Rvb2xzL2dvL3NzYQpnb2xhbmcub3JnL3gvdG9vbHMvZ28vc3NhL3NzYXV0aWwKZ29sYW5nLm9yZy94L3Rvb2xzL2dvL3R5cGVzL29iamVjdHBhdGgKZ29sYW5nLm9yZy94L3Rvb2xzL2dvL3R5cGVzL3R5cGV1dGlsCmdvbGFuZy5vcmcveC90b29scy9pbnRlcm5hbC9hbGlhc2VzCmdvbGFuZy5vcmcveC90b29scy9pbnRlcm5hbC9ldmVudApnb2xhbmcub3JnL3gvdG9vbHMvaW50ZXJuYWwvZXZlbnQvY29yZQpnb2xhbmcub3JnL3gvdG9vbHMvaW50ZXJuYWwvZXZlbnQva2V5cwpnb2xhbmcub3JnL3gvdG9vbHMvaW50ZXJuYWwvZXZlbnQvbGFiZWwKZ29sYW5nLm9yZy94L3Rvb2xzL2ludGVybmFsL2djaW1wb3J0ZXIKZ29sYW5nLm9yZy94L3Rvb2xzL2ludGVybmFsL2dvY29tbWFuZApnb2xhbmcub3JnL3gvdG9vbHMvaW50ZXJuYWwvcGFja2FnZXNpbnRlcm5hbApnb2xhbmcub3JnL3gvdG9vbHMvaW50ZXJuYWwvcGtnYml0cwpnb2xhbmcub3JnL3gvdG9vbHMvaW50ZXJuYWwvc3RkbGliCmdvbGFuZy5vcmcveC90b29scy9pbnRlcm5hbC90eXBlcGFyYW1zCmdvbGFuZy5vcmcveC90b29scy9pbnRlcm5hbC90eXBlc2ludGVybmFsCmdvbGFuZy5vcmcveC90b29scy9pbnRlcm5hbC92ZXJzaW9ucwojIGdvbGFuZy56eDJjNC5jb20vd2ludHVuIHYwLjAuMC0yMDIzMDEyNjE1MjcyNC0wZmEzZGIyMjljZTIKIyMgZXhwbGljaXQ7IGdvIDEuMTcKZ29sYW5nLnp4MmM0LmNvbS93aW50dW4K",
+  "compat_upstream_sha256": {
+    "vendor/github.com/tailscale/walk/tableview.go": "360d1e56faf8f91f4dadde29ea2659db7e153176cd7c0c78eafa3f1a1f8122c3",
+    "vendor/github.com/tailscale/walk/form.go": "a87b57ec425a2a130c9863a3a921e57183cd6aa5feea4dff0fbe2a37d619ce5d",
+    "vendor/github.com/tailscale/walk/expression.go": "df5b1275660b3b5396e014e0765ec1bc6bb45d1ff68caa3b7ebdc9c43adefcd3"
+  },
+  "obsolete_vendor": [
+    {
+      "path": "vendor/github.com/lxn/walk",
+      "tree_sha256": "3f918819e87e9b067536fb6ba754f0be3ee5b802ab6880b85bd32355a1b26505",
+      "files": 115
+    },
+    {
+      "path": "vendor/github.com/lxn/win",
+      "tree_sha256": "e02f3627b188c43e8aaaa46657d6ce8b12b96d6b689726c3b8a4c8d861be20eb",
+      "files": 48
+    }
+  ],
+  "removed_archived_runtime": {
+    "module": "gopkg.in/Knetic/govaluate.v3",
+    "version": "v3.0.0",
+    "upstream_walk_file": "vendor/github.com/tailscale/walk/expression.go",
+    "upstream_walk_sha256": "df5b1275660b3b5396e014e0765ec1bc6bb45d1ff68caa3b7ebdc9c43adefcd3",
+    "removed_exact_import": "import _ \"gopkg.in/Knetic/govaluate.v3\"",
+    "reason": "The compiled walk package imports this module only for its own internal init; no Walk UI code uses its exported API."
+  }
+}

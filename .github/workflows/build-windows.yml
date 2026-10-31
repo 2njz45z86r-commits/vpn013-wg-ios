@@ -152,6 +152,16 @@ jobs:
           $env:CGO_ENABLED='1'
           $env:CC='x86_64-w64-mingw32-gcc'
           ./scripts/ci-ui.ps1
+      - name: Prepare Microsoft SDK MSI validator on the disposable runner
+        working-directory: vpn013-wg-windows
+        run: ./scripts/bootstrap-msi-validator.ps1
+      - name: Require static and complete SDK ICE verification before installation
+        working-directory: vpn013-wg-windows
+        run: |
+          ./scripts/validate-native-msi.ps1 -MsiPath 'installer/dist/VPN013WG-1.5.7-amd64.msi'
+          $ice=Get-Content -LiteralPath 'installer/dist/VPN013WG-1.5.7-amd64.msi.ice-validation.json' -Raw | ConvertFrom-Json
+          if ($ice.exitCode -ne 0 -or !$ice.noErrorOrWarning -or !$ice.iceMessagesPresent) {throw 'Exact MSI lacks complete SDK ICE acceptance'}
+          Copy-Item -LiteralPath 'installer/dist/VPN013WG-1.5.7-amd64.msi.ice-validation.json' -Destination (Join-Path $env:RUNNER_TEMP 'r013-msi-ice-validation.json')
       - name: Test install, native AWG traffic, repair and uninstall
         working-directory: vpn013-wg-windows
         run: |
@@ -175,6 +185,10 @@ jobs:
             ${{ runner.temp }}/windows-go-findings.enc.json
             ${{ runner.temp }}/windows-go-provenance.json
             ${{ runner.temp }}/r013-default-acl-proof.json
+            ${{ runner.temp }}/r013-msi-ice-validation.json
+            ${{ runner.temp }}/vpn013-msi-validator-provenance.json
+            ${{ runner.temp }}/vpn013-msi-ice-*.log
+            ${{ runner.temp }}/vpn013-msi-ice-*.txt
           if-no-files-found: error
       - name: Prepare tested Windows build and source
         working-directory: vpn013-wg-windows

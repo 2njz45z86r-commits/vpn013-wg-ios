@@ -1,8 +1,12 @@
 $ErrorActionPreference='Stop'
+if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted' -or $env:RUNNER_OS -ne 'Windows' -or $env:GITHUB_REPOSITORY -ne '2njz45z86r-commits/vpn013-wg-ios' -or $env:GITHUB_SHA -notmatch '^[0-9a-fA-F]{40}$') {
+  throw 'Release installer build requires the authorized GitHub-hosted Windows runner and exact commit'
+}
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $versionSource=Get-Content -LiteralPath (Join-Path $projectRoot 'version/version.go') -Raw
 if ($versionSource -notmatch 'Number\s*=\s*"([\d.]+)"') {throw 'Missing application version'}
 $releaseVersion=$Matches[1]
+if ($releaseVersion -ne '1.5.7') {throw 'Native MSI builder is pinned to Windows 1.5.7'}
 Set-Location -LiteralPath $projectRoot
 $env:PATH="$projectRoot\.deps\llvm-mingw-20231128-ucrt-x86_64\bin;$projectRoot\.deps;$env:PATH"
 $driver="$projectRoot\.deps\official-extracted\AmneziaWG\wintun.dll"
@@ -26,9 +30,11 @@ Copy-Item -LiteralPath $toolsBinary -Destination amd64\awg.exe -Force
 New-Item -ItemType Directory -Path installer\amd64,installer\dist -Force | Out-Null
 & x86_64-w64-mingw32-gcc -O3 -Wall -std=gnu11 -DWINVER=0x0601 -D_WIN32_WINNT=0x0601 -municode -DUNICODE -D_UNICODE -DNDEBUG -shared -s '-Wl,--kill-at' '-Wl,--major-os-version=6' '-Wl,--minor-os-version=1' '-Wl,--major-subsystem-version=6' '-Wl,--minor-subsystem-version=1' '-Wl,--tsaware' '-Wl,--dynamicbase' '-Wl,--nxcompat' '-Wl,--export-all-symbols' -o installer\amd64\customactions.dll installer\customactions.c -lmsi -lole32 -lshlwapi -lshell32 -luuid -lntdll
 if ($LASTEXITCODE -ne 0) {throw 'Installer custom actions build failed'}
-Set-Location -LiteralPath "$projectRoot\installer"
-& "$projectRoot\.deps\wix314\candle.exe" -nologo "-dWIREGUARD_VERSION=$releaseVersion" '-dWIREGUARD_PLATFORM=amd64' -out amd64\wireguard.wixobj -arch x64 wireguard.wxs
-if ($LASTEXITCODE -ne 0) {throw 'Installer compilation failed'}
-& "$projectRoot\.deps\wix314\light.exe" -nologo -spdb -sice:ICE39 -sice:ICE61 -sice:ICE03 -out "dist\VPN013WG-$releaseVersion-amd64.msi" amd64\wireguard.wixobj
-if ($LASTEXITCODE -ne 0) {throw 'Installer linking failed'}
-Write-Output "Built VPN013 WG Windows installer $releaseVersion amd64"
+$template=Join-Path $projectRoot '.deps/native-installer/VPN013WG-1.5.6-amd64.msi'
+& "$PSScriptRoot\bootstrap-installer.ps1"
+$sourceManifestHash=(Get-FileHash -LiteralPath (Join-Path $projectRoot 'SOURCE-MANIFEST.json') -Algorithm SHA256).Hash.ToLowerInvariant()
+$layoutHash=(Get-FileHash -LiteralPath (Join-Path $projectRoot 'installer/wireguard.wxs') -Algorithm SHA256).Hash.ToLowerInvariant()
+$actionsHash=(Get-FileHash -LiteralPath (Join-Path $projectRoot 'installer/customactions.c') -Algorithm SHA256).Hash.ToLowerInvariant()
+$msi=Join-Path $projectRoot "installer/dist/VPN013WG-$releaseVersion-amd64.msi"
+& "$PSScriptRoot\build-native-msi.ps1" -TemplateMsi $template -SourceRoot $projectRoot -PayloadRoot $projectRoot -OutputMsi $msi -ExpectedSourceManifestSha256 $sourceManifestHash -ExpectedInstallerWxsSha256 $layoutHash -ExpectedCustomActionsSourceSha256 $actionsHash -GitCommit $env:GITHUB_SHA
+Write-Output "Built VPN013 WG Windows installer $releaseVersion amd64; SDK ICE and native installation gates remain required"
