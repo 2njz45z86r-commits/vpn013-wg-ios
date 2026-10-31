@@ -124,30 +124,52 @@ class R013RoutingSurfaceTest {
     }
     private fun tapChecked(text: String, description: Boolean) {
         var direction = AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
-        await("Native routing UI target was not visible: $text") {
-            val target = node { (if (description) it.contentDescription else it.text)?.toString() == text }
-            if (target == null || !target.isVisibleToUser) {
+        await("Native routing UI target was not visible and enabled: $text") {
+            val match = node { (if (description) it.contentDescription else it.text)?.toString() == text }
+            if (match == null || !match.isVisibleToUser) {
                 val scrollable = node { it.isScrollable }
                 if (scrollable != null && !scrollable.performAction(direction)) {
                     direction = if (direction == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
                         AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
                 }
                 false
-            } else true
-        }
-        var target = node { (if (description) it.contentDescription else it.text)?.toString() == text }!!
-        while (!target.isClickable && target.parent != null) target = target.parent
-        assertTrue("Native routing UI target must be enabled: $text", target.isEnabled)
-        if (!target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-            if (text == "Установленные приложения") captureButtonDiagnostics()
-            val bounds = Rect(); target.getBoundsInScreen(bounds)
-            val windowBounds = Rect(); instrumentation.uiAutomation.rootInActiveWindow?.getBoundsInScreen(windowBounds)
-            assertTrue("Native routing UI target must have visible bounds: $text", target.isVisibleToUser && !bounds.isEmpty && bounds.intersect(windowBounds))
-            val now = SystemClock.uptimeMillis()
-            val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, bounds.exactCenterX(), bounds.exactCenterY(), 0)
-            val up = MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP, bounds.exactCenterX(), bounds.exactCenterY(), 0)
-            try { instrumentation.sendPointerSync(down); instrumentation.sendPointerSync(up) }
-            finally { down.recycle(); up.recycle() }
+            } else if (!match.refresh() || !match.isVisibleToUser || !match.isEnabled ||
+                (if (description) match.contentDescription else match.text)?.toString() != text) {
+                false
+            } else {
+                var target = match
+                while (!target.isClickable) {
+                    val parent = target.parent ?: break
+                    target = parent
+                }
+                // The tree can be replaced while walking it. Refresh the same
+                // candidate and require it to belong to the current window.
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                val windowBounds = Rect(); root?.getBoundsInScreen(windowBounds)
+                if (root == null || target.windowId != root.windowId || !target.refresh() ||
+                    !target.isEnabled || !target.isVisibleToUser) {
+                    false
+                } else {
+                    val bounds = Rect(); target.getBoundsInScreen(bounds)
+                    if (bounds.isEmpty || !bounds.intersect(windowBounds)) return@await false
+                    if (target.isClickable && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return@await true
+                    // Some accessible labels have no actionable node. Inject
+                    // a real touch inside the visible candidate, never a View
+                    // callback; subsequent assertions still verify the result.
+                    if (!match.refresh() || match.windowId != root.windowId || !match.isVisibleToUser || !match.isEnabled) {
+                        false
+                    } else {
+                        val touch = if (target.isClickable) bounds else Rect().also { match.getBoundsInScreen(it) }
+                        if (touch.isEmpty || !touch.intersect(windowBounds)) return@await false
+                        val now = SystemClock.uptimeMillis()
+                        val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, touch.exactCenterX(), touch.exactCenterY(), 0)
+                        val up = MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP, touch.exactCenterX(), touch.exactCenterY(), 0)
+                        try { instrumentation.sendPointerSync(down); instrumentation.sendPointerSync(up) }
+                        finally { down.recycle(); up.recycle() }
+                        true
+                    }
+                }
+            }
         }
     }
     @Test fun bNativeSelectorsAndExclusiveOffDefaultModesRunInEverySection() = runBlocking {
