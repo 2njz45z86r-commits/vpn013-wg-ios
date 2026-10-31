@@ -3,6 +3,7 @@ package org.amnezia.awg.r013
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.os.ParcelFileDescriptor
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -57,6 +58,7 @@ class R013ProxyRuntimeTest {
         activity = instrumentation.startActivitySync(Intent(context,R013HomeActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as R013HomeActivity
         instrumentation.waitForIdleSync()
+        verifyOtherApplication(false)
     }
     @After fun finish() = runBlocking {
         UnifiedAutoCoordinator.stop()
@@ -90,6 +92,31 @@ class R013ProxyRuntimeTest {
         }
         await { val stats=ProxyVpnService.statistics(); stats != null && stats.optLong("rx")>0 && stats.optLong("tx")>0 }
     }
+    private fun verifyOtherApplication(throughVPN: Boolean) {
+        val testPackage = "com.vpn013.awg.debug.test"
+        val nonce = fixture.getString("nonce"); val port = fixture.getInt("port")
+        check(fixture.getString("host") == "198.18.0.1" && port in 1..65535 && nonce.matches(Regex("[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}")))
+        fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).use { stream ->
+            val bytes = stream.readNBytes(16385); check(bytes.size <= 16384); String(bytes, Charsets.UTF_8)
+        }
+        val bootstrap = "$testPackage/org.amnezia.awg.r013.R013RoutingProbeBootstrapService"
+        // AMS force-stops the target package on an ordinary instrument command.
+        // The test APK also supplies the parent runner, so first bootstrap its
+        // separate UID process and attach without restarting either process.
+        val started = shell("am start-foreground-service -n $bootstrap")
+        check(started.contains("Starting service")) { "Independent routing process did not start" }
+        val output = try {
+            await(10_000) { val state = shell("dumpsys activity services $bootstrap"); state.contains("isForeground=true") && state.contains("foregroundId=71") }
+            shell("am instrument --no-restart -w -r -e port $port -e nonce $nonce $testPackage/org.amnezia.awg.r013.R013RoutingProbeInstrumentation")
+        }
+            finally { shell("am stopservice -n $bootstrap") }
+        fun value(key: String): String? = output.lineSequence().firstOrNull { it.startsWith("INSTRUMENTATION_RESULT: $key=") }?.substringAfter('=')?.trim()
+        val otherUID = context.packageManager.getApplicationInfo(testPackage, 0).uid
+        assertNotEquals("The probe must have a different application UID", context.applicationInfo.uid, otherUID)
+        assertEquals("The second package must actually run under its own UID", otherUID.toString(), value("r013_probe_uid"))
+        assertEquals("The OS must publish the expected network for that UID", throughVPN.toString(), value("r013_probe_vpn"))
+        assertEquals("The independent UID must exchange the unpredictable nonce only when routed into VPN", throughVPN.toString(), value("r013_probe_nonce"))
+    }
     private fun capture(name: String) {
         val folder=File(context.getExternalFilesDir(null),"review").apply { mkdirs() }
         instrumentation.uiAutomation.takeScreenshot().also { bitmap ->
@@ -117,7 +144,7 @@ class R013ProxyRuntimeTest {
             val id=withContext(Dispatchers.IO) { store.importText(section,fixture.getString(if (transport == "tcp") "uri" else "xhttpURI")).single() }
             val applicationMode = if (transport == "tcp") "only" else "bypass"
             OfflineChanges.apply {
-                val packages = setOf("com.android.settings")
+                val packages = setOf("com.vpn013.awg.debug.test")
                 val selection = if (applicationMode == "only") ApplicationRoutingStore.Selection("only", only = packages)
                     else ApplicationRoutingStore.Selection("bypass", bypass = packages)
                 ApplicationRoutingStore.save(registry.vault, section.name, setOf(id), selection)
@@ -130,12 +157,13 @@ class R013ProxyRuntimeTest {
             await { ProxyVpnService.activeId == id }
             stage = "traffic"
             exchange()
+            verifyOtherApplication(applicationMode == "only")
             assertEquals(id,ProxyVpnService.activeId)
             val proofFolder = File(context.getExternalFilesDir(null), "review").apply { mkdirs() }
             File(proofFolder, "application-routing-${section.name.lowercase()}-$transport.json").writeText(JSONObject()
                 .put("section", section.name).put("transport", transport).put("mode", applicationMode)
                 .put("realVPNTransport", true).put("nonceResponseVerified", true).put("rxTxPositive", true)
-                .put("otherApplicationUIDTrafficVerified", false).toString())
+                .put("otherApplicationUIDTrafficVerified", true).toString())
             await { var rendered = false; instrumentation.runOnMainSync {
                 rendered = views().filterIsInstance<TextView>().any { it.tag == "vpn013.current.traffic" && it.text.contains("Всего:") } &&
                     views().any { it.tag == "vpn013.current.ping" && it.contentDescription == "Проверить пинг текущего сервера" }
