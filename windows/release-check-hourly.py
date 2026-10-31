@@ -5,7 +5,12 @@ import json, os, subprocess, sys, time
 out = Path(sys.argv[1]).resolve()
 out.mkdir(parents=True, exist_ok=True)
 native = sys.argv[2] == 'windows'
+catalog_traffic = len(sys.argv) == 4 and sys.argv[3] == 'catalog-traffic-122'
+assert len(sys.argv) == 3 or catalog_traffic, 'Unknown native inventory mode'
+assert not catalog_traffic or native, 'Catalog/traffic inventory requires Windows'
 packages = ['./r013routing','./r013probe/...','./r013tun'] + (['./r013gate', './r013winudp','./r013vault','./r013prepare','./manager','./r013','./ui','github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/firewall','github.com/amnezia-vpn/amneziawg-windows/v3/tunnel'] if native else [])
+if catalog_traffic:
+    packages.append('./r013traffic')
 # Source staging retains client vendor customizations and refreshes separately
 # pinned official Go dependencies. Tests must not change the staged manifests.
 before = {f: Path(f).read_bytes() for f in ('go.mod', 'go.sum')}
@@ -13,7 +18,7 @@ listed = subprocess.run(['go', 'test', '-mod=vendor', '-p=1', '-timeout=2m', '-l
 (out / 'inventory.txt').write_text(listed.stdout + listed.stderr,encoding='utf-8')
 assert listed.returncode == 0, listed.stderr
 expected = set(line.strip() for line in listed.stdout.splitlines() if line.startswith('Test'))
-assert len(expected) == (112 if native else 47), expected
+assert len(expected) == (122 if catalog_traffic else 112 if native else 47), expected
 # Preserve evidence while tests run, including when a hosted job is cancelled.
 # The earlier capture_output call kept every event in memory until completion.
 # This watchdog diagnoses a red run; it does not turn partial results green.

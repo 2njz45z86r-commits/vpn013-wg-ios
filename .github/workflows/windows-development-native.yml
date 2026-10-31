@@ -56,6 +56,13 @@ jobs:
           $env:GOFLAGS='-mod=vendor'
           python "$env:GITHUB_WORKSPACE/scripts/check_go_security.py" "$PWD" --level symbol
           if ($LASTEXITCODE -ne 0) {throw 'Private Go dependency review required'}
+      - name: Prepare exact inert owner catalog for mandatory no-skip tests
+        run: |
+          $catalog=Join-Path $env:RUNNER_TEMP 'pinned-service-catalog'
+          New-Item -ItemType Directory -Force -Path $catalog | Out-Null
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogUI.json" -Destination "$catalog/catalog-ui.json"
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogRules.json" -Destination "$catalog/catalog-rules.private.json"
+          "VPN013_ROUTING_CATALOG_TEST_DIR=$catalog" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Verify actual hourly product and complete native safety inventory
         working-directory: vpn013-wg-windows
         run: |
@@ -66,7 +73,7 @@ jobs:
           $env:CC='x86_64-w64-mingw32-gcc'
           $env:R013_CI_WINTUN_DLL=Join-Path $PWD 'amd64/wintun.dll'
           $env:R013_CI_CLIENT_EXE=Join-Path $PWD 'amd64/VPN013WG.exe'
-          python "$env:GITHUB_WORKSPACE/windows/release-check-hourly.py" "$env:RUNNER_TEMP/hourly-product-report" 'windows'
+          python "$env:GITHUB_WORKSPACE/windows/release-check-hourly.py" "$env:RUNNER_TEMP/hourly-product-report" 'windows' 'catalog-traffic-122'
           if ($LASTEXITCODE -ne 0) {throw 'Actual hourly product acceptance failed'}
       - name: Test protocol, keys, recovery, policy and real ICMP
         working-directory: vpn013-wg-windows
