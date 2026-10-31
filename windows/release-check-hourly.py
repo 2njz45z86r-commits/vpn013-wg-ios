@@ -5,7 +5,8 @@ import json, os, subprocess, sys, time
 out = Path(sys.argv[1]).resolve()
 out.mkdir(parents=True, exist_ok=True)
 native = sys.argv[2] == 'windows'
-catalog_traffic = len(sys.argv) == 4 and sys.argv[3] == 'catalog-traffic-122'
+service_native = len(sys.argv) == 4 and sys.argv[3] == 'service-routing-139'
+catalog_traffic = len(sys.argv) == 4 and sys.argv[3] in ('catalog-traffic-122', 'service-routing-139')
 assert len(sys.argv) == 3 or catalog_traffic, 'Unknown native inventory mode'
 assert not catalog_traffic or native, 'Catalog/traffic inventory requires Windows'
 packages = ['./r013routing','./r013probe/...','./r013tun'] + (['./r013gate', './r013winudp','./r013vault','./r013prepare','./manager','./r013','./ui','github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/firewall','github.com/amnezia-vpn/amneziawg-windows/v3/tunnel'] if native else [])
@@ -18,7 +19,20 @@ listed = subprocess.run(['go', 'test', '-mod=vendor', '-p=1', '-timeout=2m', '-l
 (out / 'inventory.txt').write_text(listed.stdout + listed.stderr,encoding='utf-8')
 assert listed.returncode == 0, listed.stderr
 expected = set(line.strip() for line in listed.stdout.splitlines() if line.startswith('Test'))
-assert len(expected) == (122 if catalog_traffic else 112 if native else 47), expected
+assert len(expected) == (139 if service_native else 122 if catalog_traffic else 112 if native else 47), expected
+if service_native:
+    required_service_tests = {
+        'TestServiceMetadataDPAPIAtomicBinding', 'TestServiceMetadataRejectsInvalidWithoutReplacing',
+        'TestServiceAutoPolicyVaultAndCandidateFence', 'TestServicePreflightDNSAndDirectCoverage',
+        'TestServicePreflightRejectsDomainAndDNSBypass', 'TestServiceRuntimeEffectiveRouting',
+        'TestServiceRoutesOnlyAndOffPreserveBaseline', 'TestServiceRoutesBypassSubtractsOnlyFromBaseline',
+        'TestServiceRoutesRejectUnsupportedAndInvalid', 'TestOwnerCatalogIPv4BypassFailsClosedAtRouteLimit',
+        'TestOwnerGroupsMatchPinnedDisplay', 'TestServicePoliciesAtomicTargetsAndActiveFence',
+        'TestServicePoliciesLogicalAutoKeepsManualChoices', 'TestServicePoliciesTypedManagerIPC',
+        'TestServiceChooserStartsEmptyRetainsModeSelections', 'TestServiceChooserRejectsDomainOnlyRows',
+        'TestServiceWFPDestinationPolicyModel',
+    }
+    assert len(required_service_tests) == 17 and required_service_tests <= expected, 'Service test inventory incomplete'
 # Preserve evidence while tests run, including when a hosted job is cancelled.
 # The earlier capture_output call kept every event in memory until completion.
 # This watchdog diagnoses a red run; it does not turn partial results green.
@@ -105,6 +119,8 @@ if result.returncode or bad or passed != expected:
         detail = ''.join(e.get('Output', '') for e in events if e.get('Test') == name)
         print(name + '\n' + detail[-12000:], flush=True)
 assert result.returncode == 0 and not bad and passed == expected, {'exit': result.returncode, 'missing': sorted(expected-passed), 'bad': bad}
+if service_native:
+    assert 'ACTUAL_SERVICE_WFP_ONLY_BYPASS_DNS_BLOCKED_CLEANED' in result.stdout, 'Actual service WFP traffic and cleanup proof missing'
 assert before == {f: Path(f).read_bytes() for f in before}, 'module files changed'
 vet = subprocess.run(['go', 'vet', '-mod=vendor', './r013probe/...','./r013tun'] + (['./r013winudp','./r013vault','./r013prepare'] if native else []), capture_output=True, text=True)
 (out / 'vet.txt').write_text(vet.stdout + vet.stderr)

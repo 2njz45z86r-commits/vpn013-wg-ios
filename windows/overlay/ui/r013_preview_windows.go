@@ -68,6 +68,9 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 		if scenario == "traffic" {
 			minimum = 8
 		}
+		if scenario == "services" {
+			minimum = 8
+		}
 		if len(checks) < minimum && failure == "" {
 			failure = "Required UI checks did not execute"
 		}
@@ -83,6 +86,10 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 			}
 		})
 	}()
+	if scenario == "services" {
+		failure = verifyR013ServicePreview(window, destination, syncUI, &checks)
+		return
+	}
 	if scenario == "traffic" {
 		failure = verifyR013TrafficPreview(window, destination, syncUI, &checks)
 		return

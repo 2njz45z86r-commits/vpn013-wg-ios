@@ -5,3 +5,9 @@ windows/dependencies/go.sum text eol=lf
 # Preserve the exact cross-platform RU policy bytes in Windows checkouts.
 windows/overlay/r013routing/networks.cidr text eol=lf
 .github/release-publication/** -text
+windows/overlay/r013routing/catalog-ui.json -text
+windows/overlay/r013routing/catalog-rules.json -text
+windows/overlay/r013routing/catalog-groups.json -text
+overlay/VPN013/ServiceCatalogUI.json -text
+overlay/VPN013/ServiceCatalogRules.json -text
+overlay/VPN013/ServiceCatalogGroups.json -text

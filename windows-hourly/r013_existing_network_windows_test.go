@@ -19,6 +19,7 @@ import (
 
 	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013gate"
+	"github.com/amnezia-vpn/amneziawg-windows-client/r013routing"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/elevate"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/firewall"
@@ -87,13 +88,13 @@ func (b *networkBinder) BindSocketToInterface6(index uint32, blackhole bool) err
 }
 
 type networkReceipt struct {
-	Success                                                           bool   `json:"success"`
-	Phase                                                             string `json:"phase"`
-	Error                                                             string `json:"error,omitempty"`
-	System                                                            bool   `json:"system"`
-	SessionZero                                                       bool   `json:"session_zero"`
-	Dropped                                                           bool   `json:"dropped"`
-	First, Second, Retired, PolicyPreserved, SameTUN, SourceImmutable bool
+	Success                                                                          bool   `json:"success"`
+	Phase                                                                            string `json:"phase"`
+	Error                                                                            string `json:"error,omitempty"`
+	System                                                                           bool   `json:"system"`
+	SessionZero                                                                      bool   `json:"session_zero"`
+	Dropped                                                                          bool   `json:"dropped"`
+	First, Second, Retired, PolicyPreserved, SameTUN, SourceImmutable, ServiceRoutes bool
 }
 type networkFixture struct {
 	directory string
@@ -235,6 +236,68 @@ func (f *networkFixture) run(ctx context.Context) error {
 	if err = verifyOwnNetwork(luid, &second); err != nil {
 		return err
 	}
+	// The service overlay changes only owned OS destinations. Exercise real
+	// route installation, native readback and retirement on this disposable TUN.
+	if err = next.RetireForBackend(ctx); err != nil {
+		return err
+	}
+	cat, err := r013routing.OwnerCatalog()
+	if err != nil {
+		return err
+	}
+	choice := r013routing.ServiceSelection{Mode: r013routing.ServicesOnly}
+	for _, s := range cat.DisplayServices() {
+		if cat.SupportsWireGuard(s.ID) {
+			choice.Only = []string{s.ID}
+			break
+		}
+	}
+	if len(choice.Only) == 0 {
+		return errors.New("missing service fixture")
+	}
+	third := fixtureNetworkConfig(4, 5, 1370)
+	third.Name = "ServiceFixture"
+	third.Interface.DNS = []net.IP{net.ParseIP("9.9.9.9").To4()}
+	third.Peers[0].AllowedIPs = []conf.IPCidr{{IP: net.IPv4zero.To4(), Cidr: 0}}
+	third.Interface.PrivateKey[0] = 1
+	third.Peers[0].PublicKey[0] = 2
+	third.Peers[0].Endpoint = conf.Endpoint{Host: "192.0.2.1", Port: 51820}
+	// The SYSTEM fixture writes only to its own disposable CI directory.
+	conf.PresetRootDirectory(f.directory)
+	doc := r013routing.ServicePolicies{Version: 1, Profiles: []r013routing.ProfilePolicy{{Name: third.Name, SourceDigest: r013routing.ProfileSourceDigest(&third), Selection: choice}}}
+	if err = r013routing.SaveServicePolicies(doc); err != nil {
+		return err
+	}
+	if err = r013routing.ActivateProfileServicePolicy(&third); err != nil {
+		return err
+	}
+	r013routing.Enable()
+	thirdOriginal, _ := json.Marshal(third)
+	serviceWatcher, err := watchInterface(gate, ctx)
+	if err != nil {
+		return err
+	}
+	defer serviceWatcher.Destroy()
+	if err = serviceWatcher.ConfigureExisting(ctx, &networkBinder{}, &third, native); err != nil {
+		return err
+	}
+	if err = verifyOwnNetwork(luid, &third); err != nil {
+		return err
+	}
+	if _, err = luid.Route(third.Peers[0].AllowedIPs[0].IPNet(), net.IPv4zero); !errors.Is(err, windows.ERROR_NOT_FOUND) {
+		return errors.New("unexpected full IPv4 route in only mode")
+	}
+	if err = serviceWatcher.RetireForBackend(ctx); err != nil {
+		return err
+	}
+	if err = verifyRetiredNetwork(luid, &third); err != nil {
+		return err
+	}
+	thirdAfter, _ := json.Marshal(third)
+	if string(thirdOriginal) != string(thirdAfter) {
+		return errors.New("service route overlay changed source profile")
+	}
+	f.receipt.ServiceRoutes = true
 	f.receipt.Phase = "done"
 	return nil
 }
@@ -286,7 +349,7 @@ func TestNativeExistingTUNNetworkRetiresAndReappliesAfterPrivilegeDrop(t *testin
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if !receipt.Success || !receipt.First || !receipt.Second || !receipt.Retired || !receipt.PolicyPreserved || !receipt.SameTUN || !receipt.SourceImmutable || !receipt.System || !receipt.SessionZero || !receipt.Dropped {
+	if !receipt.Success || !receipt.First || !receipt.Second || !receipt.Retired || !receipt.PolicyPreserved || !receipt.SameTUN || !receipt.SourceImmutable || !receipt.ServiceRoutes || !receipt.System || !receipt.SessionZero || !receipt.Dropped {
 		if state, e := service.Query(); e == nil {
 			t.Logf("SCM state=%d win32=%d specific=%d", state.State, state.Win32ExitCode, state.ServiceSpecificExitCode)
 		}

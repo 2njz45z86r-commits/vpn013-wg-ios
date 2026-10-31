@@ -1,0 +1,4267 @@
+{
+  "defaults": {
+    "mode": "unchanged",
+    "selectedIds": []
+  },
+  "groups": [
+    {
+      "id": "grp_0558cc03f85cfe49",
+      "title": "📱 Социальные сети",
+      "services": [
+        {
+          "id": "svc_31193328f8e21dfb",
+          "name": "Facebook",
+          "icon": {
+            "kind": "monogram",
+            "text": "FB"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ec792a2a54d88303",
+          "name": "Hornet",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_055878d4c9c9aa32",
+          "name": "Instagram",
+          "icon": {
+            "kind": "monogram",
+            "text": "IG"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_68c1e55b7e754991",
+          "name": "Linkedin",
+          "icon": {
+            "kind": "monogram",
+            "text": "L"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_83887c10f9f17570",
+          "name": "Snapchat",
+          "icon": {
+            "kind": "monogram",
+            "text": "SC"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_154cf1b733d07814",
+          "name": "TikTok",
+          "icon": {
+            "kind": "monogram",
+            "text": "TT"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3daf18f236caefaa",
+          "name": "Twinby",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "💬 Соцсети и форумы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3c8b2bbd5af1180d",
+          "name": "X / Twitter",
+          "icon": {
+            "kind": "monogram",
+            "text": "X"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_877ca9b8dd0b5eeb",
+          "name": "ВКонтакте",
+          "icon": {
+            "kind": "monogram",
+            "text": "VK"
+          },
+          "category": "💬 Соцсети и форумы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_dd694448bf5e7870",
+          "name": "Дзен",
+          "icon": {
+            "kind": "monogram",
+            "text": "ДЗ"
+          },
+          "category": "💬 Соцсети и форумы",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_94ce0a6a5dc2cbab",
+      "title": "💬 Мессенджеры",
+      "services": [
+        {
+          "id": "svc_c8e8f9f979e435f9",
+          "name": "Discord",
+          "icon": {
+            "kind": "monogram",
+            "text": "DC"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e9003464f5cc3884",
+          "name": "Element",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f6d234b6b7158d3a",
+          "name": "Signal",
+          "icon": {
+            "kind": "monogram",
+            "text": "SG"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_89d909b7535dac5e",
+          "name": "Tamtam chat",
+          "icon": {
+            "kind": "monogram",
+            "text": "TC"
+          },
+          "category": "💬 Соцсети и форумы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_38c8743ecd2810f7",
+          "name": "Telegram",
+          "icon": {
+            "kind": "monogram",
+            "text": "TG"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_73a64d400c07581c",
+          "name": "Viber",
+          "icon": {
+            "kind": "monogram",
+            "text": "VB"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e868906c73020996",
+          "name": "WhatsApp",
+          "icon": {
+            "kind": "monogram",
+            "text": "WA"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_de2a09c996c2119f",
+          "name": "Zello",
+          "icon": {
+            "kind": "monogram",
+            "text": "Z"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_597040ef978593b4",
+      "title": "👥 Форумы и сообщества",
+      "services": [
+        {
+          "id": "svc_3cf231d3725d857f",
+          "name": "4PDA",
+          "icon": {
+            "kind": "monogram",
+            "text": "4P"
+          },
+          "category": "💬 Соцсети и форумы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7ba72752ef821b18",
+          "name": "Pikabu",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "💬 Соцсети и форумы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_87066233c6368d7d",
+          "name": "Quora",
+          "icon": {
+            "kind": "monogram",
+            "text": "Q"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2fa3efee5e530a08",
+          "name": "Ru board",
+          "icon": {
+            "kind": "monogram",
+            "text": "RB"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_02badc9df587affd",
+      "title": "📺 Медиа-платформы",
+      "services": [
+        {
+          "id": "svc_ea23f42416f7a739",
+          "name": "Anilibria",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_76add7402949e826",
+          "name": "Animego",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f21c330463a68957",
+          "name": "Bato",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_da3867781bd3bbf7",
+          "name": "Boosty",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_801b212d6a2abee7",
+          "name": "Deezer",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_128baf71651c468b",
+          "name": "Doramy",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0fa51f69b404e513",
+          "name": "Dw",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e42ed04f7df0707f",
+          "name": "Filmix",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_4ae3c4d7dee213ce",
+          "name": "Getstv",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0f02b07538eb3f3d",
+          "name": "Hdrezka ag",
+          "icon": {
+            "kind": "monogram",
+            "text": "HA"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7f3a48a186b7be0c",
+          "name": "Kinobase",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d23ddaffdb70c5c4",
+          "name": "Kinovod",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f0c1b0ed98deeba0",
+          "name": "Lampa",
+          "icon": {
+            "kind": "monogram",
+            "text": "L"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_52fea99fade21649",
+          "name": "Last",
+          "icon": {
+            "kind": "monogram",
+            "text": "L"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c590ca506ec6376a",
+          "name": "Lostfilm",
+          "icon": {
+            "kind": "monogram",
+            "text": "L"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_adcfc3564b98a377",
+          "name": "Meduza",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_32448676dd9d3ddd",
+          "name": "Musicbrainz",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_125ec6416e9be9d0",
+          "name": "Myanimelist",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c061919f8e2bde4a",
+          "name": "Netflix",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_74163f4e6e62a59d",
+          "name": "Netflix · 1",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_27be17c28b8fc55b",
+          "name": "Netflix · 2",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_66c303bd07d29620",
+          "name": "Patreon",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_cc0ba53369aed91c",
+          "name": "Pixiv",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f451a0ce975dbd22",
+          "name": "Pornhub",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a5a5169deb93600d",
+          "name": "Seasonvar",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_5bf8b58f6a7bc9d2",
+          "name": "Soundcloud",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0fa3d40aff36fa2b",
+          "name": "Spotify",
+          "icon": {
+            "kind": "monogram",
+            "text": "SP"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b59373a789d41a31",
+          "name": "Stremio",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f5fd5d44f8fb10ce",
+          "name": "Themoviedb",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_bc82a15ad90dbc21",
+          "name": "Thetvdb",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a44593691bc916ae",
+          "name": "Tidal",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b3bff6c614646441",
+          "name": "Twitch",
+          "icon": {
+            "kind": "monogram",
+            "text": "TW"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3acc5aeeb6fc884e",
+          "name": "Videocdn",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_4dc3a769398cc025",
+          "name": "YouTube",
+          "icon": {
+            "kind": "monogram",
+            "text": "YT"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_436d664c67325d1b",
+          "name": "YouTube · 1",
+          "icon": {
+            "kind": "monogram",
+            "text": "YT"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_4a4eec578b6f5b3c",
+          "name": "YouTube · 2",
+          "icon": {
+            "kind": "monogram",
+            "text": "YT"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_2f737c47a7da0b27",
+          "name": "Zeflix",
+          "icon": {
+            "kind": "monogram",
+            "text": "Z"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e7356734ec75d5ac",
+          "name": "Zfilm hd",
+          "icon": {
+            "kind": "monogram",
+            "text": "ZH"
+          },
+          "category": "📺 Медиа-платформы",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_386f1d726c499673",
+      "title": "🎬 Развлечения, кино и ТВ",
+      "services": [
+        {
+          "id": "svc_32cde16d19495827",
+          "name": "Hitmos",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_88fae40aab03c683",
+          "name": "Hitmotop",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_b60858494a579a5a",
+          "name": "Ivi",
+          "icon": {
+            "kind": "monogram",
+            "text": "I"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1c84af11f09496e7",
+          "name": "Kino pub",
+          "icon": {
+            "kind": "monogram",
+            "text": "KP"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8ce0ec423e3768dc",
+          "name": "Kinopoisk",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7a96ab1f0c741491",
+          "name": "Kion",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0f6a0328de307a29",
+          "name": "Okko",
+          "icon": {
+            "kind": "monogram",
+            "text": "O"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b3d58a6929fbc664",
+          "name": "Premiere",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d36efd1b27d67fa4",
+          "name": "Rutube",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c9cf4ff58fa4d60e",
+          "name": "Smotreshka",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_6ac442cbb62c5b33",
+          "name": "Smotrim",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1c6f3572d2da7035",
+          "name": "Viju",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3b223dab96cf5eff",
+          "name": "Vitrina",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_5473cdea3b8e8162",
+          "name": "Wink",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "🎬 Развлечения, кино и ТВ",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_2d47152f5d1bc217",
+      "title": "🎮 Игры и игровые платформы",
+      "services": [
+        {
+          "id": "svc_e70768728931215d",
+          "name": "Battlefield5",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1ab811107358e5fc",
+          "name": "Bethesda",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_491e8d7c03b544d2",
+          "name": "Blizzard",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1b89f5dab08c0388",
+          "name": "Brawl stars",
+          "icon": {
+            "kind": "monogram",
+            "text": "BS"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a55e98856d24d182",
+          "name": "Chess",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a0e660058cc55780",
+          "name": "Clash royale",
+          "icon": {
+            "kind": "monogram",
+            "text": "CR"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_05da017bff325c64",
+          "name": "Cs 2",
+          "icon": {
+            "kind": "monogram",
+            "text": "C2"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_660f9640fa006563",
+          "name": "Ea",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_da9b1fd3b0d9e3b7",
+          "name": "Epicgames",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3156bdb9a71f780e",
+          "name": "Hay day",
+          "icon": {
+            "kind": "monogram",
+            "text": "HD"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2d8a49b463d741e7",
+          "name": "Heroes thelazy",
+          "icon": {
+            "kind": "monogram",
+            "text": "HT"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f21ea0f474a85c35",
+          "name": "Itch",
+          "icon": {
+            "kind": "monogram",
+            "text": "I"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f651da4aeb16ad75",
+          "name": "Modrinth",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_fdea44a5619a5504",
+          "name": "Nexusmods",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_99d31cdae860f215",
+          "name": "Nintendo",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d637dc83a9a823f7",
+          "name": "Playstation",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a2073f29e9482c71",
+          "name": "Pubg",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_cd6eefd2fba109ca",
+          "name": "Raidshadowlegends",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_6cc601e3c0055041",
+          "name": "Riotgames",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c1688e9b4c7a1dc9",
+          "name": "Roblox",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8fc84ed84b98f412",
+          "name": "Squad busters",
+          "icon": {
+            "kind": "monogram",
+            "text": "SB"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f45bacb8f5438e22",
+          "name": "Steam",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1139c565dcf9360d",
+          "name": "Supercell",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d49277820f608e15",
+          "name": "Throne and liberty",
+          "icon": {
+            "kind": "monogram",
+            "text": "TA"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8a4340143a246a96",
+          "name": "Ubisoft",
+          "icon": {
+            "kind": "monogram",
+            "text": "U"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1e8fc511d665634d",
+          "name": "Vkplay",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "💬 Соцсети и форумы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c7ec4e6fb9d3eb27",
+          "name": "Warzone",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8f8ccc7f7c7095f1",
+          "name": "Wot",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ab45dcd6aa54ada7",
+          "name": "Xbox",
+          "icon": {
+            "kind": "monogram",
+            "text": "X"
+          },
+          "category": "🎮 Игры и игровые платформы",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_3a5e61935ff2543a",
+      "title": "🎌 Аниме и манга",
+      "services": [
+        {
+          "id": "svc_c6a902b930766108",
+          "name": "Amedia",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_38d50185c174c9a2",
+          "name": "Anidub",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1f8087fefe8b4ba4",
+          "name": "Animevost",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7e5c2eb43c5775a2",
+          "name": "Crunchyroll",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8aec359b3b5156b1",
+          "name": "Jut",
+          "icon": {
+            "kind": "monogram",
+            "text": "J"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_deccbb2bac037346",
+          "name": "Kara",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_272d67aaf43f21e3",
+          "name": "Kodik",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_21d4ee9f4413ab9d",
+          "name": "Mangahub",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_102ed67aba94e875",
+          "name": "Mangapark",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1b80e961a4f98582",
+          "name": "Nyaa land",
+          "icon": {
+            "kind": "monogram",
+            "text": "NL"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_991590f923fdaa0c",
+          "name": "Nyaa si",
+          "icon": {
+            "kind": "monogram",
+            "text": "NS"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_63b321a15867dd27",
+          "name": "Shikimori",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_02ecf5b85478c2d9",
+          "name": "Yummyanime",
+          "icon": {
+            "kind": "monogram",
+            "text": "Y"
+          },
+          "category": "🎌 Аниме и манга",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_6b105e52b207abe4",
+      "title": "🎓 Образование",
+      "services": [
+        {
+          "id": "svc_10dd6e016c6ddd70",
+          "name": "Gb",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "🎓 Образование",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8af2ea71514e6f2f",
+          "name": "Skillbox",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🎓 Образование",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_5a68264111ef7166",
+          "name": "Skillfactory",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🎓 Образование",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_4223a0d68fd2db05",
+          "name": "Tetrika school",
+          "icon": {
+            "kind": "monogram",
+            "text": "TS"
+          },
+          "category": "🎓 Образование",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1f7cc3b07bb8f976",
+          "name": "Uchi",
+          "icon": {
+            "kind": "monogram",
+            "text": "U"
+          },
+          "category": "🎓 Образование",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_6fba8a2df77503d5",
+      "title": "🏛️ Государственные и муниципальные ресурсы",
+      "services": [
+        {
+          "id": "svc_8578474ce56764aa",
+          "name": "Aeroflot",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d4a7de24b935d0a5",
+          "name": "Amina mos",
+          "icon": {
+            "kind": "monogram",
+            "text": "AM"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_182f51f2813d08ce",
+          "name": "Arb",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_4eb5969784d6cdfd",
+          "name": "Avtodor tr",
+          "icon": {
+            "kind": "monogram",
+            "text": "AT"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d3d828fba1cf0d28",
+          "name": "Cbr",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_458415da166aba22",
+          "name": "Energosale34",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_950721733cc3b753",
+          "name": "Etm",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_00cd4eca95190f11",
+          "name": "Eysk bezformata",
+          "icon": {
+            "kind": "monogram",
+            "text": "EB"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2363709150dc9005",
+          "name": "Fssp",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f45b36cf0fb4a7d6",
+          "name": "Gosuslugi",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_01abcf6dbc99ab62",
+          "name": "Gov",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2318baf210f35679",
+          "name": "Mos",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2b42b204dae02325",
+          "name": "Mosenergosbyt",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_974a069657585978",
+          "name": "Mosreg",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_eb0c2c74a09f5168",
+          "name": "Nalog",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d3a3f9918849092f",
+          "name": "Pochta",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_aac4c5237458fcf0",
+          "name": "Rockblack",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_07ea316c15249fdb",
+          "name": "Rosguard",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_302b66858940d28c",
+          "name": "Rosreestr",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_be00ab9639e30a4b",
+          "name": "Roszdravnadzor",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_fa515dc119b3b40d",
+          "name": "Rt",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_581652be82db2479",
+          "name": "Rts tender",
+          "icon": {
+            "kind": "monogram",
+            "text": "RT"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ce69f7c614108723",
+          "name": "Rzd",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b65baf37a1237442",
+          "name": "Seven sky",
+          "icon": {
+            "kind": "monogram",
+            "text": "SS"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_af7bffd0c1a81f9b",
+          "name": "Sfr",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7f023c607eca3f2f",
+          "name": "Vlg media",
+          "icon": {
+            "kind": "monogram",
+            "text": "VM"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2bf22da19587b915",
+          "name": "Volgaparking",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f23c7631723850ea",
+          "name": "Volgograd",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_37eeb32b10d6ac22",
+          "name": "Volgograd trv",
+          "icon": {
+            "kind": "monogram",
+            "text": "VT"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e1ce973e4ef11ad9",
+          "name": "Vpravda",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ed49f01be67e6fd8",
+          "name": "Мвд рф",
+          "icon": {
+            "kind": "monogram",
+            "text": "МР"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_46fc3b55e5bce13e",
+          "name": "Мособлеирц рф",
+          "icon": {
+            "kind": "monogram",
+            "text": "МР"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_203b4ae47c0f742f",
+      "title": "🏥 Здоровье",
+      "services": [
+        {
+          "id": "svc_bbb5f4bc9f8130c5",
+          "name": "Genotek",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "🏥 Здоровье",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_453109ef23a7ee60",
+          "name": "Invitro",
+          "icon": {
+            "kind": "monogram",
+            "text": "I"
+          },
+          "category": "🏥 Здоровье",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8ff4577aebb10429",
+          "name": "Medsi",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🏥 Здоровье",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_0082f1c62ec48746",
+      "title": "💰 Финансы и крипто",
+      "services": [
+        {
+          "id": "svc_2f2e3a63a4066fd9",
+          "name": "Aave",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "💰 Финансы и крипто",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c7b3a72d2ed8749d",
+          "name": "Euler finance",
+          "icon": {
+            "kind": "monogram",
+            "text": "EF"
+          },
+          "category": "💰 Финансы и крипто",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_03d6b638b88accbd",
+          "name": "Morpho",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "💰 Финансы и крипто",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e7be5e4ede08c17d",
+          "name": "Wise",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "💰 Финансы и крипто",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_d048a2b8fbb31241",
+      "title": "💳 Финансовые и банковские услуги",
+      "services": [
+        {
+          "id": "svc_150ca9fe33682d5b",
+          "name": "Alfabank",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "💳 Финансовые и банковские услуги",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e85f6d1047457486",
+          "name": "Gazprombank",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "💳 Финансовые и банковские услуги",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b8eee0f8730f1e4a",
+          "name": "Reso",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "💳 Финансовые и банковские услуги",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_bdacaf9de1a38936",
+          "name": "Sberbank",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "💳 Финансовые и банковские услуги",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_abce7aa346286472",
+          "name": "Tinkoff",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "💳 Финансовые и банковские услуги",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_bdf711b8ba1736ea",
+          "name": "Vtb",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "💳 Финансовые и банковские услуги",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_07bcd475fd558baf",
+      "title": "💻 Интернет и технологии",
+      "services": [
+        {
+          "id": "svc_52130aa00f48271b",
+          "name": "2gis",
+          "icon": {
+            "kind": "monogram",
+            "text": "2"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_57931a2ce8c62e8c",
+          "name": "2ip",
+          "icon": {
+            "kind": "monogram",
+            "text": "2"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c757e3c8c7884589",
+          "name": "Belparking",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_726a4c327c2958dc",
+          "name": "Bitrix24",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_dfda61671cf5acdf",
+          "name": "Cian",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8e8c8ffd60fbbf5b",
+          "name": "Dom",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9246d382ea3c5d09",
+          "name": "Ggsel",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2cebc25ceffecc0d",
+          "name": "Habr",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_cf282d5de0d00867",
+          "name": "Hh",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e3c623cad82c6061",
+          "name": "Keenetic",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d5f6e61db2aab5ca",
+          "name": "Kontur",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_05b5616fa89869a1",
+          "name": "Mail",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d80f6ac255f7362e",
+          "name": "Rustore",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_06c1d5542b331753",
+          "name": "Saby",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ad538ccd818c70d5",
+          "name": "Tenderplan",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_79e20b2452034a83",
+          "name": "Яндекс",
+          "icon": {
+            "kind": "monogram",
+            "text": "Я"
+          },
+          "category": "💻 Интернет и технологии",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_2636eaf2b3652d66",
+      "title": "📚 Книги, знания и творчество",
+      "services": [
+        {
+          "id": "svc_6d7557b539786ca5",
+          "name": "Archiveofourown",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_cbf4df1c21877f22",
+          "name": "Deviantart",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c51377809913d34e",
+          "name": "Ficbook",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7d077433470e3a2d",
+          "name": "Flibusta",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f362a19d2518cd96",
+          "name": "Ieee",
+          "icon": {
+            "kind": "monogram",
+            "text": "I"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_274a67da01663d52",
+          "name": "Infinitenovel",
+          "icon": {
+            "kind": "monogram",
+            "text": "I"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_458b2c61e0f0679e",
+          "name": "Mrakopedia",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_817f6318417cf2f5",
+          "name": "Pixabay",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d2cd6510f8ed551d",
+          "name": "Refactoring guru",
+          "icon": {
+            "kind": "monogram",
+            "text": "RG"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_da31bf1e97f65194",
+          "name": "Rulate",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_eea57414d33fa039",
+          "name": "Vndb",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_39bb8246998a08aa",
+          "name": "Wikiart",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_da6b387601834350",
+          "name": "Wikipedia",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b0cab386d68291c6",
+          "name": "Younettranslate",
+          "icon": {
+            "kind": "monogram",
+            "text": "Y"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_73b21012e8eebd0f",
+          "name": "Znanija",
+          "icon": {
+            "kind": "monogram",
+            "text": "Z"
+          },
+          "category": "📚 Книги, знания и творчество",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_777a3efca15328e0",
+      "title": "📡 Операторы связи",
+      "services": [
+        {
+          "id": "svc_73bcb3811f0f0278",
+          "name": "Beeline",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "📡 Операторы связи",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_03b7b9362cc8a94e",
+          "name": "Megafon",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "📡 Операторы связи",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9796d49a83167d6f",
+          "name": "T2",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "📡 Операторы связи",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_20647d0bf01be5b4",
+      "title": "📦 Прочее",
+      "services": [
+        {
+          "id": "svc_4a691c30073f30b7",
+          "name": "3dwarehouse sketchup",
+          "icon": {
+            "kind": "monogram",
+            "text": "3S"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e2b7c8c6a2e3e7c8",
+          "name": "Cwer",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🏛️ Государственные и муниципальные ресурсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_77ed60eff25cf142",
+          "name": "Cwer",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "📱 Социальные сети и мессенджеры",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_dffd6da5a35133b6",
+          "name": "Dreame",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a846c8062a35aa46",
+          "name": "Duolingo",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1ee857004685dea4",
+          "name": "Eufy",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7a7103f2b5dc4f2a",
+          "name": "Imdb",
+          "icon": {
+            "kind": "monogram",
+            "text": "I"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7a0dddd42ca8f338",
+          "name": "Kinozal",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d713d609a18d22a3",
+          "name": "Petlibro",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0ebd9864e21545d8",
+          "name": "Speedtest",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7a2ccbb95a0adccd",
+          "name": "Strava",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a01f959515796469",
+          "name": "Udemy",
+          "icon": {
+            "kind": "monogram",
+            "text": "U"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_92f7cc1de4deb343",
+          "name": "Wunderground",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "📦 Прочее",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_bff4e98a7f9e8135",
+      "title": "📰 Новости и СМИ",
+      "services": [
+        {
+          "id": "svc_5fd3f61d47e1f40b",
+          "name": "Agents",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b9d601fca408dd0e",
+          "name": "Agentura",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_48de9242cd8882fa",
+          "name": "Bbc",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_27f7d208235f0216",
+          "name": "Bellingcat",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a4fcf327608a655b",
+          "name": "Cherta",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a7a427c3b23d1a1c",
+          "name": "Colta",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_01bb58f569273ee0",
+          "name": "Currenttime",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d99afed35b0c5c06",
+          "name": "Dept",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0391835d60123413",
+          "name": "Doxa",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8f1c861686a09c26",
+          "name": "Echofm",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1c138b61c9d1a011",
+          "name": "Ehorussia",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_25327093cf9bd031",
+          "name": "Ej",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2ad50306595dc4ca",
+          "name": "Euronews",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ffe375e2ac051564",
+          "name": "Golosameriki",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d1a9d9478d023ecc",
+          "name": "Gordonua",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e966d5dc7b7c653b",
+          "name": "Gulagu",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_aeffe7c7e1a7c3b0",
+          "name": "Holod",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3d17286deecd9428",
+          "name": "Hrw",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_726cda3793c4025c",
+          "name": "Istories",
+          "icon": {
+            "kind": "monogram",
+            "text": "I"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0afb094eac1edadb",
+          "name": "Kavkaz uzel",
+          "icon": {
+            "kind": "monogram",
+            "text": "KU"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ae80372f8877a40e",
+          "name": "Korrespondent",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9cc875c597f29c80",
+          "name": "Krymr",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_923c63dd267fa358",
+          "name": "Memohrc",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_efa526d078587764",
+          "name": "Navalny",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a06c16b6d9d3bfdf",
+          "name": "Newtimes",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ac42150e582d9cb3",
+          "name": "Novayagazeta",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_6eb3ec9676d9b8f5",
+          "name": "Ovd",
+          "icon": {
+            "kind": "monogram",
+            "text": "O"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c69ff08282d1441f",
+          "name": "Paperpaper",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8039796c251218b6",
+          "name": "Polit",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c4153b58bfc38095",
+          "name": "Proekt",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_6d337ad07601e677",
+          "name": "Radiosvoboda",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7a84e81d9519c05a",
+          "name": "Semnasem",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0961fbc701059ef3",
+          "name": "Svoboda",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_5caf88e539573334",
+          "name": "Tayga",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2288d8476f1edc56",
+          "name": "The village",
+          "icon": {
+            "kind": "monogram",
+            "text": "TV"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e37e6b0ccae710b4",
+          "name": "Theins",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_5f8f22123ac10e4d",
+          "name": "Thetruestory news",
+          "icon": {
+            "kind": "monogram",
+            "text": "TN"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_27946547dac3e2e7",
+          "name": "Tvrain",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_394b7e8e35582e19",
+          "name": "Unian",
+          "icon": {
+            "kind": "monogram",
+            "text": "U"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_47f8a83ad08725f2",
+          "name": "Verstka",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_056b41097940da47",
+          "name": "Vot tak",
+          "icon": {
+            "kind": "monogram",
+            "text": "VT"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_14acbe465ed6cdd3",
+          "name": "Zona",
+          "icon": {
+            "kind": "monogram",
+            "text": "Z"
+          },
+          "category": "📰 Новости и СМИ",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_44b30fb56b9d6486",
+      "title": "🔞 Для взрослых",
+      "services": [
+        {
+          "id": "svc_9c3ac886739d8082",
+          "name": "Beeg",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_bdd57f5970682828",
+          "name": "Danbooru donmai",
+          "icon": {
+            "kind": "monogram",
+            "text": "DD"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_dae39b22e80aa433",
+          "name": "E621",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7e2af09f443c5c2b",
+          "name": "F95zone",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f6ca1c7d5d00a2a3",
+          "name": "Gelbooru",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8700fa07167695b3",
+          "name": "Hentaichan",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f14c5f03eb3c4965",
+          "name": "Hentailib",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1f9219ccadaaa621",
+          "name": "Hqporner",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_63efc6a87a0dcaad",
+          "name": "Kemono cr",
+          "icon": {
+            "kind": "monogram",
+            "text": "KC"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d4999cd805ddf134",
+          "name": "Pornolab",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0c5fdf88e86d16a2",
+          "name": "Reddxxx",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d2bfc266238cb817",
+          "name": "Redgifs",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_963b94895db56697",
+          "name": "Redtube",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3b3a641a4889558d",
+          "name": "Rule34 xxx",
+          "icon": {
+            "kind": "monogram",
+            "text": "RX"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3c34ce0170c66e98",
+          "name": "Sankakucomplex",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_6eba6edf984bf767",
+          "name": "Xhamster",
+          "icon": {
+            "kind": "monogram",
+            "text": "X"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e8a8d5dcfe24e4e4",
+          "name": "Xhamsterlive",
+          "icon": {
+            "kind": "monogram",
+            "text": "X"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_34e7689d725d3b27",
+          "name": "Xnxx ru",
+          "icon": {
+            "kind": "monogram",
+            "text": "XR"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_fa5a46404fb6405a",
+          "name": "Xvideos",
+          "icon": {
+            "kind": "monogram",
+            "text": "X"
+          },
+          "category": "🔞 Для взрослых",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_55b292759f1ac396",
+      "title": "🛍️ Маркетплейсы",
+      "services": [
+        {
+          "id": "svc_11f07b842948df21",
+          "name": "Auto",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b1ad93d9319185a5",
+          "name": "Avito",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_dd41e764e7ef6976",
+          "name": "Bestbenefits",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d05ea08342452ab6",
+          "name": "Cdek",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2be95940d8ac7c78",
+          "name": "Detmir",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8743a0521ad5c164",
+          "name": "Komus",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_65bea63664f11ef3",
+          "name": "Lamoda",
+          "icon": {
+            "kind": "monogram",
+            "text": "L"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b405aba833927b63",
+          "name": "Magnit",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_bdd79acee0745e45",
+          "name": "Mvideo",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_645dffe09c72c938",
+          "name": "Myspar",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2735a42aba72acef",
+          "name": "Onepricecoffee",
+          "icon": {
+            "kind": "monogram",
+            "text": "O"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b9c735e9f59cf6ce",
+          "name": "Ozon",
+          "icon": {
+            "kind": "monogram",
+            "text": "O"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e6be2ab3ffd55ddd",
+          "name": "Rendez vous",
+          "icon": {
+            "kind": "monogram",
+            "text": "RV"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_72afa8c0d2896c09",
+          "name": "Vkusnoitochka",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c73e3acf2d6c4a7b",
+          "name": "Vkusvill",
+          "icon": {
+            "kind": "monogram",
+            "text": "V"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ef3a68ff4d3b1caa",
+          "name": "Wildberries",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9d0265e86e7253b1",
+          "name": "X5",
+          "icon": {
+            "kind": "monogram",
+            "text": "X"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_bf2ce5a7938dbd3e",
+          "name": "Youla",
+          "icon": {
+            "kind": "monogram",
+            "text": "Y"
+          },
+          "category": "🛍️ Маркетплейсы",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_ff15b84609d304c3",
+      "title": "🛒 Интернет-магазины и торговые платформы",
+      "services": [
+        {
+          "id": "svc_a0c92040ca3e74cf",
+          "name": "2407 pl",
+          "icon": {
+            "kind": "monogram",
+            "text": "2P"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_53193994ec9a9c6b",
+          "name": "Airbnb",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_02cc1021fb162a4d",
+          "name": "Aliexpress",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7e339205e2e0f378",
+          "name": "Allegro pl",
+          "icon": {
+            "kind": "monogram",
+            "text": "AP"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7e37b936169475c8",
+          "name": "Babook",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_db3c316cb1f8485c",
+          "name": "Bestchange",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_20f661b1940c3470",
+          "name": "Binance",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ccbfcc1a6af5041e",
+          "name": "Bing",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1ec418434644f0bd",
+          "name": "Coinglass",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d95166f219045c9e",
+          "name": "Ebay",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_58aa2447416957c2",
+          "name": "Etsy",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c51f53b22a8c9706",
+          "name": "Iherb",
+          "icon": {
+            "kind": "monogram",
+            "text": "I"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_74f97e4cf92a5ff5",
+          "name": "Mouser",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e220ecbe25007b5a",
+          "name": "Pinterest",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_515937ab2effd84b",
+          "name": "Ralphlauren",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0e1df75eeb6205f7",
+          "name": "Tari",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "🛒 Интернет-магазины и торговые платформы",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_6845c0a35d764f29",
+      "title": "🛠 Сервисы и инструменты",
+      "services": [
+        {
+          "id": "svc_495a00045502d0f2",
+          "name": "10minutemail",
+          "icon": {
+            "kind": "monogram",
+            "text": "1"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c16ed2ca16fa5ee3",
+          "name": "9proxy",
+          "icon": {
+            "kind": "monogram",
+            "text": "9"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_68eb94427dd8799b",
+          "name": "Aida64",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_673134665fd7cbdc",
+          "name": "Basecamp",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f7ca4b433b441968",
+          "name": "Beeble",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_45b7745a785b6ac2",
+          "name": "Bitninja",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_8fb2ad23c8f8b941",
+          "name": "Capcut",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9bd7bad2b48eceb5",
+          "name": "Clickup",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d11d284934805773",
+          "name": "Cloudlinux",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_67f4b1f5c225ba5d",
+          "name": "Connect garmin",
+          "icon": {
+            "kind": "monogram",
+            "text": "CG"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0c7bf5c35678f40b",
+          "name": "Fastpic",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3e8d22806c290417",
+          "name": "Fatsecret",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_393951862691d044",
+          "name": "Fmhy",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_bf145ff1ad6c3bde",
+          "name": "Godaddy",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_4f5512af6368000e",
+          "name": "Linktr ee",
+          "icon": {
+            "kind": "monogram",
+            "text": "LE"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_021a150783874d5b",
+          "name": "Make",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1b6a6d071aa3b8eb",
+          "name": "Myheritage",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_aec95e84bba56c3e",
+          "name": "Namecheap",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_858f3e83eeda977d",
+          "name": "Naukri",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f13437b0b015e10c",
+          "name": "Notepad plus plus",
+          "icon": {
+            "kind": "monogram",
+            "text": "NP"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a259c2b50d785080",
+          "name": "Proton",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e4d02203920f5a80",
+          "name": "Proxy6",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_976785e7268a96a7",
+          "name": "Proxyline",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_4e90830b4d514fa1",
+          "name": "Revanced",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b2cec97c4ab23097",
+          "name": "Sentry",
+          "icon": {
+            "kind": "monogram",
+            "text": "S"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2900fc200ab851b9",
+          "name": "Trainingpeaks",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ec7b50f538d4f5a5",
+          "name": "Whoop",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_96960622ff48d8e0",
+          "name": "Wikidot",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_054d95f6a3250eca",
+          "name": "Zapier",
+          "icon": {
+            "kind": "monogram",
+            "text": "Z"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9ea79d0d119ecb49",
+          "name": "Zscaler",
+          "icon": {
+            "kind": "monogram",
+            "text": "Z"
+          },
+          "category": "🛠 Сервисы и инструменты",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_3279bc86f58789dc",
+      "title": "🤖 IT-компании и AI",
+      "services": [
+        {
+          "id": "svc_d0173bddc13c09c2",
+          "name": "Adobe",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_5e71c745e9b173cd",
+          "name": "Akamai",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_038f7920b6d1e1df",
+          "name": "Amazon AWS",
+          "icon": {
+            "kind": "monogram",
+            "text": "AWS"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_71f9a3af724b1d33",
+          "name": "Amazon AWS · 1",
+          "icon": {
+            "kind": "monogram",
+            "text": "AWS"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_3931ca7efbefe126",
+          "name": "Amazon AWS · 2",
+          "icon": {
+            "kind": "monogram",
+            "text": "AWS"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_a1485ef8d2e02b5b",
+          "name": "Amazon AWS · 3",
+          "icon": {
+            "kind": "monogram",
+            "text": "AWS"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_d318762d9a7b1ecb",
+          "name": "Anthropic",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_aaf30e07d856f418",
+          "name": "Anydesk",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2265cbcc3ef24106",
+          "name": "Apple",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d27a59b89b5e98b5",
+          "name": "Autodesk",
+          "icon": {
+            "kind": "monogram",
+            "text": "A"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b6dc43b705c41ab0",
+          "name": "Bigfangroup",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d3ef5dee2be0e4c1",
+          "name": "Bizagi",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_0f93367c8ec168cf",
+          "name": "Canva",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_c6240ca88eed5b23",
+          "name": "ChatGPT",
+          "icon": {
+            "kind": "monogram",
+            "text": "AI"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9974855a2250fcaf",
+          "name": "Cisco",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_743e483ae01f1fa2",
+          "name": "Claude",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_738e22f0acab814c",
+          "name": "Cloudflare",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_067a3ff791863417",
+          "name": "Cloudflare",
+          "icon": {
+            "kind": "monogram",
+            "text": "CF"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_163826c5cd06187f",
+          "name": "Codeium",
+          "icon": {
+            "kind": "monogram",
+            "text": "CD"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_7cbff059b404bede",
+          "name": "Copilot microsoft",
+          "icon": {
+            "kind": "monogram",
+            "text": "CM"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7a4dc0a14dd97275",
+          "name": "Cursor",
+          "icon": {
+            "kind": "monogram",
+            "text": "C"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1be487756ae7e1a2",
+          "name": "Deepl",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b67044bc69dbd418",
+          "name": "Deepseek",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_2d2ee8930476f093",
+          "name": "Dell",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b227274791ce27af",
+          "name": "Digash",
+          "icon": {
+            "kind": "monogram",
+            "text": "D"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e2d214894af79bc4",
+          "name": "Elevenlabs",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_63277adb7bfb7d0d",
+          "name": "Envato",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d3d7337386f0f41b",
+          "name": "Ewelink",
+          "icon": {
+            "kind": "monogram",
+            "text": "E"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_5c0eef9031d4e3f8",
+          "name": "Facetime apple",
+          "icon": {
+            "kind": "monogram",
+            "text": "FA"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_b6c3d15a387f20b5",
+          "name": "Fastly",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_acb4ffda1a668b44",
+          "name": "Figma",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f8226d80a7c25a04",
+          "name": "Gemini google",
+          "icon": {
+            "kind": "monogram",
+            "text": "GG"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3aeb002460381c6f",
+          "name": "GitHub",
+          "icon": {
+            "kind": "monogram",
+            "text": "GH"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d4c9d9027326271a",
+          "name": "Google",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_a8b63360acbee64d",
+          "name": "Grammarly",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d73d2981888be2d8",
+          "name": "Grok",
+          "icon": {
+            "kind": "monogram",
+            "text": "G"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_60858e774b6ba0d5",
+          "name": "Hetzner",
+          "icon": {
+            "kind": "monogram",
+            "text": "H"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_ebbd2830b6413e67",
+          "name": "Home connect",
+          "icon": {
+            "kind": "monogram",
+            "text": "HC"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_496a9a7de0a1eb53",
+          "name": "Intel",
+          "icon": {
+            "kind": "monogram",
+            "text": "IN"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9e9d6742095b0900",
+          "name": "Jetbrains",
+          "icon": {
+            "kind": "monogram",
+            "text": "J"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_91aee8603d7d45b2",
+          "name": "Kilo",
+          "icon": {
+            "kind": "monogram",
+            "text": "K"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_f9010e2cf1f5ff10",
+          "name": "Lenovo",
+          "icon": {
+            "kind": "monogram",
+            "text": "L"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_e21bcb1fe1d4d296",
+          "name": "Logo",
+          "icon": {
+            "kind": "monogram",
+            "text": "L"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_004fdbe692c46aef",
+          "name": "Lucid",
+          "icon": {
+            "kind": "monogram",
+            "text": "L"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_479b0251bfc0b087",
+          "name": "Manus im",
+          "icon": {
+            "kind": "monogram",
+            "text": "MI"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_4609d127e39f7e8e",
+          "name": "Medium",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_83179e012a501034",
+          "name": "Meta",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_24299f39915b1fa5",
+          "name": "Microsoft",
+          "icon": {
+            "kind": "monogram",
+            "text": "MS"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_beca91bf6fb5bca1",
+          "name": "Miro",
+          "icon": {
+            "kind": "monogram",
+            "text": "M"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7c4b4c8cdd8cff6b",
+          "name": "Notion",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_1411e994b70efbb4",
+          "name": "NVIDIA",
+          "icon": {
+            "kind": "monogram",
+            "text": "NV"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_06ae6b52ed986ed5",
+          "name": "Outlook",
+          "icon": {
+            "kind": "monogram",
+            "text": "O"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_cf0f4f756728eba7",
+          "name": "Perplexity",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_727ed73e3181bd08",
+          "name": "Pollo",
+          "icon": {
+            "kind": "monogram",
+            "text": "P"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_18cacd65cd3cbba4",
+          "name": "Qoder",
+          "icon": {
+            "kind": "monogram",
+            "text": "Q"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_d415a44044011c8a",
+          "name": "Tevas",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": true
+        },
+        {
+          "id": "svc_f2dfd4fb898a4c1e",
+          "name": "Trae",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_434d16de89ceb345",
+          "name": "Tuta",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_dea2daf10ae24f1b",
+          "name": "Ubiquiti",
+          "icon": {
+            "kind": "monogram",
+            "text": "U"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_6076f0bc769bbe0d",
+          "name": "Wetransfer",
+          "icon": {
+            "kind": "monogram",
+            "text": "W"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9bf05377a645d360",
+          "name": "Windsurf",
+          "icon": {
+            "kind": "monogram",
+            "text": "WS"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_caf3a7abc4ef8fff",
+          "name": "Zoom",
+          "icon": {
+            "kind": "monogram",
+            "text": "ZM"
+          },
+          "category": "🤖 IT-компании и AI",
+          "archivedOnly": false
+        }
+      ]
+    },
+    {
+      "id": "grp_61f02dd8c2f8610d",
+      "title": "🧲 Торренты",
+      "services": [
+        {
+          "id": "svc_4912f7166455474a",
+          "name": "1337x",
+          "icon": {
+            "kind": "monogram",
+            "text": "1"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_eab9c2b2eae05f10",
+          "name": "Booktracker",
+          "icon": {
+            "kind": "monogram",
+            "text": "B"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_3d33631511fd5c16",
+          "name": "Filmitorrent",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_158f62cadcc7321c",
+          "name": "Freetp",
+          "icon": {
+            "kind": "monogram",
+            "text": "F"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_9f5d637a8dd6fcef",
+          "name": "Newstudio",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_26909d8c9e78ad69",
+          "name": "Nnmclub",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_711f2ca1ee481f5e",
+          "name": "Rustorka",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_5adf3dae96931fc8",
+          "name": "Rutor",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_7386aff2a5374b98",
+          "name": "Rutracker",
+          "icon": {
+            "kind": "monogram",
+            "text": "R"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_bf57d32131f12a04",
+          "name": "Thepiratebay",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_6b070cff232226de",
+          "name": "Tor",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        },
+        {
+          "id": "svc_48b9665d23b67433",
+          "name": "Torrent",
+          "icon": {
+            "kind": "monogram",
+            "text": "T"
+          },
+          "category": "🧲 Торренты",
+          "archivedOnly": false
+        }
+      ]
+    }
+  ],
+  "version": 1
+}

@@ -220,7 +220,7 @@ func (f *backendFixture) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = gate.Primary(ctx, r013gate.Stamp{}, func(context.Context) error { return owner.install(&working, uapi) }); err != nil {
+	if err = gate.Primary(ctx, r013gate.Stamp{}, func(context.Context) error { return owner.install(&working, uapi, false) }); err != nil {
 		return err
 	}
 	slot, err := r013gate.NewPrimaryDeviceSlot(ctx, gate, engine)

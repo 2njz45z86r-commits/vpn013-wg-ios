@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -90,7 +91,45 @@ func TestRussianRoutingNative(t *testing.T) {
 	if mode == "client" {
 		target := os.Getenv("R013_RU_NATIVE_TARGET")
 		if target != "2.56.24.2" && target != "198.18.0.2" && target != "2001:640::2" && target != "2001:db8:130::2" {
-			t.Fatal("only owned synthetic targets permitted")
+			// Catalog-derived destination is allowed only when an exact /32 is
+			// installed on this fixture's own TUN on the authorized CI runner.
+			if os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Getenv("GITHUB_REPOSITORY") != "2njz45z86r-commits/vpn013-wg-ios" || target != os.Getenv("R013_RU_NATIVE_SELECTED") {
+				t.Fatal("only owned synthetic targets permitted")
+			}
+			address, e := netip.ParseAddr(target)
+			if e != nil || !address.Is4() {
+				t.Fatal("invalid owned target")
+			}
+			adapters, e := winipcfg.GetAdaptersAddresses(windows.AF_INET, winipcfg.GAAFlagDefault)
+			if e != nil {
+				t.Fatal(e)
+			}
+			var owned winipcfg.LUID
+			for _, a := range adapters {
+				if a.FriendlyName() == "VPN013-RU-fixture" {
+					owned = a.LUID
+					break
+				}
+			}
+			if owned == 0 {
+				t.Fatal("fixture adapter not found")
+			}
+			rows, e := winipcfg.GetIPForwardTable2(windows.AF_INET)
+			if e != nil {
+				t.Fatal(e)
+			}
+			ok := false
+			for _, row := range rows {
+				n := row.DestinationPrefix.IPNet()
+				p, pe := netip.ParsePrefix(n.String())
+				if pe == nil && row.InterfaceLUID == owned && p == netip.PrefixFrom(address, 32) {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				t.Fatal("target route is not owned by fixture adapter")
+			}
 		}
 		family := "udp4"
 		if strings.Contains(target, ":") {
@@ -211,7 +250,7 @@ func TestRussianRoutingNative(t *testing.T) {
 				break
 			}
 		}
-		if !strings.Contains(string(out), "R013_RU_TEST_EXIT_0") || !strings.Contains(string(out), "ACTUAL_RU_WFP_ALLOWED_FOREIGN_BLOCKED_CLEANED") {
+		if !strings.Contains(string(out), "R013_RU_TEST_EXIT_0") || !strings.Contains(string(out), "ACTUAL_RU_WFP_ALLOWED_FOREIGN_BLOCKED_CLEANED") || !strings.Contains(string(out), "ACTUAL_SERVICE_WFP_ONLY_BYPASS_DNS_BLOCKED_CLEANED") {
 			t.Fatalf("isolated actual-SYSTEM routing service failed:\n%s", out)
 		}
 		t.Log(string(out))
@@ -267,8 +306,42 @@ func TestRussianRoutingNative(t *testing.T) {
 	}
 	defer luid.FlushRoutes(windows.AF_INET)
 	defer luid.FlushIPAddresses(windows.AF_INET)
+	cat, e := r013routing.OwnerCatalog()
+	if e != nil {
+		t.Fatal(e)
+	}
+	selection := r013routing.ServiceSelection{Mode: r013routing.ServicesOnly}
+	var chosen netip.Addr
+	for _, service := range cat.DisplayServices() {
+		if !cat.SupportsWireGuard(service.ID) {
+			continue
+		}
+		selection.Only = []string{service.ID}
+		plan, pe := cat.Resolve(selection)
+		if pe != nil {
+			t.Fatal(pe)
+		}
+		if len(plan.Networks) == 0 {
+			continue
+		}
+		conflict := false
+		for _, n := range plan.Networks {
+			if n.Contains(netip.MustParseAddr("2.56.24.2")) || n.Contains(netip.MustParseAddr("9.9.9.9")) {
+				conflict = true
+				break
+			}
+		}
+		if conflict {
+			continue
+		}
+		chosen = plan.Networks[0].Addr()
+		break
+	}
+	if !chosen.IsValid() {
+		t.Fatal("no eligible service policy fixture")
+	}
 	var routes []*winipcfg.RouteData
-	for _, ip := range []string{"2.56.24.2", "198.18.0.2"} {
+	for _, ip := range []string{"2.56.24.2", "198.18.0.2", chosen.String()} {
 		routes = append(routes, &winipcfg.RouteData{Destination: net.IPNet{IP: net.ParseIP(ip).To4(), Mask: net.CIDRMask(32, 32)}, NextHop: net.IPv4zero})
 	}
 	if err = luid.SetRoutesForFamily(windows.AF_INET, routes); err != nil {
@@ -415,14 +488,14 @@ func TestRussianRoutingNative(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 		defer cancel()
 		c := exec.CommandContext(ctx, helper, "-test.run=^TestRussianRoutingNative$")
-		c.Env = append(os.Environ(), "R013_RU_NATIVE_MODE=client", "R013_RU_NATIVE_TARGET="+ip)
+		c.Env = append(os.Environ(), "R013_RU_NATIVE_MODE=client", "R013_RU_NATIVE_TARGET="+ip, "R013_RU_NATIVE_SELECTED="+chosen.String())
 		text, e := c.CombinedOutput()
 		if e != nil {
 			t.Fatalf("native client failed: %v %s", e, text)
 		}
 		return strings.Contains(string(text), "echo-ok")
 	}
-	for _, ip := range []string{"2.56.24.2", "198.18.0.2", "2001:640::2", "2001:db8:130::2"} {
+	for _, ip := range []string{"2.56.24.2", "198.18.0.2", chosen.String(), "2001:640::2", "2001:db8:130::2"} {
 		if !ask(ip) {
 			t.Fatalf("physical fixture control unavailable before WFP: %s", ip)
 		}
@@ -458,6 +531,40 @@ func TestRussianRoutingNative(t *testing.T) {
 			t.Fatalf("fixture route did not recover after cleanup: %s", ip)
 		}
 	}
+	// Exercise the real additional ONLY WFP policy with a test-owned routed
+	// DNS address and the independent helper executable. No WAN is used.
+	if e = r013routing.ActivateServicePolicy(cat, selection, []netip.Addr{netip.MustParseAddr("198.18.0.2")}); e != nil {
+		t.Fatal(e)
+	}
+	if e = EnableFirewall(0, false, nil); e != nil {
+		t.Fatal(e)
+	}
+	if e = VerifyFirewall(); e != nil {
+		t.Fatal(e)
+	}
+	if !ask("2.56.24.2") || ask("198.18.0.2") || ask(chosen.String()) {
+		t.Fatal("service WFP direct/DNS destination policy failed")
+	}
+	DisableFirewall()
+	selection.Mode = r013routing.ServicesBypass
+	selection.Bypass = append([]string(nil), selection.Only...)
+	if e = r013routing.ActivateServicePolicy(cat, selection, []netip.Addr{netip.MustParseAddr("9.9.9.9")}); e != nil {
+		t.Fatal(e)
+	}
+	if e = EnableFirewall(0, false, nil); e != nil {
+		t.Fatal(e)
+	}
+	if !ask(chosen.String()) || ask("198.18.0.2") {
+		t.Fatal("service WFP bypass destination policy failed")
+	}
+	DisableFirewall()
+	if e = r013routing.ActivateServicePolicy(cat, r013routing.ServiceSelection{}, nil); e != nil {
+		t.Fatal(e)
+	}
+	if !ask("2.56.24.2") || !ask("198.18.0.2") {
+		t.Fatal("service WFP cleanup failed")
+	}
+	t.Log("ACTUAL_SERVICE_WFP_ONLY_BYPASS_DNS_BLOCKED_CLEANED")
 	t.Logf("ACTUAL_RU_WFP_ALLOWED_FOREIGN_BLOCKED_CLEANED policy install/probes %s; full %d-prefix dataset, distinct requesting exe", time.Since(started), r013routing.NetworkCount)
 }
 
@@ -474,4 +581,63 @@ func russianFixtureChecksum(p []byte) uint16 {
 		sum = (sum & 65535) + (sum >> 16)
 	}
 	return ^uint16(sum)
+}
+
+func TestServiceWFPDestinationPolicyModel(t *testing.T) {
+	cat, err := r013routing.OwnerCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sel := r013routing.ServiceSelection{Mode: r013routing.ServicesOnly}
+	var chosen netip.Addr
+	dns := netip.MustParseAddr("9.9.9.9")
+	for _, s := range cat.DisplayServices() {
+		if !cat.SupportsWireGuard(s.ID) {
+			continue
+		}
+		sel.Only = []string{s.ID}
+		p, e := cat.Resolve(sel)
+		if e == nil && len(p.Networks) > 0 {
+			if e = r013routing.ActivateServicePolicy(cat, sel, []netip.Addr{dns}); e == nil {
+				chosen = p.Networks[0].Addr()
+				break
+			}
+		}
+	}
+	if !chosen.IsValid() {
+		t.Fatal("no supported service")
+	}
+	defer r013routing.ActivateServicePolicy(cat, r013routing.ServiceSelection{}, nil)
+	rows, err := serviceFirewallNetworks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	contains := func(a netip.Addr) bool {
+		for _, p := range rows {
+			if p.Contains(a) {
+				return true
+			}
+		}
+		return false
+	}
+	if contains(chosen) || contains(dns) {
+		t.Fatal("selected service or VPN DNS permitted directly")
+	}
+	old, e := r013routing.Networks()
+	if e != nil {
+		t.Fatal(e)
+	}
+	found := false
+	for _, p := range old {
+		if p.Addr().Is6() {
+			found = true
+			if !contains(p.Addr()) {
+				t.Fatal("existing IPv6 WFP exemption lost")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("missing IPv6 baseline")
+	}
 }

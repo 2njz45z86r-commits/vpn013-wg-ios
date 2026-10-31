@@ -186,6 +186,12 @@ func (c *ServiceCatalog) DisplayServices() []CatalogService {
 	return append([]CatalogService(nil), c.services...)
 }
 
+// SupportsWireGuard describes availability without exposing network rules.
+func (c *ServiceCatalog) SupportsWireGuard(id string) bool {
+	r, ok := c.rules[id]
+	return ok && len(r.IPv4) > 0 && len(r.Domains) == 0
+}
+
 // A nil plan means leave the entire previous routing policy unchanged.
 // Even an explicitly enabled mode cannot resolve with an empty selection.
 func (c *ServiceCatalog) Resolve(s ServiceSelection) (*ServiceRoutePlan, error) {

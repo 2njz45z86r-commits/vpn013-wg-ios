@@ -16,6 +16,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013prepare"
 	probe "github.com/amnezia-vpn/amneziawg-windows-client/r013probe"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013probe/protectedudp"
+	"github.com/amnezia-vpn/amneziawg-windows-client/r013routing"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013vault"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel/winipcfg"
@@ -168,6 +169,9 @@ func (w *comparisonWorker) submit(request *comparisonSelection) error {
 func (w *comparisonWorker) prepare(ctx context.Context, snapshot r013vault.Snapshot, index int, active string, roles r013prepare.Roles, resolver *r013prepare.EndpointResolver, primary bool) (*r013prepare.Member, string, error) {
 	configuration, digest, err := snapshot.Member(index)
 	if err != nil {
+		return nil, "", err
+	}
+	if err = r013routing.ValidateActiveAutoMember(&configuration); err != nil {
 		return nil, "", err
 	}
 	if !primary {

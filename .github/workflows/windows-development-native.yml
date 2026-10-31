@@ -62,6 +62,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $catalog | Out-Null
           Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogUI.json" -Destination "$catalog/catalog-ui.json"
           Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogRules.json" -Destination "$catalog/catalog-rules.private.json"
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogGroups.json" -Destination "$catalog/catalog-groups.json"
           "VPN013_ROUTING_CATALOG_TEST_DIR=$catalog" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Verify actual hourly product and complete native safety inventory
         working-directory: vpn013-wg-windows
@@ -73,7 +74,7 @@ jobs:
           $env:CC='x86_64-w64-mingw32-gcc'
           $env:R013_CI_WINTUN_DLL=Join-Path $PWD 'amd64/wintun.dll'
           $env:R013_CI_CLIENT_EXE=Join-Path $PWD 'amd64/VPN013WG.exe'
-          python "$env:GITHUB_WORKSPACE/windows/release-check-hourly.py" "$env:RUNNER_TEMP/hourly-product-report" 'windows' 'catalog-traffic-122'
+          python "$env:GITHUB_WORKSPACE/windows/release-check-hourly.py" "$env:RUNNER_TEMP/hourly-product-report" 'windows' 'service-routing-139'
           if ($LASTEXITCODE -ne 0) {throw 'Actual hourly product acceptance failed'}
       - name: Test protocol, keys, recovery, policy and real ICMP
         working-directory: vpn013-wg-windows
@@ -92,6 +93,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $catalog | Out-Null
           Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogUI.json" -Destination "$catalog/catalog-ui.json"
           Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogRules.json" -Destination "$catalog/catalog-rules.private.json"
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/overlay/VPN013/ServiceCatalogGroups.json" -Destination "$catalog/catalog-groups.json"
           $env:VPN013_ROUTING_CATALOG_TEST_DIR=$catalog
           ./.deps/go/bin/go.exe test -mod=vendor -v ./r013traffic ./r013routing
           if ($LASTEXITCODE -ne 0) {throw 'Traffic and catalog model checks failed'}
@@ -121,4 +123,5 @@ jobs:
             ${{ runner.temp }}/r013-ui-*.json
             ${{ runner.temp }}/r013-power-*.png
             ${{ runner.temp }}/r013-traffic-*.png
+            ${{ runner.temp }}/r013-services.png
           if-no-files-found: error

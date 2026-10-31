@@ -22,6 +22,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013gate"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013prepare"
 	probe "github.com/amnezia-vpn/amneziawg-windows-client/r013probe"
+	"github.com/amnezia-vpn/amneziawg-windows-client/r013routing"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013tun"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013vault"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
@@ -117,6 +118,9 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 		return errBackendUnknown
 	}
 	selected.Name = r013.AutoName
+	if err = r013routing.ValidateActiveAutoMember(&selected); err != nil {
+		return err
+	}
 	// Capture an ACTUAL numeric rollback endpoint before acquiring the fence.
 	old, err := r013vault.CopyConfig(**o.configuration)
 	if err != nil || !r013vault.EligibleForComparison(old) {
@@ -227,7 +231,7 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 		}
 		if applyError == nil {
 			step("install-engine")
-			applyError = o.install(&selected, request.member.UAPI())
+			applyError = o.install(&selected, request.member.UAPI(), false)
 		}
 		if applyError == nil {
 			path, e = comparisonForeignPath(winipcfg.LUID(o.native.LUID()))
@@ -281,7 +285,7 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 			<-(*o.engine).Wait()
 			*o.engine = nil
 		}
-		if e = o.install(&old, rollbackUAPI); e != nil {
+		if e = o.install(&old, rollbackUAPI, true); e != nil {
 			return nil, errors.Join(applyError, e)
 		}
 		if e = o.persist(&old); e != nil {
@@ -316,9 +320,18 @@ func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {
 	})
 }
 
-func (o *comparisonBackendOwner) install(configuration *conf.Config, uapi string) error {
+func (o *comparisonBackendOwner) install(configuration *conf.Config, uapi string, restoring bool) error {
 	if o.ctx.Err() != nil {
 		return o.ctx.Err()
+	}
+	if restoring {
+		if err := r013routing.ValidateActiveAutoRestore(configuration); err != nil {
+			return err
+		}
+	} else {
+		if err := r013routing.ValidateActiveAutoMember(configuration); err != nil {
+			return err
+		}
 	}
 	if err := firewall.ReplaceFirewall(o.native.LUID(), !comparisonRestricts(configuration), configuration.Interface.DNS); err != nil {
 		return err

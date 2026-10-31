@@ -13,6 +13,11 @@ workspace = Path(os.environ['GITHUB_WORKSPACE']).resolve()
 root = (workspace / 'vpn013-wg-windows').resolve()
 assert root.parent == workspace and root.is_dir()
 overlays = workspace / 'windows/overlay'
+catalog_assets = {
+    'r013routing/catalog-ui.json': '4fbaf9d8985c50b47465034165180393e11546c396027e5ded57e7c53f5475a3',
+    'r013routing/catalog-rules.json': 'f69a0c79f3077981dca0600657b49a4a085610f76ef407a5f5e0d4874083476b',
+    'r013routing/catalog-groups.json': 'a88d52da61ab4e596bb6050843bf11619148de40235a00a8162c660aba1ab882',
+}
 if overlays.is_dir():
     for path in overlays.rglob('*'):
         if not path.is_file():
@@ -20,7 +25,11 @@ if overlays.is_dir():
         assert not path.is_symlink()
         relative = path.relative_to(overlays)
         assert not any(part in ('.git', '.deps', 'output') for part in relative.parts)
-        assert path.suffix in ('.ps1', '.py', '.go', '.wxs', '.c', '.h', '.txt', '.md', '.ico', '.png', '.cidr')
+        if path.suffix == '.json':
+            assert relative.as_posix() in catalog_assets
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == catalog_assets[relative.as_posix()]
+        else:
+            assert path.suffix in ('.ps1', '.py', '.go', '.wxs', '.c', '.h', '.txt', '.md', '.ico', '.png', '.cidr')
         target = root / relative
         assert target.resolve().is_relative_to(root)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -98,6 +107,7 @@ assert 'go1.25.14' not in build_source
 build_script.write_text(build_source, encoding='utf-8', newline='\n')
 subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/stage-hourly-into-existing.py'),str(workspace),str(root)],check=True)
 subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/refresh-go-dependencies.py'),str(workspace),str(root)],check=True)
+subprocess.run([sys.executable,'-X','utf8',str(workspace/'windows/patch-service-ipc.py'),str(root)],check=True)
 subprocess.run([sys.executable,str(workspace/'windows/russian-routing/patch-native.py'),str(root)],check=True)
 manifest = []
 files = []

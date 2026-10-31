@@ -3,7 +3,9 @@ package firewall
 
 import (
 	"encoding/binary"
+	"errors"
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013routing"
+	"net/netip"
 	"runtime"
 	"unsafe"
 )
@@ -11,8 +13,30 @@ import (
 // Only outbound destination prefixes receive permission. This does not open
 // inbound listeners, waive the DNS restriction or disable the terminal block.
 // One prefix per filter avoids version-dependent repeated-condition OR rules.
-func permitRussianNetworks(session uintptr, bo *baseObjects, weight uint8) error {
+func serviceFirewallNetworks() ([]netip.Prefix, error) {
 	rows, err := r013routing.Networks()
+	if err != nil {
+		return nil, err
+	}
+	if r013routing.ServicePolicyMode() == r013routing.ServicesOnly {
+		// Preserve the existing IPv6 policy; the new selection is IPv4 only.
+		kept := rows[:0]
+		for _, p := range rows {
+			if p.Addr().Is6() {
+				kept = append(kept, p)
+			}
+		}
+		rows = kept
+	}
+	rows = append(rows, r013routing.ServiceDirectIPv4()...)
+	if len(rows) > 60000 {
+		return nil, errors.New("WFP service policy resource limit")
+	}
+	return rows, nil
+}
+
+func permitRussianNetworks(session uintptr, bo *baseObjects, weight uint8) error {
+	rows, err := serviceFirewallNetworks()
 	if err != nil {
 		return err
 	}

@@ -20,7 +20,7 @@ s=s.replace('routes = append(routes, route)','''original,parseErr:=netip.ParsePr
             if parseErr!=nil{return parseErr}
             parts := []netip.Prefix{original.Masked()}
             var splitErr error
-            if r013routing.Enabled() { parts,splitErr = r013routing.Exclude(parts[0]) }
+            if r013routing.Enabled() { parts,splitErr = r013routing.Effective(parts[0]) }
             if splitErr != nil { return splitErr }
             for _, part := range parts {
                 ip := net.IP(part.Addr().AsSlice())
@@ -70,7 +70,7 @@ func verifyEffectiveRoutes(luid winipcfg.LUID,configuration *conf.Config)error{
             if !haveSource{continue}
             network:=prefix.IPNet();original,err:=netip.ParsePrefix(network.String());if err!=nil{return err}
             parts:=[]netip.Prefix{original.Masked()}
-            if r013routing.Enabled(){parts,err=r013routing.Exclude(original);if err!=nil{return err}}
+            if r013routing.Enabled(){parts,err=r013routing.Effective(original);if err!=nil{return err}}
             for _,part:=range parts{if !actual[part.String()]{return errors.New("effective split route readback missing or differs")}}
         }}
     }
@@ -131,7 +131,7 @@ s=s.replace(anchor,'''    if r013routing.Enabled()&&!old.Interface.TableOff {
             for _,address:=range old.Interface.Addresses{if address.Bits()==prefix.Bits(){haveSource=true}}
             if !haveSource{continue}
             network:=prefix.IPNet();original,err:=netip.ParsePrefix(network.String());if err!=nil{return err}
-            parts,err:=r013routing.Exclude(original);if err!=nil{return err}
+            parts,err:=r013routing.Effective(original);if err!=nil{return err}
             for _,part:=range parts{if remaining[part.String()]{return errors.New("retired effective owned route remains")}}
         }}
     }
@@ -179,8 +179,9 @@ if '"log"' not in s:
 a='func (o *comparisonBackendOwner) apply(request *comparisonSelection) error {'
 assert s.count(a)==1
 s=s.replace(a,a+'\n started:=time.Now();defer func(){if r013routing.Enabled(){log.Printf("R013Routing: selection returned after %s",time.Since(started))}}()',1)
-s=s.replace('import (','import (\n "github.com/amnezia-vpn/amneziawg-windows-client/r013routing"',1)
-for a,label in [('applyError := (*o.watcher).RetireForBackend(o.ctx)','retire'),('applyError = o.install(&selected, request.member.UAPI())','install'),('applyError = o.persist(&selected)','persist')]:
+if '"github.com/amnezia-vpn/amneziawg-windows-client/r013routing"' not in s:
+ s=s.replace('import (','import (\n "github.com/amnezia-vpn/amneziawg-windows-client/r013routing"',1)
+for a,label in [('applyError := (*o.watcher).RetireForBackend(o.ctx)','retire'),('applyError = o.install(&selected, request.member.UAPI(), false)','install'),('applyError = o.persist(&selected)','persist')]:
  assert s.count(a)==1
  s=s.replace(a,a+'\n if r013routing.Enabled(){log.Printf("R013Routing: handover '+label+' ok=%v elapsed=%s",applyError==nil,time.Since(started))}',1)
  if label=='retire':
@@ -191,6 +192,12 @@ p.write_text(s,encoding='utf-8',newline='\n')
 
 p=tunnel/'service.go';s=p.read_text(encoding='utf-8')
 s=s.replace('import (','import (\n "github.com/amnezia-vpn/amneziawg-windows-client/r013routing"',1)
+anchor='\tconfig.DeduplicateNetworkEntries()';assert s.count(anchor)==1
+s=s.replace(anchor,'''    if err = r013routing.ActivateProfileServicePolicy(config); err != nil {
+        serviceError = services.ErrorLoadConfiguration
+        return
+    }
+'''+anchor,1)
 anchor='\tchanges <- svc.Status{State: svc.StartPending}';assert s.count(anchor)==1
 s=s.replace(anchor,anchor+'\n\tr013routing.Enable()')
 p.write_text(s,encoding='utf-8',newline='\n')

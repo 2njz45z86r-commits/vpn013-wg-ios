@@ -8,7 +8,7 @@ import zipfile
 
 root = Path(__file__).resolve().parents[1]
 files = {root / p for p in subprocess.check_output(['git', 'ls-files', '-z'], cwd=root).decode().split('\0') if p}
-for directory in ('r013', 'scripts', 'vendor', '.impeccable'):
+for directory in ('r013', 'r013routing', 'r013traffic', 'scripts', 'vendor', '.impeccable'):
     files.update(p for p in (root / directory).rglob('*') if p.is_file())
 files.update(root / p for p in ('PRODUCT.md', 'DESIGN.md', 'THIRD-PARTY-NOTICES.txt', 'release-public-key.txt', 'r013_preview.go', 'r013_preview_disabled.go', 'docs/wintun-binaries-license.txt'))
 files.update((root / 'manager').glob('r013*.go'))
