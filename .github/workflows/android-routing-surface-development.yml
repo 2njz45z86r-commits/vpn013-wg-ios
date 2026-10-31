@@ -1,0 +1,13 @@
+name: Android native panel routing and interaction development without release
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/android-routing-surface-development.yml'
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    uses: ./.github/workflows/native-android-check.yml
+    with:
+      focus_runtime: true

@@ -75,6 +75,16 @@ public final class GoBackend implements Backend {
     public record AutoMember(String name, Config config) { }
     public interface AutomaticSource { List<AutoMember> members(String profileName); }
     private AutomaticSource automaticSource = name -> Collections.emptyList();
+    public record ApplicationRoute(String mode, Set<String> packages) {
+        public ApplicationRoute {
+            if ((!mode.equals("only") && !mode.equals("bypass")) || packages.isEmpty() || packages.size() > 200 ||
+                packages.stream().anyMatch(name -> name.length() > 255 || !name.matches("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")))
+                throw new IllegalArgumentException("Invalid application routing selection");
+            packages = Collections.unmodifiableSet(new java.util.HashSet<>(packages));
+        }
+    }
+    public interface ApplicationRoutingSource { @Nullable ApplicationRoute rule(String profileName); }
+    private ApplicationRoutingSource applicationRoutingSource = name -> null;
     private volatile boolean automaticModeEnabled = true;
     private final AtomicLong automaticModeRevision = new AtomicLong();
     private List<AutoMember> automaticMembers = Collections.emptyList();
@@ -137,6 +147,10 @@ public final class GoBackend implements Backend {
         return "Российские IP-сети — напрямую; остальные — через VPN.";
     }
     public void setAutomaticSource(AutomaticSource source) { automaticSource = source; }
+    public synchronized void setApplicationRoutingSource(ApplicationRoutingSource source) {
+        if (currentTunnel != null) throw new IllegalStateException("Routing source cannot change during a connection");
+        applicationRoutingSource = java.util.Objects.requireNonNull(source);
+    }
     @Nullable public synchronized Config getCurrentConfiguration() { return currentConfig; }
     @Nullable public String getActualRouteInterfaceName() {
         final NativeRouteBinding binding = nativeRouteBinding.get();
@@ -851,11 +865,20 @@ public final class GoBackend implements Backend {
             final VpnService.Builder builder = service.getBuilder();
             builder.setSession(tunnel.getName());
 
-            for (final String excludedApplication : config.getInterface().getExcludedApplications())
-                builder.addDisallowedApplication(excludedApplication);
-
-            for (final String includedApplication : config.getInterface().getIncludedApplications())
-                builder.addAllowedApplication(includedApplication);
+            final ApplicationRoute applicationRoute = applicationRoutingSource.rule(tunnel.getName());
+            if (applicationRoute == null) {
+                for (final String excludedApplication : config.getInterface().getExcludedApplications())
+                    builder.addDisallowedApplication(excludedApplication);
+                for (final String includedApplication : config.getInterface().getIncludedApplications())
+                    builder.addAllowedApplication(includedApplication);
+            } else if (applicationRoute.mode().equals("only")) {
+                final Set<String> applications = new java.util.HashSet<>(applicationRoute.packages());
+                applications.add(context.getPackageName()); // Real in-tunnel health checks stay in this VPN.
+                for (final String application : applications) builder.addAllowedApplication(application);
+            } else {
+                for (final String application : applicationRoute.packages())
+                    if (!application.equals(context.getPackageName())) builder.addDisallowedApplication(application);
+            }
 
             for (final InetNetwork addr : config.getInterface().getAddresses())
                 builder.addAddress(addr.getAddress(), addr.getMask());

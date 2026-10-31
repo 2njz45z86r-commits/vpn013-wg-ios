@@ -32,15 +32,19 @@ class ProfileRegistry private constructor(context: Context) {
         val selected = snapshot.single { it.getString("name") == name }
         if (selected.has("members")) return members(name)
         val primary = parse(selected.getString("config"))
+        val policyDocument = vault.read()
+        fun applications(record: JSONObject, config: Config) = ApplicationRoutingStore.effectiveKey(policyDocument,
+            ApplicationRoutingStore.reference("AMNEZIAWG", record.getString("id")),
+            config.`interface`.includedApplications, config.`interface`.excludedApplications, packageName)
+        val primaryApplications = applications(selected, primary)
         if (!eligible(primary)) {
             check(!automaticEnabled()) { "Для Авто нужен полный IPv4-туннель и доступ VPN013 через VPN. Выключите Авто для этого профиля." }
             return emptyList()
         }
         val others = snapshot.filter { !it.has("members") && it.getString("id") != selected.getString("id") }
-            .sortedBy { it.getString("name") }.map { it.getString("name") to parse(it.getString("config")) }
-            .filter { (_, config) -> eligible(config) &&
-                config.`interface`.includedApplications == primary.`interface`.includedApplications &&
-                config.`interface`.excludedApplications == primary.`interface`.excludedApplications }
+            .sortedBy { it.getString("name") }.map { record -> Triple(record, record.getString("name"), parse(record.getString("config"))) }
+            .filter { (record, _, config) -> eligible(config) && applications(record, config) == primaryApplications }
+            .map { (_, name, config) -> name to config }
         val result = listOf(name to primary) + others
         check(result.size <= 30 || !automaticEnabled()) { "Для Авто доступно до 30 совместимых серверов. Выключите Авто для ручного подключения." }
         return if (result.size <= 30) result else listOf(name to primary)

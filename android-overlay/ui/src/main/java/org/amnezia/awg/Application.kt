@@ -66,6 +66,9 @@ class Application : android.app.Application() {
 
     private suspend fun determineBackend(): Backend {
         val backend = GoBackend(applicationContext)
+        backend.setApplicationRoutingSource { name ->
+            org.amnezia.awg.r013.ApplicationRoutingStore.wireGuard(org.amnezia.awg.r013.ProfileRegistry.get(this).vault, name)
+        }
         backend.setAutomaticEnabled(org.amnezia.awg.r013.ProfileRegistry.get(this).automaticEnabled())
         backend.setAutomaticSource { name ->
             org.amnezia.awg.r013.ProfileRegistry.get(this).automaticMembers(name).map { (title, config) ->

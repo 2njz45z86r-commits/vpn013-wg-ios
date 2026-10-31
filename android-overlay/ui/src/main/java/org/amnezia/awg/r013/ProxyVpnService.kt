@@ -67,7 +67,7 @@ class ProxyVpnService : VpnService() {
                             .addAddress("10.13.0.2", 32).addAddress("fd13::2", 128)
                             .addRoute("0.0.0.0", 0).addRoute("::", 0).addDnsServer("1.1.1.1")
                             .setBlocking(false).apply { setUnderlyingNetworks(arrayOf(captured.network)) }
-                        ProxyRouting.apply(this@ProxyVpnService, builder, ProxyRouting.read(ProfileRegistry.get(this@ProxyVpnService).vault, id))
+                        ProxyRouting.apply(this@ProxyVpnService, builder, ProxyRouting.effective(ProfileRegistry.get(this@ProxyVpnService).vault, record.profile.section.name, id))
                         val descriptor = builder.establish()
                             ?: error("Не удалось создать VPN")
                         tun = descriptor

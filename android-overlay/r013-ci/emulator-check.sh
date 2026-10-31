@@ -32,6 +32,11 @@ finish() {
   # Only synthetic hosted CI runs here. Preserve bounded system-service crash
   # diagnostics, never app configuration dumps, when native networking fails.
   timeout 15s adb logcat -d -t 1200 -s Watchdog:E ActivityManager:E ConnectivityService:E AndroidRuntime:E > output/review/system-service-errors.txt 2>/dev/null || true
+  # Native Go/JNI failures are not AndroidRuntime Java exceptions. Keep bounded
+  # raw diagnostics encrypted for private review; never print crash buffers or
+  # fixture material into a public summary.
+  timeout 15s adb logcat -b crash -d -t 800 > "$RUNNER_TEMP/r013-native-crash.log" 2>/dev/null || true
+  timeout 15s adb logcat -d -t 1600 -s libc:F DEBUG:F System.err:E Go:E GoLog:E > "$RUNNER_TEMP/r013-native-runtime.log" 2>/dev/null || true
   cp "$RUNNER_TEMP/r013-emulator.log" output/review/emulator.log 2>/dev/null || true
   cp "$RUNNER_TEMP/r013-peer.log" output/review/synthetic-peer-build.log 2>/dev/null || true
   if [ -n "$proxy_pid" ]; then kill "$proxy_pid" 2>/dev/null || true; fi
@@ -40,6 +45,7 @@ finish() {
   if [ "$ru_alias_added" = yes ]; then sudo ip address del 2.56.24.1/32 dev lo 2>/dev/null || true; fi
   if [ "$control_alias_added" = yes ]; then sudo ip address del 198.18.0.1/32 dev lo 2>/dev/null || true; fi
   kill "$emulator_pid" 2>/dev/null || true
+  python3 r013-ci/protect-native-diagnostics.py
 }
 trap finish EXIT
 timeout 180s adb wait-for-device
@@ -115,29 +121,48 @@ proxy_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-proxy-fixture.json")
 fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic.conf")
 candidate_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic-candidate.conf")
 if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
-  # Diagnostic scope is one real coordinator case, shared semantic/ZIP case and both proxy
+  # Every timeout/crash remains a failure. Other independent diagnostic classes
+  # can still run in a fresh debug process and retain their own actual evidence.
+  focused_instrument() {
+    local destination=$1
+    shift
+    if ! timeout 360s adb shell am instrument -w -r "$@" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > "$destination"; then
+      printf '%s\n' 'INSTRUMENTATION_FAILED: bounded diagnostic did not complete' >> "$destination"
+    fi
+    if grep -E 'Process crashed|INSTRUMENTATION_FAILED' "$destination" >/dev/null; then
+      timeout 10s adb shell am force-stop com.vpn013.awg.debug >/dev/null 2>&1 || true
+    fi
+  }
+  # Diagnostic scope is one real coordinator case, shared semantic/ZIP case,
+  # both routing-surface cases and both proxy runtime cases.
   # runtime cases. It is never a complete acceptance result or release input.
-  adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest#jRealCoordinatorChoosesFasterPeerWithActualPolicyAndUnchangedProfiles -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/focused-coordinator.txt
+  focused_instrument output/review/focused-coordinator.txt -e class org.amnezia.awg.r013.R013InstrumentedTest#jRealCoordinatorChoosesFasterPeerWithActualPolicyAndUnchangedProfiles -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture"
   coordinator_ok=false
   if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/focused-coordinator.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/focused-coordinator.txt; then coordinator_ok=true; fi
-  adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest#multiServerSubscriptionImportsPrimaryNodesOnly com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/focused-semantic.txt
+  focused_instrument output/review/focused-semantic.txt -e class org.amnezia.awg.r013.R013InstrumentedTest#multiServerSubscriptionImportsPrimaryNodesOnly
   semantic_ok=false
   if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/focused-semantic.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/focused-semantic.txt; then semantic_ok=true; fi
+  focused_instrument output/review/routing-surface.txt -e class org.amnezia.awg.r013.R013RoutingSurfaceTest
+  surface_ok=false
+  if grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/routing-surface.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/routing-surface.txt; then surface_ok=true; fi
   sudo ip address add 198.18.0.1/32 dev lo
   control_alias_added=yes
   start_proxy_fixture
-  adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013ProxyRuntimeTest -e proxyFixture "$proxy_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/proxy-runtime.txt
+  focused_instrument output/review/proxy-runtime.txt -e class org.amnezia.awg.r013.R013ProxyRuntimeTest -e proxyFixture "$proxy_fixture"
   proxy_ok=false
   if grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/proxy-runtime.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/proxy-runtime.txt; then proxy_ok=true; fi
   unset proxy_fixture fixture candidate_fixture
-  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedSemanticCases":1,"expectedProxyCases":2,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
-  test "$coordinator_ok" = true && test "$semantic_ok" = true && test "$proxy_ok" = true
+  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedSemanticCases":1,"expectedSurfaceCases":2,"expectedProxyCases":2,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
+  test "$coordinator_ok" = true && test "$semantic_ok" = true && test "$surface_ok" = true && test "$proxy_ok" = true
   exit $?
 fi
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
 grep -E '^OK \(16 tests\)[[:space:]]*$' output/review/instrumentation.txt
 grep -F 'test=bSubscriptionRefreshRestoresDeletedAndReconcilesTenTwentyFifteen' output/review/instrumentation.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/instrumentation.txt
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013RoutingSurfaceTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/routing-surface.txt
+grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/routing-surface.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/routing-surface.txt
 sudo ip address add 2.56.24.1/32 dev lo
 ru_alias_added=yes
 sudo ip address add 198.18.0.1/32 dev lo

@@ -20,6 +20,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.Assert.*
 import org.junit.runner.RunWith
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -93,6 +96,17 @@ class R013ProxyRuntimeTest {
             File(folder,"$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle()
         }
     }
+    private fun views(): List<View> {
+        val result = mutableListOf<View>()
+        fun visit(view: View) { result.add(view); if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index)) }
+        visit(activity!!.window.decorView); return result
+    }
+    private fun selectSection(section: ProxyProfile.Section) {
+        instrumentation.runOnMainSync {
+            val tab = views().filterIsInstance<TextView>().first { it.text.toString() == UnifiedAutoCoordinator.label(section.name) && it.isClickable }
+            check(tab.performClick())
+        }
+    }
     @Test fun actualRealityTrafficInAllThreeProxySectionsAndCompleteStop() = runBlocking {
         val store=ProxyRegistry(registry.vault)
         val sections = ProxyProfile.Section.values().toList()
@@ -101,16 +115,31 @@ class R013ProxyRuntimeTest {
             var stage = "import"
             try {
             val id=withContext(Dispatchers.IO) { store.importText(section,fixture.getString(if (transport == "tcp") "uri" else "xhttpURI")).single() }
+            selectSection(section)
+            val control = if (index % 2 == 0) "vpn013.proxy.globe.$id" else "vpn013.proxy.body.$id"
+            await { var found = false; instrumentation.runOnMainSync { found = views().any { it.tag == control && it.isEnabled } }; found }
             stage = "start"
-            ProxyVpnService.start(context,id)
+            instrumentation.runOnMainSync { check(views().single { it.tag == control }.performClick()) }
             await { ProxyVpnService.activeId == id }
             stage = "traffic"
             exchange()
             assertEquals(id,ProxyVpnService.activeId)
+            await { var rendered = false; instrumentation.runOnMainSync {
+                rendered = views().filterIsInstance<TextView>().any { it.tag == "vpn013.current.traffic" && it.text.contains("Всего:") } &&
+                    views().any { it.tag == "vpn013.current.ping" && it.contentDescription == "Проверить пинг текущего сервера" }
+            }; rendered }
+            val revision = ProxyVpnService.trafficRevision()
+            instrumentation.runOnMainSync { check(views().single { it.tag == "vpn013.proxy.details.$id" }.performClick()) }
+            await { instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("Закрыть")?.any { it.isClickable } == true }
+            check(requireNotNull(instrumentation.uiAutomation.rootInActiveWindow).findAccessibilityNodeInfosByText("Закрыть").first { it.isClickable }
+                .performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+            await { instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("Закрыть")?.none { it.isClickable } == true }
+            assertEquals("Opening configuration restarted the real tunnel", revision, ProxyVpnService.trafficRevision())
+            assertEquals(id, ProxyVpnService.activeId)
             stage = "capture"
             capture("proxy-"+section.name.lowercase()+"-"+transport)
             stage = "stop"
-            withContext(Dispatchers.IO) { ProxyVpnService.stopAndWait() }
+            withContext(Dispatchers.IO) { UnifiedAutoCoordinator.stop() }
             assertNull(ProxyVpnService.activeId)
             assertNull(ProxyVpnService.statistics())
             stage = "delete"

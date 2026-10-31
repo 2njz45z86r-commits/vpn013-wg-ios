@@ -57,7 +57,11 @@ object UnifiedAutoCoordinator {
                                 if (registry.automaticEnabled()) {
                                     val store = ProxyRegistry(registry.vault)
                                     val section = ProxyProfile.Section.valueOf(candidate.section)
-                                    val records = store.list(section).take(30)
+                                    val policy = registry.vault.read()
+                                    val currentPolicy = ApplicationRoutingStore.candidateKey(policy, candidate.section, candidate.id, owner.packageName)
+                                    val records = store.list(section).filter {
+                                        ApplicationRoutingStore.candidateKey(policy, section.name, it.id, owner.packageName) == currentPolicy
+                                    }.take(30)
                                     val current = records.singleOrNull { it.id == candidate.id }
                                     if (current != null) {
                                         val baseline = ProxyVpnService.measure(current.profile)
@@ -106,7 +110,12 @@ object UnifiedAutoCoordinator {
         awg.keys().asSequence().map { awg.getJSONObject(it) }.filter { !it.has("members") }
             .take(30).forEach { all.add(Candidate("AMNEZIAWG", it.getString("name"))) }
         ProxyProfile.Section.values().forEach { section -> proxy.list(section).take(30).forEach { all.add(Candidate(section.name, it.id)) } }
-        return (listOf(selected) + all.filter { it.section == selected.section && it != selected } + all.filter { it.section != selected.section }).distinct().take(120)
+        val policy = registry.vault.read()
+        val selectedPolicy = ApplicationRoutingStore.candidateKey(policy, selected.section, selected.id, Application.get().packageName)
+        return (listOf(selected) + all.filter { it.section == selected.section && it != selected } + all.filter { it.section != selected.section })
+            .distinct().filter {
+                ApplicationRoutingStore.candidateKey(policy, it.section, it.id, Application.get().packageName) == selectedPolicy
+            }.take(120)
     }
     private suspend fun start(context: Context, candidate: Candidate, generation: Long): Boolean = try {
         stopEngines()

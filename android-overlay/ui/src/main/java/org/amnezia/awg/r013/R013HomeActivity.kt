@@ -63,6 +63,7 @@ class R013HomeActivity : AppCompatActivity() {
     private lateinit var summaryDetails: TextView
     private lateinit var routingDetails: TextView
     private lateinit var currentPing: MaterialButton
+    private lateinit var currentPower: MaterialButton
     private lateinit var allPing: MaterialButton
     private lateinit var countLabel: TextView
     private lateinit var automaticToggle: MaterialButton
@@ -88,6 +89,7 @@ class R013HomeActivity : AppCompatActivity() {
     private var pendingError: String? = null
     private var pendingTunnel: ObservableTunnel? = null
     private val pings = HashMap<String, Pair<String, Long?>>()
+    private val selectedProxy = HashMap<String, String>()
     private val fileResult = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) importFile(uri) }
     private val trialNotificationsPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         NativeTrial.show(this) { listSignature = "" }
@@ -184,19 +186,27 @@ class R013HomeActivity : AppCompatActivity() {
             radius = dp(14).toFloat(); cardElevation = 0f; strokeWidth = dp(1); strokeColor = color(R.color.r013_separator)
             setCardBackgroundColor(color(R.color.r013_background))
         }
-        val inside = vertical().apply { setPadding(dp(16), dp(12), dp(12), dp(16)) }
-        val top = horizontal()
+        val inside = horizontal().apply { setPadding(dp(16), dp(12), dp(12), dp(16)) }
+        val labels = vertical()
         summaryTitle = text("VPN отключён", 22, true)
-        top.addView(summaryTitle, LinearLayout.LayoutParams(0, -2, 1f))
-        currentPing = iconButton(R.drawable.ic_r013_ping, "Проверить пинг текущего сервера") { pingCurrent() }
-        top.addView(currentPing, LinearLayout.LayoutParams(dp(48), dp(48)))
-        inside.addView(top)
-        summaryDetails = text("Выберите профиль ниже", 14).apply { setTextColor(color(R.color.r013_secondary)); setPadding(0, dp(4), 0, 0) }
-        inside.addView(summaryDetails)
+        labels.addView(summaryTitle)
+        summaryDetails = text("Выберите профиль ниже", 14).apply { tag = "vpn013.current.traffic"; setTextColor(color(R.color.r013_secondary)); setPadding(0, dp(4), 0, 0) }
+        labels.addView(summaryDetails)
         routingDetails = text("Российские IP-сети — напрямую; остальные — через VPN", 12).apply {
             setTextColor(color(R.color.r013_secondary)); setPadding(0, dp(6), 0, 0)
         }
-        inside.addView(routingDetails)
+        labels.addView(routingDetails)
+        inside.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+        val controls = vertical().apply { gravity = Gravity.CENTER_HORIZONTAL }
+        currentPower = iconButton(R.drawable.ic_r013_power, "Подключить VPN") { }.apply {
+            tag = "vpn013.current.power"; iconSize = dp(42); isEnabled = false
+        }
+        controls.addView(currentPower, LinearLayout.LayoutParams(dp(76), dp(76)))
+        currentPing = iconButton(R.drawable.ic_r013_ping, "Проверить пинг текущего сервера") { pingCurrent() }.apply {
+            tag = "vpn013.current.ping"; isEnabled = false
+        }
+        controls.addView(currentPing, LinearLayout.LayoutParams(dp(48), dp(48)).apply { topMargin = dp(8) })
+        inside.addView(controls, LinearLayout.LayoutParams(dp(80), -2).apply { marginStart = dp(8) })
         card.addView(inside); content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         val heading = horizontal().apply { setPadding(0, dp(20), 0, dp(8)) }
         countLabel = text("Профили", 18, true)
@@ -307,18 +317,19 @@ class R013HomeActivity : AppCompatActivity() {
         dialog.setContentView(ScrollView(this).apply { addView(box) }); dialog.show()
     }
     private fun settings() {
-        MaterialAlertDialogBuilder(this).setTitle("VPN013").setItems(arrayOf("Обновить конфигурации", "Проверить обновление приложения", "Настройки и журнал", "Купить конфигурацию")) { _, index ->
+        MaterialAlertDialogBuilder(this).setTitle("VPN013").setItems(arrayOf("Маршрутизация", "Обновить конфигурации", "Проверить обновление приложения", "Настройки и журнал", "Купить конфигурацию")) { _, index ->
             when (index) {
-                0 -> lifecycleScope.launch { try {
+                0 -> routingServers()
+                1 -> lifecycleScope.launch { try {
                     feedback("Проверяем обновления конфигураций…")
                     val ordinary = ClientUpdates.refreshOrders()
                     val count = OfflineChanges.apply { var count = 0
                         for (source in proxyStore.sources()) count += proxyStore.reconcile(source, ProxySubscription.fetch(source)); count }
                     feedback("$ordinary · Профилей подписок: $count"); listSignature = ""
                 } catch (_: Exception) { feedback("Обновление не выполнено. Отключите VPN и проверьте доступность подписки. Прежние профили сохранены.") } }
-                1 -> ClientUpdates.offerUpdate(this)
-                2 -> startActivity(Intent(this, SettingsActivity::class.java))
-                3 -> open(ClientProtocol.BOT)
+                2 -> ClientUpdates.offerUpdate(this)
+                3 -> startActivity(Intent(this, SettingsActivity::class.java))
+                4 -> open(ClientProtocol.BOT)
             }
         }.setNegativeButton("Закрыть", null).show()
     }
@@ -431,23 +442,7 @@ class R013HomeActivity : AppCompatActivity() {
         }
     }
     private suspend fun renderCurrent() {
-        if (ProxyVpnService.activeId != null || ProxyVpnService.requestedId != null) {
-            val id = ProxyVpnService.activeId ?: ProxyVpnService.requestedId
-            val record = withContext(Dispatchers.IO) { ProxyProfile.Section.values().flatMap { proxyStore.list(it) }.singleOrNull { it.id == id } }
-            summaryTitle.text = record?.profile?.name ?: "Подключение…"
-            val stats = withContext(Dispatchers.IO) { ProxyVpnService.statistics() }
-            summaryDetails.text = buildString {
-                record?.profile?.let { append(UnifiedAutoCoordinator.label(it.section.name)); append(" · ${it.host}:${it.port}\n") }
-                append(UnifiedAutoCoordinator.status ?: "Проверяется подключение")
-                append(trafficLines("proxy:$id:${ProxyVpnService.trafficRevision()}",
-                    stats?.let { counter(it, "rx") }, stats?.let { counter(it, "tx") }))
-            }
-            routingDetails.text = if (android.os.Build.VERSION.SDK_INT >= 33) "Российские IP-сети — напрямую; остальные — через VPN"
-                else "Все IP-сети — через VPN; исключения российских сетей требуют Android 13 или новее"
-            currentPing.isEnabled = true; currentPing.contentDescription = "Отключить VPN"
-            currentPing.setOnClickListener { lifecycleScope.launch { UnifiedAutoCoordinator.stop(); listSignature = ""; renderCurrent(); renderRows(true) } }
-            return
-        }
+        if (selectedSection != "AMNEZIAWG") { renderProxyCurrent(); return }
         currentPing.setOnClickListener { pingCurrent() }
         currentPing.contentDescription = "Проверить пинг текущего сервера"
         val backend = Application.getBackend() as GoBackend
@@ -464,6 +459,11 @@ class R013HomeActivity : AppCompatActivity() {
         val identity = "${snapshot.profile}|${snapshot.member}|${snapshot.endpoints}|${snapshot.revision}"
         if (identity != currentIdentity) { currentIdentity = identity; currentHost = snapshot.host; pingJob?.cancel(); currentMeasurement = null; listSignature = ""; currentPing.text = ""; currentPing.icon = getDrawable(R.drawable.ic_r013_ping) }
         summaryTitle.text = snapshot.member ?: snapshot.profile ?: "VPN отключён"
+        val chosen = Application.getTunnelManager().getTunnels().toList().firstOrNull { it.name == snapshot.profile }
+            ?: Application.getTunnelManager().getTunnels().firstOrNull()
+        currentPower.isEnabled = chosen != null && !connecting && !applyingAutomatic
+        currentPower.contentDescription = if (chosen?.state == Tunnel.State.UP) "Отключить VPN" else "Подключить VPN"
+        currentPower.setOnClickListener { chosen?.let { connect(it, it.state != Tunnel.State.UP) } }
         currentPing.isEnabled = snapshot.host != null && pingJob?.isActive != true
         if (snapshot.profile == null) trafficSampler.reset()
         summaryDetails.text = if (snapshot.profile == null) "Выберите профиль ниже" else buildString {
@@ -475,6 +475,49 @@ class R013HomeActivity : AppCompatActivity() {
             snapshot.handshake?.let { append("\nРукопожатие: ${DateFormat.getTimeInstance(DateFormat.MEDIUM).format(Date(it))}") }
             snapshot.hourly?.let { append("\n$it") }
         }
+    }
+    private suspend fun renderProxyCurrent() {
+        val section = ProxyProfile.Section.valueOf(selectedSection)
+        val records = withContext(Dispatchers.IO) { proxyStore.list(section) }
+        val active = ProxyVpnService.activeId
+        val requested = ProxyVpnService.requestedId
+        val record = records.firstOrNull { it.id == active || it.id == requested }
+            ?: records.firstOrNull { it.id == selectedProxy[section.name] } ?: records.firstOrNull()
+        val identity = "proxy:${section.name}:${record?.id}:${ProxyVpnService.trafficRevision()}"
+        if (identity != currentIdentity) {
+            currentIdentity = identity; currentHost = record?.profile?.host
+            pingJob?.cancel(); currentMeasurement = null; trafficSampler.reset()
+            currentPing.text = ""; currentPing.icon = getDrawable(R.drawable.ic_r013_ping)
+        }
+        val ownsActive = record != null && record.id == active
+        val ownsRequested = record != null && record.id == requested
+        val stats = if (ownsActive) withContext(Dispatchers.IO) { ProxyVpnService.statistics() } else null
+        if (!ownsActive) trafficSampler.reset()
+        summaryTitle.text = record?.profile?.name ?: UnifiedAutoCoordinator.label(section.name)
+        summaryDetails.text = if (record == null) "Добавьте конфигурацию" else buildString {
+            append(if (ownsActive) UnifiedAutoCoordinator.status ?: "VPN запущен" else if (ownsRequested) "Подключение…" else "VPN выключен")
+            if (ownsActive) append(trafficLines(identity, stats?.let { counter(it, "rx") }, stats?.let { counter(it, "tx") }))
+            currentMeasurement?.takeIf { it.first == identity }?.let { append(it.second?.let { ms -> "\nПинг адреса: $ms мс" } ?: "\nПинг адреса недоступен") }
+        }
+        val rules = record?.let { withContext(Dispatchers.IO) { ProxyRouting.effective(registry.vault, section.name, it.id) } }
+        routingDetails.text = when (rules?.mode) {
+            "only" -> "VPN только для выбранных приложений · ${rules.packages.size}"
+            "except" -> "Выбранные приложения без VPN · ${rules.packages.size}"
+            else -> if (rules?.russianDirect == true && android.os.Build.VERSION.SDK_INT >= 33) "Российские IP-сети — напрямую; остальные — через VPN" else if (record != null) "Все IP-сети — через VPN" else ""
+        }
+        currentPower.isEnabled = record != null && (!UnifiedAutoCoordinator.busy || ownsActive || ownsRequested)
+        currentPower.contentDescription = if (ownsActive || ownsRequested) "Отключить VPN" else "Подключить VPN"
+        currentPower.setOnClickListener { record?.let { toggleProxy(it.id, section) } }
+        currentPing.isEnabled = record != null && pingJob?.isActive != true
+        currentPing.contentDescription = "Проверить пинг текущего сервера"
+        currentPing.setOnClickListener { pingCurrent() }
+    }
+    private fun toggleProxy(id: String, section: ProxyProfile.Section) {
+        selectedProxy[section.name] = id
+        if (ProxyVpnService.activeId == id || ProxyVpnService.requestedId == id) lifecycleScope.launch {
+            try { UnifiedAutoCoordinator.stop(); listSignature = ""; renderCurrent(); renderRows(true) }
+            catch (_: Exception) { feedback("Не удалось завершить подключение. Повторите действие.") }
+        } else connectProxy(id)
     }
     private fun proxyAddMenu() {
         MaterialAlertDialogBuilder(this).setTitle("Добавить · ${UnifiedAutoCoordinator.label(selectedSection)}")
@@ -536,28 +579,43 @@ class R013HomeActivity : AppCompatActivity() {
         val section = ProxyProfile.Section.valueOf(selectedSection)
         val records = withContext(Dispatchers.IO) { proxyStore.list(section) }
         val signature = selectedSection + records.joinToString { it.id } + ProxyVpnService.activeId + ProxyVpnService.requestedId + UnifiedAutoCoordinator.busy
+        allPing.isEnabled = records.isNotEmpty() && batchJob?.isActive != true
         if (listSignature == signature) return
         listSignature = signature; rows.removeAllViews(); countLabel.text = "${UnifiedAutoCoordinator.label(selectedSection)} · ${records.size}"
-        allPing.isEnabled = false
         if (records.isEmpty()) rows.addView(button("Добавить свою конфигурацию") { proxyAddMenu() })
         for (record in records) {
             val row = horizontal().apply { minimumHeight = dp(76); gravity = Gravity.CENTER_VERTICAL }
-            row.addView(text(record.profile.name, 18, true).apply {
-                contentDescription = record.profile.name
-                setOnLongClickListener {
-                    MaterialAlertDialogBuilder(this@R013HomeActivity).setTitle(record.profile.name)
-                        .setItems(arrayOf("Маршрутизация приложений", "Удалить")) { _, item ->
-                            if (item == 0) proxyApplications(record.id) else launchOffline { proxyStore.delete(record.id); "Профиль удалён" }
-                        }.show(); true
-                }
-            }, LinearLayout.LayoutParams(0, -2, 1f))
             val active = ProxyVpnService.activeId == record.id || ProxyVpnService.requestedId == record.id
-            row.addView(button(if (active) "Выключить" else "Включить") {
-                if (active) lifecycleScope.launch { UnifiedAutoCoordinator.stop(); listSignature = ""; renderRows(true) }
-                else connectProxy(record.id)
-            }.apply { isEnabled = !UnifiedAutoCoordinator.busy || active }, LinearLayout.LayoutParams(-2, dp(52)))
+            val action = if (active) "Отключить" else "Подключить"
+            row.addView(iconButton(R.drawable.ic_r013_globe, "$action ${record.profile.name}") { toggleProxy(record.id, section) }.apply {
+                tag = "vpn013.proxy.globe.${record.id}"; iconSize = dp(30); isEnabled = !UnifiedAutoCoordinator.busy || active
+            }, LinearLayout.LayoutParams(dp(52), dp(64)))
+            val labels = vertical().apply {
+                tag = "vpn013.proxy.body.${record.id}"; minimumHeight = dp(76); gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(8), dp(8), dp(8), dp(8)); isEnabled = !UnifiedAutoCoordinator.busy || active
+                contentDescription = "$action ${record.profile.name}"; setOnClickListener { toggleProxy(record.id, section) }
+                addView(text(record.profile.name, 18, true))
+                addView(text("${record.profile.host}:${record.profile.port}", 12).apply { setTextColor(color(R.color.r013_secondary)) })
+                val status = if (ProxyVpnService.activeId == record.id) "VPN запущен" else if (ProxyVpnService.requestedId == record.id) "Подключение…" else "VPN выключен"
+                val measured = pings["proxy:${record.id}"]?.takeIf { it.first == record.profile.host }
+                addView(text(status + (measured?.let { it.second?.let { ms -> " · $ms мс" } ?: " · ICMP недоступен" } ?: ""), 12).apply { setTextColor(color(R.color.r013_secondary)) })
+            }
+            row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(iconButton(R.drawable.ic_r013_chevron, "Конфигурация ${record.profile.name}") { proxyDetails(record) }.apply {
+                tag = "vpn013.proxy.details.${record.id}"
+            }, LinearLayout.LayoutParams(dp(64), dp(76)))
             rows.addView(row)
+            rows.addView(View(this).apply { setBackgroundColor(color(R.color.r013_separator)) }, LinearLayout.LayoutParams(-1, dp(1)))
         }
+    }
+    private fun proxyDetails(record: ProxyRegistry.Record) {
+        MaterialAlertDialogBuilder(this).setTitle(record.profile.name)
+            .setMessage("${UnifiedAutoCoordinator.label(record.profile.section.name)}\n${record.profile.host}:${record.profile.port}")
+            .setPositiveButton("Маршрутизация") { _, _ -> proxyApplications(record.id) }
+            .setNeutralButton("Удалить") { _, _ -> launchOffline { proxyStore.delete(record.id); "Профиль удалён" } }
+            .setNegativeButton("Закрыть", null).create().apply {
+                setOnShowListener { window?.decorView?.tag = "vpn013.proxy.configuration.${record.id}" }
+            }.show()
     }
     private fun connectProxy(id: String) {
         val permission = android.net.VpnService.prepare(this)
@@ -567,24 +625,40 @@ class R013HomeActivity : AppCompatActivity() {
         listSignature = ""
     }
     private fun proxyApplications(id: String) {
-        MaterialAlertDialogBuilder(this).setTitle("Маршрутизация приложений")
-            .setItems(arrayOf("Все приложения", "Только выбранные", "Кроме выбранных")) { _, choice ->
-                if (choice == 0) { launchOffline { ProxyRouting.save(registry.vault, id, ProxyRouting.Rules()); "Маршрутизация сохранена" }; return@setItems }
-                val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-                val apps = packageManager.queryIntentActivities(launcher, 0).map { it.activityInfo.applicationInfo }
-                    .distinctBy { it.packageName }.filter { it.packageName != packageName }
-                    .sortedBy { packageManager.getApplicationLabel(it).toString() }.take(200)
-                val previous = ProxyRouting.read(registry.vault, id)
-                val checked = BooleanArray(apps.size) { apps[it].packageName in previous.packages }
-                MaterialAlertDialogBuilder(this).setTitle(if (choice == 1) "Только выбранные" else "Кроме выбранных")
-                    .setMultiChoiceItems(apps.map { packageManager.getApplicationLabel(it).toString() }.toTypedArray(), checked) { _, index, value -> checked[index] = value }
-                    .setPositiveButton("Сохранить") { _, _ -> launchOffline {
-                        val packages = apps.filterIndexed { index, _ -> checked[index] }.map { it.packageName }.toSet()
-                        require(choice != 1 || packages.isNotEmpty()) { "Выберите хотя бы одно приложение" }
-                        ProxyRouting.save(registry.vault, id, previous.copy(mode = if (choice == 1) "only" else "except", packages = packages))
-                        "Маршрутизация сохранена. VPN013 остаётся в туннеле для проверки подключения."
-                    } }.setNegativeButton("Отмена", null).show()
-            }.show()
+        applicationRouting(selectedSection, setOf(id))
+    }
+    private fun routingServers() {
+        val section = selectedSection
+        lifecycleScope.launch {
+            try {
+                val entries = withContext(Dispatchers.IO) {
+                    if (section == "AMNEZIAWG") registry.records().map { ApplicationRoutingUI.Server(it.getString("id"), it.getString("name")) }
+                    else proxyStore.list(ProxyProfile.Section.valueOf(section)).map { ApplicationRoutingUI.Server(it.id, it.profile.name) }
+                }.sortedBy { it.title }
+                if (entries.isEmpty()) feedback("Сначала добавьте конфигурацию в этот раздел")
+                else ApplicationRoutingUI.servers(this@R013HomeActivity, section, entries) { ids -> applicationRouting(section, ids) }
+            } catch (_: Exception) { feedback("Не удалось открыть список серверов. Прежние правила сохранены.") }
+        }
+    }
+    private fun applicationRouting(section: String, ids: Set<String>) {
+        lifecycleScope.launch {
+            try {
+                val previous = withContext(Dispatchers.IO) {
+                    val document = registry.vault.read()
+                    ids.map { ApplicationRoutingStore.read(document, ApplicationRoutingStore.reference(section, it)) }.distinct()
+                        .singleOrNull() ?: ApplicationRoutingStore.Selection()
+                }
+                ApplicationRoutingUI.edit(this@R013HomeActivity, previous) { selection, close ->
+                    lifecycleScope.launch {
+                        try {
+                            OfflineChanges.apply { ApplicationRoutingStore.save(registry.vault, section, ids, selection) }
+                            close(); listSignature = ""; renderCurrent()
+                            feedback("Правила сохранены для серверов: ${ids.size}. Они применяются при следующем подключении.")
+                        } catch (error: Exception) { feedback(error.message ?: "Прежние правила сохранены. Повторите действие.") }
+                    }
+                }
+            } catch (_: Exception) { feedback("Не удалось открыть маршрутизацию. Прежние правила сохранены.") }
+        }
     }
     private data class Current(val profile: String?, val member: String?, val endpoints: List<String>, val host: String?, val received: Long?, val sent: Long?, val handshake: Long?, val revision: Long, val hourly: String?)
     private fun pingCurrent() {
@@ -600,6 +674,7 @@ class R013HomeActivity : AppCompatActivity() {
     }
     private fun pingAll() {
         if (batchJob?.isActive == true) return
+        if (selectedSection != "AMNEZIAWG") { pingProxyServers(); return }
         allPing.isEnabled = false; allPing.text = "Проверяем…"
         batchJob = lifecycleScope.launch {
             val limit = Semaphore(4)
@@ -610,6 +685,25 @@ class R013HomeActivity : AppCompatActivity() {
                 if (registry.names().contains(tunnel.name) && ProfileRegistry.digest(registry.config(tunnel.name).toAwgQuickString()) == fingerprint) pings[tunnel.name] = fingerprint to result
             } }.awaitAll(); renderRows(true)
             } finally { allPing.text = "Проверить пинг"; allPing.isEnabled = true }
+        }
+    }
+    private fun pingProxyServers() {
+        val section = ProxyProfile.Section.valueOf(selectedSection)
+        allPing.isEnabled = false; allPing.text = "Проверяем…"
+        batchJob = lifecycleScope.launch {
+            val limit = Semaphore(4)
+            try {
+                val records = withContext(Dispatchers.IO) { proxyStore.list(section) }
+                records.map { record -> async {
+                    val result = limit.withPermit { withContext(Dispatchers.IO) { runCatching { EndpointPing.measure(record.profile.host) }.getOrNull() } }
+                    pings["proxy:${record.id}"] = record.profile.host to result
+                } }.awaitAll()
+                if (selectedSection == section.name) {
+                    val selected = records.firstOrNull { it.id == selectedProxy[section.name] || it.id == ProxyVpnService.activeId } ?: records.firstOrNull()
+                    selected?.let { record -> pings["proxy:${record.id}"]?.takeIf { it.first == currentHost }?.let { currentMeasurement = currentIdentity to it.second } }
+                    renderCurrent()
+                }
+            } finally { allPing.text = "Проверить пинг"; listSignature = ""; renderRows(true) }
         }
     }
     private fun counter(stats: org.json.JSONObject, key: String): Long? {
