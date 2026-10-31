@@ -59,8 +59,9 @@ adb shell wm dismiss-keyguard
 for setting in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global "$setting" 0; done
 adb shell cmd uimode night yes
 if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
-  adb install -r -t ui/build/outputs/apk/debug/ui-debug.apk
-  adb install -r -t ui/build/outputs/apk/androidTest/debug/ui-debug-androidTest.apk
+  python3 r013-ci/prepare-focused-apks.py
+  adb install -r -t "$RUNNER_TEMP/r013-focused-app.apk"
+  adb install -r -t "$RUNNER_TEMP/r013-focused-test.apk"
   adb shell appops set com.vpn013.awg.debug ACTIVATE_VPN allow
   adb shell pm grant com.vpn013.awg.debug android.permission.POST_NOTIFICATIONS
 else

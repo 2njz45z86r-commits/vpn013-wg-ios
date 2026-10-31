@@ -68,6 +68,8 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/json" />
                 <data android:mimeType="application/octet-stream" />
                 <data android:mimeType="application/x-wireguard-profile" />
                 <data android:mimeType="text/plain" />
@@ -79,6 +81,8 @@
                 <data android:scheme="content" />
                 <data android:scheme="file" />
                 <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/json" />
                 <data android:mimeType="application/octet-stream" />
                 <data android:mimeType="text/plain" />
             </intent-filter>

@@ -2,6 +2,8 @@
 package org.amnezia.awg.r013
 
 import android.content.Intent
+import android.app.Instrumentation
+import android.app.Activity
 import android.graphics.Bitmap
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -20,6 +22,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 
 /** Synthetic offline records only; native TCP/XHTTP packet checks run separately. */
 @RunWith(AndroidJUnit4::class)
@@ -106,6 +109,23 @@ class R013RoutingSurfaceTest {
         activity = instrumentation.startActivitySync(Intent(context, R013HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as R013HomeActivity
         for (section in sections) {
             tap(UnifiedAutoCoordinator.label(section))
+            val documentIntent = AtomicReference<Intent?>()
+            val monitor = object : Instrumentation.ActivityMonitor() {
+                override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? {
+                    if (intent.action != Intent.ACTION_OPEN_DOCUMENT) return null
+                    documentIntent.set(Intent(intent))
+                    return Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null)
+                }
+            }
+            instrumentation.addMonitor(monitor)
+            try {
+                tap("Добавить", true)
+                tap(if (section == "AMNEZIAWG") "Импорт из файла или ZIP" else "Импортировать файл")
+                await { documentIntent.get() != null }
+                val types = documentIntent.get()!!.getStringArrayExtra(Intent.EXTRA_MIME_TYPES)!!.toSet()
+                assertTrue("System picker hides ordinary ZIP", "*/*" in types || "application/zip" in types)
+                assertTrue("System picker hides Windows ZIP MIME", "*/*" in types || "application/x-zip-compressed" in types)
+            } finally { instrumentation.removeMonitor(monitor) }
             tap("Настройки и обновления", true); tap("Маршрутизация")
             await { node { it.text?.toString() == "Далее (0)" && !it.isEnabled } != null }
             tap("Выбрать все"); await { node { it.text?.toString() == "Далее (3)" && it.isEnabled } != null }

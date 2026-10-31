@@ -245,7 +245,7 @@ class R013HomeActivity : AppCompatActivity() {
             try {
                 val (section,text)=ProxySubscription.handoff(intent.data.toString())
                 incomingSection=true;selectedSection=section;listSignature="";intent.action=null
-                if(section=="AMNEZIAWG") fileResult.launch(arrayOf("application/zip","text/plain","application/octet-stream"))
+                if(section=="AMNEZIAWG") fileResult.launch(arrayOf("application/zip","application/x-zip-compressed","text/plain","application/octet-stream"))
                 else if(importDialog?.isShowing != true) showProxyInput(ProxyProfile.Section.valueOf(section),text ?: "")
                 else feedback("Сначала завершите ввод текущего ключа. Введённый текст сохранён.")
             } catch (_:Exception) { feedback("Ссылка VPN013 не содержит поддерживаемую конфигурацию.") }
@@ -524,7 +524,7 @@ class R013HomeActivity : AppCompatActivity() {
             .setItems(arrayOf("Вставить конфигурацию или подписку", "Импортировать файл", "Купить конфигурацию", "Сканировать QR")) { _, choice ->
                 when(choice) {
                     0 -> showProxyInput(ProxyProfile.Section.valueOf(selectedSection))
-                    1 -> fileResult.launch(arrayOf("text/*", "application/json", "application/octet-stream"))
+                    1 -> fileResult.launch(arrayOf("text/*", "application/json", "application/octet-stream", "application/zip", "application/x-zip-compressed"))
                     2 -> open(ClientProtocol.BOT)
                     3 -> qrResult.launch(ScanOptions().setOrientationLocked(false).setBeepEnabled(false).setPrompt("Конфигурация VLESS"))
                 }
