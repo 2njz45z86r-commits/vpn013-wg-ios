@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,7 +65,65 @@ func instance(object any) *core.Instance {
 	}
 	return server
 }
+
+// Exercise the real relay and isolated server from the host, without printing fixture values.
+func relayTest(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > 16384 {
+		panic("relay fixture read")
+	}
+	var f struct {
+		URI      string `json:"uri"`
+		XHTTPURI string `json:"xhttpURI"`
+		Host     string `json:"host"`
+		Port     int    `json:"port"`
+		Nonce    string `json:"nonce"`
+	}
+	if json.Unmarshal(data, &f) != nil || f.Host != "198.18.0.1" || f.Port < 1024 || f.Port > 65535 {
+		panic("relay fixture validation")
+	}
+	if _, err := uuid.Parse(f.Nonce); err != nil {
+		panic("relay nonce validation")
+	}
+	for _, item := range []struct{ raw, network string }{{f.URI, "tcp"}, {f.XHTTPURI, "xhttp"}} {
+		u, err := url.Parse(item.raw)
+		if err != nil || u.Scheme != "vless" || u.Hostname() != "10.0.2.2" || u.User == nil {
+			panic("relay URI validation")
+		}
+		port, err := strconv.Atoi(u.Port())
+		if err != nil || port < 1024 || port > 65535 {
+			panic("relay port validation")
+		}
+		q := u.Query()
+		stream := map[string]any{"network": item.network, "security": "reality", "realitySettings": map[string]any{"show": false, "serverName": "localhost", "fingerprint": "chrome", "publicKey": q.Get("pbk"), "shortId": q.Get("sid")}}
+		if item.network == "xhttp" {
+			stream["xhttpSettings"] = map[string]any{"path": "/native-xhttp", "mode": "stream-one", "xPaddingBytes": "16-32", "xmux": map[string]any{"maxConnections": 1}}
+		}
+		client := instance(map[string]any{"log": map[string]any{"loglevel": "none"}, "outbounds": []any{map[string]any{"protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": port, "users": []any{map[string]any{"id": u.User.Username(), "encryption": "none"}}}}}, "streamSettings": stream}}})
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		conn, err := core.Dial(ctx, client, xnet.TCPDestination(xnet.ParseAddress(f.Host), xnet.Port(f.Port)))
+		if err != nil {
+			cancel()
+			client.Close()
+			panic("relay dial")
+		}
+		_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
+		_, err = fmt.Fprintf(conn, "GET /%s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", f.Nonce)
+		response, readErr := io.ReadAll(io.LimitReader(conn, 4096))
+		conn.Close()
+		cancel()
+		client.Close()
+		if err != nil || readErr != nil || !strings.Contains(string(response), f.Nonce) {
+			panic("relay nonce exchange failed")
+		}
+		fmt.Printf("Host relay REALITY/VLESS %s nonce exchange passed\n", item.network)
+	}
+}
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "--relay-test" {
+		relayTest(os.Args[2])
+		return
+	}
 	self := len(os.Args) == 2 && os.Args[1] == "--self-test"
 	isolated := !self && os.Getenv("R013_ISOLATED_FIXTURE") == "true"
 	host := "198.18.0.1"

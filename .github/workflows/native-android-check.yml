@@ -138,6 +138,21 @@ jobs:
           from pathlib import Path
           base=Path('android/output/review')
           base.mkdir(parents=True,exist_ok=True)
+          relay=base/'proxy-relay-counters.jsonl'
+          if relay.is_file():
+              assert relay.stat().st_size <= 256*1024, 'Relay diagnostics exceed bounded size'
+              rows=[]; rejected=0
+              for line in relay.read_text(errors='replace').splitlines()[-200:]:
+                  try:
+                      row=json.loads(line)
+                      assert set(row) in ({'transport','status'},{'transport','status','upBytes','downBytes'})
+                      assert row['transport'] in ('tcp','xhttp')
+                      assert row['status'] in ('accepted','complete','OSError','ConnectionError','TimeoutError','ConnectionRefusedError','ConnectionResetError','BrokenPipeError','ConnectionAbortedError')
+                      assert all(type(row[k]) is int and 0 <= row[k] <= 2**31 for k in ('upBytes','downBytes') if k in row)
+                      rows.append(row)
+                  except (ValueError,TypeError,AssertionError):
+                      rejected+=1
+              (base/'proxy-relay-counters.json').write_text(json.dumps({'connections':rows,'rejectedDiagnosticLines':rejected}))
           for path in list(base.rglob('*')):
               if path.is_file() and path.suffix not in ('.png','.json','.xml'):
                   text=path.read_text(errors='replace')

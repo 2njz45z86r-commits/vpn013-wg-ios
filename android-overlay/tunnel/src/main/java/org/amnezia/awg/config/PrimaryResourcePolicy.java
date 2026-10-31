@@ -7,7 +7,9 @@ import java.util.regex.Pattern;
 public final class PrimaryResourcePolicy {
     private static final int MAX_JUNK_COUNT = 64, MAX_PACKET_BYTES = 4096;
     private static final long MAX_JUNK_TOTAL = 256L * 1024, MAX_INITIAL_TOTAL = 20L * 1024;
-    private static final Pattern FIELDS = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
+    // Go strings.Fields whitespace, explicit so host Java and Android ICU agree.
+    // Android rejects the UNICODE_CHARACTER_CLASS flag during class loading.
+    private static final Pattern FIELDS = Pattern.compile("[\\x09-\\x0D\\x20\\x85\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]+");
     private PrimaryResourcePolicy() {}
     private static IllegalArgumentException invalid() { return new IllegalArgumentException("Недопустимые параметры ресурсов AmneziaWG"); }
     public static void validate(int count, int min, int max, int[] padding, String[] initial) {

@@ -65,6 +65,9 @@ class R013ProxyRuntimeTest {
         UnifiedAutoCoordinator.stop()
         assertNull(ProxyVpnService.activeId)
         instrumentation.runOnMainSync { activity?.finish() }
+        val manager = context.getSystemService(ConnectivityManager::class.java)
+        await { manager.getNetworkCapabilities(manager.activeNetwork)
+            ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) != true }
     }
     private fun await(timeout: Long = 20_000, condition: () -> Boolean) {
         val until = System.currentTimeMillis()+timeout
@@ -73,6 +76,14 @@ class R013ProxyRuntimeTest {
     }
     private fun exchange() {
         val manager = context.getSystemService(ConnectivityManager::class.java)
+        val folder = File(context.getExternalFilesDir(null), "review").apply { mkdirs() }
+        File(folder, "proxy-traffic-process.json").writeText(JSONObject()
+            .put("processUID", android.os.Process.myUid())
+            .put("appUID", context.applicationInfo.uid)
+            .put("instrumentationPackageUID", context.packageManager.getApplicationInfo("com.vpn013.awg.debug.test", 0).uid)
+            .put("probePackageUID", context.packageManager.getApplicationInfo("com.vpn013.routingprobe", 0).uid)
+            .put("vpnCapabilityBeforeWait", manager.getNetworkCapabilities(manager.activeNetwork)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true).toString())
         // Service startup and Android's publication of the default VPN network
         // are separate events, particularly when immediately restarting it.
         // Wait for the actual system capability; never replace it with the

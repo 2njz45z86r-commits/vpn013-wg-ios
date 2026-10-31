@@ -58,6 +58,7 @@ finish() {
   cp "$RUNNER_TEMP/r013-peer.log" output/review/synthetic-peer-build.log 2>/dev/null || true
   if [ -n "$proxy_pid" ]; then kill "$proxy_pid" 2>/dev/null || true; fi
   if [ -n "$proxy_relay_pid" ]; then kill "$proxy_relay_pid" 2>/dev/null || true; fi
+  if [ -f "$RUNNER_TEMP/r013-proxy-relay.log" ]; then tail -n 200 "$RUNNER_TEMP/r013-proxy-relay.log" > output/review/proxy-relay-counters.jsonl; fi
   if [ -n "$peer_pid" ]; then kill "$peer_pid" 2>/dev/null || true; fi
   if [ -n "$route_echo_pid" ]; then kill "$route_echo_pid" 2>/dev/null || true; fi
   if [ "$ru_alias_added" = yes ]; then sudo ip address del 2.56.24.1/32 dev lo 2>/dev/null || true; fi
@@ -185,6 +186,10 @@ python3 r013-ci/proxy-relay.py "$RUNNER_TEMP/r013-proxy-fixture.json" "$RUNNER_T
 proxy_relay_pid=$!
 for i in $(seq 1 20); do test -s "$RUNNER_TEMP/r013-proxy-relay.ready" && break; sleep 1; done
 test -s "$RUNNER_TEMP/r013-proxy-relay.ready"
+timeout 25s "$RUNNER_TEMP/r013-proxy-peer" --relay-test "$RUNNER_TEMP/r013-proxy-fixture.json" > "$RUNNER_TEMP/r013-proxy-relay-test.log" 2>&1
+grep -Fx 'Host relay REALITY/VLESS tcp nonce exchange passed' "$RUNNER_TEMP/r013-proxy-relay-test.log"
+grep -Fx 'Host relay REALITY/VLESS xhttp nonce exchange passed' "$RUNNER_TEMP/r013-proxy-relay-test.log"
+printf '%s\n' '{"hostRelayTCPNonce":true,"hostRelayXHTTPNonce":true,"androidTrafficVerified":false}' > output/review/proxy-host-relay-preflight.json
 python3 r013-ci/proxy-isolation-preflight.py "$RUNNER_TEMP/r013-proxy-fixture.json"
 proxy_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-proxy-fixture.json")
 }

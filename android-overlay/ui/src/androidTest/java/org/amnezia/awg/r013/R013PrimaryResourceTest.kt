@@ -18,6 +18,14 @@ class R013PrimaryResourceTest {
     @Test fun rejectedBulkImportPreservesExistingProfile() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         check(BuildConfig.DEBUG && context.packageName == "com.vpn013.awg.debug")
+        val zero = intArrayOf(0, 0, 0, 0)
+        org.amnezia.awg.config.PrimaryResourcePolicy.validate(1, 0, 1, zero,
+            arrayOf("<r\u00a04>", "<rc\u20034>", "<rd\u202f4>", "<dz\u00854>", "<b\u3000aabb>"))
+        try {
+            org.amnezia.awg.config.PrimaryResourcePolicy.validate(0, 0, 0, zero,
+                arrayOf("<r\u00a04097>", "", "", "", ""))
+            fail("Unicode-separated value over the resource limit was accepted")
+        } catch (_: IllegalArgumentException) { }
         val registry = ProfileRegistry.get(context)
         Application.getTunnelManager().getTunnels(); UnifiedAutoCoordinator.stop()
         val client = KeyPair(); val peer = KeyPair()

@@ -15,6 +15,8 @@ public final class PrimaryResourcePolicyTest {
         valid(3,40,70,new int[]{20,30,0,0},"<r 12><rc 4><rd 2><t><b 0xabcdef>","<d><ds><dz 2>","","","");
         valid(64,4096,4096,new int[]{4096,4096,4096,4096},"<r 4096>","<rc 4096>","<rd 4096>","<dz 4096>","<r 4096>");
         valid(1,0,0,zero,"prefix<r +0004 ignored>suffix","<r -0>","<t ignored>","<b AAbb>","");
+        valid(1,0,1,zero,"<r\u00a04>","<rc\u20034>","<rd\u202f4>","<dz\u00854>","<b\u3000aabb>");
+        reject(0,0,0,zero,"<r\u00a04097>","","","","");
         reject(65,1,1,zero,empty); reject(65535,65535,65535,zero,empty);
         reject(1,100,99,zero,empty); reject(1,0,4097,zero,empty); reject(1,4097,4097,zero,empty);
         reject(0,0,0,new int[]{4097,0,0,0},empty); reject(0,0,0,new int[]{0,0,-1,0},empty);

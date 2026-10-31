@@ -23,6 +23,7 @@ if len(set(ports)) != 2:
     raise SystemExit("synthetic ports must differ")
 
 async def transfer(reader, writer):
+    count = 0
     try:
         while True:
             data = await asyncio.wait_for(reader.read(16384), timeout=120)
@@ -30,23 +31,29 @@ async def transfer(reader, writer):
                 if writer.can_write_eof():
                     writer.write_eof()
                     await writer.drain()
-                return
+                return count
             writer.write(data)
             await writer.drain()
+            count += len(data)
     except (OSError, ConnectionError, asyncio.TimeoutError):
-        return
+        return count
 
 async def main():
     limit = asyncio.Semaphore(128)
     async def forward(reader, writer, port):
         async with limit:
             other = None
+            counts = (0, 0)
+            status = "complete"
+            print(json.dumps({"transport": "tcp" if port == ports[0] else "xhttp", "status": "accepted"}), flush=True)
             try:
                 remote, other = await asyncio.wait_for(asyncio.open_connection("10.254.197.2", port), timeout=5)
-                await asyncio.gather(transfer(reader, other), transfer(remote, writer))
-            except (OSError, ConnectionError, asyncio.TimeoutError):
-                pass
+                counts = await asyncio.gather(transfer(reader, other), transfer(remote, writer))
+            except (OSError, ConnectionError, asyncio.TimeoutError) as exc:
+                status = type(exc).__name__
             finally:
+                print(json.dumps({"transport": "tcp" if port == ports[0] else "xhttp", "status": status,
+                                  "upBytes": counts[0], "downBytes": counts[1]}), flush=True)
                 if other is not None:
                     other.close()
                 writer.close()
