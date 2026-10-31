@@ -74,7 +74,7 @@ class R013ProxyRuntimeTest {
         while (System.currentTimeMillis()<until) { if (condition()) return; Thread.sleep(100) }
         assertTrue("Native proxy condition timed out; error="+ProxyVpnService.lastError,condition())
     }
-    private fun exchange() {
+    private fun exchange(label: String) {
         val manager = context.getSystemService(ConnectivityManager::class.java)
         val folder = File(context.getExternalFilesDir(null), "review").apply { mkdirs() }
         File(folder, "proxy-traffic-process.json").writeText(JSONObject()
@@ -92,7 +92,7 @@ class R013ProxyRuntimeTest {
             ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true }
         assertTrue("The application must use the actual VPN network",manager.getNetworkCapabilities(manager.activeNetwork)
             ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true)
-        Socket().use { socket ->
+        try { Socket().use { socket ->
             socket.soTimeout=6_000
             socket.connect(InetSocketAddress(fixture.getString("host"),fixture.getInt("port")),6_000)
             val nonce=fixture.getString("nonce")
@@ -101,6 +101,25 @@ class R013ProxyRuntimeTest {
             assertTrue(bytes.size<=4096)
             val response=String(bytes,Charsets.US_ASCII)
             assertTrue("Disposable peer must return its unpredictable response",response.startsWith("HTTP/1.1 200") && response.contains(nonce))
+        } } catch (failure: java.net.ConnectException) {
+            val current = manager.activeNetwork
+            val target = java.net.InetAddress.getByName("198.18.0.1")
+            var cause: Throwable? = failure
+            var errno: Int? = null
+            while (cause != null) {
+                if (cause is android.system.ErrnoException) errno = cause.errno
+                cause = cause.cause
+            }
+            val stats = ProxyVpnService.statistics()
+            File(folder, "proxy-connect-failure-$label.json").writeText(JSONObject()
+                .put("processUID", android.os.Process.myUid())
+                .put("vpnCapability", manager.getNetworkCapabilities(current)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true)
+                .put("activeNetworkHasControlRoute", manager.getLinkProperties(current)?.routes?.any { it.matches(target) } == true)
+                .put("errno", errno ?: JSONObject.NULL)
+                .put("statisticsAvailable", stats != null)
+                .put("rxPositive", (stats?.optLong("rx") ?: 0) > 0)
+                .put("txPositive", (stats?.optLong("tx") ?: 0) > 0).toString())
+            throw failure
         }
         await { val stats=ProxyVpnService.statistics(); stats != null && stats.optLong("rx")>0 && stats.optLong("tx")>0 }
     }
@@ -163,12 +182,17 @@ class R013ProxyRuntimeTest {
     @Test fun actualRealityTrafficInAllThreeProxySectionsAndCompleteStop() = runBlocking {
         val store=ProxyRegistry(registry.vault)
         val sections = ProxyProfile.Section.values().toList()
-        for ((index, section) in (sections + sections).withIndex()) {
-            val transport = if (index < sections.size) "tcp" else "xhttp"
+        // Cross the two factors in HAPP as well as retaining all six original
+        // combinations, so a policy failure cannot be misreported as XHTTP.
+        val cases = sections.map { Triple(it, "tcp", "only") } +
+            listOf(Triple(ProxyProfile.Section.HAPP, "tcp", "bypass"),
+                Triple(ProxyProfile.Section.HAPP, "xhttp", "only")) +
+            sections.map { Triple(it, "xhttp", "bypass") }
+        for ((index, case) in cases.withIndex()) {
+            val (section, transport, applicationMode) = case
             var stage = "import"
             try {
             val id=withContext(Dispatchers.IO) { store.importText(section,fixture.getString(if (transport == "tcp") "uri" else "xhttpURI")).single() }
-            val applicationMode = if (transport == "tcp") "only" else "bypass"
             OfflineChanges.apply {
                 val packages = setOf("com.vpn013.routingprobe")
                 val selection = if (applicationMode == "only") ApplicationRoutingStore.Selection("only", only = packages)
@@ -182,14 +206,19 @@ class R013ProxyRuntimeTest {
             instrumentation.runOnMainSync { check(views().single { it.tag == control }.performClick()) }
             await { ProxyVpnService.activeId == id }
             stage = "traffic"
-            exchange()
+            if (applicationMode == "bypass") verifyOtherApplication(false)
+            exchange("${section.name.lowercase()}-$transport-$applicationMode")
             verifyOtherApplication(applicationMode == "only")
             assertEquals(id,ProxyVpnService.activeId)
             val proofFolder = File(context.getExternalFilesDir(null), "review").apply { mkdirs() }
-            File(proofFolder, "application-routing-${section.name.lowercase()}-$transport.json").writeText(JSONObject()
+            val originalMode = (transport == "tcp" && applicationMode == "only") || (transport == "xhttp" && applicationMode == "bypass")
+            val suffix = if (originalMode) "" else "-$applicationMode"
+            val proof = JSONObject()
                 .put("section", section.name).put("transport", transport).put("mode", applicationMode)
                 .put("realVPNTransport", true).put("nonceResponseVerified", true).put("rxTxPositive", true)
-                .put("otherApplicationUIDTrafficVerified", true).toString())
+                .put("otherApplicationUIDTrafficVerified", true).toString()
+            File(proofFolder, "application-routing-${section.name.lowercase()}-$transport-$applicationMode.json").writeText(proof)
+            if (originalMode) File(proofFolder, "application-routing-${section.name.lowercase()}-$transport.json").writeText(proof)
             await { var rendered = false; instrumentation.runOnMainSync {
                 rendered = views().filterIsInstance<TextView>().any { it.tag == "vpn013.current.traffic" && it.text.contains("Всего:") } &&
                     views().any { it.tag == "vpn013.current.ping" && it.contentDescription == "Проверить пинг текущего сервера" }
@@ -203,11 +232,14 @@ class R013ProxyRuntimeTest {
             assertEquals("Opening configuration restarted the real tunnel", revision, ProxyVpnService.trafficRevision())
             assertEquals(id, ProxyVpnService.activeId)
             stage = "capture"
-            capture("proxy-"+section.name.lowercase()+"-"+transport)
+            capture("proxy-"+section.name.lowercase()+"-"+transport+suffix)
             stage = "stop"
             withContext(Dispatchers.IO) { UnifiedAutoCoordinator.stop() }
             assertNull(ProxyVpnService.activeId)
             assertNull(ProxyVpnService.statistics())
+            val manager = context.getSystemService(ConnectivityManager::class.java)
+            await { manager.getNetworkCapabilities(manager.activeNetwork)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) != true }
             stage = "delete"
             withContext(Dispatchers.IO) { store.delete(id) }
             } catch (failure: Throwable) {
@@ -239,7 +271,7 @@ class R013ProxyRuntimeTest {
         } catch (failure: AssertionError) {
             throw AssertionError("Synthetic auto fallback states: " + observations.joinToString(" | "), failure)
         }
-        exchange()
+        exchange("automatic")
         assertEquals(ids.second,ProxyVpnService.activeId)
         capture("proxy-auto-cross-section")
         UnifiedAutoCoordinator.stop()
