@@ -4,6 +4,10 @@ package org.amnezia.awg.r013
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.ParcelFileDescriptor
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.ResultReceiver
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -27,6 +31,9 @@ import android.widget.TextView
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /** Hosted disposable peers only. Never receives provider or customer credentials. */
 @RunWith(AndroidJUnit4::class)
@@ -100,17 +107,25 @@ class R013ProxyRuntimeTest {
             val bytes = stream.readNBytes(16385); check(bytes.size <= 16384); String(bytes, Charsets.UTF_8)
         }
         val bootstrap = "$testPackage/org.amnezia.awg.r013.R013RoutingProbeBootstrapService"
-        // AMS force-stops the target package on an ordinary instrument command.
-        // The test APK also supplies the parent runner, so first bootstrap its
-        // separate UID process and attach without restarting either process.
-        val started = shell("am start-foreground-service -n $bootstrap")
-        check(started.contains("Starting service")) { "Independent routing process did not start" }
-        val output = try {
-            await(10_000) { val state = shell("dumpsys activity services $bootstrap"); state.contains("isForeground=true") && state.contains("foregroundId=71") }
-            shell("am instrument --no-restart -w -r -e port $port -e nonce $nonce $testPackage/org.amnezia.awg.r013.R013RoutingProbeInstrumentation")
+        // A normal service in the TEST APK runs under that APK's own UID.
+        // This avoids restarting or attaching a second instrumentation runner.
+        val received = AtomicReference<Bundle?>()
+        val ready = CountDownLatch(1)
+        val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
+            override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+                if (resultCode == android.app.Activity.RESULT_OK) received.set(resultData)
+                ready.countDown()
+            }
         }
-            finally { shell("am stopservice -n $bootstrap") }
-        fun value(key: String): String? = output.lineSequence().firstOrNull { it.startsWith("INSTRUMENTATION_RESULT: $key=") }?.substringAfter('=')?.trim()
+        val request = Intent().setClassName(testPackage, "org.amnezia.awg.r013.R013RoutingProbeBootstrapService")
+            .putExtra("r013_probe_reply", receiver).putExtra("r013_probe_port", port).putExtra("r013_probe_nonce", nonce)
+        try {
+            instrumentation.uiAutomation.adoptShellPermissionIdentity(android.Manifest.permission.DUMP)
+            try { checkNotNull(context.startForegroundService(request)) }
+            finally { instrumentation.uiAutomation.dropShellPermissionIdentity() }
+            assertTrue("Independent UID service must return its measured result", ready.await(10, TimeUnit.SECONDS))
+        } finally { shell("am stopservice -n $bootstrap") }
+        fun value(key: String): String? = received.get()?.getString(key)
         val otherUID = context.packageManager.getApplicationInfo(testPackage, 0).uid
         assertNotEquals("The probe must have a different application UID", context.applicationInfo.uid, otherUID)
         assertEquals("The second package must actually run under its own UID", otherUID.toString(), value("r013_probe_uid"))

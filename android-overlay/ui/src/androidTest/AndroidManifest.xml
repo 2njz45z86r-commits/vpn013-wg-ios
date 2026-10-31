@@ -9,10 +9,4 @@
             android:exported="true" android:permission="android.permission.DUMP"
             android:foregroundServiceType="dataSync" />
     </application>
-    <!-- Hosted debug fixture only: start the test APK under its own UID. -->
-    <instrumentation
-        android:name="org.amnezia.awg.r013.R013RoutingProbeInstrumentation"
-        android:targetPackage="com.vpn013.awg.debug.test"
-        android:functionalTest="true"
-        android:handleProfiling="false" />
 </manifest>

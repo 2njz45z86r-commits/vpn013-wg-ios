@@ -94,16 +94,21 @@ class R013RoutingSurfaceTest {
         }
         return null
     }
-    private fun await(predicate: () -> Boolean) {
+    private fun await(message: String = "Native routing UI did not reach the required state", predicate: () -> Boolean) {
         val deadline = System.currentTimeMillis() + 15_000
         while (System.currentTimeMillis() < deadline) { if (predicate()) return; Thread.sleep(100) }
-        assertTrue("Native routing UI did not reach the required state", predicate())
+        assertTrue(message, predicate())
     }
     private fun tap(text: String, description: Boolean = false) {
-        await {
+        var direction = AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        await("Native routing UI target was not visible: $text") {
             val target = node { (if (description) it.contentDescription else it.text)?.toString() == text }
             if (target == null || !target.isVisibleToUser) {
-                node { it.isScrollable }?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                val scrollable = node { it.isScrollable }
+                if (scrollable != null && !scrollable.performAction(direction)) {
+                    direction = if (direction == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                        AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                }
                 false
             } else true
         }
@@ -163,6 +168,7 @@ class R013RoutingSurfaceTest {
             await { node { it.text?.toString() == "Маршрутизация сервисов" } == null }
             tap("Настройки и обновления", true); tap("Маршрутизация")
             tap("$section Server 1"); tap("$section Server 2"); tap("Далее (2)")
+            await { node { it.text?.toString() == "Маршрутизация сервисов" } != null }
             tap("Установленные приложения")
             val only = "VPN только для выбранных"; val bypass = "Выбранные без VPN"
             await { node { it.text?.toString() == only && !it.isChecked } != null && node { it.text?.toString() == bypass && !it.isChecked } != null }
