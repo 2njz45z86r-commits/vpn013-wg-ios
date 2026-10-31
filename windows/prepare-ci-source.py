@@ -34,6 +34,29 @@ if overlays.is_dir():
         assert target.resolve().is_relative_to(root)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, target)
+# Keep account names out of the shared service/UI diagnostics. Account type
+# validation and the existing authorization/token decisions remain unchanged.
+manager_service = root / 'manager/service.go'
+manager_text = manager_service.read_text(encoding='utf-8')
+private_log_replacements = {
+    'username, domain, accType, err := user.User.Sid.LookupAccount("")':
+        '_, _, accType, err := user.User.Sid.LookupAccount("")',
+    'log.Printf("Starting UI process for user ‘%s@%s’ for session %d", username, domain, session)':
+        'log.Printf("Starting UI process for session %d", session)',
+    'log.Printf("Unable to start manager UI process for user \'%s@%s\' for session %d: %v", username, domain, session, err)':
+        'log.Printf("Unable to start manager UI process for session %d: %v", session, err)',
+    'log.Printf("Exited UI process for user \'%s@%s\' for session %d with status %x", username, domain, session, exitCode)':
+        'log.Printf("Exited UI process for session %d with status %x", session, exitCode)',
+    'log.Printf("Unable to wait for UI process for user \'%s@%s\' for session %d: %v", username, domain, session, err)':
+        'log.Printf("Unable to wait for UI process for session %d: %v", session, err)',
+}
+for before, after in private_log_replacements.items():
+    assert manager_text.count(before) == 1, 'Unexpected reviewed manager source'
+    manager_text = manager_text.replace(before, after)
+assert 'username, domain' not in manager_text
+assert 'if accType != windows.SidTypeUser {' in manager_text
+manager_service.write_text(manager_text, encoding='utf-8', newline='\n')
+
 # Add the update offer state to the exact existing native page. The button
 # does not replace the order/configuration refresh action.
 tunnels_page = root / 'ui/tunnelspage.go'

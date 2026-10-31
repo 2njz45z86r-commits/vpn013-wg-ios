@@ -51,6 +51,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) {throw 'Toolchain preparation failed'}
           ./scripts/bootstrap-driver.ps1
           ./scripts/bootstrap-installer.ps1
+      - name: Verify actual default Data permissions with SYSTEM and LocalService
+        working-directory: vpn013-wg-windows
+        env:
+          R013_DEFAULT_ACL_FIXTURE: '1'
+        run: |
+          ./.deps/go/bin/go.exe test -mod=vendor -tags r013_acl_fixture -count=1 -timeout=90s -run '^TestDefaultRootDirectoryACLHostedFixture$' -v ./r013acl
+          if ($LASTEXITCODE -ne 0) {throw 'Actual default-directory ACL fixture failed'}
+          $aclProof=Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'r013-default-acl-proof.json') -Raw | ConvertFrom-Json
+          if ($aclProof.sourceCommit -ne $env:GITHUB_SHA -or $aclProof.runId -ne $env:GITHUB_RUN_ID -or $aclProof.fixture -ne 'default-root-directory-acl') {throw 'ACL proof source/run mismatch'}
+          if ($aclProof.systemSID -ne 'S-1-5-18' -or $aclProof.localServiceSID -ne 'S-1-5-19') {throw 'ACL proof identity mismatch'}
+          if ($aclProof.systemDPAPIRoundTrip -ne $true -or $aclProof.administratorDirectoryReadWrite -ne $true -or $aclProof.localServiceReadWriteDenied -ne $true -or $aclProof.humanStandardUserTested -ne $false -or $aclProof.customerDataUsed -ne $false) {throw 'ACL proof is incomplete or inaccurate'}
       - name: Build native application and MSI
         working-directory: vpn013-wg-windows
         run: |
@@ -156,6 +167,7 @@ jobs:
             ${{ runner.temp }}/r013-in-place-upgrade.json
             ${{ runner.temp }}/windows-go-findings.enc.json
             ${{ runner.temp }}/windows-go-provenance.json
+            ${{ runner.temp }}/r013-default-acl-proof.json
           if-no-files-found: error
       - name: Prepare tested Windows build and source
         working-directory: vpn013-wg-windows
