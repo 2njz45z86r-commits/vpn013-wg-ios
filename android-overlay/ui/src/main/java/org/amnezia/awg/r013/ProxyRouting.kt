@@ -31,7 +31,7 @@ object ProxyRouting {
             settings.put(id, JSONObject().put("mode", rules.mode).put("packages", JSONArray(rules.packages.sorted())).put("russianDirect", rules.russianDirect))
         }
     }
-    fun apply(context: Context, builder: VpnService.Builder, rules: Rules) {
+    fun apply(context: Context, builder: VpnService.Builder, rules: Rules, service: ServiceRoutingCatalog.Plan? = null) {
         if (rules.mode == "only") {
             check(rules.packages.isNotEmpty()) { "Выберите хотя бы одно приложение" }
             for (name in rules.packages + context.packageName) builder.addAllowedApplication(name)
@@ -40,7 +40,24 @@ object ProxyRouting {
         }
         if (rules.russianDirect && Build.VERSION.SDK_INT >= 33) {
             val prefixes = RussianIPPolicy.get(context.assets.open("ru-networks.cidr"))
-            for (prefix in prefixes) builder.excludeRoute(IpPrefix(prefix.address(), prefix.bits()))
+            for (prefix in prefixes) {
+                if (service != null && prefix.address() is java.net.Inet4Address) {
+                    if (service.mode == "only") continue
+                    val cidr = "${prefix.address().hostAddress}/${prefix.bits()}"
+                    for (safe in ServiceIPv4Routes.subtract(listOf(cidr), listOf("1.1.1.1/32"))) builder.excludeRoute(IpPrefix(safe))
+                } else builder.excludeRoute(IpPrefix(prefix.address(), prefix.bits()))
+            }
         }
+    }
+    fun applyServiceRoutes(builder: VpnService.Builder, service: ServiceRoutingCatalog.Plan?) {
+        if (service == null) { builder.addRoute("0.0.0.0", 0); return }
+        val selected = ServiceIPv4Routes.subtract(service.ipv4, listOf("1.1.1.1/32"))
+        fun add(cidr: String) { val parts = cidr.split('/'); builder.addRoute(parts[0], parts[1].toInt()) }
+        when {
+            service.mode == "only" -> ServiceIPv4Routes.calculate(service.ipv4, false).forEach(::add)
+            Build.VERSION.SDK_INT >= 33 -> { builder.addRoute("0.0.0.0", 0); selected.forEach { builder.excludeRoute(IpPrefix(it)) } }
+            else -> ServiceIPv4Routes.calculate(selected, true).forEach(::add)
+        }
+        builder.addRoute("1.1.1.1", 32)
     }
 }

@@ -100,7 +100,13 @@ class R013RoutingSurfaceTest {
         assertTrue("Native routing UI did not reach the required state", predicate())
     }
     private fun tap(text: String, description: Boolean = false) {
-        await { node { (if (description) it.contentDescription else it.text)?.toString() == text } != null }
+        await {
+            val target = node { (if (description) it.contentDescription else it.text)?.toString() == text }
+            if (target == null || !target.isVisibleToUser) {
+                node { it.isScrollable }?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                false
+            } else true
+        }
         var target = node { (if (description) it.contentDescription else it.text)?.toString() == text }!!
         while (!target.isClickable && target.parent != null) target = target.parent
         assertTrue(target.isEnabled && target.performAction(AccessibilityNodeInfo.ACTION_CLICK))
@@ -131,6 +137,33 @@ class R013RoutingSurfaceTest {
             tap("Выбрать все"); await { node { it.text?.toString() == "Далее (3)" && it.isEnabled } != null }
             tap("Снять выбор"); await { node { it.text?.toString() == "Далее (0)" && !it.isEnabled } != null }
             tap("$section Server 1"); tap("$section Server 2"); tap("Далее (2)")
+            val serviceOnly = "VPN только для выбранных сервисов"; val serviceBypass = "Выбранные сервисы без VPN"
+            await { node { it.text?.toString() == serviceOnly && !it.isChecked } != null && node { it.text?.toString() == serviceBypass && !it.isChecked } != null }
+            tap(serviceOnly); await { node { it.text?.toString() == serviceOnly && it.isChecked } != null }
+            tap(serviceBypass); await { node { it.text?.toString() == serviceOnly && !it.isChecked } != null && node { it.text?.toString() == serviceBypass && it.isChecked } != null }
+            tap(serviceBypass)
+            val catalog = ServiceRoutingCatalog.shared(context)
+            val group = catalog.groups.first { it.services.any { service -> catalog.supported(service.id) } }
+            val item = group.services.first { catalog.supported(it.id) }
+            tap(serviceOnly)
+            tap("▸ ${group.title} (${group.services.size})")
+            tap("${item.iconText}  ${item.name}")
+            tap("Сохранить")
+            await { node { it.text?.toString() == "Маршрутизация сервисов" } == null }
+            withContext(Dispatchers.IO) {
+                val stored = registry.vault.read()
+                val selectedIds = ids(section)
+                for (id in selectedIds.take(2)) assertEquals(setOf(item.id), ServiceRoutingStore.read(stored, ApplicationRoutingStore.reference(section, id)).only)
+                assertEquals(ServiceRoutingCatalog.Selection(), ServiceRoutingStore.read(stored, ApplicationRoutingStore.reference(section, selectedIds[2])) )
+            }
+            tap("Настройки и обновления", true); tap("Маршрутизация")
+            tap("$section Server 1"); tap("$section Server 2"); tap("Далее (2)")
+            await { node { it.text?.toString() == serviceOnly && it.isChecked } != null }
+            tap(serviceOnly); tap("Сохранить")
+            await { node { it.text?.toString() == "Маршрутизация сервисов" } == null }
+            tap("Настройки и обновления", true); tap("Маршрутизация")
+            tap("$section Server 1"); tap("$section Server 2"); tap("Далее (2)")
+            tap("Установленные приложения")
             val only = "VPN только для выбранных"; val bypass = "Выбранные без VPN"
             await { node { it.text?.toString() == only && !it.isChecked } != null && node { it.text?.toString() == bypass && !it.isChecked } != null }
             tap(only); await { node { it.text?.toString() == only && it.isChecked } != null }

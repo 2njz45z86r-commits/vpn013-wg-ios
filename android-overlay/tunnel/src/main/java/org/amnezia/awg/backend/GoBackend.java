@@ -85,6 +85,15 @@ public final class GoBackend implements Backend {
     }
     public interface ApplicationRoutingSource { @Nullable ApplicationRoute rule(String profileName); }
     private ApplicationRoutingSource applicationRoutingSource = name -> null;
+    public record ServiceRoute(String mode, List<String> networks) {
+        public ServiceRoute {
+            if (!mode.equals("only") && !mode.equals("bypass")) throw new IllegalArgumentException("Invalid service mode");
+            networks = Collections.unmodifiableList(org.amnezia.awg.r013.ServiceIPv4Routes.calculate(networks, false));
+            if (networks.isEmpty()) throw new IllegalArgumentException("Empty service routes");
+        }
+    }
+    public interface ServiceRoutingSource { @Nullable ServiceRoute rule(String profileName); }
+    private ServiceRoutingSource serviceRoutingSource = name -> null;
     private volatile boolean automaticModeEnabled = true;
     private final AtomicLong automaticModeRevision = new AtomicLong();
     private List<AutoMember> automaticMembers = Collections.emptyList();
@@ -150,6 +159,16 @@ public final class GoBackend implements Backend {
     public synchronized void setApplicationRoutingSource(ApplicationRoutingSource source) {
         if (currentTunnel != null) throw new IllegalStateException("Routing source cannot change during a connection");
         applicationRoutingSource = java.util.Objects.requireNonNull(source);
+    }
+    public synchronized void setServiceRoutingSource(ServiceRoutingSource source) {
+        if (currentTunnel != null) throw new IllegalStateException("Routing source cannot change during a connection");
+        serviceRoutingSource = java.util.Objects.requireNonNull(source);
+    }
+    private static void addIPv4Route(VpnService.Builder builder, String cidr) {
+        String[] parts = cidr.split("/"); builder.addRoute(parts[0], Integer.parseInt(parts[1]));
+    }
+    private static void excludeIPv4Route(VpnService.Builder builder, String cidr) {
+        builder.excludeRoute(new android.net.IpPrefix(cidr));
     }
     @Nullable public synchronized Config getCurrentConfiguration() { return currentConfig; }
     @Nullable public String getActualRouteInterfaceName() {
@@ -889,15 +908,38 @@ public final class GoBackend implements Backend {
             for (final String dnsSearchDomain : config.getInterface().getDnsSearchDomains())
                 builder.addSearchDomain(dnsSearchDomain);
 
+            final ServiceRoute serviceRoute = serviceRoutingSource.rule(tunnel.getName());
+            final java.util.List<String> dnsIPv4 = new java.util.ArrayList<>();
+            for (final InetAddress dns : config.getInterface().getDnsServers())
+                if (dns instanceof java.net.Inet4Address) dnsIPv4.add(dns.getHostAddress() + "/32");
+            if (serviceRoute != null) {
+                boolean fullIPv4 = false;
+                for (final Peer peer : config.getPeers()) for (final InetNetwork addr : peer.getAllowedIps())
+                    if (addr.getAddress() instanceof java.net.Inet4Address && addr.getMask() == 0) fullIPv4 = true;
+                if (config.getPeers().size() != 1 || !fullIPv4) throw new IllegalStateException("Service routing requires one full IPv4 peer");
+            }
             boolean sawDefaultRoute = false;
             final java.util.List<org.amnezia.awg.r013.RussianIPPolicy.Prefix> capturedRoutes = new java.util.ArrayList<>();
             for (final Peer peer : config.getPeers()) {
                 for (final InetNetwork addr : peer.getAllowedIps()) {
                     if (addr.getMask() == 0)
                         sawDefaultRoute = true;
-                    builder.addRoute(addr.getAddress(), addr.getMask());
+                    if (serviceRoute == null || !(addr.getAddress() instanceof java.net.Inet4Address)) builder.addRoute(addr.getAddress(), addr.getMask());
                     capturedRoutes.add(new org.amnezia.awg.r013.RussianIPPolicy.Prefix(addr.getAddress(),addr.getMask()));
                 }
+            }
+
+            if (serviceRoute != null) {
+                final java.util.List<String> selected = org.amnezia.awg.r013.ServiceIPv4Routes.subtract(serviceRoute.networks(), dnsIPv4);
+                if (serviceRoute.mode().equals("only")) {
+                    for (String cidr : serviceRoute.networks()) addIPv4Route(builder, cidr);
+                } else if (Build.VERSION.SDK_INT >= 33) {
+                    builder.addRoute("0.0.0.0", 0);
+                    for (String cidr : selected) excludeIPv4Route(builder, cidr);
+                } else {
+                    for (String cidr : org.amnezia.awg.r013.ServiceIPv4Routes.calculate(selected, true)) addIPv4Route(builder, cidr);
+                }
+                for (String cidr : dnsIPv4) addIPv4Route(builder, cidr);
             }
 
             // Android13+ supports destination exclusions without expanding
@@ -918,8 +960,14 @@ public final class GoBackend implements Backend {
                 }
                 final java.util.List<org.amnezia.awg.r013.RussianIPPolicy.Prefix> exclusions =
                     org.amnezia.awg.r013.RussianIPPolicy.intersections(ru,capturedRoutes);
-                for (final org.amnezia.awg.r013.RussianIPPolicy.Prefix prefix : exclusions)
-                    builder.excludeRoute(new android.net.IpPrefix(prefix.address(), prefix.bits()));
+                for (final org.amnezia.awg.r013.RussianIPPolicy.Prefix prefix : exclusions) {
+                    if (serviceRoute != null && prefix.address() instanceof java.net.Inet4Address) {
+                        if (serviceRoute.mode().equals("only")) continue;
+                        final String cidr = prefix.address().getHostAddress() + "/" + prefix.bits();
+                        for (String safe : org.amnezia.awg.r013.ServiceIPv4Routes.subtract(java.util.Collections.singletonList(cidr), dnsIPv4))
+                            excludeIPv4Route(builder, safe);
+                    } else builder.excludeRoute(new android.net.IpPrefix(prefix.address(), prefix.bits()));
+                }
                 Log.i(TAG,"Russian IP policy: captured="+capturedRoutes.size()+", exclusions="+exclusions.size());
             }
 

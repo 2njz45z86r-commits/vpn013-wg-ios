@@ -461,6 +461,16 @@ class R013HomeActivity : AppCompatActivity() {
         summaryTitle.text = snapshot.member ?: snapshot.profile ?: "VPN отключён"
         val chosen = Application.getTunnelManager().getTunnels().toList().firstOrNull { it.name == snapshot.profile }
             ?: Application.getTunnelManager().getTunnels().firstOrNull()
+        val serviceMode = chosen?.let { tunnel -> withContext(Dispatchers.IO) {
+            runCatching {
+                val doc = registry.vault.read()
+                val records = doc.getJSONObject("profiles")
+                val record = records.keys().asSequence().map { records.getJSONObject(it) }.singleOrNull { it.getString("name") == tunnel.name }
+                record?.let { ServiceRoutingStore.read(doc, ApplicationRoutingStore.reference("AMNEZIAWG", it.getString("id"))).mode }
+            }.getOrNull()
+        } }
+        if (serviceMode == "only") routingDetails.text = "VPN только для выбранных сервисов IPv4 · DNS профиля через VPN"
+        if (serviceMode == "bypass") routingDetails.text = "Выбранные сервисы IPv4 без VPN · DNS профиля через VPN"
         currentPower.isEnabled = chosen != null && !connecting && !applyingAutomatic
         currentPower.contentDescription = if (chosen?.state == Tunnel.State.UP) "Отключить VPN" else "Подключить VPN"
         currentPower.setOnClickListener { chosen?.let { connect(it, it.state != Tunnel.State.UP) } }
@@ -505,6 +515,12 @@ class R013HomeActivity : AppCompatActivity() {
             "except" -> "Выбранные приложения без VPN · ${rules.packages.size}"
             else -> if (rules?.russianDirect == true && android.os.Build.VERSION.SDK_INT >= 33) "Российские IP-сети — напрямую; остальные — через VPN" else if (record != null) "Все IP-сети — через VPN" else ""
         }
+        val serviceMode = record?.let { withContext(Dispatchers.IO) {
+            runCatching { ServiceRoutingStore.read(registry.vault.read(), ApplicationRoutingStore.reference(section.name, it.id)).mode }.getOrNull()
+        } }
+        val appSuffix = if (rules?.mode == "only" || rules?.mode == "except") "\n${routingDetails.text}" else ""
+        if (serviceMode == "only") routingDetails.text = "VPN только для выбранных сервисов IPv4 · DNS профиля через VPN$appSuffix"
+        if (serviceMode == "bypass") routingDetails.text = "Выбранные сервисы IPv4 без VPN · DNS профиля через VPN$appSuffix"
         currentPower.isEnabled = record != null && (!UnifiedAutoCoordinator.busy || ownsActive || ownsRequested)
         currentPower.contentDescription = if (ownsActive || ownsRequested) "Отключить VPN" else "Подключить VPN"
         currentPower.setOnClickListener { record?.let { toggleProxy(it.id, section) } }
@@ -636,8 +652,29 @@ class R013HomeActivity : AppCompatActivity() {
                     else proxyStore.list(ProxyProfile.Section.valueOf(section)).map { ApplicationRoutingUI.Server(it.id, it.profile.name) }
                 }.sortedBy { it.title }
                 if (entries.isEmpty()) feedback("Сначала добавьте конфигурацию в этот раздел")
-                else ApplicationRoutingUI.servers(this@R013HomeActivity, section, entries) { ids -> applicationRouting(section, ids) }
+                else ApplicationRoutingUI.servers(this@R013HomeActivity, section, entries) { ids -> serviceRouting(section, ids) }
             } catch (_: Exception) { feedback("Не удалось открыть список серверов. Прежние правила сохранены.") }
+        }
+    }
+    private fun serviceRouting(section: String, ids: Set<String>) {
+        lifecycleScope.launch {
+            try {
+                val catalog = withContext(Dispatchers.IO) { ServiceRoutingCatalog.shared(this@R013HomeActivity) }
+                val previous = withContext(Dispatchers.IO) {
+                    val document = registry.vault.read()
+                    ids.map { ServiceRoutingStore.read(document, ApplicationRoutingStore.reference(section, it)) }.distinct()
+                        .singleOrNull() ?: ServiceRoutingCatalog.Selection()
+                }
+                ServiceRoutingUI.edit(this@R013HomeActivity, catalog, previous, { applicationRouting(section, ids) }) { selection, close ->
+                    lifecycleScope.launch {
+                        try {
+                            OfflineChanges.apply { ServiceRoutingStore.save(registry.vault, section, ids, selection, catalog) }
+                            close(); listSignature = ""; renderCurrent()
+                            feedback("Правила сохранены для серверов: ${ids.size}. Они применяются при следующем подключении.")
+                        } catch (error: Exception) { feedback(error.message ?: "Прежние правила сохранены. Повторите действие.") }
+                    }
+                }
+            } catch (_: Exception) { feedback("Не удалось открыть каталог сервисов. Прежние правила сохранены.") }
         }
     }
     private fun applicationRouting(section: String, ids: Set<String>) {
@@ -726,3 +763,4 @@ class R013HomeActivity : AppCompatActivity() {
     private fun feedback(message: String) { Snackbar.make(root, message, Snackbar.LENGTH_LONG).setTextMaxLines(6).show() }
     private fun open(url: String) { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { feedback("Не удалось открыть ссылку. Установите браузер или Telegram.") } }
 }
+

@@ -69,11 +69,13 @@ object ApplicationRoutingStore {
             val record = ProfileRegistry.find(document.getJSONObject("profiles"), id)
             val config = ProfileRegistry.parse(record.getString("config"))
             return effectiveKey(document, reference(section, record.getString("id")),
-                config.`interface`.includedApplications, config.`interface`.excludedApplications, ownPackage) + "\nru:true"
+                config.`interface`.includedApplications, config.`interface`.excludedApplications, ownPackage) + "\nru:true\n" +
+                ServiceRoutingStore.key(document, reference(section, record.getString("id")), org.amnezia.awg.Application.get())
         }
         val baseline = ProxyRouting.read(document, id)
         val included = if (baseline.mode == "only") baseline.packages + ownPackage else emptySet()
         val excluded = if (baseline.mode == "except") baseline.packages - ownPackage else emptySet()
-        return effectiveKey(document, reference(section, id), included, excluded, ownPackage) + "\nru:${baseline.russianDirect}"
+        return effectiveKey(document, reference(section, id), included, excluded, ownPackage) + "\nru:${baseline.russianDirect}\n" +
+            ServiceRoutingStore.key(document, reference(section, id), org.amnezia.awg.Application.get())
     }
 }

@@ -6,6 +6,13 @@ test "$RUNNER_ENVIRONMENT" = github-hosted
 test "$GITHUB_REPOSITORY" = '2njz45z86r-commits/vpn013-wg-ios'
 mkdir -p output/review
 df -h . > output/review/disk-before-emulator.txt
+python3 - <<'PY'
+import json,shutil
+from pathlib import Path
+free=shutil.disk_usage('.').free
+Path('output/review/disk-capacity-before-image.json').write_text(json.dumps({'freeBytes':free,'minimumBytes':8*1024**3}))
+assert free >= 8*1024**3, 'Insufficient capacity for the complete hosted emulator image and tests'
+PY
 SDK="$ANDROID_HOME/cmdline-tools/latest/bin"
 export ANDROID_USER_HOME="$RUNNER_TEMP/r013-android-user"
 export ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"
@@ -147,6 +154,9 @@ if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
   focused_instrument output/review/routing-surface.txt -e class org.amnezia.awg.r013.R013RoutingSurfaceTest
   surface_ok=false
   if grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/routing-surface.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/routing-surface.txt; then surface_ok=true; fi
+  focused_instrument output/review/service-routing.txt -e class org.amnezia.awg.r013.R013ServiceRoutingTest
+  services_ok=false
+  if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/service-routing.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/service-routing.txt; then services_ok=true; fi
   sudo ip address add 198.18.0.1/32 dev lo
   control_alias_added=yes
   start_proxy_fixture
@@ -154,8 +164,8 @@ if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
   proxy_ok=false
   if grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/proxy-runtime.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/proxy-runtime.txt; then proxy_ok=true; fi
   unset proxy_fixture fixture candidate_fixture
-  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedSemanticCases":1,"expectedSurfaceCases":2,"expectedProxyCases":2,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
-  test "$coordinator_ok" = true && test "$semantic_ok" = true && test "$surface_ok" = true && test "$proxy_ok" = true
+  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedSemanticCases":1,"expectedSurfaceCases":2,"expectedServiceCases":1,"expectedProxyCases":2,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
+  test "$coordinator_ok" = true && test "$semantic_ok" = true && test "$surface_ok" = true && test "$services_ok" = true && test "$proxy_ok" = true
   exit $?
 fi
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt
@@ -165,6 +175,9 @@ grep -F 'test=bSubscriptionRefreshRestoresDeletedAndReconcilesTenTwentyFifteen' 
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013RoutingSurfaceTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/routing-surface.txt
 grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/routing-surface.txt
 ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/routing-surface.txt
+adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013ServiceRoutingTest com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/service-routing.txt
+grep -E '^OK \(1 test\)[[:space:]]*$' output/review/service-routing.txt
+! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/service-routing.txt
 sudo ip address add 2.56.24.1/32 dev lo
 ru_alias_added=yes
 sudo ip address add 198.18.0.1/32 dev lo
