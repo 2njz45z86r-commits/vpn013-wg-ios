@@ -168,7 +168,8 @@ public final class GoBackend implements Backend {
         String[] parts = cidr.split("/"); builder.addRoute(parts[0], Integer.parseInt(parts[1]));
     }
     private static void excludeIPv4Route(VpnService.Builder builder, String cidr) {
-        builder.excludeRoute(new android.net.IpPrefix(cidr));
+        String[] parts = cidr.split("/");
+        builder.excludeRoute(new android.net.IpPrefix(org.amnezia.awg.r013.ServiceIPv4Routes.address(cidr), Integer.parseInt(parts[1])));
     }
     @Nullable public synchronized Config getCurrentConfiguration() { return currentConfig; }
     @Nullable public String getActualRouteInterfaceName() {
@@ -867,7 +868,7 @@ public final class GoBackend implements Backend {
                         continue;
                     if (ep.getResolved().orElse(null) == null) {
                         if (i < DNS_RESOLUTION_RETRIES - 1) {
-                            Log.w(TAG, "DNS host \"" + ep.getHost() + "\" failed to resolve; trying again");
+                            Log.w(TAG, "Endpoint DNS resolution failed; trying again");
                             Thread.sleep(1000);
                             continue dnsRetry;
                         } else

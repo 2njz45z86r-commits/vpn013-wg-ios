@@ -28,6 +28,13 @@ public final class ServiceIPv4Routes {
         if ((address & (size - 1)) != 0) throw new IllegalArgumentException("Non-canonical IPv4 prefix");
         return new long[] {address, address + size};
     }
+    /** Convert only a validated canonical numeric prefix; never resolve a hostname. */
+    public static java.net.InetAddress address(String cidr) {
+        long value = parse(cidr)[0];
+        byte[] bytes = new byte[] {(byte)(value >>> 24), (byte)(value >>> 16), (byte)(value >>> 8), (byte)value};
+        try { return java.net.InetAddress.getByAddress(bytes); }
+        catch (java.net.UnknownHostException impossible) { throw new IllegalStateException(impossible); }
+    }
     private static List<long[]> ranges(List<String> cidrs) {
         if (cidrs.size() > LIMIT) throw new IllegalArgumentException("Too many IPv4 prefixes");
         List<long[]> source = new ArrayList<>();

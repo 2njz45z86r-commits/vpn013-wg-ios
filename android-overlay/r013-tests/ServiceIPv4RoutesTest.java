@@ -10,6 +10,8 @@ public final class ServiceIPv4RoutesTest {
         eq(List.of("10.0.0.0/23"), ServiceIPv4Routes.calculate(List.of("10.0.1.0/24", "10.0.0.0/24", "10.0.0.0/25"), false));
         eq(List.of("10.0.0.0/25", "10.0.0.128/26", "10.0.0.192/27", "10.0.0.224/28", "10.0.0.240/29", "10.0.0.248/30", "10.0.0.252/31", "10.0.0.255/32"), ServiceIPv4Routes.subtract(List.of("10.0.0.0/24"), List.of("10.0.0.254/32")));
         invalid("1.2.3.4/24"); invalid("01.0.0.0/8"); invalid("256.0.0.0/8"); invalid("0.0.0.0/33");
+        if (!ServiceIPv4Routes.address("1.2.3.0/24").getHostAddress().equals("1.2.3.0")) throw new AssertionError("numeric address");
+        try { ServiceIPv4Routes.address("example.invalid/32"); throw new AssertionError("hostname accepted"); } catch (IllegalArgumentException expected) { }
         try { ServiceIPv4Routes.calculate(Collections.nCopies(16385, "10.0.0.0/8"), false); throw new AssertionError("input cap"); } catch (IllegalArgumentException expected) { }
         List<String> sparse = new ArrayList<>();
         for (int i = 0; i < 8192; i++) sparse.add("10." + (i / 256) + "." + (i % 256) + ".0/32");

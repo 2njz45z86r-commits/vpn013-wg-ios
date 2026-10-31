@@ -104,7 +104,7 @@ class Application : android.app.Application() {
                 futureBackend.complete(backend!!)
                 networkState.bindNetworkListener()
             } catch (e: Throwable) {
-                Log.e(TAG, Log.getStackTraceString(e))
+                Log.e(TAG, "Backend initialization failed (${e.javaClass.simpleName})")
             }
         }
 

@@ -44,7 +44,7 @@ object ProxyRouting {
                 if (service != null && prefix.address() is java.net.Inet4Address) {
                     if (service.mode == "only") continue
                     val cidr = "${prefix.address().hostAddress}/${prefix.bits()}"
-                    for (safe in ServiceIPv4Routes.subtract(listOf(cidr), listOf("1.1.1.1/32"))) builder.excludeRoute(IpPrefix(safe))
+                    for (safe in ServiceIPv4Routes.subtract(listOf(cidr), listOf("1.1.1.1/32"))) builder.excludeRoute(ipPrefix(safe))
                 } else builder.excludeRoute(IpPrefix(prefix.address(), prefix.bits()))
             }
         }
@@ -55,9 +55,10 @@ object ProxyRouting {
         fun add(cidr: String) { val parts = cidr.split('/'); builder.addRoute(parts[0], parts[1].toInt()) }
         when {
             service.mode == "only" -> ServiceIPv4Routes.calculate(service.ipv4, false).forEach(::add)
-            Build.VERSION.SDK_INT >= 33 -> { builder.addRoute("0.0.0.0", 0); selected.forEach { builder.excludeRoute(IpPrefix(it)) } }
+            Build.VERSION.SDK_INT >= 33 -> { builder.addRoute("0.0.0.0", 0); selected.forEach { builder.excludeRoute(ipPrefix(it)) } }
             else -> ServiceIPv4Routes.calculate(selected, true).forEach(::add)
         }
         builder.addRoute("1.1.1.1", 32)
     }
+    private fun ipPrefix(cidr: String) = IpPrefix(ServiceIPv4Routes.address(cidr), cidr.substringAfter('/').toInt())
 }

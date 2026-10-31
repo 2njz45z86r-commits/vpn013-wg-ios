@@ -77,7 +77,7 @@ object TunnelImporter {
         for (throwable in throwables) {
             val error = ErrorMessages[throwable]
             message = context.getString(R.string.import_error, error)
-            Log.e(TAG, message, throwable)
+            Log.e(TAG, "Tunnel import failed (${throwable.javaClass.simpleName})")
         }
         if (tunnels.size == 1 && throwables.isEmpty())
             message = context.getString(R.string.import_success, tunnels[0].name)
