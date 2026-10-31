@@ -42,14 +42,30 @@ function QueryRows($db,[string]$sql) {
         [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($view)
     }
 }
-function Update-Row($db,[string]$sql,[scriptblock]$change) {
+function Update-Row($db,[string]$sql,[scriptblock]$change,[int]$mode=2) {
+    Assert ($mode -eq 2 -or $mode -eq 4) 'Unsupported MSI row modification mode'
     $view=$db.OpenView($sql)
+    $r=$null
     try {
         $null=$view.Execute()
         $r=$view.Fetch()
         Assert ($null -ne $r) "Missing row: $sql"
         & $change $r
-        $null=$view.Modify(2,$r)
+        try {$null=$view.Modify($mode,$r)} catch {
+            # Capture immediately: a subsequent MSI operation can reset LastErrorRecord.
+            # Only expose the numeric MSI error, never record parameters or file paths.
+            $detail='unavailable'
+            try {
+                $errorRecord=$installer.LastErrorRecord()
+                if ($null -ne $errorRecord) {
+                    $formatted=$errorRecord.FormatText()
+                    if ($formatted -match '^1:\s*(\d+)') {$detail=$Matches[1]}
+                    [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($errorRecord)
+                }
+            } catch {}
+            $table=if($sql -match 'FROM\s+`([A-Za-z_][A-Za-z_0-9]*)`'){$Matches[1]}else{'unknown'}
+            throw "MSI Modify failed: table=$table mode=$mode error=$detail"
+        }
     } finally {
         $null=$view.Close()
         if ($null -ne $r) {[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($r)}
@@ -170,8 +186,9 @@ try {
     $upgradeRows=QueryRows $db 'SELECT * FROM `Upgrade`'
     Assert ($upgradeRows.Count -eq 2) 'Unexpected Upgrade row count'
     foreach($record in $upgradeRows) {[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($record)}
-    Update-Row $db 'SELECT * FROM `Upgrade` WHERE `ActionProperty`=''WIX_UPGRADE_DETECTED''' {param($r) Assert ($r.StringData(3) -eq '1.5.6') 'Unexpected original upgrade ceiling'; $r.StringData(3)=$TargetVersion}
-    Update-Row $db 'SELECT * FROM `Upgrade` WHERE `ActionProperty`=''WIX_DOWNGRADE_DETECTED''' {param($r) Assert ($r.StringData(2) -eq '1.5.6') 'Unexpected original downgrade floor'; $r.StringData(2)=$TargetVersion}
+    # VersionMin and VersionMax are Upgrade primary keys; Replace (4) handles key changes.
+    Update-Row $db 'SELECT * FROM `Upgrade` WHERE `ActionProperty`=''WIX_UPGRADE_DETECTED''' {param($r) Assert ($r.StringData(3) -eq '1.5.6') 'Unexpected original upgrade ceiling'; $r.StringData(3)=$TargetVersion} 4
+    Update-Row $db 'SELECT * FROM `Upgrade` WHERE `ActionProperty`=''WIX_DOWNGRADE_DETECTED''' {param($r) Assert ($r.StringData(2) -eq '1.5.6') 'Unexpected original downgrade floor'; $r.StringData(2)=$TargetVersion} 4
     foreach($id in $files.Keys) {
         $path=$payloadPaths[$id]
         $size=(Get-Item -LiteralPath $path).Length
