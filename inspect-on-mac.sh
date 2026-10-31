@@ -12,6 +12,11 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testTwoPersonalServers \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testThirtyPersonalServers \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testFivePersonalServers \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testFourteenPersonalServers \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testMoreThanThirteenPersonalServers \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSinglePersonalServerExplainsNoReserve \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCreateAutomaticFromThirteenImportedFixtures \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testEmptyListDisablesAutomaticCreation \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testCenteredAddShowsPurchaseAndThreeDayTrial \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testNativeThreeDayTrialImportsFullZIPWithoutBrowser \
@@ -81,7 +86,7 @@ if [ "$result" -eq 0 ]; then
 import json
 from pathlib import Path
 s=json.loads(Path('build/review/test-summary.json').read_text())
-assert s['result']=='Passed' and s['passedTests']==48 and s['failedTests']==0 and s['skippedTests']==0,s
+assert s['result']=='Passed' and s['passedTests']==54 and s['totalTestCount']==54 and s['failedTests']==0 and s['skippedTests']==0 and s.get('testFailures')==[],s
 PY
 fi
 # Keep failure screenshots with a PNG extension; never publish UI hierarchy text.
@@ -101,7 +106,7 @@ from pathlib import Path
 flow=Path('build/review/flow')
 images=[p for p in flow.glob('*.png') if p.read_bytes()[:8]==b'\x89PNG\r\n\x1a\n']
 assert images, 'Real XCUITest attachments are required'
-Path('build/review/iphone-only-scope.json').write_text(json.dumps({'iPhoneNativeSuite':48,'renderedEvidence':'actual XCUITest attachments','attachmentImages':len(images),'physicalIPhoneTested':False,'iPadTested':False,'standaloneCapturesAccepted':False}))
+Path('build/review/iphone-only-scope.json').write_text(json.dumps({'iPhoneNativeSuite':54,'renderedEvidence':'actual XCUITest attachments','attachmentImages':len(images),'physicalIPhoneTested':False,'iPadTested':False,'standaloneCapturesAccepted':False}))
 PY
 fi
 test "$result" -eq 0

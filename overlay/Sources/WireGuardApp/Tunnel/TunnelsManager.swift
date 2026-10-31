@@ -1798,7 +1798,8 @@ extension TunnelsManager {
         precondition(after[0].selection == selection && after[1].selection == selection && after[2].ciphertext == before[2].ciphertext)
         precondition(after.map { $0.tunnel.tunnelConfiguration!.asWgQuickConfig() } == originals)
         precondition(after.map { $0.id } == before.map { $0.id })
-        let encoded = try (after[0].tunnel.tunnelProvider.protocolConfiguration as! NETunnelProviderProtocol).privatePayload()!
+        guard let encodedProtocol = after[0].tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+              let encoded = try encodedProtocol.privatePayload() else { throw ProxyOperationError.unreadable }
         let identity = try encoded.serviceRoutingIdentity(); precondition(identity != nil)
         var remembered = selection; remembered.bypass = [facebook.id]
         var same = encoded; same.serviceRouting = try JSONEncoder().encode(remembered)
@@ -1808,7 +1809,8 @@ extension TunnelsManager {
         precondition(after.allSatisfy { $0.tunnel.tunnelProvider.isEnabled && !$0.tunnel.tunnelProvider.isOnDemandEnabled && $0.tunnel.status == .inactive })
         selection.setOnly(false); run(Array(after.prefix(2)), selection)
         let off = try serviceRoutingTargets()
-        let offPayload = try (off[0].tunnel.tunnelProvider.protocolConfiguration as! NETunnelProviderProtocol).privatePayload()!
+        guard let offProtocol = off[0].tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+              let offPayload = try offProtocol.privatePayload() else { throw ProxyOperationError.unreadable }
         let offIdentity = try offPayload.serviceRoutingIdentity(); precondition(offIdentity == nil)
         precondition(off[0].selection.mode == .unchanged && off[0].selection.only == [facebook.id])
         precondition(off[2].ciphertext == before[2].ciphertext && off.map { $0.tunnel.tunnelConfiguration!.asWgQuickConfig() } == originals)
