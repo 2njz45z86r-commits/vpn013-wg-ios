@@ -141,12 +141,15 @@ struct CrossProtocolPlan: Codable {
             try result.validate(); return result
         }
         let first = try group(payload, name: primary.serverAddress ?? "AmneziaWG", includeCandidates: true)
+        let serviceIdentity = try payload.serviceRoutingIdentity()
         var remaining: [Group] = []
         for manager in managers {
             guard let proto = manager.protocolConfiguration as? NETunnelProviderProtocol,
                   proto.providerBundleIdentifier == primary.providerBundleIdentifier,
                   proto.privateEnvelope?.id != envelope.id,
                   let value = try? proto.privatePayload(),
+                  (try? value.serviceRoutingIdentity()) == serviceIdentity,
+                  serviceIdentity == nil || (value.proxy == nil && payload.proxy == nil),
                   let candidate = try? group(value, name: manager.localizedDescription ?? "AmneziaWG") else { continue }
             remaining.append(candidate)
         }

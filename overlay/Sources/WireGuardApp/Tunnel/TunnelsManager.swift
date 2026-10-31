@@ -7,6 +7,7 @@ import os.log
 
 #if os(iOS)
     import UIKit
+    import CryptoKit
 #endif
 
 #if os(iOS)
@@ -743,6 +744,7 @@ class TunnelsManager {
               let old = proto.copy() as? NETunnelProviderProtocol else { completion(AutoTunnelError.keychain); return }
         do {
             let stored = try proto.privatePayload()
+            let serviceIdentity = try stored?.serviceRoutingIdentity()
             let group: AutoTunnelProfile?
             if stored?.automatic != nil && stored?.builtinAutomatic == nil {
                 group = try AutoTunnelProfile.load(from: proto)!
@@ -752,6 +754,7 @@ class TunnelsManager {
                 let configurations = sources.compactMap { item -> TunnelConfiguration? in
                     let value = try? (item.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.privatePayload()
                     guard value?.automatic == nil, let config = item.tunnelConfiguration,
+                          (try? value?.serviceRoutingIdentity()) == serviceIdentity,
                           let name = config.name, !names.contains(name),
                           (try? AutoTunnelProfile(configurations: [config])) != nil else { return nil }
                     names.insert(name); return config
@@ -1700,4 +1703,166 @@ extension NETunnelProviderManager {
             pollHandshakeFreshness()
         }
     }
+#endif
+
+#if os(iOS)
+struct WireGuardRoutingTarget {
+    let tunnel: TunnelContainer
+    let id: String
+    let ciphertext: Data
+    let sourceIdentity: Data
+    let selection: ServiceRoutingSelection
+}
+
+extension TunnelsManager {
+    func serviceRoutingTargets() throws -> [WireGuardRoutingTarget] {
+        try tunnels.compactMap { tunnel in
+            guard let proto = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+                  let envelope = proto.privateEnvelope, let payload = try proto.privatePayload(), payload.proxy == nil else { return nil }
+            let selection = try payload.serviceRouting.map { try JSONDecoder().decode(ServiceRoutingSelection.self, from: $0) } ?? ServiceRoutingSelection()
+            _ = try ServiceRoutingCatalog.shared.get().resolve(selection)
+            return WireGuardRoutingTarget(tunnel: tunnel, id: envelope.id, ciphertext: envelope.ciphertext, sourceIdentity: try serviceSourceIdentity(payload), selection: selection)
+        }
+    }
+
+    func updateServiceRouting(_ targets: [WireGuardRoutingTarget], selection: ServiceRoutingSelection,
+                              completion: @escaping (Error?) -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard !builtinPreparing, !CrossProtocolPlan.changingSources else { completion(ProxyOperationError.busy); return }
+        do {
+            let prepared = try prepareServiceRouting(targets, selection: selection)
+            #if targetEnvironment(simulator)
+            persistServiceRouting(prepared, completion: completion)
+            #else
+            _ = prepared // Preflight every target before invalidating recovery snapshots.
+            CrossProtocolPlan.prepareMutation { result in
+                switch result {
+                case .failure(let error): completion(error)
+                case .success(let permit):
+                    do {
+                        // Invalidation can alter encrypted recovery snapshots.
+                        // Recheck ownership and the original configuration before resealing.
+                        let current = try self.serviceRoutingTargets()
+                        let refreshed = try targets.map { target -> WireGuardRoutingTarget in
+                            guard let value = current.first(where: { $0.tunnel === target.tunnel && $0.id == target.id }),
+                                  value.sourceIdentity == target.sourceIdentity else { throw ProxyOperationError.unreadable }
+                            return value
+                        }
+                        let next = try self.prepareServiceRouting(refreshed, selection: selection)
+                        self.persistServiceRouting(next) { error in permit.release(); completion(error) }
+                    } catch { permit.release(); completion(error) }
+                }
+            }
+            #endif
+        } catch { completion(error) }
+    }
+
+    private func serviceSourceIdentity(_ payload: PrivateTunnelPayload) throws -> Data {
+        var source = payload; source.crossProtocol = nil
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return Data(SHA256.hash(data: try encoder.encode(source)))
+    }
+
+    #if targetEnvironment(simulator) && DEBUG
+    static func serviceRoutingFixture() -> String {
+        let manager = TunnelsManager(tunnelProviders: MockTunnels.createMockTunnels())
+        defer { for tunnel in manager.tunnels { (tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.destroyConfigurationReference() } }
+        do { return try manager.exerciseServiceRoutingFixture() } catch { preconditionFailure("WG service routing fixture failed") }
+    }
+    private func exerciseServiceRoutingFixture() throws -> String {
+        let before = try serviceRoutingTargets(); precondition(before.count == 3)
+        let originals = before.map { $0.tunnel.tunnelConfiguration!.asWgQuickConfig() }
+        let catalog = try ServiceRoutingCatalog.shared.get()
+        guard let facebook = catalog.groups.flatMap({ $0.services }).first(where: { $0.name == "Facebook" }) else { preconditionFailure("Missing pinned service") }
+        var selection = ServiceRoutingSelection(); selection.setOnly(true); selection.toggle(facebook.id)
+        func run(_ targets: [WireGuardRoutingTarget], _ value: ServiceRoutingSelection, failure: Bool = false) {
+            var completed = false
+            updateServiceRouting(targets, selection: value) { error in completed = true; precondition((error != nil) == failure) }
+            precondition(completed)
+        }
+        let forged = WireGuardRoutingTarget(tunnel: before[2].tunnel, id: "unowned", ciphertext: before[2].ciphertext, sourceIdentity: before[2].sourceIdentity, selection: before[2].selection)
+        run([before[0], forged], selection, failure: true)
+        let afterForged = try serviceRoutingTargets()
+        precondition(afterForged.map { $0.ciphertext } == before.map { $0.ciphertext })
+        before[1].tunnel.status = .active
+        run(Array(before.prefix(2)), selection, failure: true)
+        precondition(before[1].tunnel.status == .active)
+        before[1].tunnel.status = .inactive
+        before[1].tunnel.tunnelProvider.isOnDemandEnabled = true
+        run(Array(before.prefix(2)), selection, failure: true)
+        before[1].tunnel.tunnelProvider.isOnDemandEnabled = false
+        let afterGuards = try serviceRoutingTargets()
+        precondition(afterGuards.map { $0.ciphertext } == before.map { $0.ciphertext })
+        run(Array(before.prefix(2)), selection)
+        let after = try serviceRoutingTargets()
+        precondition(after[0].selection == selection && after[1].selection == selection && after[2].ciphertext == before[2].ciphertext)
+        precondition(after.map { $0.tunnel.tunnelConfiguration!.asWgQuickConfig() } == originals)
+        precondition(after.map { $0.id } == before.map { $0.id })
+        precondition(after.allSatisfy { $0.tunnel.tunnelProvider.isEnabled && !$0.tunnel.tunnelProvider.isOnDemandEnabled && $0.tunnel.status == .inactive })
+        selection.setOnly(false); run(Array(after.prefix(2)), selection)
+        let off = try serviceRoutingTargets()
+        precondition(off[0].selection.mode == .unchanged && off[0].selection.only == [facebook.id])
+        precondition(off[2].ciphertext == before[2].ciphertext && off.map { $0.tunnel.tunnelConfiguration!.asWgQuickConfig() } == originals)
+        return "WG bulk: ownership, active/on-demand guards, 2/3 scope, original configs, retained OFF choices passed"
+    }
+    #endif
+
+    private func prepareServiceRouting(_ targets: [WireGuardRoutingTarget], selection: ServiceRoutingSelection) throws -> [(WireGuardRoutingTarget, NETunnelProviderProtocol)] {
+        guard !targets.isEmpty, targets.count <= 512, Set(targets.map { $0.id }).count == targets.count else { throw ProxyOperationError.unreadable }
+        let resolved = try ServiceRoutingCatalog.shared.get().resolveWireGuard(selection)
+        let routing = try resolved.map { try WireGuardIPv4ServiceRouting(mode: $0.mode == .only ? .only : .bypass, networks: $0.networks) }
+        let data = try JSONEncoder().encode(selection)
+        guard data.count <= 32_768 else { throw ServiceCatalogError.invalid }
+        return try targets.map { target in
+            guard tunnels.contains(where: { $0 === target.tunnel }), target.tunnel.status == .inactive,
+                  let proto = target.tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+                  proto.privateEnvelope?.id == target.id, proto.privateEnvelope?.ciphertext == target.ciphertext,
+                  let next = proto.copy() as? NETunnelProviderProtocol, var payload = try proto.privatePayload(), payload.proxy == nil else { throw ProxyOperationError.stopFirst }
+            guard !target.tunnel.tunnelProvider.isOnDemandEnabled else { throw ServiceCatalogError.automaticStart }
+            let configurations = try payload.automatic?.validatedConfigurations() ?? [TunnelConfiguration(fromWgQuickConfig: payload.configuration, called: target.tunnel.name)]
+            for configuration in configurations { try routing?.validate(configuration: configuration) }
+            payload.serviceRouting = data; payload.builtinAutomatic = nil; payload.crossProtocol = nil
+            let sealed = try PrivateTunnelStore.current.seal(JSONEncoder().encode(payload), reusing: target.id)
+            var values = proto.providerConfiguration ?? [:]
+            values[PrivateTunnelStore.idKey] = sealed.id; values[PrivateTunnelStore.dataKey] = sealed.ciphertext
+            next.providerConfiguration = values
+            return (target, next)
+        }
+    }
+
+    private func persistServiceRouting(_ prepared: [(WireGuardRoutingTarget, NETunnelProviderProtocol)], completion: @escaping (Error?) -> Void) {
+        builtinPreparing = true
+        var attempted: [(TunnelContainer, NETunnelProviderProtocol)] = []
+        var offset = 0
+        func persist(_ tunnel: TunnelContainer, _ done: @escaping (Error?) -> Void) {
+            #if targetEnvironment(simulator)
+            done(nil)
+            #else
+            tunnel.tunnelProvider.saveToPreferences { error in DispatchQueue.main.async { done(error) } }
+            #endif
+        }
+        func finish(_ error: Error?) { builtinPreparing = false; completion(error) }
+        func rollback(_ original: Error) {
+            var failed = false
+            func next() {
+                guard let (tunnel, old) = attempted.popLast() else { finish(failed ? ProxyOperationError.routingPartial : original); return }
+                guard tunnel.status == .inactive, !tunnel.tunnelProvider.isOnDemandEnabled else { failed = true; next(); return }
+                tunnel.tunnelProvider.protocolConfiguration = old
+                persist(tunnel) { error in failed = failed || error != nil; next() }
+            }
+            next()
+        }
+        func next() {
+            guard offset < prepared.count else { finish(nil); return }
+            let (target, proto) = prepared[offset]; offset += 1
+            guard tunnels.contains(where: { $0 === target.tunnel }), target.tunnel.status == .inactive, !target.tunnel.tunnelProvider.isOnDemandEnabled,
+                  let old = target.tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol,
+                  old.privateEnvelope?.id == target.id, old.privateEnvelope?.ciphertext == target.ciphertext else { rollback(ProxyOperationError.stopFirst); return }
+            attempted.append((target.tunnel, old))
+            target.tunnel.tunnelProvider.protocolConfiguration = proto
+            persist(target.tunnel) { error in if let error = error { rollback(error) } else { next() } }
+        }
+        next()
+    }
+}
 #endif

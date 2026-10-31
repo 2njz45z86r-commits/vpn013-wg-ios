@@ -218,7 +218,12 @@ extension SettingsTableViewController {
             cell.onTapped = { [weak self] in
                 guard let self = self else { return }
                 if field == .routing {
-                    self.navigationController?.pushViewController(ProxyRoutingProfilesViewController(kind: self.connectionKind == .amneziawg ? nil : self.connectionKind), animated: true)
+                    if self.connectionKind == nil || self.connectionKind == .amneziawg {
+                        guard let manager = self.tunnelsManager else { return }
+                        self.navigationController?.pushViewController(WireGuardRoutingProfilesViewController(manager: manager), animated: true)
+                    } else {
+                        self.navigationController?.pushViewController(ProxyRoutingProfilesViewController(kind: self.connectionKind), animated: true)
+                    }
                 } else if field == .refreshConfigurations { self.refreshConfigurations() }
                 else { self.checkApplicationUpdate() }
             }

@@ -98,6 +98,17 @@ public class WireGuardAdapter {
 
     /// Adapter state.
     private var state: State = .stopped
+    private var ipv4ServiceRouting: WireGuardIPv4ServiceRouting?
+
+    /// A route edit never restarts a running device. Automatic member changes
+    /// retain the explicit overlay belonging to this logical connection.
+    public func setIPv4ServiceRouting(_ routing: WireGuardIPv4ServiceRouting?, completionHandler: @escaping (WireGuardAdapterError?) -> Void) {
+        workQueue.async {
+            guard case .stopped = self.state else { completionHandler(.invalidState); return }
+            self.ipv4ServiceRouting = routing
+            completionHandler(nil)
+        }
+    }
 
     /// Tunnel device file descriptor.
     private var tunnelFileDescriptor: Int32? {
@@ -494,9 +505,13 @@ public class WireGuardAdapter {
     /// - Throws: an error of type `WireGuardAdapterError`.
     /// - Returns: an instance of type `PacketTunnelSettingsGenerator`.
     private func makeSettingsGenerator(with tunnelConfiguration: TunnelConfiguration) throws -> PacketTunnelSettingsGenerator {
+        let endpoints = try self.resolvePeers(for: tunnelConfiguration)
+        do { try ipv4ServiceRouting?.validate(configuration: tunnelConfiguration, resolvedEndpoints: endpoints) }
+        catch { throw WireGuardAdapterError.setNetworkSettings(error) }
         return PacketTunnelSettingsGenerator(
             tunnelConfiguration: tunnelConfiguration,
-            resolvedEndpoints: try self.resolvePeers(for: tunnelConfiguration)
+            resolvedEndpoints: endpoints,
+            serviceRouting: ipv4ServiceRouting
         )
     }
 

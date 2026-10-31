@@ -142,16 +142,44 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let rememberStatisticsStartup = { self.localStatisticsEpoch = statisticsEpoch }
         if Thread.isMainThread { rememberStatisticsStartup() }
         else { DispatchQueue.main.sync(execute: rememberStatisticsStartup) }
-        let activationAttemptId = options?["activationAttemptId"] as? String
-        let errorNotifier = ErrorNotifier(activationAttemptId: activationAttemptId)
+        let context = ServicePreparedStart(options: options, epoch: statisticsEpoch)
 
         Logger.configureGlobal(tagged: "NET", withFilePath: FileManager.logFileURL?.path)
 
         #if os(iOS)
         do {
-            try (self.protocolConfiguration as? NETunnelProviderProtocol)?.receivePrivateStartKey(options)
+            let proto = self.protocolConfiguration as? NETunnelProviderProtocol
+            try proto?.receivePrivateStartKey(options)
+            var routing: WireGuardIPv4ServiceRouting?
+            if let data = try proto?.privatePayload()?.serviceRouting {
+                guard data.count <= 32_768 else { throw ServiceCatalogError.invalid }
+                let selection = try JSONDecoder().decode(ServiceRoutingSelection.self, from: data)
+                if let plan = try ServiceRoutingCatalog.shared.get().resolveWireGuard(selection) {
+                    routing = try WireGuardIPv4ServiceRouting(mode: plan.mode == .only ? .only : .bypass, networks: plan.networks)
+                }
+            }
+            adapter.setIPv4ServiceRouting(routing) { error in
+                DispatchQueue.main.async {
+                    guard self.localStatisticsEpoch == statisticsEpoch else { completionHandler(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)); return }
+                    guard error == nil else { completionHandler(PacketTunnelProviderError.couldNotSetNetworkSettings); return }
+                    self.startServicePreparedTunnel(context, completionHandler: completionHandler)
+                }
+            }
         } catch { completionHandler(error); return }
+        #else
+        startServicePreparedTunnel(context, completionHandler: completionHandler)
         #endif
+    }
+
+    private struct ServicePreparedStart {
+        let options: [String: NSObject]?
+        let epoch: UUID
+    }
+
+    private func startServicePreparedTunnel(_ context: ServicePreparedStart, completionHandler: @escaping (Error?) -> Void) {
+        let options = context.options, statisticsEpoch = context.epoch
+        let activationAttemptId = options?["activationAttemptId"] as? String
+        let errorNotifier = ErrorNotifier(activationAttemptId: activationAttemptId)
 
         #if os(iOS)
         if let proto = self.protocolConfiguration as? NETunnelProviderProtocol,

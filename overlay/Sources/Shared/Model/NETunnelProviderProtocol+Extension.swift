@@ -22,8 +22,10 @@ extension NETunnelProviderProtocol {
         PrivateTunnelStore.lastError = nil
         do {
             let previous = old as? NETunnelProviderProtocol
-            let automatic = try previous?.privatePayload()?.automatic
-            let payload = PrivateTunnelPayload(version: 1, configuration: tunnelConfiguration.asWgQuickConfig(), automatic: automatic)
+            let previousPayload = try previous?.privatePayload()
+            let automatic = previousPayload?.automatic
+            var payload = PrivateTunnelPayload(version: 1, configuration: tunnelConfiguration.asWgQuickConfig(), automatic: automatic)
+            payload.serviceRouting = previousPayload?.serviceRouting
             let sealed = try PrivateTunnelStore.current.seal(JSONEncoder().encode(payload), reusing: previous?.privateEnvelope?.id)
             providerConfiguration = [PrivateTunnelStore.idKey: sealed.id, PrivateTunnelStore.dataKey: sealed.ciphertext]
         } catch { PrivateTunnelStore.lastError = error; return nil }

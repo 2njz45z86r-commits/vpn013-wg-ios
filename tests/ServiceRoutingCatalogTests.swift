@@ -64,6 +64,15 @@ import Foundation
             check(actual["outboundTag"] as! String == (mode == .bypass ? "vpn013-direct" : "vpn013-proxy"), "Selected packet-engine action")
             check(compiled.last!["outboundTag"] as! String == (mode == .only ? "vpn013-direct" : "vpn013-proxy"), "Complement packet-engine action")
         }
+        check(all.filter { catalog.supportsWireGuard($0.id) }.count == 411, "Only actual static-IP services are WG-compatible")
+        var wg = ServiceRoutingSelection(); wg.setOnly(true); wg.toggle(facebook.id)
+        check(try catalog.resolveWireGuard(wg)?.networks == only.networks, "WG materializes the same pinned IPv4 destinations")
+        wg.setBypass(true); wg.toggle(facebook.id)
+        check(try catalog.resolveWireGuard(wg)?.mode == .bypass, "WG bypass is exclusive and explicit")
+        let domainOnly = all.filter { !catalog.supportsWireGuard($0.id) }
+        check(domainOnly.count == 1, "Owner domain-only service is retained, not replaced with fake addresses")
+        wg.toggle(domainOnly[0].id); rejects { _ = try catalog.resolveWireGuard(wg) }
+        wg.setBypass(false); check(try catalog.resolveWireGuard(wg) == nil, "OFF never applies an unsupported remembered choice")
         print("ServiceRoutingCatalogTests: \(checks) checks passed; no VPN or live requests")
     }
 }

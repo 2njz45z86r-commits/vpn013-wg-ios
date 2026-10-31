@@ -94,6 +94,25 @@ struct PrivateTunnelPayload: Codable {
     // Once Auto may have selected a reserve, a saved seed is never proof of the
     // current endpoint, including after Auto is paused. Reset on a new start.
     var builtinAutomaticIdentityRequired: Bool? = nil
+    // Opaque-ID service selection only. Original WG quick text stays intact.
+    var serviceRouting: Data? = nil
+
+    /// Foundation-only identity keeps model/compiler fixtures independent of
+    /// UI resources. OFF retains choices but is equivalent to legacy routing.
+    func serviceRoutingIdentity() throws -> Data? {
+        guard let data = serviceRouting else { return nil }
+        guard data.count <= 32_768,
+              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              Set(object.keys) == Set(["mode", "only", "bypass"]),
+              let mode = object["mode"] as? String, ["unchanged", "only", "bypass"].contains(mode),
+              let only = object["only"] as? [String], let bypass = object["bypass"] as? [String],
+              [only, bypass].allSatisfy({ values in
+                  values.count <= 412 && Set(values).count == values.count && values.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 128 })
+              }) else { throw PrivateStoreError.invalidEnvelope }
+        guard mode != "unchanged" else { return nil }
+        guard !(mode == "only" ? only : bypass).isEmpty else { throw PrivateStoreError.invalidEnvelope }
+        return try JSONSerialization.data(withJSONObject: ["mode": mode, "ids": (mode == "only" ? only : bypass).sorted()], options: [.sortedKeys])
+    }
 }
 
 extension NETunnelProviderProtocol {
@@ -106,11 +125,13 @@ extension NETunnelProviderProtocol {
         guard let envelope = privateEnvelope else { return nil }
         let value = try JSONDecoder().decode(PrivateTunnelPayload.self, from: PrivateTunnelStore.current.open(envelope))
         guard value.version == 1 else { throw PrivateStoreError.invalidEnvelope }
+        _ = try value.serviceRoutingIdentity()
         return value
     }
     func setPrivateAutomatic(_ automatic: AutoTunnelProfile) throws {
         guard let envelope = privateEnvelope, let old = try privatePayload() else { throw PrivateStoreError.invalidEnvelope }
-        let payload = PrivateTunnelPayload(version: 1, configuration: old.configuration, automatic: automatic, proxy: old.proxy, builtinAutomatic: nil, automaticEnabled: old.automaticEnabled)
+        var payload = PrivateTunnelPayload(version: 1, configuration: old.configuration, automatic: automatic, proxy: old.proxy, builtinAutomatic: nil, automaticEnabled: old.automaticEnabled)
+        payload.serviceRouting = old.serviceRouting
         let next = try PrivateTunnelStore.current.seal(JSONEncoder().encode(payload), reusing: envelope.id)
         providerConfiguration = [PrivateTunnelStore.idKey: next.id, PrivateTunnelStore.dataKey: next.ciphertext]
     }

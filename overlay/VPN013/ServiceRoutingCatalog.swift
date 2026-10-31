@@ -3,8 +3,14 @@ import Foundation
 import CryptoKit
 
 enum ServiceCatalogError: Error, LocalizedError {
-    case invalid
-    var errorDescription: String? { "Каталог маршрутизации недоступен или выбор не прошёл проверку. Прежние правила сохранены." }
+    case invalid, wireGuardDomains, automaticStart
+    var errorDescription: String? {
+        switch self {
+        case .invalid: return "Каталог маршрутизации недоступен или выбор не прошёл проверку. Прежние правила сохранены."
+        case .wireGuardDomains: return "Этот сервис требует маршрутизации по доменам, которая здесь пока недоступна для WireGuard. Прежние правила сохранены."
+        case .automaticStart: return "Сначала отключите подключение по требованию для выбранных серверов. Действующие подключения не изменены."
+        }
+    }
 }
 
 struct ServiceRoutingSelection: Codable, Equatable {
@@ -107,5 +113,16 @@ final class ServiceRoutingCatalog {
             let services = group.title.localizedCaseInsensitiveContains(value) ? group.services : group.services.filter { $0.name.localizedCaseInsensitiveContains(value) }
             return services.isEmpty ? nil : ServiceCatalogGroup(id: group.id, title: group.title, services: services)
         }
+    }
+
+    func supportsWireGuard(_ id: String) -> Bool {
+        guard let value = rules[id] else { return false }
+        return value.domains.isEmpty && !value.ipv4.isEmpty
+    }
+
+    func resolveWireGuard(_ selection: ServiceRoutingSelection) throws -> Plan? {
+        guard let plan = try resolve(selection) else { return nil }
+        guard plan.domains.isEmpty, !plan.networks.isEmpty else { throw ServiceCatalogError.wireGuardDomains }
+        return plan
     }
 }

@@ -50,6 +50,7 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testRoutingSelectsMultipleServersAndPreservesUnselected \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testProxyRowConnectsAndOnlyRightStripOpensConfiguration \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testServiceCatalogGroupsExclusiveModesAndRememberedSelection \
+ -only-testing:AutoTunnelUITests/AutoTunnelUITests/testWireGuardServicesUseOwnServersAndKeepUnselectedConfiguration \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedInvalidImportKeepsProfiles \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testUnifiedRoutingPersistsTypedPolicy \
  -only-testing:AutoTunnelUITests/AutoTunnelUITests/testAutomaticModeDefaultSharedAndPersistent \

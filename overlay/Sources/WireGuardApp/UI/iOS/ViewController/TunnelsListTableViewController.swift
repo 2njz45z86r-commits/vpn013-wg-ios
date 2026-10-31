@@ -308,6 +308,11 @@ class TunnelsListTableViewController: UIViewController {
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-russian-routes") {
             routingLabel.accessibilityValue = PacketTunnelSettingsGenerator.russianRoutingSettingsFixture()
         }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-wg-service-routing") {
+            routingLabel.accessibilityValue = PacketTunnelSettingsGenerator.russianRoutingSettingsFixture() + "; " + TunnelsManager.serviceRoutingFixture()
+        }
+        #endif
         #endif
         summaryProofLabel.accessibilityIdentifier = "vpn013.current-proof"
         currentPingLabel.accessibilityIdentifier = "vpn013.current-ping-result"

@@ -12,13 +12,72 @@ import WireGuardKitC
 /// A type alias for `Result` type that holds a tuple with source and resolved endpoint.
 typealias EndpointResolutionResult = Result<(Endpoint, Endpoint), DNSResolutionError>
 
+/// A client-only IPv4 overlay. Never changes a peer key, endpoint, AllowedIPs,
+/// original quick configuration, or the existing IPv6 policy.
+public struct WireGuardIPv4ServiceRouting {
+    public enum Mode { case only, bypass }
+    public enum ValidationError: Error { case invalid }
+    public let mode: Mode
+    private let networks: [IPAddressRange]
+
+    public init(mode: Mode, networks: [String]) throws {
+        guard !networks.isEmpty, networks.count <= 16_384,
+              Set(networks).count == networks.count else { throw ValidationError.invalid }
+        self.mode = mode
+        self.networks = try networks.map { text in
+            guard let range = IPAddressRange(from: text), range.address is IPv4Address,
+                  range.networkPrefixLength > 0, range.networkPrefixLength <= 32,
+                  String(describing: range.address) == String(describing: range.maskedAddress()) else { throw ValidationError.invalid }
+            return range
+        }
+    }
+    public func validate(configuration: TunnelConfiguration, resolvedEndpoints: [Endpoint?] = []) throws {
+        guard configuration.peers.count == 1,
+              configuration.interface.addresses.contains(where: { $0.address is IPv4Address }),
+              configuration.interface.addresses.filter({ $0.address is IPv4Address }).allSatisfy({ $0.networkPrefixLength > 0 }),
+              configuration.peers[0].allowedIPs.contains(where: { $0.address is IPv4Address && $0.networkPrefixLength == 0 })
+        else { throw ValidationError.invalid }
+        let dns = Set(configuration.interface.dns.map { $0.stringRepresentation }.filter { IPv4Address($0) != nil })
+        for endpoint in resolvedEndpoints.compactMap({ $0 }) {
+            if case .ipv4(let address) = endpoint.host, dns.contains(String(describing: address)) { throw ValidationError.invalid }
+        }
+    }
+    fileprivate func apply(to settings: NEPacketTunnelNetworkSettings, configuration: TunnelConfiguration, endpoints: [Endpoint?]) {
+        guard let ipv4 = settings.ipv4Settings else { return }
+        let dns = configuration.interface.dns.map { $0.stringRepresentation }.filter { IPv4Address($0) != nil }
+        let selected = networks.filter { !($0.networkPrefixLength == 32 && dns.contains(String(describing: $0.address))) }
+            .map { NEIPv4Route(destinationAddress: String(describing: $0.address), subnetMask: String(describing: $0.subnetMask())) }
+        let dnsRoutes = dns.map { NEIPv4Route(destinationAddress: $0, subnetMask: "255.255.255.255") }
+        switch mode {
+        case .only:
+            // Interface routes and DNS stay reachable. Only explicitly selected
+            // IPv4 destinations enter the VPN; IPv6 retains its previous policy.
+            ipv4.includedRoutes = (ipv4.includedRoutes ?? []).filter { $0.gatewayAddress != nil } + selected + dnsRoutes
+            ipv4.excludedRoutes = endpoints.compactMap { endpoint in
+                guard let endpoint = endpoint else { return nil }
+                if case .ipv4(let address) = endpoint.host { return NEIPv4Route(destinationAddress: String(describing: address), subnetMask: "255.255.255.255") }
+                return nil
+            }
+        case .bypass:
+            // Keep the original split policy, plus the explicit service bypass.
+            // A DNS host route remains more specific than service CIDRs.
+            ipv4.includedRoutes = (ipv4.includedRoutes ?? []) + dnsRoutes
+            ipv4.excludedRoutes = (ipv4.excludedRoutes ?? []).filter {
+                !($0.destinationSubnetMask == "255.255.255.255" && dns.contains($0.destinationAddress))
+            } + selected
+        }
+    }
+}
+
 class PacketTunnelSettingsGenerator {
     let tunnelConfiguration: TunnelConfiguration
     let resolvedEndpoints: [Endpoint?]
+    let serviceRouting: WireGuardIPv4ServiceRouting?
 
-    init(tunnelConfiguration: TunnelConfiguration, resolvedEndpoints: [Endpoint?]) {
+    init(tunnelConfiguration: TunnelConfiguration, resolvedEndpoints: [Endpoint?], serviceRouting: WireGuardIPv4ServiceRouting? = nil) {
         self.tunnelConfiguration = tunnelConfiguration
         self.resolvedEndpoints = resolvedEndpoints
+        self.serviceRouting = serviceRouting
     }
 
     func endpointUapiConfiguration() -> (String, [EndpointResolutionResult?]) {
@@ -219,6 +278,8 @@ class PacketTunnelSettingsGenerator {
         ipv6Settings.includedRoutes = ipv6IncludedRoutes
         ipv6Settings.excludedRoutes = ipv6ExcludedRoutes
         networkSettings.ipv6Settings = ipv6Settings
+
+        serviceRouting?.apply(to: networkSettings, configuration: tunnelConfiguration, endpoints: resolvedEndpoints)
 
         return networkSettings
     }
@@ -11211,6 +11272,22 @@ extension PacketTunnelSettingsGenerator {
         precondition(ipv4Settings.ipv6Settings?.includedRoutes?.contains(where: {$0.destinationNetworkPrefixLength.intValue == 0}) == true)
         precondition(ipv4Settings.ipv6Settings?.excludedRoutes?.count == 2167)
         precondition(ipv4Config.interface.addresses.count == 1 && ipv4Config.peers[0].allowedIPs == ipv4Peer.allowedIPs)
+        guard let only = try? WireGuardIPv4ServiceRouting(mode: .only, networks: ["203.0.113.0/24"]),
+              let bypass = try? WireGuardIPv4ServiceRouting(mode: .bypass, networks: ["203.0.113.0/24"]) else { preconditionFailure("Invalid local service fixture") }
+        do { try only.validate(configuration: ipv4Config) } catch { preconditionFailure("Invalid service fixture configuration") }
+        let onlySettings = PacketTunnelSettingsGenerator(tunnelConfiguration: ipv4Config, resolvedEndpoints: [nil], serviceRouting: only).generateNetworkSettings()
+        precondition(onlySettings.ipv4Settings?.includedRoutes?.contains(where: { $0.destinationAddress == "203.0.113.0" && $0.destinationSubnetMask == "255.255.255.0" }) == true)
+        precondition(onlySettings.ipv4Settings?.includedRoutes?.contains(where: { $0.destinationSubnetMask == "0.0.0.0" }) == false)
+        precondition(onlySettings.ipv4Settings?.excludedRoutes?.isEmpty == true)
+        precondition(onlySettings.ipv6Settings?.excludedRoutes?.count == 2167)
+        precondition(onlySettings.ipv6Settings?.includedRoutes?.contains(where: { $0.destinationNetworkPrefixLength.intValue == 0 }) == true)
+        let bypassSettings = PacketTunnelSettingsGenerator(tunnelConfiguration: ipv4Config, resolvedEndpoints: [nil], serviceRouting: bypass).generateNetworkSettings()
+        precondition(bypassSettings.ipv4Settings?.includedRoutes?.contains(where: { $0.destinationSubnetMask == "0.0.0.0" }) == true)
+        precondition(bypassSettings.ipv4Settings?.excludedRoutes?.contains(where: { $0.destinationAddress == "203.0.113.0" && $0.destinationSubnetMask == "255.255.255.0" }) == true)
+        precondition(ipv4Config.peers[0].allowedIPs == ipv4Peer.allowedIPs)
+        precondition((try? WireGuardIPv4ServiceRouting(mode: .only, networks: [])) == nil)
+        precondition((try? WireGuardIPv4ServiceRouting(mode: .only, networks: ["0.0.0.0/0"])) == nil)
+        precondition((try? WireGuardIPv4ServiceRouting(mode: .only, networks: ["::/0"])) == nil)
         return "8671 IPv4 / 2167 IPv6; original peers retained"
     }
 }
