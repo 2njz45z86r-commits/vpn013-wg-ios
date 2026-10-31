@@ -86,8 +86,12 @@ jobs:
           PY
             exit 1
           }
-          bash scripts/build-previous-android-fixture.sh
-          bash scripts/build-future-android-fixture.sh
+          # The focused diagnostic does not execute installer/upgrade cases.
+          # Keep both historical fixtures mandatory in full acceptance only.
+          if [ "${R013_FOCUS_RUNTIME:-false}" != true ]; then
+            bash scripts/build-previous-android-fixture.sh
+            bash scripts/build-future-android-fixture.sh
+          fi
       - name: Exercise disposable VPN, upgrades, native switch and device classes
         id: emulator
         run: |
@@ -133,6 +137,10 @@ jobs:
                   # Only retain exception class and owned test line; no messages,
                   # input URLs, fixture credentials or network endpoint details.
                   for line in text.splitlines():
+                      models=re.search(r'ProxyXHTTPModelTests: [1-9][0-9]{0,3} checks passed; semantic models only; no VPN traffic proof', line)
+                      if models: selected.append(models.group(0))
+                      proxy=re.search(r'Synthetic proxy section=(?:HAPP|INCY|BLACKTEMPLE) transport=(?:tcp|xhttp) stage=(?:import|start|traffic|capture|stop|delete) exception=[A-Za-z]+', line)
+                      if proxy: selected.append(proxy.group(0))
                       diagnostic=re.search(r'comparison-state: member=(?:slow|fast|none|other) phase=[a-z_]+ index=-?\d+ auto=(?:true|false)', line)
                       if diagnostic: selected.append(diagnostic.group(0))
                       exception=re.search(r'\b(?:java|javax|kotlin|android)[\w.$]*(?:Exception|Error)\b', line)

@@ -102,6 +102,10 @@ test -s "$RUNNER_TEMP/r013-synthetic.conf"
 test -s "$RUNNER_TEMP/r013-synthetic-candidate.conf"
 start_proxy_fixture() {
 (cd tunnel/tools/libwg-go && go build -o "$RUNNER_TEMP/r013-proxy-peer" ../../../r013-ci/proxy-peer.go)
+timeout 30s "$RUNNER_TEMP/r013-proxy-peer" --self-test > "$RUNNER_TEMP/r013-proxy-self-test.log" 2>&1
+grep -Fx 'Disposable REALITY/VLESS tcp fixture nonce exchange passed' "$RUNNER_TEMP/r013-proxy-self-test.log"
+grep -Fx 'Disposable REALITY/VLESS xhttp fixture nonce exchange passed' "$RUNNER_TEMP/r013-proxy-self-test.log"
+printf '%s\n' '{"hostFixtureTCPNonce":true,"hostFixtureXHTTPNonce":true,"androidTrafficVerified":false}' > output/review/proxy-host-self-test.json
 "$RUNNER_TEMP/r013-proxy-peer" > "$RUNNER_TEMP/r013-proxy-peer.log" 2>&1 &
 proxy_pid=$!
 for i in $(seq 1 30); do test -s "$RUNNER_TEMP/r013-proxy-fixture.json" && break; sleep 1; done
@@ -111,11 +115,14 @@ proxy_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-proxy-fixture.json")
 fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic.conf")
 candidate_fixture=$(base64 -w0 "$RUNNER_TEMP/r013-synthetic-candidate.conf")
 if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
-  # Diagnostic scope is exactly one real coordinator case and both proxy
+  # Diagnostic scope is one real coordinator case, shared semantic/ZIP case and both proxy
   # runtime cases. It is never a complete acceptance result or release input.
   adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest#jRealCoordinatorChoosesFasterPeerWithActualPolicyAndUnchangedProfiles -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/focused-coordinator.txt
   coordinator_ok=false
   if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/focused-coordinator.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/focused-coordinator.txt; then coordinator_ok=true; fi
+  adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest#multiServerSubscriptionImportsPrimaryNodesOnly com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/focused-semantic.txt
+  semantic_ok=false
+  if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/focused-semantic.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/focused-semantic.txt; then semantic_ok=true; fi
   sudo ip address add 198.18.0.1/32 dev lo
   control_alias_added=yes
   start_proxy_fixture
@@ -123,8 +130,8 @@ if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
   proxy_ok=false
   if grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/proxy-runtime.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/proxy-runtime.txt; then proxy_ok=true; fi
   unset proxy_fixture fixture candidate_fixture
-  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedProxyCases":2,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
-  test "$coordinator_ok" = true && test "$proxy_ok" = true
+  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedSemanticCases":1,"expectedProxyCases":2,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
+  test "$coordinator_ok" = true && test "$semantic_ok" = true && test "$proxy_ok" = true
   exit $?
 fi
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt

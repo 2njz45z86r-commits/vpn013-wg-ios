@@ -92,7 +92,7 @@ class ProxyRegistry(private val vault: PrivateVault) {
         }.joinToString("&")
         val host = record.getString("host").let { if (it.contains(':')) "[$it]" else it }
         val uri = "vless://${record.getString("user")}@$host:${record.getInt("port")}?$encoded#${percent(record.getString("name"))}"
-        return ProxyProfile.parse(uri, ProxyProfile.Section.valueOf(record.getString("section")))
+        return ProxyImport.parse(uri, ProxyProfile.Section.valueOf(record.getString("section"))).single()
     }
 
     private fun percent(value: String): String = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")

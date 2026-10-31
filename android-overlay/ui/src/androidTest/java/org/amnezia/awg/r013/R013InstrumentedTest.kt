@@ -77,6 +77,13 @@ class R013InstrumentedTest {
         assertEquals(listOf("One","Two"), registry.automaticMembers("One").map { it.first })
     }
     @Test fun multiServerSubscriptionImportsPrimaryNodesOnly() {
+        // Execute the same semantic cases with Android's real org.json too.
+        // The host JVM run alone is not Android platform verification.
+        val xhttpChecks = ProxyXHTTPModelTests.runChecks()
+        assertEquals(102, xhttpChecks)
+        val review = File(context.getExternalFilesDir(null), "review").apply { mkdirs() }
+        File(review, "xhttp-semantic-models.json").writeText(JSONObject().put("platform", "android")
+            .put("checks", xhttpChecks).put("passed", true).put("trafficVerified", false).toString())
         val user = "00000000-0000-4000-8000-000000000001"
         val nodes = (1..18).map { n ->
             ProxyConfiguration.outbound(ProxyProfile.parse(

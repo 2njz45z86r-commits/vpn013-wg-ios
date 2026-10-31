@@ -22,7 +22,9 @@ object ProxyImport {
     fun parse(text: String, section: ProxyProfile.Section): List<ProxyProfile> {
         if (text.toByteArray(Charsets.UTF_8).size > 8_388_608) invalid()
         val trimmed = text.trim()
-        if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return ProxyProfile.parseList(text, section)
+        if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return ProxyProfile.parseList(text, section) { raw ->
+            ProxyXHTTPOptions.checked(ProxyProfile.parseTransportURI(raw, section))
+        }
         // Bound parser recursion before allocating JSONObject/JSONArray on a caller-supplied document.
         var depth = 0; var quoted = false; var escaped = false
         for (character in trimmed) {
@@ -89,7 +91,7 @@ object ProxyImport {
             return result.toList()
         } catch (_: org.json.JSONException) { invalid() }
     }
-    private fun fromOutbound(outbound: JSONObject, section: ProxyProfile.Section): ProxyProfile {
+    internal fun fromOutbound(outbound: JSONObject, section: ProxyProfile.Section): ProxyProfile {
         fields(outbound, setOf("tag", "protocol", "settings", "streamSettings"))
         val settings = outbound.optJSONObject("settings") ?: invalid()
         fields(settings, setOf("vnext"))
@@ -99,10 +101,16 @@ object ProxyImport {
         fields(user, setOf("id", "encryption", "flow", "level", "email"))
         if (user.has("level") && user.opt("level") != 0) invalid()
         val stream = outbound.optJSONObject("streamSettings") ?: invalid()
-        val type = string(stream, "network", "tcp")
-        val security = string(stream, "security")
+        val rawType = string(stream, "network", "tcp").lowercase(java.util.Locale.ROOT)
+        val type = when (rawType) { "raw" -> "tcp"; "splithttp" -> "xhttp"; else -> rawType }
+        val security = string(stream, "security").lowercase(java.util.Locale.ROOT)
         if (type !in setOf("tcp", "ws", "grpc", "xhttp") || security !in setOf("tls", "reality")) invalid()
-        val transportKey = mapOf("tcp" to "tcpSettings", "ws" to "wsSettings", "grpc" to "grpcSettings", "xhttp" to "xhttpSettings")[type]
+        val transportKey = when (type) {
+            "tcp" -> if (stream.has("rawSettings")) "rawSettings" else "tcpSettings"
+            "xhttp" -> if (stream.has("splithttpSettings")) "splithttpSettings" else "xhttpSettings"
+            "ws" -> "wsSettings"
+            else -> "grpcSettings"
+        }
         fields(stream, setOfNotNull("network", "security", if (security == "tls") "tlsSettings" else "realitySettings", transportKey))
         val tls = stream.optJSONObject(if (security == "tls") "tlsSettings" else "realitySettings") ?: invalid()
         fields(tls, setOf("serverName", "fingerprint", "alpn", "allowInsecure", "publicKey", "shortId", "spiderX", "mldsa65Verify", "show"))
@@ -120,7 +128,7 @@ object ProxyImport {
             query["alpn"] = (0 until alpn.length()).map { alpn.opt(it) as? String ?: invalid() }.joinToString(",")
         }
         if (tls.has("alpn") && tls.optJSONArray("alpn") == null) invalid()
-        transportKey?.let { key ->
+        transportKey.let { key ->
             val transport = stream.optJSONObject(key) ?: JSONObject()
             when (type) {
                 "tcp" -> {
@@ -152,9 +160,10 @@ object ProxyImport {
                     query["mode"] = if (transport.optBoolean("multiMode", false)) "multi" else "gun"
                 }
                 "xhttp" -> {
-                    fields(transport, setOf("path", "host", "mode", "xPaddingBytes"))
                     query["path"] = string(transport, "path", "/"); query["mode"] = string(transport, "mode", "auto")
                     if (transport.has("host")) query["host"] = string(transport, "host")
+                    val extra = JSONObject(transport.toString()).apply { remove("path"); remove("host"); remove("mode"); remove("xPaddingBytes") }
+                    if (extra.length() > 0) query["extra"] = extra.toString()
                     if (transport.has("xPaddingBytes")) {
                         val padding = transport.opt("xPaddingBytes")
                         query["x_padding_bytes"] = when (padding) {
@@ -172,7 +181,7 @@ object ProxyImport {
         val port = node.opt("port")
         if (port !is Number || port.toDouble() != port.toInt().toDouble()) invalid()
         val encoded = query.entries.joinToString("&") { percent(it.key) + "=" + percent(it.value) }
-        return ProxyProfile.parse("vless://${percent(string(user, "id"))}@$host:${port.toInt()}?$encoded#${percent(string(outbound, "tag", section.name))}", section)
+        return ProxyXHTTPOptions.checked(ProxyProfile.parseTransportURI("vless://${percent(string(user, "id"))}@$host:${port.toInt()}?$encoded#${percent(string(outbound, "tag", section.name))}", section))
     }
     private fun percent(value: String): String = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 }

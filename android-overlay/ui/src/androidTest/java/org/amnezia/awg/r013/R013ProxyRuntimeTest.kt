@@ -41,6 +41,8 @@ class R013ProxyRuntimeTest {
         check(fixture.getString("nonce").matches(Regex("[a-f0-9-]{36}")))
         val parsed = ProxyImport.parse(fixture.getString("uri"), ProxyProfile.Section.HAPP).single()
         check(parsed.host == "10.0.2.2" && parsed.security == "reality" && parsed.port > 1024)
+        val xhttp = ProxyImport.parse(fixture.getString("xhttpURI"), ProxyProfile.Section.HAPP).single()
+        check(xhttp.host == "10.0.2.2" && xhttp.security == "reality" && xhttp.transport == "xhttp" && xhttp.port > 1024)
         Application.getTunnelManager().getTunnels()
         UnifiedAutoCoordinator.stop()
         for (t in Application.getTunnelManager().getTunnels().toList()) if (t.state == Tunnel.State.UP) t.setStateAsync(Tunnel.State.DOWN)
@@ -93,10 +95,12 @@ class R013ProxyRuntimeTest {
     }
     @Test fun actualRealityTrafficInAllThreeProxySectionsAndCompleteStop() = runBlocking {
         val store=ProxyRegistry(registry.vault)
-        for (section in ProxyProfile.Section.values().toList() + ProxyProfile.Section.values().toList()) {
+        val sections = ProxyProfile.Section.values().toList()
+        for ((index, section) in (sections + sections).withIndex()) {
+            val transport = if (index < sections.size) "tcp" else "xhttp"
             var stage = "import"
             try {
-            val id=withContext(Dispatchers.IO) { store.importText(section,fixture.getString("uri")).single() }
+            val id=withContext(Dispatchers.IO) { store.importText(section,fixture.getString(if (transport == "tcp") "uri" else "xhttpURI")).single() }
             stage = "start"
             ProxyVpnService.start(context,id)
             await { ProxyVpnService.activeId == id }
@@ -104,7 +108,7 @@ class R013ProxyRuntimeTest {
             exchange()
             assertEquals(id,ProxyVpnService.activeId)
             stage = "capture"
-            capture("proxy-"+section.name.lowercase())
+            capture("proxy-"+section.name.lowercase()+"-"+transport)
             stage = "stop"
             withContext(Dispatchers.IO) { ProxyVpnService.stopAndWait() }
             assertNull(ProxyVpnService.activeId)
@@ -114,7 +118,7 @@ class R013ProxyRuntimeTest {
             } catch (failure: Throwable) {
                 // Keep only the synthetic stage and type in retained evidence.
                 // Do not copy URI, host, key, nonce or core output to the summary.
-                throw AssertionError("Synthetic proxy section=${section.name} stage=$stage exception=${failure.javaClass.simpleName}", failure)
+                throw AssertionError("Synthetic proxy section=${section.name} transport=$transport stage=$stage exception=${failure.javaClass.simpleName}", failure)
             }
         }
     }

@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -41,6 +42,7 @@ import (
 	_ "github.com/xtls/xray-core/proxy/vless/inbound"
 	_ "github.com/xtls/xray-core/proxy/vless/outbound"
 	_ "github.com/xtls/xray-core/transport/internet/reality"
+	_ "github.com/xtls/xray-core/transport/internet/splithttp"
 	_ "github.com/xtls/xray-core/transport/internet/tcp"
 )
 
@@ -143,41 +145,70 @@ func main() {
 		panic("fixture port")
 	}
 	port := reserve.Addr().(*net.TCPAddr).Port
+	xreserve, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		panic("fixture xhttp port")
+	}
+	xport := xreserve.Addr().(*net.TCPAddr).Port
 	_ = reserve.Close()
-	server := instance(map[string]any{"log": map[string]any{"loglevel": "none"}, "inbounds": []any{map[string]any{"listen": "127.0.0.1", "port": port, "protocol": "vless", "settings": map[string]any{"clients": []any{map[string]any{"id": user}}, "decryption": "none"}, "streamSettings": map[string]any{"network": "tcp", "security": "reality", "realitySettings": map[string]any{"show": false, "dest": cover.Addr().String(), "serverNames": []string{"localhost"}, "privateKey": base64.RawURLEncoding.EncodeToString(key.Bytes()), "shortIds": []string{short}}}}}, "outbounds": []any{map[string]any{"protocol": "freedom", "settings": map[string]any{"finalRules": []any{map[string]any{"action": "allow", "ip": []string{host + "/32"}, "network": "tcp", "port": fmt.Sprint(echoPort)}, map[string]any{"action": "allow", "network": "tcp", "port": "443"}, map[string]any{"action": "allow", "ip": []string{"1.1.1.1/32"}, "network": "udp", "port": "53"}, map[string]any{"action": "block"}}}}}})
+	_ = xreserve.Close()
+	inbound := func(network string, listenPort int) any {
+		stream := map[string]any{"network": network, "security": "reality", "realitySettings": map[string]any{"show": false, "dest": cover.Addr().String(), "serverNames": []string{"localhost"}, "privateKey": base64.RawURLEncoding.EncodeToString(key.Bytes()), "shortIds": []string{short}}}
+		if network == "xhttp" {
+			stream["xhttpSettings"] = map[string]any{"path": "/native-xhttp", "mode": "stream-one", "xPaddingBytes": "16-32"}
+		}
+		return map[string]any{"listen": "127.0.0.1", "port": listenPort, "protocol": "vless", "settings": map[string]any{"clients": []any{map[string]any{"id": user}}, "decryption": "none"}, "streamSettings": stream}
+	}
+	server := instance(map[string]any{"log": map[string]any{"loglevel": "none"}, "inbounds": []any{inbound("tcp", port), inbound("xhttp", xport)}, "outbounds": []any{map[string]any{"protocol": "freedom", "settings": map[string]any{"finalRules": []any{map[string]any{"action": "allow", "ip": []string{host + "/32"}, "network": "tcp", "port": fmt.Sprint(echoPort)}, map[string]any{"action": "allow", "network": "tcp", "port": "443"}, map[string]any{"action": "allow", "ip": []string{"1.1.1.1/32"}, "network": "udp", "port": "53"}, map[string]any{"action": "block"}}}}}})
 	defer server.Close()
 	endpoint := "10.0.2.2"
 	if self {
 		endpoint = "127.0.0.1"
 	}
 	uri := fmt.Sprintf("vless://%s@%s:%d?security=reality&type=tcp&sni=localhost&fp=chrome&pbk=%s&sid=%s#NativeReality", user, endpoint, port, base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()), short)
+	// These non-default options must survive semantic import and reach the real
+	// XHTTP core; the nonce exchange below is independent of UI/service flags.
+	extra := map[string]any{"xPaddingBytes": "16-32", "xmux": map[string]any{"maxConnections": 1, "cMaxLifetimeMs": 0}, "scMaxBufferedPosts": 8}
+	extraJSON, _ := json.Marshal(extra)
+	xhttpURI := fmt.Sprintf("vless://%s@%s:%d?security=reality&type=xhttp&sni=localhost&fp=chrome&pbk=%s&sid=%s&mode=stream-one&path=%%2Fnative-xhttp&extra=%s#NativeXHTTP", user, endpoint, xport, base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()), short, url.QueryEscape(string(extraJSON)))
 	if self {
-		client := instance(map[string]any{"log": map[string]any{"loglevel": "none"}, "outbounds": []any{map[string]any{"protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": endpoint, "port": port, "users": []any{map[string]any{"id": user, "encryption": "none"}}}}}, "streamSettings": map[string]any{"network": "tcp", "security": "reality", "realitySettings": map[string]any{"show": false, "serverName": "localhost", "fingerprint": "chrome", "publicKey": base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()), "shortId": short}}}}})
-		defer client.Close()
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-		defer cancel()
-		conn, err := core.Dial(ctx, client, xnet.TCPDestination(xnet.ParseAddress(host), xnet.Port(echoPort)))
-		if err != nil {
-			panic("fixture client dial")
+		for _, transport := range []struct {
+			network string
+			port    int
+		}{{"tcp", port}, {"xhttp", xport}} {
+			stream := map[string]any{"network": transport.network, "security": "reality", "realitySettings": map[string]any{"show": false, "serverName": "localhost", "fingerprint": "chrome", "publicKey": base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()), "shortId": short}}
+			if transport.network == "xhttp" {
+				stream["xhttpSettings"] = map[string]any{"path": "/native-xhttp", "mode": "stream-one", "xPaddingBytes": "16-32", "xmux": map[string]any{"maxConnections": 1}}
+			}
+			client := instance(map[string]any{"log": map[string]any{"loglevel": "none"}, "outbounds": []any{map[string]any{"protocol": "vless", "settings": map[string]any{"vnext": []any{map[string]any{"address": endpoint, "port": transport.port, "users": []any{map[string]any{"id": user, "encryption": "none"}}}}}, "streamSettings": stream}}})
+			defer client.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			defer cancel()
+			conn, err := core.Dial(ctx, client, xnet.TCPDestination(xnet.ParseAddress(host), xnet.Port(echoPort)))
+			if err != nil {
+				panic("fixture client dial")
+			}
+			defer conn.Close()
+			time.AfterFunc(8*time.Second, func() { _ = conn.Close() })
+			_, err = fmt.Fprintf(conn, "GET /%s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", nonce)
+			if err != nil {
+				panic("fixture client request")
+			}
+			response, err := io.ReadAll(io.LimitReader(conn, 4096))
+			if err != nil || !strings.Contains(string(response), nonce) {
+				panic(fmt.Sprintf("fixture REALITY traffic failed err=%v bytes=%d", err, len(response)))
+			}
+			fmt.Printf("Disposable REALITY/VLESS %s fixture nonce exchange passed\n", transport.network)
+			_ = conn.Close()
+			_ = client.Close()
 		}
-		defer conn.Close()
-		time.AfterFunc(8*time.Second, func() { _ = conn.Close() })
-		_, err = fmt.Fprintf(conn, "GET /%s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", nonce)
-		if err != nil {
-			panic("fixture client request")
-		}
-		response, err := io.ReadAll(io.LimitReader(conn, 4096))
-		if err != nil || !strings.Contains(string(response), nonce) {
-			panic(fmt.Sprintf("fixture REALITY traffic failed err=%v bytes=%d", err, len(response)))
-		}
-		fmt.Println("Disposable REALITY/VLESS fixture self-test passed")
 		return
 	}
 	folder := os.Getenv("RUNNER_TEMP")
 	if folder == "" {
 		panic("hosted temporary directory required")
 	}
-	data, _ := json.Marshal(map[string]any{"uri": uri, "host": host, "port": echoPort, "nonce": nonce})
+	data, _ := json.Marshal(map[string]any{"uri": uri, "xhttpURI": xhttpURI, "host": host, "port": echoPort, "nonce": nonce})
 	if os.WriteFile(filepath.Join(folder, "r013-proxy-fixture.json"), data, 0600) != nil {
 		panic("fixture output")
 	}

@@ -18,7 +18,7 @@ public final class ProxyProfile {
     public final Map<String, String> options;
     private static final Set<String> ALLOWED = Set.of("type", "security", "encryption", "sni", "fp", "pbk", "sid",
             "flow", "path", "host", "serviceName", "mode", "alpn", "authority", "spx", "pqv", "x_padding_bytes",
-            "headerType", "allowInsecure", "insecure", "skipTLSVerify", "support-x25519mlkem768");
+            "headerType", "allowInsecure", "insecure", "skipTLSVerify", "support-x25519mlkem768", "extra");
 
     private ProxyProfile(Section section, String name, String host, int port, String userId,
                          String transport, String security, String serverName, Map<String,String> options) {
@@ -35,6 +35,9 @@ public final class ProxyProfile {
         return value;
     }
     private static String decode(String value) {
+        return decode(value,4096);
+    }
+    private static String decode(String value, int maximum) {
         try {
             ByteArrayOutputStream bytes=new ByteArrayOutputStream();
             for(int i=0;i<value.length();) {
@@ -51,7 +54,7 @@ public final class ProxyProfile {
                 }
             }
             return clean(StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes.toByteArray())).toString(),4096);
+                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes.toByteArray())).toString(),maximum);
         } catch(IllegalArgumentException | CharacterCodingException error) { throw invalid(); }
     }
     private static String host(String value) {
@@ -70,6 +73,14 @@ public final class ProxyProfile {
         return value.toLowerCase(Locale.ROOT);
     }
     public static ProxyProfile parse(String input, Section section) {
+        return parse(input,section,false);
+    }
+    // Package-only ingress for the Android JSON semantic validator. Public
+    // JDK-only URI parsing still refuses opaque extras, as before.
+    static ProxyProfile parseTransportURI(String input, Section section) {
+        return parse(input,section,true);
+    }
+    private static ProxyProfile parse(String input, Section section, boolean semanticValidationFollows) {
         Objects.requireNonNull(section);
         if(input==null || input.getBytes(StandardCharsets.UTF_8).length>65536) throw invalid();
         try {
@@ -83,7 +94,7 @@ public final class ProxyProfile {
             if(uri.getRawQuery()!=null) for(String item:uri.getRawQuery().split("&",-1)) {
                 String[] pair=item.split("=",2);
                 if(pair.length!=2) throw invalid();
-                String key=decode(pair[0]), value=decode(pair[1]);
+                String key=decode(pair[0]), value=decode(pair[1],key.equals("extra")?16384:4096);
                 if(!ALLOWED.contains(key) || q.putIfAbsent(key,value)!=null) throw invalid();
             }
             String transport=q.getOrDefault("type","tcp").toLowerCase(Locale.ROOT);
@@ -100,6 +111,10 @@ public final class ProxyProfile {
                     !Set.of("0","1","false","true").contains(q.get("support-x25519mlkem768").toLowerCase(Locale.ROOT))) throw invalid();
             if(q.containsKey("headerType") && (!transport.equals("tcp") || !q.get("headerType").equals("none"))) throw invalid();
             q.put("type",transport); q.put("security",security);
+            // Opaque JSON is bounded here. ProxyImport and the configuration
+            // builder both run the strict XHTTP semantic validator before any
+            // save or core invocation; raw JSON never becomes a core config.
+            if(q.containsKey("extra") && (!transport.equals("xhttp") || !semanticValidationFollows)) throw invalid();
             // Capability hints do not select a cipher or bypass certificate checks.
             for(String flag:List.of("headerType","allowInsecure","insecure","skipTLSVerify","support-x25519mlkem768")) q.remove(flag);
             String endpoint=host(uri.getHost()), sni=host(q.getOrDefault("sni",endpoint));
@@ -139,6 +154,9 @@ public final class ProxyProfile {
     }
     /** Parse atomically. One bad row never silently replaces a complete saved roster. */
     public static List<ProxyProfile> parseList(String input, Section section) {
+        return parseList(input,section,row -> parse(row,section));
+    }
+    static List<ProxyProfile> parseList(String input, Section section, java.util.function.Function<String,ProxyProfile> parser) {
         if(input==null || input.getBytes(StandardCharsets.UTF_8).length>8_388_608) throw invalid();
         String text=input.trim();
         if(!text.regionMatches(true,0,"vless://",0,8) && !rosterMetadata(text)) {
@@ -160,7 +178,7 @@ public final class ProxyProfile {
                 if(row.length()>2048 || row.chars().anyMatch(c -> c<32 || c==127)) throw invalid();
                 continue;
             }
-            ProxyProfile profile=parse(row,section);
+            ProxyProfile profile=parser.apply(row);
             profiles.putIfAbsent(row.trim(),profile);
             if(profiles.size()>100) throw invalid();
         }

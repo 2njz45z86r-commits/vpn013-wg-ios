@@ -59,6 +59,7 @@ class ProxyVpnService : VpnService() {
                     val record = ProxyProfile.Section.values().flatMap { store.list(it) }.single { it.id == id }
                     val captured = ProxySocketGate.capture(this@ProxyVpnService); gate = captured
                     val address = captured.resolve(record.profile.host)
+                    val additional = ProxyXHTTPOptions.additionalHosts(record.profile).associateWith { captured.resolve(it) }
                     check(token == revision.get()) { "Подключение отменено" }
                     val ticket = Native.r013PrimaryBegin(); check(ticket != 0L) { "Прежнее подключение ещё завершается" }
                     try {
@@ -71,7 +72,7 @@ class ProxyVpnService : VpnService() {
                             ?: error("Не удалось создать VPN")
                         tun = descriptor
                         check(token == revision.get() && captured.current()) { "Сеть изменилась" }
-                        check(Native.r013ProxyStart(ticket, ProxyConfiguration.tunnel(record.profile, address), descriptor.fd, captured) == 0) { "Не удалось запустить подключение" }
+                        check(Native.r013ProxyStart(ticket, ProxyConfiguration.tunnel(record.profile, address, additional), descriptor.fd, captured) == 0) { "Не удалось запустить подключение" }
                         started = true; activeOwner = this@ProxyVpnService; activeId = id; lastError = null; requestedId = null
                     } finally { Native.r013PrimaryEnd(ticket) }
                 } catch (_: Exception) {
@@ -132,7 +133,8 @@ class ProxyVpnService : VpnService() {
             val captured = instance?.gate ?: return@withContext null
             try {
                 val address = captured.resolve(profile.host)
-                val result = Native.r013ProxyProbe(ProxyConfiguration.probe(profile, address), captured)
+                val additional = ProxyXHTTPOptions.additionalHosts(profile).associateWith { captured.resolve(it) }
+                val result = Native.r013ProxyProbe(ProxyConfiguration.probe(profile, address, additional), captured)
                 if (result >= 0 && captured.current()) result else null
             } catch (_: Exception) { null }
         }
