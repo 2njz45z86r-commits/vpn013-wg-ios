@@ -32,6 +32,9 @@ for p in files:
  target=Path(p.relative_to(source)); target.parent.mkdir(parents=True,exist_ok=True)
  target.write_bytes(p.read_bytes())
 PY
+python3 ../../scripts/patch_primary_resource_swift.py "$PWD"
+swiftc ../../scripts/PrimaryResourceBudget.swift ../../tests/PrimaryResourceBudgetTests.swift -o ../primary-resource-model-tests
+../primary-resource-model-tests
 python3 VPN013/prepare_hourly_project.py
 python3 VPN013/prepare_unified_project.py
 python3 VPN013/add_uitest_target.py

@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 import shutil
+from prepare_primary_awg import prepare_primary_awg
 
 root = Path(sys.argv[1]).resolve()
 output = Path(sys.argv[2]).resolve()
@@ -38,5 +39,6 @@ modfile = output / 'proxy-tun.mod'
 shutil.copyfile(root/'go.mod', modfile)
 shutil.copyfile(root/'go.sum', output/'proxy-tun.sum')
 subprocess.run(['go', 'mod', 'edit', '-modfile='+str(modfile), '-replace=github.com/xtls/xray-core='+str(local)], cwd=root, check=True)
-(output / 'proxy-tun-provenance.json').write_text(json.dumps({'module': replacement['Path'], 'version': replacement['Version'], 'originalSHA256': hashlib.sha256(source.read_bytes()).hexdigest(), 'patchedSHA256': hashlib.sha256(target.read_bytes()).hexdigest(), 'moduleCacheUnchanged': True}))
+primary = prepare_primary_awg(root, output, modfile)
+(output / 'proxy-tun-provenance.json').write_text(json.dumps({'module': replacement['Path'], 'version': replacement['Version'], 'originalSHA256': hashlib.sha256(source.read_bytes()).hexdigest(), 'patchedSHA256': hashlib.sha256(target.read_bytes()).hexdigest(), 'moduleCacheUnchanged': True, 'primaryAWG': primary}))
 print('Pinned TUN fd ownership copy and explicit modfile prepared; upstream lock files and module cache unchanged')
