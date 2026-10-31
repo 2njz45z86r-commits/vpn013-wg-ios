@@ -115,6 +115,13 @@ class R013ProxyRuntimeTest {
             var stage = "import"
             try {
             val id=withContext(Dispatchers.IO) { store.importText(section,fixture.getString(if (transport == "tcp") "uri" else "xhttpURI")).single() }
+            val applicationMode = if (transport == "tcp") "only" else "bypass"
+            OfflineChanges.apply {
+                val packages = setOf("com.android.settings")
+                val selection = if (applicationMode == "only") ApplicationRoutingStore.Selection("only", only = packages)
+                    else ApplicationRoutingStore.Selection("bypass", bypass = packages)
+                ApplicationRoutingStore.save(registry.vault, section.name, setOf(id), selection)
+            }
             selectSection(section)
             val control = if (index % 2 == 0) "vpn013.proxy.globe.$id" else "vpn013.proxy.body.$id"
             await { var found = false; instrumentation.runOnMainSync { found = views().any { it.tag == control && it.isEnabled } }; found }
@@ -124,6 +131,11 @@ class R013ProxyRuntimeTest {
             stage = "traffic"
             exchange()
             assertEquals(id,ProxyVpnService.activeId)
+            val proofFolder = File(context.getExternalFilesDir(null), "review").apply { mkdirs() }
+            File(proofFolder, "application-routing-${section.name.lowercase()}-$transport.json").writeText(JSONObject()
+                .put("section", section.name).put("transport", transport).put("mode", applicationMode)
+                .put("realVPNTransport", true).put("nonceResponseVerified", true).put("rxTxPositive", true)
+                .put("otherApplicationUIDTrafficVerified", false).toString())
             await { var rendered = false; instrumentation.runOnMainSync {
                 rendered = views().filterIsInstance<TextView>().any { it.tag == "vpn013.current.traffic" && it.text.contains("Всего:") } &&
                     views().any { it.tag == "vpn013.current.ping" && it.contentDescription == "Проверить пинг текущего сервера" }

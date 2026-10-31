@@ -600,7 +600,14 @@ class R013InstrumentedTest {
         val fast = String(android.util.Base64.decode(encoded,android.util.Base64.DEFAULT),Charsets.UTF_8)
             .replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
         OfflineChanges.apply { registry.importOrdinary(listOf("A Slow Fixture" to ProfileRegistry.parse(slow),"B Fast Fixture" to ProfileRegistry.parse(fast))); registry.createAuto() }
-        startHome(); val manager = Application.getTunnelManager(); val auto = manager.getTunnels().first()
+        startHome(); val manager = Application.getTunnelManager()
+        val autoName = registry.records().single { it.has("members") }.getString("name")
+        val auto = manager.getTunnels()[autoName]!!
+        assertTrue("Comparison must exercise the explicit automatic fixture", registry.isAuto(auto.name))
+        OfflineChanges.apply {
+            val id = registry.record(auto.name).getString("id")
+            ApplicationRoutingStore.save(registry.vault, "AMNEZIAWG", setOf(id), ApplicationRoutingStore.Selection("only", only = setOf("com.android.settings")))
+        }
         val backend = Application.getBackend() as GoBackend
         automaticMode(true)
         auto.setStateAsync(Tunnel.State.UP)
@@ -610,6 +617,7 @@ class R013InstrumentedTest {
         val policy = GoBackend::class.java.getDeclaredField("automaticPolicy").apply { isAccessible = true }.get(backend) as AutoPolicy
         val epoch = (GoBackend::class.java.getDeclaredField("autoEpoch").apply { isAccessible = true }.get(backend) as java.util.concurrent.atomic.AtomicLong).get()
         val members = registry.members(auto.name).map { GoBackend.AutoMember(it.first,it.second) }
+        assertEquals("Both actual isolated comparison peers are required", 2, members.size)
         val compare = GoBackend::class.java.getDeclaredMethod("compareHourly",Tunnel::class.java,List::class.java,
             AutoPolicy::class.java,java.lang.Long.TYPE,Integer.TYPE).apply { isAccessible = true }
         // Same production coordinator; invoke its due work directly so the

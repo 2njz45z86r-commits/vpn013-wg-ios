@@ -56,11 +56,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;26.1.10909125' 'cmake;3.22.1'
           cd android
           chmod +x gradlew
-          native_abi=()
-          # This diagnostic executes only on x86_64. Full acceptance keeps all
-          # shipping ABIs, and no diagnostic APK is retained or released.
-          if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then native_abi=(-Pandroid.injected.build.abi=x86_64); fi
-          ./gradlew --no-daemon --console=plain "${native_abi[@]}" :ui:compileDebugKotlin :ui:compileDebugJavaWithJavac :ui:compileDebugAndroidTestKotlin > ../android-development.log 2>&1 || {
+          ./gradlew --no-daemon --console=plain :ui:compileDebugKotlin :ui:compileDebugJavaWithJavac :ui:compileDebugAndroidTestKotlin > ../android-development.log 2>&1 || {
             grep -E '^e:|error:|FAILURE:|Execution failed|^> ' ../android-development.log | head -60 || true
             exit 1
           }
@@ -81,9 +77,7 @@ jobs:
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
           export PATH="$JAVA_HOME/bin:$PATH"
-          native_abi=()
-          if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then native_abi=(-Pandroid.injected.build.abi=x86_64); fi
-          (cd android && ./gradlew --no-daemon --console=plain "${native_abi[@]}" :ui:assembleDebug :ui:assembleDebugAndroidTest > ../android-assembly.log 2>&1) || {
+          (cd android && ./gradlew --no-daemon --console=plain :ui:assembleDebug :ui:assembleDebugAndroidTest > ../android-assembly.log 2>&1) || {
             python3 - <<'PY'
           from pathlib import Path
           rows=Path('android-assembly.log').read_text(errors='replace').splitlines()
