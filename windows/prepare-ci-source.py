@@ -145,14 +145,22 @@ else:
     ui_marker.write_text('VPN013_UI_PRIVATE_STAGE\n', encoding='ascii', newline='\n')
 go_executable = shutil.which('go')
 assert go_executable, 'Pinned Go build tool is unavailable'
-# Windows checkouts may supply these otherwise identical files as CRLF.
-# Canonicalize only the six independently compared inputs; the UI migration
-# still checks the exact reviewed bytes of all 27 inputs before applying.
-gofmt_executable = Path(go_executable).with_name('gofmt.exe' if os.name == 'nt' else 'gofmt')
-assert gofmt_executable.is_file()
-ui_canonical_inputs = ('ui/listview.go', 'ui/managewindow.go', 'ui/r013_brand.go',
-                       'ui/r013_native_trial.go', 'ui/r013_power.go', 'ui/r013_updates.go')
-subprocess.run([str(gofmt_executable), '-w', *[str(root/name) for name in ui_canonical_inputs]], check=True)
+# Git's Windows checkout may change line endings for any reviewed input.
+# Accept only the exact reviewed bytes or their CRLF spelling. Verify every
+# normalized hash before writing any file; content drift remains an error.
+ui_inputs = json.loads((workspace/'windows/ui-dependencies/manifest.json').read_text(encoding='utf-8-sig'))['replacements']
+ui_normalized = []
+for item in ui_inputs:
+    target = root / item['path']
+    assert not target.is_symlink() and target.resolve().is_relative_to(root)
+    raw = target.read_bytes()
+    expected = item['old_sha256']
+    if hashlib.sha256(raw).hexdigest() != expected:
+        normalized = raw.replace(b'\r\n', b'\n')
+        assert hashlib.sha256(normalized).hexdigest() == expected, 'Reviewed UI source differs: ' + item['path']
+        ui_normalized.append((target, normalized))
+for target, normalized in ui_normalized:
+    target.write_bytes(normalized)
 subprocess.run([sys.executable, str(workspace/'windows/patch-maintained-ui.py'),
                 '--stage', str(root), '--private-root', str(workspace),
                 '--go', go_executable], check=True)
