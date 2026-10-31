@@ -130,7 +130,8 @@ func (s *aclService) run(r *aclReceipt) error {
 	if e != nil {
 		return e
 	}
-	expectedSD, e := windows.SecurityDescriptorFromString("O:SYG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+	// Readback has the protected DACL but Windows does not retain the auto-inherited flag.
+	expectedSD, e := windows.SecurityDescriptorFromString("O:SYG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
 	if e != nil {
 		return e
 	}
