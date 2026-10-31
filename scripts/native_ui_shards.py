@@ -26,6 +26,10 @@ ADDED = frozenset({
 })
 PREFIX = "AutoTunnelUITests/AutoTunnelUITests/"
 SHARDS = ("coreA", "coreB", "coreC", "added5")
+# The bound includes simulator compilation and xcresult export. The coreC
+# run 41172679943 finished all 16 tests just before the old 40-minute limit,
+# then timed out before exporting evidence. Keep a finite 45-minute budget.
+MAX_WATCHDOG_SECONDS = 2700
 # The 54 UI method bodies and the native WireGuard fixture assertions must
 # remain the reviewed b9ecff4 sources. Updating them requires a new review.
 UI_TEST_SOURCE_SHA256 = "707ffc71eef6c1c3bc55eb36adbabf2b9c9014ebee1374113c7f9f9a4613faad"
@@ -370,7 +374,7 @@ def watchdog_diagnostics(shard, seconds, group_stopped=True):
 
 
 def run(shard, seconds):
-    if shard not in SHARDS or not 1 <= seconds <= 2400:
+    if shard not in SHARDS or not 1 <= seconds <= MAX_WATCHDOG_SECONDS:
         raise ValueError("invalid native shard or watchdog bound")
     log = ROOT / "build/simulator-test.log"
     proof = ROOT / "build/review/shard-proof.json"
@@ -455,7 +459,7 @@ def main():
     release.add_argument("--review", type=Path)
     drive = sub.add_parser("run")
     drive.add_argument("shard", choices=SHARDS)
-    drive.add_argument("--seconds", type=int, default=2400)
+    drive.add_argument("--seconds", type=int, default=MAX_WATCHDOG_SECONDS)
     args = parser.parse_args()
     try:
         if args.command == "selectors":

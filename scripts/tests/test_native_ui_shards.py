@@ -93,6 +93,22 @@ class NativeUIShardsTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 gate.exact_summary(invalid, 5)
 
+    def test_watchdog_bound_rejects_invalid_budget_before_starting_process(self):
+        with tempfile.TemporaryDirectory() as folder:
+            proc = mock.Mock(returncode=3)
+            proc.poll.return_value = 3
+            with mock.patch.object(gate, "ROOT", Path(folder)), \
+                 mock.patch.object(gate.subprocess, "Popen", return_value=proc) as start:
+                for seconds in (-1, 0, gate.MAX_WATCHDOG_SECONDS + 1):
+                    with self.assertRaises(ValueError):
+                        gate.run("coreC", seconds)
+                with self.assertRaises(ValueError):
+                    gate.run("unknown", gate.MAX_WATCHDOG_SECONDS)
+                start.assert_not_called()
+                for seconds in (1, gate.MAX_WATCHDOG_SECONDS):
+                    self.assertEqual(gate.run("coreC", seconds), 3)
+                self.assertEqual(start.call_count, 2)
+
     def test_timeout_kills_owned_group_before_diagnostic_and_never_succeeds(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

@@ -47,7 +47,7 @@ jobs:
         if: always() && steps.compile.outcome == 'success'
         env:
           VPN013_IPHONE_ONLY: '1'
-        run: python3 scripts/native_ui_shards.py run '${{ matrix.shard }}' --seconds 2400
+        run: python3 scripts/native_ui_shards.py run '${{ matrix.shard }}' --seconds 2700
       - name: Retain only credential-free diagnostic evidence, never an installable IPA
         if: always()
         run: |
