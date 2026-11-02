@@ -48,3 +48,63 @@ jobs:
           python3 diagnostics/actual-parser-harness.py "$RUNNER_TEMP/apple" "$RUNNER_TEMP/actual-parser.swift"
           swiftc -parse-as-library "$RUNNER_TEMP/actual-parser.swift" -o "$RUNNER_TEMP/actual-parser-tests"
           "$RUNNER_TEMP/actual-parser-tests"
+  go-core-scan:
+    if: inputs.development_check == true && inputs.publish_release != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Stage and verify the candidate AWG core on Linux
+        env:
+          GOTOOLCHAIN: local
+          GOMAXPROCS: '4'
+        run: |
+          set -eu
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(['git','diff','--name-only','fc8b1c60c7eb64774c7096bd5f89153baa654d47','HEAD'],text=True).splitlines())
+          assert changed == {'.github/workflows/build-ios.yml','diagnostics/zip-dedup-harness.py','diagnostics/actual-parser-harness.py'}
+          PY
+          git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/go-apple"
+          git -C "$RUNNER_TEMP/go-apple" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
+          mkdir -p "$RUNNER_TEMP/module" "$RUNNER_TEMP/staged"
+          cp "$RUNNER_TEMP/go-apple/Sources/WireGuardKitGo/go.mod" "$RUNNER_TEMP/module/go.mod"
+          cp "$RUNNER_TEMP/go-apple/Sources/WireGuardKitGo/go.sum" "$RUNNER_TEMP/module/go.sum"
+          cp "$RUNNER_TEMP/module/go.mod" "$RUNNER_TEMP/staged/proxy-tun.mod"
+          cp "$RUNNER_TEMP/module/go.sum" "$RUNNER_TEMP/staged/proxy-tun.sum"
+          (cd "$RUNNER_TEMP/module" && go mod download github.com/amnezia-vpn/amneziawg-go/v3)
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,sys
+          sys.path.insert(0,'scripts')
+          from prepare_primary_awg import prepare_primary_awg
+          root=Path(os.environ['RUNNER_TEMP'])
+          result=prepare_primary_awg(root/'module',root/'staged',root/'staged/proxy-tun.mod')
+          assert result['effectiveReplacementVerified']
+          print('Exact staged AWG core: required synthetic host tests passed')
+          PY
+      - name: Scan Linux package dependencies without public finding details
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -eu
+          cat > "$RUNNER_TEMP/staged/awg-core-owned/diagnostic_import.go" <<'EOF'
+          package diagnostic
+          import _ "github.com/amnezia-vpn/amneziawg-go/v3/device"
+          EOF
+          mkdir -p build/review
+          python3 scripts/check_go_security.py "$RUNNER_TEMP/staged/awg-core-owned" --encrypted-report build/review/core-linux-findings.enc.json --recipient scripts/audit-recipient.pub
+      - name: Retain encrypted findings only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: awg-core-linux-sca-${{ github.run_id }}
+          path: build/review/core-linux-findings.enc.json
+          if-no-files-found: warn
