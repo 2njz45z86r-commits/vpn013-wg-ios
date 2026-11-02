@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/h1-image-readonly-diagnostic.yml'
       - '.github/workflows/wg-dynamic-diagnostic.py'
+      - '.github/workflows/h1-panel-synthetic-smoke.sh'
 permissions:
   contents: read
 jobs:
@@ -48,3 +49,19 @@ jobs:
           chmod 500 "$RUNNER_TEMP/xray"
           "$RUNNER_TEMP/xray" version | head -n 2
           python3 .github/workflows/wg-dynamic-diagnostic.py "$RUNNER_TEMP/xray"
+  synthetic-panel-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Start disposable H1 panel with no network access and synthetic identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 2 'https://github.com/XTLS/Xray-core/releases/download/v26.6.27/Xray-linux-64.zip' -o "$RUNNER_TEMP/xray.zip"
+          echo 'b3e5902d06d6282fe53cfa2fc426058b9aeaa429b2c812e20887cd47f26d08bf  '"$RUNNER_TEMP/xray.zip" | sha256sum --check
+          unzip -p "$RUNNER_TEMP/xray.zip" xray > "$RUNNER_TEMP/xray"
+          chmod 755 "$RUNNER_TEMP/xray"
+          bash .github/workflows/h1-panel-synthetic-smoke.sh "$RUNNER_TEMP/xray"
