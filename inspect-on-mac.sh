@@ -3,9 +3,13 @@ set -eu
 export HOMEBREW_NO_AUTO_UPDATE=1
 export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
 if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
+echo 'VPN013 native stage: select simulator'
 device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;v=json.load(sys.stdin);print(next(x["udid"] for rows in v["devices"].values() for x in rows if x["name"]=="iPhone 16 Pro"))')
+echo 'VPN013 native stage: boot simulator'
 xcrun simctl boot "$device" || true
+echo 'VPN013 native stage: wait for simulator boot'
 xcrun simctl bootstatus "$device" -b
+echo 'VPN013 native stage: simulator booted'
 cd build/awg
 # Prove the compiled UI cases and native persistence fixture are the reviewed
 # overlay bytes before selecting either shard.
@@ -17,6 +21,7 @@ case "$shard" in coreA|coreB|coreC|core49|added5|all54) ;; *) echo "Invalid nati
 selector_args=$(python3 ../../scripts/native_ui_shards.py selectors "$shard")
 set -- $selector_args
 set +e
+echo 'VPN013 native stage: compile and run selected UI tests'
 xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug -sdk iphonesimulator \
  -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
  "$@" \

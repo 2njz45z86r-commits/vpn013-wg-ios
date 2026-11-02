@@ -39,7 +39,15 @@ final class AutoTunnelUITests:XCTestCase {
             let savedSearch = app.searchFields.firstMatch
             savedSearch.tap(); savedSearch.typeText("Facebook")
             let saved = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.services.item.")).firstMatch
-            XCTAssertTrue(saved.waitForExistence(timeout: 5)); XCTAssertEqual(saved.value as? String, "Выбрано")
+            XCTAssertTrue(saved.waitForExistence(timeout: 5))
+            // Search filtering and UITableView reload can briefly expose a stale cell.
+            // Wait for the actual searched service and its saved selection; never
+            // tap it or relax the final state assertion to make the test pass.
+            let remembered = NSPredicate(format: "label CONTAINS %@ AND value == %@", "Facebook", "Выбрано")
+            let selectedResult = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: remembered, object: saved)], timeout: 10)
+            XCTAssertEqual(selectedResult, .completed)
+            XCTAssertTrue(saved.label.contains("Facebook"))
+            XCTAssertEqual(saved.value as? String, "Выбрано")
             capture("catalog-" + kind + "-remembered-choice-no-vpn-started")
             only.tap(); app.buttons["vpn013.services.save"].tap()
             let close = app.buttons["vpn013.settings.done"]
@@ -739,14 +747,24 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for:[readyToConnect], timeout:20), .completed, "The synthetic switch must be ready and off before activation")
         profile.switches.firstMatch.tap()
         let connected = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: profile.switches.firstMatch)
-        XCTAssertEqual(XCTWaiter.wait(for:[connected], timeout:20), .completed, "The synthetic connection must become active before the popup is opened")
+        let connectedResult = XCTWaiter.wait(for:[connected], timeout:20)
+        XCTAssertEqual(connectedResult, .completed, "The synthetic connection must become active before the popup is opened")
+        guard connectedResult == .completed else {
+            capture("manual-runtime-fixture-failed-immediately-after-activation")
+            return
+        }
         if fixture == "--vpn013-test-current-card-timeout" {
             // The simulator has no real system VPN session. Exercise the
             // foreground status refresh while keeping this model-only fixture active.
             XCUIDevice.shared.press(.home)
             app.activate()
             let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: profile.switches.firstMatch)
-            XCTAssertEqual(XCTWaiter.wait(for:[restored], timeout:20), .completed, "The active synthetic connection must survive a foreground refresh")
+            let restoredResult = XCTWaiter.wait(for:[restored], timeout:20)
+            XCTAssertEqual(restoredResult, .completed, "The active synthetic connection must survive a foreground refresh")
+            guard restoredResult == .completed else {
+                capture("manual-runtime-fixture-failed-after-foreground")
+                return
+            }
         }
         openConnectionPopup(app)
         let ping = app.buttons["vpn013.current-ping"]
