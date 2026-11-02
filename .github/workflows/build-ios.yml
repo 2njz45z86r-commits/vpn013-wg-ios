@@ -1,142 +1,75 @@
-name: Build and inspect VPN013 WG
+name: UAPI peer preflight race diagnostic (not a release)
 on:
   workflow_dispatch:
-    inputs:
-      development_check:
-        description: Validate unified development source; never retain or publish an IPA
-        type: boolean
-        default: false
-      publish_release:
-        description: Publish only after final artifact review
-        type: boolean
-        default: false
-  push:
-    paths:
-      - 'overlay/**'
-      - 'build-on-mac.sh'
-      - 'inspect-on-mac.sh'
-      - 'publish-client-release.py'
-      - 'capture-ios-simulators.py'
-      - 'scripts/native_ui_shards.py'
-      - 'scripts/tests/test_native_ui_shards.py'
-      - '.github/workflows/build-ios.yml'
-      - '.github/workflows/native-unified-check.yml'
 permissions:
   contents: read
-  actions: read
-concurrency:
-  group: vpn013-ios-${{ inputs.development_check && format('development-{0}', github.ref_name) || 'release' }}
-  cancel-in-progress: false
 jobs:
-  security-review:
-    if: inputs.development_check != true
-    uses: ./.github/workflows/security-review.yml
-  native-ui:
-    permissions:
-      contents: read
-      actions: read
-    uses: ./.github/workflows/native-unified-check.yml
-  build:
-    if: inputs.development_check != true
-    needs: [security-review, native-ui]
-    runs-on: macos-26-intel
-    timeout-minutes: 65
-    permissions:
-      contents: write
-      actions: read
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - name: Check tools and evidence export compatibility
-        run: |
-          xcodebuild -version
-          swift --version
-          xcrun xcresulttool export attachments --help >/dev/null
-          xcrun xcresulttool get test-results summary --help >/dev/null
-      - name: Test core and build unsigned app
-        run: sh build-on-mac.sh
-      - name: Check native Go dependencies without public finding details
-        run: |
-          set -eu
-          if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
-          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1
-          export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
-          export CC="$(xcrun --sdk iphoneos --find clang)"
-          export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -miphoneos-version-min=14.0"
-          export CGO_LDFLAGS="$CGO_CFLAGS"
-          set +e
-          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-findings.enc.json --recipient scripts/audit-recipient.pub
-          patched_result=$?
-          export GOFLAGS=-mod=readonly
-          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-upstream-findings.enc.json --recipient scripts/audit-recipient.pub
-          upstream_result=$?
-          test "$patched_result" -eq 0 && test "$upstream_result" -eq 0
-      - name: Verify this run's combined 54-selector native evidence
-        id: native
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Stage exact candidate and check races using synthetic traffic
         env:
-          GH_TOKEN: ${{ github.token }}
+          GOTOOLCHAIN: local
+          GOMAXPROCS: '4'
         run: |
           set -eu
-          mkdir -p build/native-ui-artifact
-          gh run download "$GITHUB_RUN_ID" \
-            --name "unified-native-review-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --dir build/native-ui-artifact
-          python3 scripts/native_ui_shards.py verify-combined \
-            --artifact build/native-ui-artifact/unified-native-review.zip \
-            --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
-            --review build/review
-      - name: Package credential-free inspection evidence
-        if: always()
-        run: |
-          mkdir -p build/review
+          python3 - <<'PY'
+          import subprocess
+          changed=subprocess.check_output(['git','diff','--name-only','18c4def378bb692cfb3ba67b9e2aa5114278ac52','HEAD'],text=True).splitlines()
+          assert changed == ['.github/workflows/build-ios.yml']
+          PY
+          git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/apple"
+          git -C "$RUNNER_TEMP/apple" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
+          mkdir -p "$RUNNER_TEMP/module" "$RUNNER_TEMP/staged"
+          cp "$RUNNER_TEMP/apple/Sources/WireGuardKitGo/go.mod" "$RUNNER_TEMP/module/go.mod"
+          cp "$RUNNER_TEMP/apple/Sources/WireGuardKitGo/go.sum" "$RUNNER_TEMP/module/go.sum"
+          cp "$RUNNER_TEMP/module/go.mod" "$RUNNER_TEMP/staged/proxy-tun.mod"
+          cp "$RUNNER_TEMP/module/go.sum" "$RUNNER_TEMP/staged/proxy-tun.sum"
+          (cd "$RUNNER_TEMP/module" && go mod download github.com/amnezia-vpn/amneziawg-go/v3)
           python3 - <<'PY'
           from pathlib import Path
-          import zipfile
-          with zipfile.ZipFile('build/native-review.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
-              for path in Path('build/review').rglob('*'):
-                  if path.is_file() and path.suffix in ('.png', '.json'):
-                      archive.write(path, path.as_posix().removeprefix('build/'))
+          import os,sys
+          sys.path.insert(0,'scripts')
+          from prepare_primary_awg import prepare_primary_awg
+          root=Path(os.environ['RUNNER_TEMP'])
+          result=prepare_primary_awg(root/'module',root/'staged',root/'staged/proxy-tun.mod')
+          assert result['effectiveReplacementVerified'] and len(result['primaryHostTests']['requiredTests']) == 33
+          print('Exact staged primary core: all 33 required host tests passed')
           PY
-      - name: Prepare verified IPA and exact public metadata
-        if: success()
-        run: |
-          set -eu
-          test '${{ steps.native.outcome }}' = success
-          test -f build/VPN013AWG-unsigned.ipa
-          python3 publish-client-release.py --prepare-only
-          shasum -a 256 build/VPN013-*.ipa build/native-review.zip build/client-release.json > build/SHA256SUMS.txt
-      - name: Retain successfully checked IPA before release publication
-        if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ios-verified-${{ github.run_id }}
-          retention-days: 7
-          if-no-files-found: error
-          path: |
-            build/VPN013-*.ipa
-            build/native-review.zip
-            build/client-release.json
-            build/SHA256SUMS.txt
-      - name: Retain failed inspection without an installable file
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ios-diagnostics-${{ github.run_id }}
-          retention-days: 7
-          if-no-files-found: warn
-          path: build/native-review.zip
-      - name: Publish checked IPA when explicitly dispatched
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.publish_release == true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -eu
-          gh release create "unsigned-${GITHUB_RUN_ID}" \
-            build/VPN013-*.ipa build/native-review.zip build/SHA256SUMS.txt \
-            --target "$GITHUB_SHA" --prerelease --title "VPN013 unsigned build ${GITHUB_RUN_NUMBER}" \
-            --notes 'Requires owner signing and physical iPhone VPN verification. No customer credentials included.'
-          python3 publish-client-release.py
-      - name: Export credential-free development files for verification
+          export AWG_FIXTURES="$GITHUB_WORKSPACE/scripts/awg31-fixtures"
+          cd "$RUNNER_TEMP/staged/awg-core-owned"
+          set +e
+          go test -race -json ./device -run '^(TestLegacy15|TestVPN013Legacy|TestVPN013HeaderOverlapRejectedBeforePeerMutation|TestVPN013InvalidPeerFieldsRejectedBeforePeerMutation|TestPrimary|TestTwoDevicePing|TestAWGDevicePing|TestVPN013AuthenticatedFallbackLocalTraffic|TestVPN013QueuedCandidateRejectsForgedTraffic)' -count=3 -timeout=120s > "$RUNNER_TEMP/race.jsonl" 2> "$RUNNER_TEMP/race.stderr"
+          result=$?
+          set -e
+          export VPN013_RACE_EXIT="$result"
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          rows=[json.loads(x) for x in (Path(os.environ['RUNNER_TEMP'])/'race.jsonl').read_text().splitlines() if x.startswith('{')]
+          names={'TestVPN013InvalidPeerFieldsRejectedBeforePeerMutation','TestVPN013HeaderOverlapRejectedBeforePeerMutation','TestVPN013LegacyStaleSnapshotAfterModeSwitch','TestVPN013LegacyRejectPreparedPacketAfterModeSwitch','TestVPN013LegacySendCompletesBeforeModeCommit','TestVPN013LegacyEndpointRefreshKeepsRevision','TestVPN013LegacyMaskingChangesAdvanceRevision','TestVPN013LegacyConcurrentUpdatesAndGeneration','TestVPN013LegacyWaitStopsWhenDeviceGoesDown','TestVPN013LegacyUAPIStagingAndPeerPreservation','TestVPN013LegacySparsePackets','TestTwoDevicePing','TestAWGDevicePing','TestVPN013AuthenticatedFallbackLocalTraffic','TestVPN013QueuedCandidateRejectsForgedTraffic'}
+          counts={n:sum(x.get('Action')=='pass' and x.get('Test')==n for x in rows) for n in names}
+          failures=[x.get('Test','package') for x in rows if x.get('Action') in ('fail','skip')]
+          race=any('DATA RACE' in x.get('Output','') for x in rows)
+          root=Path(os.environ['RUNNER_TEMP'])/'staged/awg-core-owned/device'
+          files=['device.go','peer.go','send.go','uapi.go','r013_resource_limits.go','r013_legacy15.go','r013_legacy_uapi_test.go','r013_stale_snapshot_test.go']
+          out={'exit':int(os.environ['VPN013_RACE_EXIT']),'counts':counts,'failedOrSkipped':failures,'raceDetected':race,'stagedSHA256':{n:hashlib.sha256((root/n).read_bytes()).hexdigest() for n in files},'scope':'synthetic Linux tests; not physical iPhone or production'}
+          Path(os.environ['GITHUB_WORKSPACE'],'preflight-race-summary.json').write_text(json.dumps(out,indent=2))
+          print(json.dumps(out))
+          assert out['exit']==0 and not race and not failures and all(x==3 for x in counts.values())
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
-        run: python3 export-build-evidence.py
+        with:
+          name: uapi-peer-preflight-race-${{ github.run_id }}
+          path: preflight-race-summary.json
+          if-no-files-found: warn
