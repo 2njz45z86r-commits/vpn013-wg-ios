@@ -121,16 +121,16 @@ class R013NativeTrialTest {
         }
         return find(instrumentation.uiAutomation.rootInActiveWindow)
     }
-    private fun waitFor(check:()->Boolean) {
+    private fun waitFor(stage:String="UI condition",check:()->Boolean) {
         val until=android.os.SystemClock.elapsedRealtime()+15000
         while(android.os.SystemClock.elapsedRealtime()<until) { if(check())return;Thread.sleep(100) }
-        assertTrue("Native trial state did not arrive",check())
+        assertTrue("Native trial state did not arrive: $stage",check())
     }
     private fun click(text:String) { waitFor { node(text)!=null };assertTrue(node(text)!!.performAction(AccessibilityNodeInfo.ACTION_CLICK)) }
-    private fun getTrial() { click("Добавить");waitFor { node(NativeTrial.LABEL)!=null };assertNull(node("1 час бесплатно"));click(NativeTrial.LABEL) }
+    private fun getTrial() { click("Добавить");waitFor("trial menu") { node(NativeTrial.LABEL)!=null };assertNull(node("1 час бесплатно"));click(NativeTrial.LABEL) }
     private fun importTrial() {
-        start();getTrial();waitFor { node("Тестовые профили добавлены")!=null };click("Готово")
-        waitFor { registry.vault.read().getJSONObject("orders").has(oid) }
+        start();getTrial();waitFor("import completion") { node("Тестовые профили добавлены")!=null };click("Готово")
+        waitFor("imported order") { registry.vault.read().getJSONObject("orders").has(oid) }
     }
     private fun screenshot(name:String) {
         val root=File(context.getExternalFilesDir(null),"review").apply { mkdirs() }
@@ -175,14 +175,14 @@ class R013NativeTrialTest {
         finally { OfflineChanges.lock.unlock() }
         instrumentation.runOnMainSync { TrialExpiryNotifications.expired(context,oid) }
         val manager=context.getSystemService(NotificationManager::class.java)
-        waitFor { manager.activeNotifications.any { it.tag==oid } }
-        instrumentation.runOnMainSync { NativeTrial.renewalMenu(activity!!) };click("Заявка №$oid");waitFor { outside.size==1 };assertEquals(renewal,outside.single())
+        waitFor("expiry notification posted") { manager.activeNotifications.any { it.tag==oid } }
+        instrumentation.runOnMainSync { NativeTrial.renewalMenu(activity!!) };click("Заявка №$oid");waitFor("renewal link opened") { outside.size==1 };assertEquals(renewal,outside.single())
         expires=System.currentTimeMillis()+30L*86400000L
         ClientProtocol.installNativeTrialDebugFixture { path,auth->assertEquals("/client/awg/$oid/android",path);assertEquals(capability,auth);snapshot() }
         instrumentation.runOnMainSync { NativeTrial.resumeRenewal(activity!!) {} }
-        waitFor { registry.vault.read().getJSONObject("orders").getJSONObject(oid).getJSONObject("document").getJSONObject("snapshot").getLong("expiry")==expires }
+        waitFor("paid expiry refreshed") { registry.vault.read().getJSONObject("orders").getJSONObject(oid).getJSONObject("document").getJSONObject("snapshot").getLong("expiry")==expires }
         assertEquals(before,registry.records().associate { it.getString("id") to it.getString("config") })
-        waitFor { manager.activeNotifications.none { it.tag==oid } }
+        waitFor("expiry notification cancelled") { manager.activeNotifications.none { it.tag==oid } }
         assertEquals(1,creates);assertEquals(1,downloads)
     }
 }
