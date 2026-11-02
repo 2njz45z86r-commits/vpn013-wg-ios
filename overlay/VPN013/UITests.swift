@@ -743,10 +743,15 @@ final class AutoTunnelUITests:XCTestCase {
         app.launch()
         let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
         XCTAssertTrue(profile.waitForExistence(timeout:20))
-        let readyToConnect = XCTNSPredicateExpectation(predicate: NSPredicate(format:"hittable == true AND enabled == true AND value == '0'"), object: profile.switches.firstMatch)
+        // The cell may be rebuilt during list updates. Resolve the uniquely
+        // named switch directly so a stale cell snapshot cannot supply an
+        // invalid activation point while still keeping a real tap and checks.
+        let manualSwitch = app.switches["Личный сервер 1"]
+        XCTAssertTrue(manualSwitch.waitForExistence(timeout:20))
+        let readyToConnect = XCTNSPredicateExpectation(predicate: NSPredicate(format:"hittable == true AND enabled == true AND value == '0'"), object: manualSwitch)
         XCTAssertEqual(XCTWaiter.wait(for:[readyToConnect], timeout:20), .completed, "The synthetic switch must be ready and off before activation")
-        profile.switches.firstMatch.tap()
-        let connected = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: profile.switches.firstMatch)
+        manualSwitch.tap()
+        let connected = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: manualSwitch)
         let connectedResult = XCTWaiter.wait(for:[connected], timeout:20)
         XCTAssertEqual(connectedResult, .completed, "The synthetic connection must become active before the popup is opened")
         guard connectedResult == .completed else {
@@ -758,7 +763,7 @@ final class AutoTunnelUITests:XCTestCase {
             // foreground status refresh while keeping this model-only fixture active.
             XCUIDevice.shared.press(.home)
             app.activate()
-            let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: profile.switches.firstMatch)
+            let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: manualSwitch)
             let restoredResult = XCTWaiter.wait(for:[restored], timeout:20)
             XCTAssertEqual(restoredResult, .completed, "The active synthetic connection must survive a foreground refresh")
             guard restoredResult == .completed else {
@@ -791,8 +796,8 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertEqual(app.staticTexts["vpn013.current-ping-result"].label, measured, "Missing runtime must not erase the measured Ping")
         capture(captureName)
         closeConnectionPopup(app)
-        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1", "Ping and refresh must not replace the running VPN")
-        profile.switches.firstMatch.tap()
+        XCTAssertEqual(manualSwitch.value as? String, "1", "Ping and refresh must not replace the running VPN")
+        manualSwitch.tap()
         openConnectionPopup(app)
         XCTAssertFalse(ping.isHittable, "Unavailable or late runtime cannot resurrect the disconnected card")
     }
