@@ -15,7 +15,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Check validator bootstrap and report SDK payload identity
-        shell: pwsh
+        shell: powershell
         run: |
           try {
             & ./windows/overlay/scripts/bootstrap-msi-validator.ps1
