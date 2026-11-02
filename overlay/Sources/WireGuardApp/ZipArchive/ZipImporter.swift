@@ -4,6 +4,8 @@
 import Foundation
 
 class ZipImporter {
+    private struct RawFile: Hashable { let name: String; let contents: Data }
+    private struct DecodedFile: Hashable { let name: String; let contents: Data }
     static func importConfigFiles(from url: URL, completion: @escaping (Result<[TunnelConfiguration?], ZipArchiveError>) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             var unarchivedFiles: [(fileBaseName: String, contents: Data)]
@@ -31,14 +33,20 @@ class ZipImporter {
 
             unarchivedFiles.sort { TunnelsManager.tunnelNameIsLessThan($0.fileBaseName, $1.fileBaseName) }
             var configs: [TunnelConfiguration?] = []
-            var uniqueFiles: [(fileBaseName: String, contents: Data)] = []
+            var uniqueFiles = Set<RawFile>()
+            var uniqueDecodedFiles = Set<DecodedFile>()
             for file in unarchivedFiles {
                 // Android/iPhone folders can contain identical copies. A duplicate is
                 // not a failed import and must not inflate the result denominator.
-                if uniqueFiles.contains(where: { $0 == file }) { continue }
-                uniqueFiles.append(file)
-                guard let fileContents = try? VPN013PrimaryResourceBudget.decodeConfig(file.contents),
-                      let tunnelConfig = try? TunnelConfiguration(fromWgQuickConfig: fileContents, called: file.fileBaseName) else {
+                guard uniqueFiles.insert(RawFile(name: file.fileBaseName, contents: file.contents)).inserted else { continue }
+                guard let fileContents = try? VPN013PrimaryResourceBudget.decodeConfig(file.contents) else {
+                    configs.append(nil); continue
+                }
+                // Identical Android/iPhone copies may use different text
+                // encodings. Deduplicate only when both name and decoded UTF-8 bytes
+                // are equal; different configurations remain separate.
+                guard uniqueDecodedFiles.insert(DecodedFile(name: file.fileBaseName, contents: Data(fileContents.utf8))).inserted else { continue }
+                guard let tunnelConfig = try? TunnelConfiguration(fromWgQuickConfig: fileContents, called: file.fileBaseName) else {
                     configs.append(nil); continue
                 }
                 configs.append(tunnelConfig)
