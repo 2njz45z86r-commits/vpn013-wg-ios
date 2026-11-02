@@ -248,7 +248,7 @@ class R013HomeActivity : AppCompatActivity() {
         (connectionCard.parent as? ViewGroup)?.removeView(connectionCard)
         val scroll = ScrollView(this).apply {
             setPadding(dp(16), dp(8), dp(16), dp(8))
-            addView(connectionCard, ScrollView.LayoutParams(-1, -2))
+            addView(connectionCard, FrameLayout.LayoutParams(-1, -2))
         }
         val popup = MaterialAlertDialogBuilder(this)
             .setTitle(UnifiedAutoCoordinator.label(selectedSection))
