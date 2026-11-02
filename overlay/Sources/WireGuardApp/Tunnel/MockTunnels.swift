@@ -31,7 +31,7 @@ class MockTunnels {
             var raw = config.asWgQuickConfig()
             let classic = "Jc = 4\nJmin = 40\nJmax = 70\nS1 = 16\nS2 = 16\nH1 = 1\nH2 = 2\nH3 = 3\nH4 = 4\n"
             let generation2 = "S3 = 16\nS4 = 16\nI1 = <b 0x00>\nI2 = <r 4>\nI3 = <b 0x01>\nI4 = <r 8>\nI5 = <b 0x02>\n"
-            let legacy15 = "I1 = <b 0xA><c><t><wt 1>\nJ1 = <b 0xBB><r 4>\nJ2 = <b 0xCC>\nITime = 30\n"
+            let legacy15 = "I2 = <b 0xA><c><t><wt 1>\nJ1 = <b 0xBB><r 4>\nJ3 = <b 0xCC>\nITime = 30\n"
             let trailerFlag = index % 8 == 3 ? "true" : "false"
             let generation31 = "HeaderProtectionKey = \(PrivateKey().base64Key)\nContentPaddingAddition = 0\nRekeyAfterTime = 120\nRekeyTimeout = 5\nRejectAfterTime = 180\nKeepaliveTimeout = 10\nMaxHandshakeAttempts = 20\nRandomTrailers = \(trailerFlag)\nDisableCookies = false\n"
             let extras: String

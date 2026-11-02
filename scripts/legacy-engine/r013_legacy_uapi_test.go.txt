@@ -116,3 +116,22 @@ func TestVPN013LegacyWaitStopsWhenDeviceGoesDown(t *testing.T) {
 		t.Fatal("legacy wait delayed device shutdown")
 	}
 }
+
+func TestVPN013LegacySparsePackets(t *testing.T) {
+	pair := genTestPair(t, false)
+	d := pair[0].dev
+	cfg := r013LegacyConfig{enabled: true, intervalSeconds: 60}
+	cfg.initial[1] = "<b 0x12>"
+	cfg.controlled[2] = "<b 0x34>"
+	if err := cfg.validate(); err != nil {
+		t.Fatal("sparse configuration rejected")
+	}
+	first, err := d.r013BuildLegacyInitial(cfg, 0, 0, 0)
+	if err != nil || len(first) != 1 || len(first[0]) != 1 || first[0][0] != 0x12 {
+		t.Fatal("sparse I2 was not sent first")
+	}
+	second, err := d.r013BuildLegacyInitial(cfg, 0, 0, 0)
+	if err != nil || len(second) != 1 || len(second[0]) != 1 || second[0][0] != 0x34 {
+		t.Fatal("sparse J3 was not sent next")
+	}
+}

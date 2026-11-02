@@ -49,14 +49,9 @@ func (c r013LegacyConfig) validate() error {
 	}
 	totalWait := time.Duration(0)
 	for _, specs := range [][]string{c.initial[:], c.controlled[:]} {
-		seenGap := false
 		for _, raw := range specs {
 			if raw == "" {
-				seenGap = true
 				continue
-			}
-			if seenGap {
-				return errors.New("legacy packets must be consecutive")
 			}
 			s, err := r013ParseLegacy(raw)
 			if err != nil {
@@ -213,7 +208,14 @@ func (device *Device) r013BuildLegacyInitial(config r013LegacyConfig, count, min
 	device.legacyRuntime.Lock()
 	defer device.legacyRuntime.Unlock()
 	now := time.Now()
-	useInitial := config.initial[0] != "" && (!device.legacyRuntime.sent || now.After(device.legacyRuntime.next))
+	hasInitial := false
+	for _, raw := range config.initial {
+		if raw != "" {
+			hasInitial = true
+			break
+		}
+	}
+	useInitial := hasInitial && (!device.legacyRuntime.sent || now.After(device.legacyRuntime.next))
 	var selected []string
 	if useInitial {
 		selected = config.initial[:]
@@ -241,7 +243,7 @@ func (device *Device) r013BuildLegacyInitial(config r013LegacyConfig, count, min
 	}
 	for _, raw := range selected {
 		if raw == "" {
-			break
+			continue
 		}
 		spec, err := r013ParseLegacy(raw)
 		if err != nil {

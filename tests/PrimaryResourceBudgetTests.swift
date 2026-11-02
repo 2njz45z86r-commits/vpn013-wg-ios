@@ -16,8 +16,8 @@ enum PrimaryResourceBudgetTests {
                      controlledPackets: [], intervalSeconds: 0), "legacy wait above limit")
         check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<wt 5000><wt 5000>"],
                      controlledPackets: ["<wt 5000><wt 1>"], intervalSeconds: nil), "legacy aggregate wait")
-        check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: [nil, "<r 1>"],
-                     controlledPackets: [], intervalSeconds: nil), "legacy gap in sequence")
+        check(true, VPN013PrimaryResourceBudget.validLegacy(initialPackets: [nil, "<r 1>"],
+                    controlledPackets: [nil, nil, "<b 0x01>"], intervalSeconds: nil), "legacy sparse sequence")
         check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<c><c>"],
                      controlledPackets: [], intervalSeconds: nil), "legacy duplicate counter")
         check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<r 1001>"],

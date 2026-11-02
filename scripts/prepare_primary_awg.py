@@ -96,7 +96,8 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 'TestLegacy15MalformedAndBudgets', 'TestLegacy15Scheduling',
                 'TestVPN013LegacyWaitStopsWhenDeviceGoesDown',
                 'TestVPN013LegacyConcurrentUpdatesAndGeneration',
-                'TestVPN013LegacyUAPIStagingAndPeerPreservation', 'FuzzVPN013LegacyParse'}
+                'TestVPN013LegacyUAPIStagingAndPeerPreservation', 'TestVPN013LegacySparsePackets',
+                'FuzzVPN013LegacyParse'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,
               'passedTests': passed, 'requiredTests': sorted(required),

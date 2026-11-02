@@ -17,10 +17,9 @@ enum VPN013PrimaryResourceBudget {
               (intervalSeconds ?? 0) <= 86_400 else { return false }
         var totalWait = 0
         for group in [initialPackets, controlledPackets] {
-            var sawGap = false
             for optional in group {
-                guard let spec = optional, !spec.isEmpty else { sawGap = true; continue }
-                guard !sawGap, let wait = legacyPacketWait(spec) else { return false }
+                guard let spec = optional, !spec.isEmpty else { continue }
+                guard let wait = legacyPacketWait(spec) else { return false }
                 totalWait += wait
                 guard totalWait <= 15_000 else { return false }
             }
