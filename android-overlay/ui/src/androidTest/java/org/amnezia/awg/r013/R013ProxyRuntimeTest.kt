@@ -173,6 +173,26 @@ class R013ProxyRuntimeTest {
         fun visit(view: View) { result.add(view); if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index)) }
         visit(activity!!.window.decorView); return result
     }
+    private fun popupNodes(): List<android.view.accessibility.AccessibilityNodeInfo> {
+        val result = mutableListOf<android.view.accessibility.AccessibilityNodeInfo>()
+        fun visit(node: android.view.accessibility.AccessibilityNodeInfo?) {
+            if (node == null) return
+            result.add(node)
+            for (index in 0 until node.childCount) visit(node.getChild(index))
+        }
+        visit(instrumentation.uiAutomation.rootInActiveWindow); return result
+    }
+    private fun openConnectionPopup(section: ProxyProfile.Section) {
+        await { var found = false; instrumentation.runOnMainSync { found = views().any { it.contentDescription?.toString() == "Управление подключением" && it.isEnabled } }; found }
+        instrumentation.runOnMainSync { check(views().first { it.contentDescription?.toString() == "Управление подключением" }.performClick()) }
+        await { popupNodes().any { it.text?.toString() == UnifiedAutoCoordinator.label(section.name) } }
+    }
+    private fun closeConnectionPopup() {
+        await { popupNodes().any { it.text?.toString() == "Закрыть" && it.isClickable } }
+        check(popupNodes().first { it.text?.toString() == "Закрыть" && it.isClickable }
+            .performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+        await { popupNodes().none { it.text?.toString() == "Закрыть" && it.isClickable } }
+    }
     private fun selectSection(section: ProxyProfile.Section) {
         instrumentation.runOnMainSync {
             val tab = views().filterIsInstance<TextView>().first { it.text.toString() == UnifiedAutoCoordinator.label(section.name) && it.isClickable }
@@ -219,11 +239,13 @@ class R013ProxyRuntimeTest {
                 .put("otherApplicationUIDTrafficVerified", true).toString()
             File(proofFolder, "application-routing-${section.name.lowercase()}-$transport-$applicationMode.json").writeText(proof)
             if (originalMode) File(proofFolder, "application-routing-${section.name.lowercase()}-$transport.json").writeText(proof)
-            await { var rendered = false; instrumentation.runOnMainSync {
-                rendered = views().filterIsInstance<TextView>().any { it.tag == "vpn013.current.traffic" && it.text.contains("Всего:") } &&
-                    views().any { it.tag == "vpn013.current.ping" && it.contentDescription == "Проверить пинг текущего сервера" }
-            }; rendered }
             val revision = ProxyVpnService.trafficRevision()
+            openConnectionPopup(section)
+            await { popupNodes().any { it.text?.toString()?.contains("Всего:") == true } &&
+                popupNodes().any { it.contentDescription?.toString() == "Проверить пинг текущего сервера" } &&
+                popupNodes().any { it.contentDescription?.toString() == "Отключить VPN" } }
+            assertEquals("Opening connection status restarted the real tunnel", revision, ProxyVpnService.trafficRevision())
+            closeConnectionPopup()
             instrumentation.runOnMainSync { check(views().single { it.tag == "vpn013.proxy.details.$id" }.performClick()) }
             await { instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("Закрыть")?.any { it.isClickable } == true }
             check(requireNotNull(instrumentation.uiAutomation.rootInActiveWindow).findAccessibilityNodeInfosByText("Закрыть").first { it.isClickable }

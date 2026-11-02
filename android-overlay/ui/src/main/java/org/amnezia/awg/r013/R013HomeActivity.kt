@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -64,6 +65,7 @@ class R013HomeActivity : AppCompatActivity() {
     private lateinit var routingDetails: TextView
     private lateinit var currentPing: MaterialButton
     private lateinit var currentPower: MaterialButton
+    private lateinit var connectionCard: MaterialCardView
     private lateinit var allPing: MaterialButton
     private lateinit var countLabel: TextView
     private lateinit var automaticToggle: MaterialButton
@@ -134,8 +136,17 @@ class R013HomeActivity : AppCompatActivity() {
             title = "VPN013"; setTitleTextColor(color(R.color.r013_text)); setNavigationIcon(R.drawable.ic_r013_settings)
             navigationContentDescription = "Настройки и обновления"; setNavigationIconTint(color(R.color.r013_accent))
             setNavigationOnClickListener { settings() }
-            menu.add("Добавить").apply { setIcon(R.drawable.ic_r013_add); setShowAsAction(2) }
-            setOnMenuItemClickListener { addMenu(); true }
+            val addID = View.generateViewId()
+            val statusID = View.generateViewId()
+            menu.add(0, addID, 0, "Добавить").apply { setIcon(R.drawable.ic_r013_add); setShowAsAction(2) }
+            menu.add(0, statusID, 1, "Управление подключением").apply { setIcon(android.R.drawable.ic_menu_info_details); setShowAsAction(2) }
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    addID -> { addMenu(); true }
+                    statusID -> { showConnectionPopup(); true }
+                    else -> false
+                }
+            }
         }
         content.addView(toolbar, LinearLayout.LayoutParams(-1, dp(64)))
         val tabs = horizontal()
@@ -182,7 +193,7 @@ class R013HomeActivity : AppCompatActivity() {
             try { setAutomaticChecked(withContext(Dispatchers.IO) { registry.automaticEnabled() }); automaticReady = true; automaticToggle.isEnabled = true }
             catch (_: Exception) { feedback("Не удалось прочитать настройку Авто. Откройте настройки и повторите.") }
         }
-        val card = MaterialCardView(this).apply {
+        connectionCard = MaterialCardView(this).apply {
             radius = dp(14).toFloat(); cardElevation = 0f; strokeWidth = dp(1); strokeColor = color(R.color.r013_separator)
             setCardBackgroundColor(color(R.color.r013_background))
         }
@@ -207,7 +218,7 @@ class R013HomeActivity : AppCompatActivity() {
         }
         controls.addView(currentPing, LinearLayout.LayoutParams(dp(48), dp(48)).apply { topMargin = dp(8) })
         inside.addView(controls, LinearLayout.LayoutParams(dp(80), -2).apply { marginStart = dp(8) })
-        card.addView(inside); content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        connectionCard.addView(inside)
         val heading = horizontal().apply { setPadding(0, dp(20), 0, dp(8)) }
         countLabel = text("Профили", 18, true)
         heading.addView(countLabel, LinearLayout.LayoutParams(0, -2, 1f))
@@ -233,6 +244,21 @@ class R013HomeActivity : AppCompatActivity() {
         lifecycleScope.launch { ClientUpdates.checkDaily(this@R013HomeActivity) { message -> feedback(message) } }
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleSharedFile(intent); TrialExpiryNotifications.handleOpen(this,intent) }
+    private fun showConnectionPopup() {
+        (connectionCard.parent as? ViewGroup)?.removeView(connectionCard)
+        val scroll = ScrollView(this).apply {
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+            addView(connectionCard, ScrollView.LayoutParams(-1, -2))
+        }
+        val popup = MaterialAlertDialogBuilder(this)
+            .setTitle(UnifiedAutoCoordinator.label(selectedSection))
+            .setView(scroll)
+            .setNegativeButton("Закрыть", null)
+            .create()
+        popup.setOnDismissListener { (connectionCard.parent as? ViewGroup)?.removeView(connectionCard) }
+        popup.show()
+        lifecycleScope.launch { renderCurrent() }
+    }
     override fun onResume() {
         super.onResume()
         ClientUpdates.resumePendingInstall(this)

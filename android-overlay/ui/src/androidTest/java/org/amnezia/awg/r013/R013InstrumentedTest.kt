@@ -420,7 +420,12 @@ class R013InstrumentedTest {
         startHome(); waitFor { texts().any { it.startsWith("Профили ·") } }
         assertTrue(texts().contains("Проверить пинг"))
         val labels = texts(); assertTrue(labels.indexOfFirst { it.startsWith("Авто ·") } < labels.indexOf("Finland"))
-        assertTrue(allViews().any { it.contentDescription == "Проверить пинг текущего сервера" && it.width >= 48 * context.resources.displayMetrics.density })
+        openConnectionPopup("AmneziaWG")
+        val popupPing = popupNodes().first { it.contentDescription?.toString() == "Проверить пинг текущего сервера" }
+        val pingBounds = android.graphics.Rect(); popupPing.getBoundsInScreen(pingBounds)
+        assertTrue(pingBounds.width() >= 48 * context.resources.displayMetrics.density)
+        assertTrue(popupNodes().any { it.contentDescription?.toString() == "Подключить VPN" })
+        closeConnectionPopup()
         assertTrue(allViews().any { it.contentDescription == "Добавить" || it.contentDescription == "Добавить профиль" })
         screenshot(InstrumentationRegistry.getArguments().getString("reviewLabel") ?: "phone-main")
         val backend = Application.getBackend() as GoBackend
@@ -450,9 +455,10 @@ class R013InstrumentedTest {
         assertNotNull(EndpointPing.measure("10.13.99.1"))
         assertEquals(connected,backend.connectionRevision)
         assertEquals(before,registry.config(tunnel.name).toAwgQuickString())
-        waitFor { allViews().any { it.contentDescription == "Проверить пинг текущего сервера" && it.isEnabled } }
-        val pingButton = allViews().first { it.contentDescription == "Проверить пинг текущего сервера" }
-        instrumentation.runOnMainSync { assertTrue(pingButton.performClick()) }
+        openConnectionPopup("AmneziaWG")
+        waitFor { popupNodes().any { it.contentDescription?.toString() == "Проверить пинг текущего сервера" && it.isEnabled } }
+        val pingButton = popupNodes().first { it.contentDescription?.toString() == "Проверить пинг текущего сервера" }
+        assertTrue(pingButton.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
         waitFor { texts().any { it.contains("Пинг адреса:") || it.contains("Пинг адреса недоступен") } }
         assertEquals(connected,backend.connectionRevision)
         assertEquals("CI Manual",backend.currentProfileName)
@@ -676,6 +682,27 @@ class R013InstrumentedTest {
         return String(android.util.Base64.decode(encoded,android.util.Base64.DEFAULT),Charsets.UTF_8)
     }
     private fun startHome() { activity = instrumentation.startActivitySync(Intent(context,R013HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as R013HomeActivity; instrumentation.waitForIdleSync() }
+    private fun popupNodes(): List<android.view.accessibility.AccessibilityNodeInfo> {
+        val result = ArrayList<android.view.accessibility.AccessibilityNodeInfo>()
+        fun visit(node: android.view.accessibility.AccessibilityNodeInfo?) {
+            if (node == null) return
+            result.add(node)
+            for (index in 0 until node.childCount) visit(node.getChild(index))
+        }
+        visit(instrumentation.uiAutomation.rootInActiveWindow); return result
+    }
+    private fun openConnectionPopup(section: String) {
+        waitFor { allViews().any { it.contentDescription?.toString() == "Управление подключением" && it.isEnabled } }
+        val open = allViews().first { it.contentDescription?.toString() == "Управление подключением" }
+        instrumentation.runOnMainSync { assertTrue(open.performClick()) }
+        waitFor { popupNodes().any { it.text?.toString() == section } }
+    }
+    private fun closeConnectionPopup() {
+        waitFor { popupNodes().any { it.text?.toString() == "Закрыть" && it.isClickable } }
+        assertTrue(popupNodes().first { it.text?.toString() == "Закрыть" && it.isClickable }
+            .performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+        waitFor { popupNodes().none { it.text?.toString() == "Закрыть" && it.isClickable } }
+    }
     private fun allViews(): List<View> { val views = ArrayList<View>(); instrumentation.runOnMainSync {
         fun walk(v: View) { views.add(v); if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i)) }
         activity?.window?.decorView?.let { walk(it) }
