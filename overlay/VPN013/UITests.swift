@@ -51,9 +51,11 @@ final class AutoTunnelUITests:XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "3", "--vpn013-test-unified", "--vpn013-test-wg-service-routing"]
         app.launch()
         app.tabBars.buttons["vpn013.kind.amneziawg"].tap()
+        openConnectionPopup(app, title: "AmneziaWG")
         let proof = app.staticTexts["vpn013.routing-policy"]
         XCTAssertTrue(proof.waitForExistence(timeout: 20))
         XCTAssertTrue((proof.value as? String)?.contains("WG bulk: ownership, active/on-demand guards, 2/3 scope, original configs, retained OFF choices passed") == true)
+        closeConnectionPopup(app)
         func openServers() {
             if !app.buttons["vpn013.settings.routing"].exists { app.buttons["vpn013.settings"].tap() }
             app.buttons["vpn013.settings.routing"].tap()
@@ -154,18 +156,28 @@ final class AutoTunnelUITests:XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-hold-ping-for-cancellation"]
         app.launch()
+        app.tabBars.buttons["vpn013.kind.amneziawg"].tap()
+        XCTAssertFalse(app.buttons["vpn013.current-power"].isHittable, "Connection controls start inside the popup")
+        openConnectionPopup(app, title: "AmneziaWG")
+        XCTAssertTrue(app.buttons["vpn013.current-power"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["vpn013.connection-popup.ping"].exists)
+        closeConnectionPopup(app)
         for kind in ["happ", "incy", "blacktemple"] {
             let tab = app.tabBars.buttons["vpn013.kind." + kind]
             XCTAssertTrue(tab.waitForExistence(timeout: 15)); tab.tap()
             let power = app.buttons["vpn013.proxy.current.power"]
             let ping = app.buttons["vpn013.proxy.current.ping"]
+            XCTAssertFalse(power.isHittable, "Connection controls start inside the popup")
+            openConnectionPopup(app, title: kind == "happ" ? "Happ" : kind == "incy" ? "INCY" : "BlackTemple")
             XCTAssertTrue(power.waitForExistence(timeout: 8)); XCTAssertFalse(power.isEnabled)
             XCTAssertTrue(ping.exists); XCTAssertFalse(ping.isEnabled)
+            closeConnectionPopup(app)
             app.buttons["vpn013.proxy.add"].tap()
             app.buttons["vpn013.proxy.import.check"].tap()
             XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5))
             app.alerts.buttons["Добавить"].tap()
             XCTAssertTrue(app.tables.cells.staticTexts["Demo server"].waitForExistence(timeout: 8))
+            openConnectionPopup(app, title: kind == "happ" ? "Happ" : kind == "incy" ? "INCY" : "BlackTemple")
             XCTAssertTrue(power.isEnabled); XCTAssertTrue(ping.isEnabled)
             XCTAssertEqual(app.staticTexts["vpn013.proxy.current.name"].label, "Demo server")
             XCTAssertEqual(app.staticTexts["vpn013.proxy.current.status"].label, "Не подключено")
@@ -174,6 +186,7 @@ final class AutoTunnelUITests:XCTestCase {
             XCTAssertTrue(app.buttons["Отменить проверку пинга"].waitForExistence(timeout: 3))
             ping.tap()
             XCTAssertEqual(app.staticTexts["vpn013.proxy.current.status"].label, "Не подключено", "Ping must not activate a VPN")
+            closeConnectionPopup(app)
         }
     }
     func testTrafficSummaryUsesAdaptiveUnits() {
@@ -253,12 +266,23 @@ final class AutoTunnelUITests:XCTestCase {
         let app=XCUIApplication()
         app.launchArguments=["-AppleLanguages","(ru)","-AppleLocale","ru_RU","--vpn013-test-count","2","--vpn013-test-russian-routes"]
         app.launch()
+        openConnectionPopup(app, title: "AmneziaWG")
         let policy=app.staticTexts["vpn013.routing-policy"]
         XCTAssertTrue(policy.waitForExistence(timeout:20))
         XCTAssertEqual(policy.value as? String,"8671 IPv4 / 2167 IPv6; original peers retained")
         capture("native-russian-ip-settings-objects-not-physical-traffic")
     }
     func capture(_ name:String) { let a=XCTAttachment(screenshot:XCUIScreen.main.screenshot());a.name=name;a.lifetime = .keepAlways;add(a) }
+    private func openConnectionPopup(_ app: XCUIApplication, title: String = "AmneziaWG") {
+        let open = app.buttons["vpn013.connection-popup.open"]
+        XCTAssertTrue(open.waitForExistence(timeout: 15)); open.tap()
+        let heading = app.staticTexts["vpn013.connection-popup.title"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 5)); XCTAssertEqual(heading.label, title)
+    }
+    private func closeConnectionPopup(_ app: XCUIApplication) {
+        let close = app.buttons["vpn013.connection-popup.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5)); close.tap()
+    }
     private func assertProfileCount(_ app: XCUIApplication, _ count: Int, file: StaticString = #filePath, line: UInt = #line) {
         // UIKit exposes the same section-header UILabel through both its
         // legacy table element and modern accessibility container. Verify
@@ -636,6 +660,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.tables.cells.element(boundBy:0).staticTexts["Авто · 3 сервера"].waitForExistence(timeout:6), "Auto must precede ! and 0 names")
         let auto = app.tables.cells.element(boundBy:0)
         auto.switches.firstMatch.tap()
+        openConnectionPopup(app)
         let ping = app.buttons["vpn013.current-ping"]
         XCTAssertTrue(ping.waitForExistence(timeout:8))
         XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].waitForExistence(timeout:8))
@@ -647,9 +672,11 @@ final class AutoTunnelUITests:XCTestCase {
         ping.tap()
         let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout:10), "Current-server button must show a real loopback echo result")
-        XCTAssertEqual(auto.switches.firstMatch.value as? String, "1", "Current-server Ping cannot switch off Auto")
         capture("20-auto-first-current-member-real-loopback-ping-synthetic-vpn")
+        closeConnectionPopup(app)
+        XCTAssertEqual(auto.switches.firstMatch.value as? String, "1", "Current-server Ping cannot switch off Auto")
         auto.switches.firstMatch.tap()
+        openConnectionPopup(app)
         XCTAssertFalse(ping.isHittable, "No current-server action after VPN is off")
     }
 
@@ -660,6 +687,7 @@ final class AutoTunnelUITests:XCTestCase {
         let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
         XCTAssertTrue(profile.waitForExistence(timeout:20))
         profile.switches.firstMatch.tap()
+        openConnectionPopup(app)
         let ping = app.buttons["vpn013.current-ping"]
         XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].waitForExistence(timeout:8))
         XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Личный сервер 1")
@@ -667,16 +695,18 @@ final class AutoTunnelUITests:XCTestCase {
         ping.tap()
         let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout:10))
-        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1")
         capture("21-current-manual-server-real-loopback-ping-synthetic-vpn")
         XCUIDevice.shared.orientation = .landscapeLeft
         capture("22-current-manual-server-landscape-synthetic-vpn")
         XCUIDevice.shared.orientation = .portrait
+        closeConnectionPopup(app)
+        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1")
         let portraitReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true AND value == '1'"), object: profile.switches.firstMatch)
         XCTAssertEqual(XCTWaiter.wait(for: [portraitReady], timeout: 5), .completed)
         profile.switches.firstMatch.tap()
         let disconnected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '0'"), object: profile.switches.firstMatch)
         XCTAssertEqual(XCTWaiter.wait(for: [disconnected], timeout: 5), .completed)
+        openConnectionPopup(app)
         let pingHidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == false"), object: ping)
         XCTAssertEqual(XCTWaiter.wait(for: [pingHidden], timeout: 5), .completed)
     }
@@ -688,13 +718,15 @@ final class AutoTunnelUITests:XCTestCase {
         let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
         XCTAssertTrue(profile.waitForExistence(timeout:20))
         profile.switches.firstMatch.tap()
+        openConnectionPopup(app)
         let proof = app.staticTexts["vpn013.current-proof"]
         let received = XCTNSPredicateExpectation(predicate: NSPredicate(format:"label == %@", "Данные рукопожатия получены"), object: proof)
         XCTAssertEqual(XCTWaiter.wait(for:[received], timeout:8), .completed)
         XCTAssertTrue(app.staticTexts["vpn013.current-handshake"].label.hasPrefix("Рукопожатие:"))
         XCTAssertFalse(app.staticTexts["vpn013.current-traffic"].label.contains("недоступна"))
-        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1")
         capture("manual-runtime-handshake-summary-synthetic-no-internet-proof")
+        closeConnectionPopup(app)
+        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1")
     }
 
     private func checkManualPingWithoutRuntime(_ fixture: String, captureName: String) {
@@ -704,6 +736,7 @@ final class AutoTunnelUITests:XCTestCase {
         let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
         XCTAssertTrue(profile.waitForExistence(timeout:20))
         profile.switches.firstMatch.tap()
+        openConnectionPopup(app)
         let ping = app.buttons["vpn013.current-ping"]
         XCTAssertTrue(ping.waitForExistence(timeout:8))
         XCTAssertTrue(ping.isEnabled && ping.isHittable, "Saved ordinary address must remain usable without extension statistics")
@@ -726,9 +759,11 @@ final class AutoTunnelUITests:XCTestCase {
         wait(for:[refreshes], timeout:16)
         XCTAssertTrue(ping.isEnabled)
         XCTAssertEqual(app.staticTexts["vpn013.current-ping-result"].label, measured, "Missing runtime must not erase the measured Ping")
-        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1", "Ping and refresh must not replace the running VPN")
         capture(captureName)
+        closeConnectionPopup(app)
+        XCTAssertEqual(profile.switches.firstMatch.value as? String, "1", "Ping and refresh must not replace the running VPN")
         profile.switches.firstMatch.tap()
+        openConnectionPopup(app)
         XCTAssertFalse(ping.isHittable, "Unavailable or late runtime cannot resurrect the disconnected card")
     }
 
@@ -766,11 +801,13 @@ final class AutoTunnelUITests:XCTestCase {
         let auto = app.tables.cells.element(boundBy:0)
         XCTAssertTrue(auto.staticTexts["Авто · 2 сервера"].waitForExistence(timeout:6))
         auto.switches.firstMatch.tap()
+        openConnectionPopup(app)
         let ping = app.buttons["vpn013.current-ping"]
         XCTAssertTrue(ping.waitForExistence(timeout:8))
         XCTAssertFalse(ping.isEnabled, "Unknown Auto member cannot be replaced by its saved seed")
         XCTAssertEqual(app.staticTexts["vpn013.current-endpoint"].label, "Текущий сервер пока недоступен")
         capture("25-auto-unknown-member-no-seed-ping-synthetic-vpn")
+        closeConnectionPopup(app)
         auto.switches.firstMatch.tap()
     }
 
@@ -789,6 +826,7 @@ final class AutoTunnelUITests:XCTestCase {
         let first = app.tables.cells.containing(.staticText, identifier: "Личный сервер 1").firstMatch
         let second = app.tables.cells.containing(.staticText, identifier: "Личный сервер 2").firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 20))
+        openConnectionPopup(app)
         let power = waitForPowerValue("Выключен", in: app)
         XCTAssertTrue(power.isEnabled && power.isHittable)
         XCTAssertGreaterThanOrEqual(power.frame.width, 44)
@@ -796,21 +834,28 @@ final class AutoTunnelUITests:XCTestCase {
         capture("26a-current-power-off-synthetic")
         power.tap()
         _ = waitForPowerValue("Включён", in: app)
-        XCTAssertEqual(first.switches.firstMatch.value as? String, "1")
         XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Личный сервер 1")
         capture("26b-current-power-on-without-runtime-synthetic")
+        closeConnectionPopup(app)
+        XCTAssertEqual(first.switches.firstMatch.value as? String, "1")
+        openConnectionPopup(app)
         power.tap()
         _ = waitForPowerValue("Выключен", in: app)
+        closeConnectionPopup(app)
         XCTAssertEqual(first.switches.firstMatch.value as? String, "0")
         second.switches.firstMatch.tap()
+        openConnectionPopup(app)
         _ = waitForPowerValue("Включён", in: app)
         XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Личный сервер 2")
         power.tap()
         _ = waitForPowerValue("Выключен", in: app)
-        XCTAssertEqual(second.switches.firstMatch.value as? String, "0")
         XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Личный сервер 2")
+        closeConnectionPopup(app)
+        XCTAssertEqual(second.switches.firstMatch.value as? String, "0")
+        openConnectionPopup(app)
         power.tap()
         _ = waitForPowerValue("Включён", in: app)
+        closeConnectionPopup(app)
         XCTAssertEqual(second.switches.firstMatch.value as? String, "1", "Reconnect the last actual profile, not the first row")
         XCTAssertEqual(first.switches.firstMatch.value as? String, "0")
         capture("26c-current-power-remembers-second-manual-profile-synthetic")
@@ -831,21 +876,27 @@ final class AutoTunnelUITests:XCTestCase {
         }
         let auto = app.tables.cells.element(boundBy: 0)
         XCTAssertTrue(auto.staticTexts["Авто · 2 сервера"].waitForExistence(timeout: 6))
+        openConnectionPopup(app)
         let power = waitForPowerValue("Выключен", in: app)
         XCTAssertEqual(app.staticTexts["vpn013.current-name"].label, "Авто · 2 сервера")
         power.tap()
         _ = waitForPowerValue("Включён", in: app)
-        XCTAssertEqual(auto.switches.firstMatch.value as? String, "1")
         let ping = app.buttons["vpn013.current-ping"]
         XCTAssertTrue(ping.waitForExistence(timeout: 8))
         XCTAssertFalse(ping.isEnabled, "Unknown Auto member must still not ping a saved seed")
         XCTAssertTrue(power.isEnabled && power.isHittable, "Power depends on the connection, not runtime statistics")
         capture("27-current-power-auto-without-member-statistics-synthetic")
+        closeConnectionPopup(app)
+        XCTAssertEqual(auto.switches.firstMatch.value as? String, "1")
+        openConnectionPopup(app)
         power.tap()
         _ = waitForPowerValue("Выключен", in: app)
+        closeConnectionPopup(app)
         XCTAssertEqual(auto.switches.firstMatch.value as? String, "0")
+        openConnectionPopup(app)
         power.tap()
         _ = waitForPowerValue("Включён", in: app)
+        closeConnectionPopup(app)
         XCTAssertEqual(auto.switches.firstMatch.value as? String, "1")
     }
 
@@ -853,6 +904,7 @@ final class AutoTunnelUITests:XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "0"]
         app.launch()
+        openConnectionPopup(app)
         let emptyPower = waitForPowerValue("Выключен", in: app)
         XCTAssertFalse(emptyPower.isEnabled, "No profile may be invented or connected from an empty list")
         capture("28a-current-power-empty-disabled-synthetic")
@@ -861,10 +913,11 @@ final class AutoTunnelUITests:XCTestCase {
             "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
             "--vpn013-test-count", "2", "--vpn013-test-current-card", "--vpn013-test-start-current"]
         app.launch()
+        openConnectionPopup(app)
         let power = waitForPowerValue("Включён", in: app)
         for _ in 0..<5 {
             if power.isHittable { break }
-            app.tables.firstMatch.swipeUp()
+            app.scrollViews.firstMatch.swipeUp()
         }
         XCTAssertTrue(power.isHittable)
         XCTAssertGreaterThanOrEqual(power.frame.height, 44)
@@ -880,6 +933,7 @@ final class AutoTunnelUITests:XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU",
             "--vpn013-test-count", "2", "--vpn013-test-power-connecting"]
         app.launch()
+        openConnectionPopup(app)
         let power = waitForPowerValue("Изменение подключения", in: app)
         XCTAssertFalse(power.isEnabled, "A second activation must not be submitted during a transition")
         XCTAssertFalse(app.buttons["vpn013.automatic-mode"].isEnabled, "Auto preference cannot race the prepared connection payload")

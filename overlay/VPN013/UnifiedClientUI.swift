@@ -307,6 +307,55 @@ private final class ProxyServerListCell: UITableViewCell {
     @objc private func openTapped() { openConfiguration?() }
 }
 
+/// Shared status sheet; opening or closing it never changes a VPN connection.
+final class VPN013ConnectionPopup: UIViewController {
+    private let sectionTitle: String
+    private let content: UIView
+    var onShown: (() -> Void)?
+
+    init(sectionTitle: String, content: UIView) {
+        self.sectionTitle = sectionTitle
+        self.content = content
+        super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .pageSheet
+        if #available(iOS 15.0, *) {
+            sheetPresentationController?.detents = [.medium(), .large()]
+            sheetPresentationController?.prefersGrabberVisible = true
+        }
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = VPN013Theme.background
+        view.tintColor = VPN013Theme.accent
+        let heading = proxyLabel(sectionTitle, style: .title2)
+        heading.accessibilityIdentifier = "vpn013.connection-popup.title"
+        let close = UIButton(type: .system)
+        close.setTitle("Готово", for: .normal)
+        close.accessibilityIdentifier = "vpn013.connection-popup.close"
+        close.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        close.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        let top = UIStackView(arrangedSubviews: [heading, close]); top.axis = .horizontal; top.spacing = 16
+        let stack = UIStackView(arrangedSubviews: [top, content]); stack.axis = .vertical; stack.spacing = 12
+        let scroll = UIScrollView(); scroll.translatesAutoresizingMaskIntoConstraints = false
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scroll); scroll.addSubview(stack)
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 12),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -20),
+            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -32)
+        ])
+    }
+    override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); onShown?() }
+    @objc private func closeTapped() { dismiss(animated: true) }
+}
+
 private final class ProxyConnectionPanel: UIView {
     struct Presentation {
         let name, status, detail, routing: String
@@ -408,7 +457,9 @@ final class ProxyListViewController: UITableViewController {
         add.accessibilityIdentifier = "vpn013.proxy.add"
         let invite = UIBarButtonItem(image: UIImage(systemName: "person.badge.plus"), style: .plain, target: self, action: #selector(inviteFriend))
         invite.accessibilityLabel = "Пригласить друга"; invite.accessibilityIdentifier = "vpn013.invite"
-        navigationItem.rightBarButtonItems = [add, invite]
+        let status = UIBarButtonItem(image: UIImage(systemName: "info.circle"), style: .plain, target: self, action: #selector(openConnectionPopup))
+        status.accessibilityLabel = "Управление подключением"; status.accessibilityIdentifier = "vpn013.connection-popup.open"
+        navigationItem.rightBarButtonItems = [add, status, invite]
         let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(openSettings))
         settings.accessibilityLabel = "Настройки"; settings.accessibilityIdentifier = "vpn013.settings"
         navigationItem.leftBarButtonItems = [settings, UIBarButtonItem(customView: automaticHeader)]
@@ -420,7 +471,6 @@ final class ProxyListViewController: UITableViewController {
         #endif
         connectionPanel.powerAction = { [weak self] in guard let self = self, let entry = self.panelEntry else { return }; self.manager.toggle(entry) }
         connectionPanel.pingAction = { [weak self] in self?.checkPanelPing() }
-        tableView.tableHeaderView = connectionPanel
         observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in self?.tableView.reloadData(); self?.refreshPanel() }
         refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refreshProfiles), for: .valueChanged)
         renderPanel()
@@ -428,6 +478,9 @@ final class ProxyListViewController: UITableViewController {
     deinit { if let token = observer { NotificationCenter.default.removeObserver(token) }; panelTimer?.invalidate(); panelPing.cancel() }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated); tableView.reloadData()
+        startPanelUpdates()
+    }
+    private func startPanelUpdates() {
         panelTimer?.invalidate(); panelTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refreshPanel() }
         refreshPanel()
     }
@@ -483,12 +536,10 @@ final class ProxyListViewController: UITableViewController {
             guard let self = self, self.panelPingRequest == request else { return }; self.pingBusy = false; self.renderPanel()
         })
     }
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        guard let header = tableView.tableHeaderView else { return }
-        let width = tableView.bounds.width
-        let size = header.systemLayoutSizeFitting(CGSize(width: width, height: UIView.layoutFittingCompressedSize.height), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
-        if abs(header.frame.height - size.height) > 0.5 || header.frame.width != width { header.frame = CGRect(x: 0, y: 0, width: width, height: size.height); tableView.tableHeaderView = header }
+    @objc private func openConnectionPopup() {
+        let popup = VPN013ConnectionPopup(sectionTitle: kind.title, content: connectionPanel)
+        popup.onShown = { [weak self] in self?.startPanelUpdates() }
+        present(popup, animated: true)
     }
     @objc private func refreshProfiles() {
         manager.refreshSubscriptions(kind) { [weak self] error in

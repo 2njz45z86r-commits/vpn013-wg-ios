@@ -52,6 +52,7 @@ class TunnelsListTableViewController: UIViewController {
     }()
 
     private let summaryHeader = UIView()
+    private let summaryContent = UIView()
     private let appTitleLabel = TunnelsListTableViewController.makeLabel(style: .title2, weight: .semibold)
     private let summaryStatusLabel = TunnelsListTableViewController.makeLabel(style: .caption1)
     private let summaryNameLabel = TunnelsListTableViewController.makeLabel(style: .title3, weight: .semibold)
@@ -80,6 +81,7 @@ class TunnelsListTableViewController: UIViewController {
     private let emptyStateStack = UIStackView()
     private let emptyStateContainer = UIView()
     private let checkAllButton = UIButton(type: .system)
+    private let popupPingButton = UIButton(type: .system)
     private let pingExplanationLabel = TunnelsListTableViewController.makeLabel(style: .footnote, color: VPN013Theme.secondaryText)
     private let pingCoordinator = EndpointPingCoordinator()
     private var pingIsRunning = false
@@ -200,7 +202,10 @@ class TunnelsListTableViewController: UIViewController {
             let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addButtonTapped(sender:)))
             addButton.accessibilityIdentifier = "vpn013.add-profile"
             addButton.accessibilityLabel = "Добавить конфигурацию"
-            navigationItem.rightBarButtonItems = [addButton]
+            let status = UIBarButtonItem(image: UIImage(systemName: "info.circle"), style: .plain, target: self, action: #selector(openConnectionPopup))
+            status.accessibilityLabel = "Управление подключением"
+            status.accessibilityIdentifier = "vpn013.connection-popup.open"
+            navigationItem.rightBarButtonItems = [addButton, status]
             let settings = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(settingsButtonTapped(sender:)))
             settings.accessibilityIdentifier = "vpn013.settings"
             settings.accessibilityLabel = tr("tunnelsListSettingsButtonTitle")
@@ -285,7 +290,7 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     private func configureSummaryHeader() {
-        let summary = UIView()
+        let summary = summaryContent
         summary.backgroundColor = VPN013Theme.background
         summary.layer.cornerRadius = 14
         summary.layer.cornerCurve = .continuous
@@ -372,7 +377,17 @@ class TunnelsListTableViewController: UIViewController {
         summaryDetailsRow.addArrangedSubview(details)
         summaryDetailsRow.addArrangedSubview(powerColumn)
         summaryDetailsRow.spacing = 12
-        let labels = UIStackView(arrangedSubviews: [summaryIdentityRow, summaryDetailsRow, currentPingRow])
+        var popupPingConfiguration = UIButton.Configuration.tinted()
+        popupPingConfiguration.title = "Проверить пинг серверов"
+        popupPingConfiguration.image = UIImage(systemName: "waveform.path.ecg")
+        popupPingConfiguration.imagePadding = 6
+        popupPingConfiguration.baseForegroundColor = VPN013Theme.accent
+        popupPingButton.configuration = popupPingConfiguration
+        popupPingButton.accessibilityIdentifier = "vpn013.connection-popup.ping"
+        popupPingButton.accessibilityHint = "Измерить пинг адресов без переключения VPN"
+        popupPingButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        popupPingButton.addTarget(self, action: #selector(checkAllServersTapped), for: .touchUpInside)
+        let labels = UIStackView(arrangedSubviews: [summaryIdentityRow, summaryDetailsRow, currentPingRow, popupPingButton])
         labels.axis = .vertical
         labels.spacing = 5
         labels.translatesAutoresizingMaskIntoConstraints = false
@@ -434,7 +449,7 @@ class TunnelsListTableViewController: UIViewController {
         let pingStack = UIStackView(arrangedSubviews: [checkAllButton, pingExplanationLabel])
         pingStack.axis = .vertical
         pingStack.spacing = 8
-        let stack = UIStackView(arrangedSubviews: [summary, pingStack, emptyStateContainer])
+        let stack = UIStackView(arrangedSubviews: [pingStack, emptyStateContainer])
         stack.axis = .vertical
         stack.spacing = 16
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -446,6 +461,13 @@ class TunnelsListTableViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: summaryHeader.bottomAnchor, constant: -8)
         ])
         tableView.tableHeaderView = summaryHeader
+    }
+
+    @objc private func openConnectionPopup() {
+        updateConnectionSummary()
+        let popup = VPN013ConnectionPopup(sectionTitle: "AmneziaWG", content: summaryContent)
+        popup.onShown = { [weak self] in self?.startAutomaticSummaryUpdates() }
+        present(popup, animated: true)
     }
 
     private func updateSummaryIdentityLayout() {
@@ -540,6 +562,7 @@ class TunnelsListTableViewController: UIViewController {
         let hasTunnels = (tunnelsManager?.numberOfTunnels() ?? 0) > 0
         emptyStateContainer.isHidden = tunnelsManager == nil || hasTunnels
         checkAllButton.isEnabled = hasTunnels
+        popupPingButton.isEnabled = hasTunnels
         checkAllButton.isHidden = !hasTunnels
         pingExplanationLabel.isHidden = !hasTunnels
         sizeSummaryHeader()
@@ -878,6 +901,8 @@ class TunnelsListTableViewController: UIViewController {
         checkAllButton.isEnabled = (tunnelsManager?.numberOfTunnels() ?? 0) > 0
         checkAllButton.configuration?.title = title ?? (isRunning ? "Остановить проверку" : "Проверить пинг")
         checkAllButton.configuration?.showsActivityIndicator = isRunning
+        popupPingButton.configuration?.title = isRunning ? "Остановить проверку" : "Проверить пинг серверов"
+        popupPingButton.configuration?.showsActivityIndicator = isRunning
         sizeSummaryHeader()
     }
 
