@@ -78,8 +78,10 @@ class MockTunnels {
                 }
             }
             expectedArchiveConfigs[config.name!] = canonical
-            let contents = index == 1 ? Data([0xff, 0xfe]) + raw.data(using: .utf16LittleEndian)! : Data(raw.utf8)
-            return ["Android", "iPhone"].map { (fileName: $0 + "/" + config.name! + ".conf", contents: contents) }
+            return ["Android", "iPhone"].map { platform in
+                let contents = index == 1 && platform == "iPhone" ? Data([0xff, 0xfe]) + raw.data(using: .utf16LittleEndian)! : Data(raw.utf8)
+                return (fileName: platform + "/" + config.name! + ".conf", contents: contents)
+            }
         }
         try ZipArchive.archive(inputs: files, to: url)
         return url
