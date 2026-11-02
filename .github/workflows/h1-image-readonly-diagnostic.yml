@@ -6,6 +6,7 @@ on:
       - '.github/workflows/h1-image-readonly-diagnostic.yml'
       - '.github/workflows/wg-dynamic-diagnostic.py'
       - '.github/workflows/h1-panel-synthetic-smoke.sh'
+      - '.github/workflows/h1-panel-synthetic-add.py'
 permissions:
   contents: read
 jobs:

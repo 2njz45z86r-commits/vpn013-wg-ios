@@ -29,5 +29,19 @@ done
 docker exec "$name" sh -c 'curl -sS -o /dev/null --max-time 2 http://127.0.0.1:25119/fixture/login'
 docker exec "$name" sh -c 'command -v python3 >/dev/null && command -v sqlite3 >/dev/null'
 docker exec "$name" sh -c '/home/container/bin/xray-linux-amd64 version | head -n 1'
-docker exec "$name" sh -c "sqlite3 /home/container/db/x-ui.db \"select 'synthetic_subscription_port=' || value from settings where key='subPort';\""
-echo 'synthetic_panel_started=true isolated_network=true production_contact=false'
+before=$(docker exec "$name" sqlite3 /home/container/db/x-ui.db "select value from settings where key='subPort';")
+test "$before" = 25120
+docker cp .github/workflows/h1-panel-synthetic-add.py "$name:/tmp/h1-panel-synthetic-add.py"
+docker exec "$name" python3 /tmp/h1-panel-synthetic-add.py
+docker restart -t 10 "$name" >/dev/null
+for _ in $(seq 1 90); do
+  if docker exec "$name" sh -c 'curl -sS -o /dev/null --max-time 1 http://127.0.0.1:25119/fixture/login' >/dev/null 2>&1; then break; fi
+  if [ "$(docker inspect -f '{{.State.Running}}' "$name")" != true ]; then
+    echo 'Synthetic panel exited after fixture restart' >&2; exit 1
+  fi
+  sleep 1
+done
+after=$(docker exec "$name" sqlite3 /home/container/db/x-ui.db "select value from settings where key='subPort';")
+printf 'synthetic_subscription_before=%s synthetic_subscription_after=%s\n' "$before" "$after"
+test "$after" = 25121
+echo 'synthetic_panel_test=true disabled_inbound_moved_subscription_port_on_restart=true isolated_network=true production_contact=false'
