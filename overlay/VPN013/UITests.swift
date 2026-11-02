@@ -736,6 +736,8 @@ final class AutoTunnelUITests:XCTestCase {
         let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
         XCTAssertTrue(profile.waitForExistence(timeout:20))
         profile.switches.firstMatch.tap()
+        let connected = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: profile.switches.firstMatch)
+        XCTAssertEqual(XCTWaiter.wait(for:[connected], timeout:20), .completed, "The synthetic connection must become active before the popup is opened")
         openConnectionPopup(app)
         let ping = app.buttons["vpn013.current-ping"]
         XCTAssertTrue(ping.waitForExistence(timeout:8))
@@ -962,6 +964,10 @@ final class AutoTunnelUITests:XCTestCase {
             XCUIDevice.shared.press(.home); app.activate()
             XCTAssertTrue(draft.waitForExistence(timeout: 8))
             XCTAssertEqual(draft.value as? String, original, "Returning from another app must preserve the input and selected section")
+            let currentTab = XCTNSPredicateExpectation(predicate: NSPredicate(format:"selected == true"), object: tab)
+            XCTAssertEqual(XCTWaiter.wait(for:[currentTab], timeout:15), .completed, "Returning from another app must keep the same protocol section")
+            let checkReady = XCTNSPredicateExpectation(predicate: NSPredicate(format:"hittable == true"), object: app.buttons["vpn013.proxy.import.check"])
+            XCTAssertEqual(XCTWaiter.wait(for:[checkReady], timeout:15), .completed, "The existing import action must become available after returning")
             XCTAssertTrue(app.buttons["vpn013.proxy.import.check"].isHittable)
             app.buttons["vpn013.proxy.import.check"].tap()
             XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5))
