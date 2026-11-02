@@ -1,0 +1,138 @@
+package device
+
+import (
+	"errors"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// Synthetic configuration only; verifies staging and preservation, not traffic.
+func TestVPN013LegacyUAPIStagingAndPeerPreservation(t *testing.T) {
+	pair := genTestPair(t, false)
+	d := pair[0].dev
+	initial := len(d.peers.keyMap)
+	config := uapiCfg("r013_legacy15", "true", "i1", "<b 0xf1f2><c><t>", "j1", "<b 0xa1a2><c><t><wt 2>", "itime", "60")
+	if err := d.IpcSet(config); err != nil {
+		t.Fatal("synthetic legacy settings rejected")
+	}
+	got, err := d.IpcGet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{"r013_legacy15=true\n", "i1=<b 0xf1f2><c><t>\n", "j1=<b 0xa1a2><c><t><wt 2>\n", "itime=60\n"} {
+		if !strings.Contains(got, fragment) {
+			t.Fatal("legacy field lost")
+		}
+	}
+	// iOS supplies empty fields to clear stale I/J values while keeping peers.
+	if err := d.IpcSet(uapiCfg("r013_legacy15", "true", "i1", "", "i2", "", "i3", "", "i4", "", "i5", "", "j1", "", "j2", "", "j3", "", "itime", "0")); err != nil {
+		t.Fatal("empty legacy fields could not clear the prior profile")
+	}
+	cleared, err := d.IpcGet()
+	if err != nil || strings.Contains(cleared, "j1=") || strings.Contains(cleared, "i1=") || len(d.peers.keyMap) != initial {
+		t.Fatal("clearing legacy fields retained old data or changed peers")
+	}
+	if err := d.IpcSet(config); err != nil {
+		t.Fatal("legacy settings could not be restored after clearing")
+	}
+	if err := d.IpcSet(uapiCfg("r013_legacy15", "true", "j1", "<wt 5001>", "replace_peers", "true")); err == nil {
+		t.Fatal("unsafe legacy wait accepted")
+	}
+	if len(d.peers.keyMap) != initial {
+		t.Fatal("unsafe settings removed a peer")
+	}
+	if err := d.IpcSet(uapiCfg("r013_legacy15", "false", "i1", "<b 0x01>")); err != nil {
+		t.Fatal("switch to modern settings rejected")
+	}
+	got, err = d.IpcGet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "r013_legacy15=true") || strings.Contains(got, "j1=") || !strings.Contains(got, "i1=<b 0x01>\n") {
+		t.Fatal("legacy mode switch did not preserve intended modern field")
+	}
+}
+
+func TestVPN013LegacyConcurrentUpdatesAndGeneration(t *testing.T) {
+	pair := genTestPair(t, false)
+	d := pair[0].dev
+	var wg sync.WaitGroup
+	failures := make(chan bool, 4)
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			var conf string
+			if i%2 == 0 {
+				conf = uapiCfg("r013_legacy15", "true", "i1", "<b 0xf1><c><t>", "j1", "<b 0xa1><c><t>", "itime", "60")
+			} else {
+				conf = uapiCfg("r013_legacy15", "false", "i1", "<b 0x01>")
+			}
+			if d.IpcSet(conf) != nil {
+				failures <- true
+				return
+			}
+		}
+	}()
+	for n := 0; n < 3; n++ {
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 500; i++ {
+				if _, _, _, _, err := d.r013PrepareInitialObfuscationMode(); err != nil && !errors.Is(err, errR013LegacyStale) {
+					failures <- true
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(failures)
+	for range failures {
+		t.Error("synthetic legacy operation failed")
+	}
+}
+
+func TestVPN013LegacyWaitStopsWhenDeviceGoesDown(t *testing.T) {
+	pair := genTestPair(t, false)
+	d := pair[0].dev
+	if err := d.IpcSet(uapiCfg("r013_legacy15", "true", "i1", "<wt 5000><b 0x01>")); err != nil {
+		t.Fatal("synthetic legacy setup rejected")
+	}
+	started := make(chan struct{})
+	done := make(chan error, 1)
+	go func() { close(started); _, _, _, _, err := d.r013PrepareInitialObfuscationMode(); done <- err }()
+	<-started
+	time.Sleep(50 * time.Millisecond)
+	if err := d.Down(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("legacy wait was not interrupted")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("legacy wait delayed device shutdown")
+	}
+}
+
+func TestVPN013LegacySparsePackets(t *testing.T) {
+	pair := genTestPair(t, false)
+	d := pair[0].dev
+	cfg := r013LegacyConfig{enabled: true, intervalSeconds: ^uint32(0), revision: d.legacyRevision.Load()}
+	cfg.initial[1] = "<b 0x12>"
+	cfg.controlled[2] = "<b 0x34>"
+	if err := cfg.validate(); err != nil {
+		t.Fatal("sparse configuration rejected")
+	}
+	first, err := d.r013BuildLegacyInitial(cfg, 0, 0, 0)
+	if err != nil || len(first) != 1 || len(first[0]) != 1 || first[0][0] != 0x12 {
+		t.Fatal("sparse I2 was not sent first")
+	}
+	second, err := d.r013BuildLegacyInitial(cfg, 0, 0, 0)
+	if err != nil || len(second) != 1 || len(second[0]) != 1 || second[0][0] != 0x34 {
+		t.Fatal("sparse J3 was not sent next")
+	}
+}

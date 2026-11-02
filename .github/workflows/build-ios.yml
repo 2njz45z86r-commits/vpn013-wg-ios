@@ -26,7 +26,8 @@ jobs:
           python3 - <<'PY'
           import subprocess
           changed = set(subprocess.check_output(['git','diff','--name-only','fc8b1c60c7eb64774c7096bd5f89153baa654d47','HEAD'], text=True).splitlines())
-          assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py', 'diagnostics/actual-parser-harness.py', 'diagnostics/go-sca-debug.py'}
+          allowed = {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py', 'diagnostics/actual-parser-harness.py', 'diagnostics/go-sca-debug.py'}
+          assert allowed <= changed and all(x in allowed or x.startswith('diagnostics/revision-engine/') for x in changed)
           PY
       - name: Compile and run Swift boundary tests
         run: |
@@ -55,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [ios-nocgo]
+        target: [linux]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -74,7 +75,8 @@ jobs:
           python3 - <<'PY'
           import subprocess
           changed=set(subprocess.check_output(['git','diff','--name-only','fc8b1c60c7eb64774c7096bd5f89153baa654d47','HEAD'],text=True).splitlines())
-          assert changed == {'.github/workflows/build-ios.yml','diagnostics/zip-dedup-harness.py','diagnostics/actual-parser-harness.py','diagnostics/go-sca-debug.py'}
+          allowed={'.github/workflows/build-ios.yml','diagnostics/zip-dedup-harness.py','diagnostics/actual-parser-harness.py','diagnostics/go-sca-debug.py'}
+          assert allowed <= changed and all(x in allowed or x.startswith('diagnostics/revision-engine/') for x in changed)
           PY
           git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/go-apple"
           git -C "$RUNNER_TEMP/go-apple" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
@@ -94,18 +96,47 @@ jobs:
           assert result['effectiveReplacementVerified']
           print('Exact staged AWG core: required synthetic host tests passed')
           PY
-      - name: Scan selected package dependencies without public finding details
+      - name: Run race detector on isolated legacy revision prototype
         env:
           GOTOOLCHAIN: local
-          VPN013_SCAN_TARGET: ${{ matrix.target }}
         run: |
           set -eu
-          mkdir -p build/review
-          python3 diagnostics/go-sca-debug.py
-      - name: Retain encrypted findings only
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          source=Path('diagnostics/revision-engine');target=Path(os.environ['RUNNER_TEMP'])/'staged/awg-core-owned/device'
+          manifest=json.loads((source/'manifest.json').read_text())
+          assert set(manifest)=={'device.go','peer.go','send.go','uapi.go','r013_resource_limits.go','r013_legacy15.go','r013_legacy_uapi_test.go','r013_stale_snapshot_test.go'}
+          for name,item in manifest.items():
+              p=target/name
+              if item['beforeSHA256'] is None: assert not p.exists()
+              else: assert hashlib.sha256(p.read_bytes()).hexdigest()==item['beforeSHA256']
+              data=(source/(name+'.txt')).read_bytes();assert hashlib.sha256(data).hexdigest()==item['afterSHA256'];p.write_bytes(data)
+          PY
+          export AWG_FIXTURES="$GITHUB_WORKSPACE/scripts/awg31-fixtures"
+          cd "$RUNNER_TEMP/staged/awg-core-owned"
+          set +e
+          go test -race -json ./device -run '^(TestLegacy15|TestVPN013Legacy|TestPrimary|TestTwoDevicePing|TestAWGDevicePing|TestVPN013AuthenticatedFallbackLocalTraffic|TestVPN013QueuedCandidateRejectsForgedTraffic)' -count=3 -timeout=120s > "$RUNNER_TEMP/revision-race.jsonl" 2> "$RUNNER_TEMP/revision-race.stderr"
+          result=$?
+          set -e
+          export VPN013_RACE_EXIT="$result"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          rows=[json.loads(x) for x in (Path(os.environ['RUNNER_TEMP'])/'revision-race.jsonl').read_text().splitlines() if x.startswith('{')]
+          names={'TestVPN013LegacyStaleSnapshotAfterModeSwitch','TestVPN013LegacyRejectPreparedPacketAfterModeSwitch','TestVPN013LegacySendCompletesBeforeModeCommit','TestVPN013LegacyConcurrentUpdatesAndGeneration','TestVPN013LegacyWaitStopsWhenDeviceGoesDown','TestVPN013LegacyUAPIStagingAndPeerPreservation','TestVPN013LegacySparsePackets','TestTwoDevicePing','TestAWGDevicePing','TestVPN013AuthenticatedFallbackLocalTraffic','TestVPN013QueuedCandidateRejectsForgedTraffic'}
+          counts={n:sum(x.get('Action')=='pass' and x.get('Test')==n for x in rows) for n in names}
+          failures=[x.get('Test','package') for x in rows if x.get('Action') in ('fail','skip')]
+          race=any('DATA RACE' in x.get('Output','') for x in rows)
+          result={'exit':int(os.environ['VPN013_RACE_EXIT']),'counts':counts,'failedOrSkipped':failures,'raceDetected':race,'scope':'isolated prototype on synthetic Linux devices; no iPhone or production servers'}
+          Path(os.environ['GITHUB_WORKSPACE'],'revision-race-summary.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result))
+          assert result['exit']==0 and not race and not failures and all(x==3 for x in counts.values())
+          PY
+      - name: Retain synthetic race summary
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: awg-core-${{ matrix.target }}-sca-${{ github.run_id }}
-          path: build/review/core-linux-debug.enc.json
+          name: awg-revision-race-${{ github.run_id }}
+          path: revision-race-summary.json
           if-no-files-found: warn
