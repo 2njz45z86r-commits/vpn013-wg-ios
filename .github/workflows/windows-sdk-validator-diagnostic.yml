@@ -71,4 +71,22 @@ jobs:
                 }
               } else { Write-Output ("SDK payload {0} absent" -f $name) }
             }
+            $root = Join-Path ${env:ProgramFiles(x86)} 'MsiVal2'
+            if (Test-Path -LiteralPath $root -PathType Container) {
+              $files = @(Get-ChildItem -LiteralPath $root -Filter 'evalcom2.dll' -File -Recurse -ErrorAction Stop)
+              foreach ($file in $files) {
+                $sig = Get-AuthenticodeSignature -LiteralPath $file.FullName
+                Write-Output ("SDK Evalcom2 file={0} SHA256={1} signature={2}" -f $file.FullName, (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash, $sig.Status)
+              }
+              if ($files.Count -eq 0) { Write-Output 'SDK Evalcom2 file absent from installed package directory' }
+            }
+            $clsid = '{6E5E1910-8053-4660-B795-6B612E29BC58}'
+            foreach ($view in @([Microsoft.Win32.RegistryView]::Registry32, [Microsoft.Win32.RegistryView]::Registry64)) {
+              $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::ClassesRoot, $view)
+              try {
+                $key = $base.OpenSubKey("CLSID\$clsid\InprocServer32")
+                try { $target = if ($key) { $key.GetValue('') } else { $null }; Write-Output ("SDK Evalcom2 registry view={0} target={1}" -f $view, $target) }
+                finally { if ($key) { $key.Dispose() } }
+              } finally { $base.Dispose() }
+            }
           }
