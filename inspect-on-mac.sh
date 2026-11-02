@@ -15,6 +15,8 @@ cd build/awg
 # overlay bytes before selecting either shard.
 cmp -s VPN013/UITests.swift ../../overlay/VPN013/UITests.swift
 cmp -s Sources/WireGuardApp/Tunnel/TunnelsManager.swift ../../overlay/Sources/WireGuardApp/Tunnel/TunnelsManager.swift
+cmp -s Sources/WireGuardApp/Tunnel/MockTunnels.swift ../../overlay/Sources/WireGuardApp/Tunnel/MockTunnels.swift
+cmp -s Sources/WireGuardApp/ZipArchive/ZipImporter.swift ../../overlay/Sources/WireGuardApp/ZipArchive/ZipImporter.swift
 shard=${VPN013_UI_SHARD:-all54}
 case "$shard" in coreA|coreB|coreC|core49|added5|all54) ;; *) echo "Invalid native UI shard" >&2; exit 2 ;; esac
 # The helper checks the exact 54 source methods and assigns every selector once.
