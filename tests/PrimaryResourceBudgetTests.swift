@@ -20,6 +20,7 @@ enum PrimaryResourceBudgetTests {
         check(true, try VPN013PrimaryResourceBudget.readConfigFile(file) == text, "UTF-8 BOM config")
         try (Data([0xff, 0xfe]) + text.data(using: .utf16LittleEndian)!).write(to: file)
         check(true, try VPN013PrimaryResourceBudget.readConfigFile(file) == text, "Windows UTF-16 config")
+        check(true, try VPN013PrimaryResourceBudget.decodeConfig(Data([0xff, 0xfe]) + text.data(using: .utf16LittleEndian)!) == text, "ZIP UTF-16 config")
         try (Data([0xfe, 0xff]) + text.data(using: .utf16BigEndian)!).write(to: file)
         check(true, try VPN013PrimaryResourceBudget.readConfigFile(file) == text, "big-endian UTF-16 config")
         try (Data([0xff, 0xfe, 0x00, 0x00]) + text.data(using: .utf32LittleEndian)!).write(to: file)

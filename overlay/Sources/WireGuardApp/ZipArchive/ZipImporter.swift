@@ -37,7 +37,7 @@ class ZipImporter {
                 // not a failed import and must not inflate the result denominator.
                 if uniqueFiles.contains(where: { $0 == file }) { continue }
                 uniqueFiles.append(file)
-                guard let fileContents = String(data: file.contents, encoding: .utf8),
+                guard let fileContents = try? VPN013PrimaryResourceBudget.decodeConfig(file.contents),
                       let tunnelConfig = try? TunnelConfiguration(fromWgQuickConfig: fileContents, called: file.fileBaseName) else {
                     configs.append(nil); continue
                 }
