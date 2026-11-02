@@ -15,6 +15,7 @@ paths = {
     'nativeRuntime': temporary / 'r013-native-runtime.log',
     'systemServices': Path('output/review/system-service-errors.txt'),
     'javaRuntime': Path('output/review/runtime-errors.txt'),
+    'instrumentation': Path('output/review/instrumentation.txt'),
     'emulator': temporary / 'r013-emulator.log',
 }
 payload = {}
