@@ -1,0 +1,30 @@
+{
+  "send.go": {
+    "before": "24bd0a144c82986968885b9216877b4deb4c6d80810f8db65409b1acfc2c380a",
+    "after": "5e4c9284b1b3b454d68041e569c7c1522eb6cfcece3c9ff43e49c847ecbf17e2",
+    "changes": [
+      [
+        "\treturn paddedSize - lastUnit\n}\n\nfunc (device *Device) randomPaddingAddition(packetSize, mtu int) int {\n\taddition := device.contentPaddingAddition.Load()\n\n\tif addition.IsZero() {\n\t\treturn -1\n\t}\n\n\tadd := int(addition.PickOne())\n\tif mtu != 0 {\n\t\tif packetSize > mtu {\n\t\t\tpacketSize %= mtu\n\t\t}\n\n\t\tspace := mtu - packetSize\n\t\tif add > space {\n\t\t\tadd = space\n\t\t}\n\t}\n\treturn add\n}\n",
+        "\treturn paddedSize - lastUnit\n}\n\nfunc (peer *Peer) randomPaddingAddition(packetSize int) int {\n\taddition := peer.device.contentPaddingAddition.Load()\n\n\tif addition.IsZero() {\n\t\treturn -1\n\t}\n\n\tudpWindow := int(peer.udpWindow.Load())\n\tif udpWindow < packetSize {\n\t\treturn 0\n\t}\n\tadd := int(addition.PickOne())\n\tspace := udpWindow - packetSize\n\tif add > space {\n\t\tadd = space\n\t}\n\treturn add\n}\n"
+      ],
+      [
+        "\t\t\tbinary.LittleEndian.PutUint32(fieldReceiver, elem.keypair.remoteIndex)\n\t\t\tbinary.LittleEndian.PutUint64(fieldNonce, elem.nonce)\n\n\t\t\tpacketSize := len(elem.packet)\n\t\t\tmtu := int(device.tun.mtu.Load())\n\n\t\t\tpaddingSize := device.randomPaddingAddition(packetSize, mtu)\n\t\t\tif paddingSize < 0 {\n\t\t\t\tpaddingSize = elem.peer.randomTrailer(packetSize + MinMessageSize + int(elem.padding))\n\t\t\t}\n\t\t\tif paddingSize < 0 {\n\t\t\t\t// pad content to multiple of 16\n\t\t\t\tpaddingSize = calculatePaddingSize(packetSize, mtu)\n\t\t\t}\n\n\t\t\t// append trailing zeroes\n",
+        "\t\t\tbinary.LittleEndian.PutUint32(fieldReceiver, elem.keypair.remoteIndex)\n\t\t\tbinary.LittleEndian.PutUint64(fieldNonce, elem.nonce)\n\n\t\t\tpacketSize := len(elem.packet) + MinMessageSize + int(elem.padding)\n\t\t\tmtu := int(device.tun.mtu.Load())\n\n\t\t\tpaddingSize := elem.peer.randomPaddingAddition(packetSize)\n\t\t\tif paddingSize < 0 {\n\t\t\t\tpaddingSize = elem.peer.randomTrailer(packetSize)\n\t\t\t}\n\t\t\tif paddingSize < 0 {\n\t\t\t\t// pad content to multiple of 16\n\t\t\t\tpaddingSize = calculatePaddingSize(len(elem.packet), mtu)\n\t\t\t}\n\n\t\t\t// append trailing zeroes\n"
+      ]
+    ]
+  },
+  "receive.go": {
+    "before": "45573cce9f62425691391555587048aa3a6d942e505baa886a6c18073838c64f",
+    "after": "50d2c659ade242dddb2c7cfc063774b95e6b9be12eaf39bc75af8b9afa00555d",
+    "changes": [
+      [
+        "\n\t\t\t// get message padding and type based on information from S1-S4 and H1-H4\n\t\t\tmsgSize, msgType, padding := device.DeterminePacketTypeAndPadding(packet, typeHash)\n\n\t\t\tpacket = packet[padding:]\n\t\t\tif msgType != MessageTransportType {\n",
+        "\n\t\t\t// get message padding and type based on information from S1-S4 and H1-H4\n\t\t\tmsgSize, msgType, padding := device.DeterminePacketTypeAndPadding(packet, typeHash)\n\t\t\tif msgType == MessageInitiationType || msgType == MessageResponseType || msgType == MessageCookieReplyType {\n\t\t\t\ttransportPadding, candidate := device.vpn013TransportCandidate(packet, typeHash)\n\t\t\t\tif controlSize, controlType, controlPadding, ok := device.vpn013AuthenticatedControl(packet, typeHash, candidate); ok {\n\t\t\t\t\tmsgSize, msgType, padding = controlSize, controlType, controlPadding\n\t\t\t\t} else if candidate {\n\t\t\t\t\tmsgSize, msgType, padding = MessageTransportSize, MessageTransportType, transportPadding\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tpacket = packet[padding:]\n\t\t\tif msgType != MessageTransportType {\n"
+      ],
+      [
+        "\n\t\t\t// endpoints destination address is the source of the datagram\n\n\t\t\tif device.IsUnderLoad() {\n\n\t\t\t\t// verify MAC2 field\n\n",
+        "\n\t\t\t// endpoints destination address is the source of the datagram\n\n\t\t\tif !device.disableCookies.Load() && device.IsUnderLoad() {\n\n\t\t\t\t// verify MAC2 field\n\n"
+      ]
+    ]
+  }
+}

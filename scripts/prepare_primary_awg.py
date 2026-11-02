@@ -11,7 +11,7 @@ import sys
 
 MODULE = 'github.com/amnezia-vpn/amneziawg-go/v3'
 VERSION = 'v3.1.20260814'
-FILES = ('device.go', 'uapi.go', 'send.go', 'noise-protocol.go')
+FILES = ('device.go', 'uapi.go', 'send.go', 'noise-protocol.go', 'receive.go')
 
 
 def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
@@ -36,23 +36,39 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     assert patch.is_file() and not patch.is_symlink()
     patch_hash = hashlib.sha256(patch.read_bytes()).hexdigest()
     subprocess.run([sys.executable, str(patch), '--module-root', str(local)], check=True)
+    awg31_patch = Path(__file__).with_name('patch-primary-awg31.py')
+    assert awg31_patch.is_file() and not awg31_patch.is_symlink()
+    subprocess.run([sys.executable, str(awg31_patch), str(local)], check=True)
     after = {name: hashlib.sha256((local / 'device' / name).read_bytes()).hexdigest()
-             for name in (*FILES, 'r013_resource_limits.go', 'r013_resource_limits_test.go', 'r013_s4_regression_test.go')}
+             for name in (*FILES, 'r013_resource_limits.go', 'r013_resource_limits_test.go', 'r013_s4_regression_test.go',
+                          'r013_awg31_classifier.go', 'r013_awg31_testhelper_test.go',
+                          'r013_vpn013_auth_classifier_test.go', 'r013_vpn013_auth_control_test.go',
+                          'r013_vpn013_auth_live_test.go', 'r013_vpn013_auth_robustness_test.go',
+                          'r013_vpn013_awg31_runtime_test.go', 'r013_vpn013_queued_classifier_test.go')}
     assert before == {name: hashlib.sha256((source / 'device' / name).read_bytes()).hexdigest() for name in FILES}
     # Execute the copied primary implementation on the build host. Cross-compiled
     # libraries still require their platform/native acceptance tests afterwards.
     host_os = subprocess.check_output(['go', 'env', 'GOHOSTOS'], text=True).strip()
     host_arch = subprocess.check_output(['go', 'env', 'GOHOSTARCH'], text=True).strip()
-    env = dict(os.environ, GOOS=host_os, GOARCH=host_arch, CGO_ENABLED='0', GOFLAGS='-mod=readonly')
+    fixtures = Path(__file__).with_name('awg31-fixtures').resolve(strict=True)
+    expected_fixtures = {'ambiguous-transport.bin':'14827386c07f42695485e4fdfa4e30e6aece4e7494691967071b50fd24237d01',
+                         'redrawn-transport.bin':'ad12318a51de6ba21c95aec0e06f0a6564c87a7b24e9a6f14e76d2551cb44957',
+                         'params.json':'d46737e0071c71acb9662259b31f7a20d206209889c48a5d31857633fd1b65c0'}
+    assert all(hashlib.sha256((fixtures / name).read_bytes()).hexdigest() == value for name, value in expected_fixtures.items())
+    env = dict(os.environ, GOOS=host_os, GOARCH=host_arch, CGO_ENABLED='0', GOFLAGS='-mod=readonly', AWG_FIXTURES=str(fixtures))
     tested = subprocess.run(['go', 'test', './device', '-count=1', '-timeout=90s',
-                             '-run', '^(TestPrimary|TestTwoDevicePing|TestVPN013S4BlockedReadReposition|TestVPN013MoveTUNPayloadBounds)', '-v'],
+                             '-run', '^(TestPrimary|TestTwoDevicePing|TestAWGDevicePing|TestVPN013)', '-v'],
                             cwd=local, env=env, capture_output=True, text=True, timeout=110)
     passed = re.findall(r'^--- PASS: ([A-Za-z0-9_]+) ', tested.stdout, re.MULTILINE)
     required = {'TestTwoDevicePing', 'TestPrimaryObfuscationResourceBudget',
                 'TestPrimaryUAPIStagesWholeObfuscationBeforeCommit',
                 'TestPrimaryUnsafeSetDoesNotRemovePeers', 'TestPrimaryInterruptedSetDoesNotCommit',
                 'TestPrimaryOrdinaryWGNoObfuscationPadding', 'TestVPN013S4BlockedReadReposition',
-                'TestVPN013MoveTUNPayloadBounds'}
+                'TestVPN013MoveTUNPayloadBounds', 'TestAWGDevicePing',
+                'TestVPN013AuthenticatedTransportFallback', 'TestVPN013AuthenticatedControlFallback',
+                'TestVPN013AuthenticatedFallbackLocalTraffic', 'TestVPN013ClassifierMalformedFramesDoNotPanic',
+                'TestVPN013PaddingFitsPeerWindow', 'TestVPN013DisabledCookiesPermitLoadedHandshake',
+                'TestVPN013QueuedCandidateRejectsForgedTraffic'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,
               'passedTests': passed, 'requiredTests': sorted(required),
@@ -67,5 +83,6 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     effective = json.loads(subprocess.check_output(['go', 'list', '-m', '-json', '-modfile=' + str(modfile), MODULE], cwd=root))
     assert Path(effective['Replace']['Dir']).resolve(strict=True) == local.resolve(strict=True)
     return {'module': MODULE, 'version': VERSION, 'moduleCacheUnchanged': True,
-            'patchSHA256': patch_hash, 'beforeSHA256': before, 'afterSHA256': after,
+            'patchSHA256': patch_hash, 'awg31PatchSHA256': hashlib.sha256(awg31_patch.read_bytes()).hexdigest(),
+            'beforeSHA256': before, 'afterSHA256': after,
             'effectiveReplacementVerified': True, 'primaryHostTests': report}

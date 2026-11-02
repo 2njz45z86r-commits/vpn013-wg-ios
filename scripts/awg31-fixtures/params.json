@@ -1,0 +1,38 @@
+{
+  "note": "SYNTHETIC disposable test values; not from any real tunnel",
+  "s": {
+    "initiation": 97,
+    "response": 41,
+    "cookie_reply": 133,
+    "transport": 24
+  },
+  "h": {
+    "initiation": [
+      305419896,
+      405419895
+    ],
+    "response": [
+      1122334455,
+      1222334454
+    ],
+    "cookie_reply": [
+      1987654321,
+      2087654320
+    ],
+    "transport": [
+      3000000000,
+      3099999999
+    ]
+  },
+  "random_trailers": true,
+  "hp_key_hex": "d7068cea352177b603b321c845694f89c8174b47f926a5c59bd2a72065675736",
+  "transport_key_hex": "4e558561a2089f8d451409a5f09940c437cbdab9cdaab13d5c9122c88bf019c3",
+  "receiver_static_public_hex": "a48e0a13d788327ed15206e4e17897306e905cd5a8a959bf7b8343abc60739b6",
+  "receiver_index": 3578900726,
+  "counter": 42,
+  "h4_tag": 3000001234,
+  "plaintext_hex": "45000140ee0bb399087f6ef1982e4ec8de3efda768dedf00ad1fe684a57e5e81e42c2f71009cfa8e8ef3d6c9de949a3f2a7f4246cd8eec8ee0769ca00064e82f90237f0db2e1c8bdd28b87d1b4c7673ca8252b946db84ae72574410b2712ef4aa00f4d748bbe4189e00f749a298d3172d196a1e75cfdc5da6a50b545e4dbdc67153e62b35c2813ccaabc56da1a358105dd0bbe15d5d4938185b6447d02064faa6171dc8260fc08ac9b16bc5a9d178ba72442fcb242d1afc3267a1a858eb138ca06a84cf83193f852f7d11982bd4d1261774942c41ad2878b658ace11feee14374b1aad0185f7e47188c91dfe689a1422b845651a80157ca5247edf41e55dc38cd75dfc7868ead86305b37fb16dbba23f1afa61e44c762a428913b2e851a12f2484c88086f2d0c50a852e7db3567dfb8b74b16940026fba4fe4e8f76bca73dfc1",
+  "ambiguous_prefix_index": 45,
+  "ambiguous_selected_as": "response",
+  "redrawn_prefix_index": 47
+}

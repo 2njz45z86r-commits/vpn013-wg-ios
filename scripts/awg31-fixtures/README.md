@@ -1,0 +1,1 @@
+Synthetic fixtures from https://github.com/Wiresock-Foundation/awg-first-match-reproducer at commit 99152cf1d54ab6df2e6c76d362bf08311dcc4c22. Test keys are public synthetic values. MIT license included.
