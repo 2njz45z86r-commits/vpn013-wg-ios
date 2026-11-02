@@ -78,8 +78,8 @@ func TestLegacy15ConfigValidation(t *testing.T) {
 	gap := good
 	gap.controlled[0] = ""
 	gap.controlled[1] = "<b 0x01>"
-	if err := gap.validate(); err == nil {
-		t.Fatal("legacy sequence gap accepted")
+	if err := gap.validate(); err != nil {
+		t.Fatal("sparse legacy sequence rejected")
 	}
 	bad := good
 	bad.controlled[0] = "<wt 5000><wt 5000><wt 5000><wt 1>"

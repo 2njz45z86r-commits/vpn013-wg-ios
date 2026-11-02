@@ -106,7 +106,7 @@ jobs:
           from pathlib import Path
           raw=(Path(os.environ['RUNNER_TEMP'])/'awg15-prototype-race.jsonl').read_text(errors='replace')
           rows=[json.loads(x) for x in raw.splitlines() if x.startswith('{')]
-          names={'TestLegacy15PacketSemantics','TestLegacy15ControlledWaitAndOddHex','TestLegacy15Scheduling','TestLegacy15MalformedAndBudgets','TestLegacy15ConfigValidation','TestVPN013LegacyUAPIStagingAndPeerPreservation','TestVPN013LegacyWaitStopsWhenDeviceGoesDown','TestVPN013LegacyConcurrentUpdatesAndGeneration','TestTwoDevicePing','TestAWGDevicePing','TestVPN013AuthenticatedFallbackLocalTraffic','TestVPN013QueuedCandidateRejectsForgedTraffic'}
+          names={'TestLegacy15PacketSemantics','TestLegacy15ControlledWaitAndOddHex','TestLegacy15Scheduling','TestLegacy15MalformedAndBudgets','TestLegacy15ConfigValidation','TestVPN013LegacyUAPIStagingAndPeerPreservation','TestVPN013LegacyWaitStopsWhenDeviceGoesDown','TestVPN013LegacyConcurrentUpdatesAndGeneration','TestVPN013LegacySparsePackets','TestTwoDevicePing','TestAWGDevicePing','TestVPN013AuthenticatedFallbackLocalTraffic','TestVPN013QueuedCandidateRejectsForgedTraffic'}
           counts={n:sum(x.get('Action')=='pass' and x.get('Test')==n for x in rows) for n in names}
           race=any('DATA RACE' in x.get('Output','') for x in rows)
           failures=[x.get('Test','package') for x in rows if x.get('Action') in ('fail','skip')]
