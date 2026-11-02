@@ -54,6 +54,30 @@ def replace(name: str, old: str, new: str) -> None:
     texts[name] = source.replace(old, new, 1)
 
 
+if module_layout:
+    # A TUN read can block before S4 is set. Reconcile its completed bytes with
+    # the current padding without allowing either slice to exceed its buffer.
+    replace("send.go", """\t\tcount, readErr = device.tun.device.Read(bufs, sizes, offset)
+\t\tfor i := 0; i < count; i++ {
+\t\t\tif sizes[i] < 1 {
+\t\t\t\tcontinue
+\t\t\t}
+
+\t\t\telem := elems[i]
+\t\t\telem.packet = bufs[i][offset : offset+sizes[i]]
+\t\t\telem.padding = padding""", """\t\tcount, readErr = device.tun.device.Read(bufs, sizes, offset)
+\t\tcurrentPadding := device.paddings.transport.Load()
+\t\tcurrentOffset := MessageTransportHeaderSize + int(currentPadding)
+\t\tfor i := 0; i < count; i++ {
+\t\t\tif sizes[i] < 1 || !r013MoveTUNPayload(bufs[i], sizes[i], offset, currentOffset) {
+\t\t\t\tcontinue
+\t\t\t}
+
+\t\t\telem := elems[i]
+\t\t\telem.packet = bufs[i][currentOffset : currentOffset+sizes[i]]
+\t\t\telem.padding = currentPadding""")
+
+
 # A single lock covers snapshots and writes of J, S, and I; never allow a
 # handshake to see a half-updated obfuscation profile.
 replace("device.go", "type Device struct {",
@@ -509,13 +533,33 @@ func TestPrimaryOrdinaryWGNoObfuscationPadding(t *testing.T) {
 }
 '''
 
+if module_layout:
+    limits_go += r'''
+// Move TUN payload bytes after S4 changes while a read is blocked. Go copy
+// supports overlapping slices; validate both bounds before taking slices.
+func r013MoveTUNPayload(buf []byte, size, oldOffset, newOffset int) bool {
+    if size < 0 || oldOffset < 0 || newOffset < 0 || oldOffset > len(buf) || newOffset > len(buf) || size > len(buf)-oldOffset || size > len(buf)-newOffset { return false }
+    if oldOffset != newOffset { copy(buf[newOffset:newOffset+size], buf[oldOffset:oldOffset+size]) }
+    return true
+}
+'''
+    s4_source = Path(__file__).with_name('primary-s4-regression_test.go')
+    assert s4_source.is_file() and not s4_source.is_symlink()
+    s4_test = device / 'r013_s4_regression_test.go'
+    assert not s4_test.exists(), 'S4 regression test already staged'
+    s4_content = s4_source.read_text(encoding='utf-8')
+    assert 'func TestVPN013S4BlockedReadReposition(' in s4_content
+    assert 'func TestVPN013MoveTUNPayloadBounds(' in s4_content
+
 for name, path in paths.items():
     path.write_text(texts[name], encoding="utf-8", newline="\n")
 new_source.write_text(limits_go, encoding="utf-8", newline="\n")
 new_test.write_text(test_go, encoding="utf-8", newline="\n")
+if module_layout:
+    s4_test.write_text(s4_content, encoding="utf-8", newline="\n")
 subprocess.run(["gofmt", "-w", *(str(path) for path in
-                (*paths.values(), new_source, new_test))], check=True)
+                (*paths.values(), new_source, new_test, *((s4_test,) if module_layout else ())))], check=True)
 after_hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-                for path in (*paths.values(), new_source, new_test)}
+                for path in (*paths.values(), new_source, new_test, *((s4_test,) if module_layout else ()))}
 print(json.dumps({"layout": "module-root" if module_layout else "vendored-app-root",
                   "before": before_hashes, "after": after_hashes}, sort_keys=True))

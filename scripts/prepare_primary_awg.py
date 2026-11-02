@@ -37,7 +37,7 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     patch_hash = hashlib.sha256(patch.read_bytes()).hexdigest()
     subprocess.run([sys.executable, str(patch), '--module-root', str(local)], check=True)
     after = {name: hashlib.sha256((local / 'device' / name).read_bytes()).hexdigest()
-             for name in (*FILES, 'r013_resource_limits.go', 'r013_resource_limits_test.go')}
+             for name in (*FILES, 'r013_resource_limits.go', 'r013_resource_limits_test.go', 'r013_s4_regression_test.go')}
     assert before == {name: hashlib.sha256((source / 'device' / name).read_bytes()).hexdigest() for name in FILES}
     # Execute the copied primary implementation on the build host. Cross-compiled
     # libraries still require their platform/native acceptance tests afterwards.
@@ -45,13 +45,14 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     host_arch = subprocess.check_output(['go', 'env', 'GOHOSTARCH'], text=True).strip()
     env = dict(os.environ, GOOS=host_os, GOARCH=host_arch, CGO_ENABLED='0', GOFLAGS='-mod=readonly')
     tested = subprocess.run(['go', 'test', './device', '-count=1', '-timeout=90s',
-                             '-run', '^(TestPrimary|TestTwoDevicePing)', '-v'],
+                             '-run', '^(TestPrimary|TestTwoDevicePing|TestVPN013S4BlockedReadReposition|TestVPN013MoveTUNPayloadBounds)', '-v'],
                             cwd=local, env=env, capture_output=True, text=True, timeout=110)
     passed = re.findall(r'^--- PASS: ([A-Za-z0-9_]+) ', tested.stdout, re.MULTILINE)
     required = {'TestTwoDevicePing', 'TestPrimaryObfuscationResourceBudget',
                 'TestPrimaryUAPIStagesWholeObfuscationBeforeCommit',
                 'TestPrimaryUnsafeSetDoesNotRemovePeers', 'TestPrimaryInterruptedSetDoesNotCommit',
-                'TestPrimaryOrdinaryWGNoObfuscationPadding'}
+                'TestPrimaryOrdinaryWGNoObfuscationPadding', 'TestVPN013S4BlockedReadReposition',
+                'TestVPN013MoveTUNPayloadBounds'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,
               'passedTests': passed, 'requiredTests': sorted(required),
