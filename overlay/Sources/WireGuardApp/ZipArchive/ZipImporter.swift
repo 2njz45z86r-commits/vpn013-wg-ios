@@ -43,6 +43,11 @@ class ZipImporter {
                 }
                 configs.append(tunnelConfig)
             }
+            #if targetEnvironment(simulator) && DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-import") {
+                MockTunnels.verifyImportedArchive(configs)
+            }
+            #endif
             guard configs.contains(where: { $0 != nil }) else {
                 DispatchQueue.main.async { completion(.failure(.invalidConfiguration)) }; return
             }

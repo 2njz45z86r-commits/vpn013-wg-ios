@@ -19,18 +19,47 @@ class MockTunnels {
     static let allowedIPs = "0.0.0.0/0"
 
     #if DEBUG
+    // Synthetic keys and expected bytes exist only in the simulator process.
+    private static var expectedArchiveConfigs: [String: String] = [:]
+
     static func sharedArchiveFixture() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("vpn013-import-fixture-" + UUID().uuidString + ".zip")
-        let files = createMockTunnels().flatMap { manager -> [(fileName: String, contents: Data)] in
+        expectedArchiveConfigs = [:]
+        let files = try createMockTunnels().enumerated().flatMap { index, manager -> [(fileName: String, contents: Data)] in
             guard let tunnelProtocol = manager.protocolConfiguration as? NETunnelProviderProtocol,
                   let config = tunnelProtocol.asTunnelConfiguration(called: manager.localizedDescription) else { return [] }
             var raw = config.asWgQuickConfig()
-            let extras = "Jc = 4\nJmin = 40\nJmax = 70\nS1 = 0\nS2 = 0\nS3 = 0\nS4 = 0\nH1 = 1\nH2 = 2\nH3 = 3\nH4 = 4\nI1 = <b 0x00>\nHeaderProtectionKey = \(PrivateKey().base64Key)\nContentPaddingAddition = 0\nRekeyAfterTime = 120\nRekeyTimeout = 5\nRejectAfterTime = 180\nKeepaliveTimeout = 10\nMaxHandshakeAttempts = 20\nRandomTrailers = false\nDisableCookies = false\n"
+            let classic = "Jc = 4\nJmin = 40\nJmax = 70\nS1 = 16\nS2 = 16\nH1 = 1\nH2 = 2\nH3 = 3\nH4 = 4\n"
+            let generation2 = "S3 = 16\nS4 = 16\nI1 = <b 0x00>\nI2 = <r 4>\nI3 = <b 0x01>\nI4 = <r 8>\nI5 = <b 0x02>\n"
+            let generation31 = "HeaderProtectionKey = \(PrivateKey().base64Key)\nContentPaddingAddition = 0\nRekeyAfterTime = 120\nRekeyTimeout = 5\nRejectAfterTime = 180\nKeepaliveTimeout = 10\nMaxHandshakeAttempts = 20\nRandomTrailers = false\nDisableCookies = false\n"
+            let extras: String
+            switch index % 4 {
+            case 0: extras = "" // Standard WireGuard.
+            case 1: extras = classic // Classic AmneziaWG.
+            case 2: extras = classic + generation2 // AmneziaWG 2.x.
+            default: extras = classic + generation2 + generation31 // AmneziaWG 3.1 fields.
+            }
             raw = raw.replacingOccurrences(of: "[Peer]", with: extras + "\n[Peer]")
+            let parsed = try TunnelConfiguration(fromWgQuickConfig: raw, called: config.name!)
+            let canonical = parsed.asWgQuickConfig()
+            // Compare every requested option to its parsed/exported value, rather
+            // than comparing two parsings which could both drop the same field.
+            precondition(extras.split(separator: "\n").allSatisfy { canonical.contains(String($0) + "\n") })
+            expectedArchiveConfigs[config.name!] = canonical
             return ["Android", "iPhone"].map { (fileName: $0 + "/" + config.name! + ".conf", contents: Data(raw.utf8)) }
         }
         try ZipArchive.archive(inputs: files, to: url)
         return url
+    }
+
+    static func verifyImportedArchive(_ configurations: [TunnelConfiguration?]) {
+        let parsed = configurations.compactMap { $0 }
+        precondition(expectedArchiveConfigs.count == 13 && parsed.count == 13)
+        for config in parsed {
+            guard let name = config.name, let expected = expectedArchiveConfigs[name] else { preconditionFailure("Unknown synthetic archive item") }
+            precondition(config.asWgQuickConfig() == expected, "Synthetic archive options changed during import")
+        }
+        precondition(Set(parsed.compactMap { $0.name }).count == expectedArchiveConfigs.count)
     }
     #endif
 
