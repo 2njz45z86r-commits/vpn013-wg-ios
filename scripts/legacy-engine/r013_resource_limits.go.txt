@@ -163,10 +163,20 @@ func preflightObfuscationSet(lines []string, current *ipcSetDevice) error {
 			return ipcErrorf(ipc.IpcErrorProtocol, "UAPI line has no separator")
 		}
 		if key == "public_key" {
+			var publicKey NoisePublicKey
+			if err := publicKey.FromHex(value); err != nil {
+				return ipcErrorf(ipc.IpcErrorInvalid, "invalid peer public key")
+			}
 			deviceFields = false
 			continue
 		}
 		if !deviceFields {
+			if key == "persistent_keepalive_interval" {
+				var interval UintRange
+				if err := interval.FromString(value); err != nil {
+					return ipcErrorf(ipc.IpcErrorInvalid, "invalid peer keepalive interval")
+				}
+			}
 			continue
 		}
 		switch key {

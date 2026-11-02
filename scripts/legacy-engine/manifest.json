@@ -17,7 +17,7 @@
   },
   "r013_resource_limits.go": {
     "beforeSHA256": "046b2ff77d2122759e365866e1d668ec23e89e60160fa638a3592c1bc6f762f4",
-    "afterSHA256": "5d6491e05ba87def9607d1c797fc8326ff961a1bf4832f21531f342da63afbf3"
+    "afterSHA256": "aa82569a644d10c5867f21ff2e1ea673300a3e660fb01951d93a25b0a0537e5a"
   },
   "r013_legacy15.go": {
     "beforeSHA256": null,
@@ -29,7 +29,7 @@
   },
   "r013_legacy_uapi_test.go": {
     "beforeSHA256": null,
-    "afterSHA256": "d116fa29b584532ad6a3476d3aafabf4f8bd31070b091822537166e3339ba5c9"
+    "afterSHA256": "2477fa4876c193ea6b2f2a5f49dbb7e38c2885ddec8e8b64c44a558b8e4a8460"
   },
   "r013_legacy_fuzz_test.go": {
     "beforeSHA256": null,

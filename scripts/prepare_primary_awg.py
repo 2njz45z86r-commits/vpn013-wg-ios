@@ -98,6 +98,7 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 'TestVPN013LegacyConcurrentUpdatesAndGeneration',
                 'TestVPN013LegacyUAPIStagingAndPeerPreservation', 'TestVPN013LegacySparsePackets',
                 'TestVPN013HeaderOverlapRejectedBeforePeerMutation',
+                'TestVPN013InvalidPeerFieldsRejectedBeforePeerMutation',
                 'TestVPN013LegacyStaleSnapshotAfterModeSwitch', 'TestVPN013LegacyRejectPreparedPacketAfterModeSwitch',
                 'TestVPN013LegacySendCompletesBeforeModeCommit',
                 'TestVPN013LegacyEndpointRefreshKeepsRevision', 'TestVPN013LegacyMaskingChangesAdvanceRevision',

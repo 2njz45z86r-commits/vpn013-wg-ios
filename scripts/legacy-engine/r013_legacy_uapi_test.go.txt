@@ -190,3 +190,43 @@ func TestVPN013HeaderOverlapRejectedBeforePeerMutation(t *testing.T) {
 		t.Fatal("separate header ranges rejected")
 	}
 }
+
+// A malformed peer key or keepalive must be rejected before replace_peers
+// can discard a working synthetic peer and its allowed routes.
+func TestVPN013InvalidPeerFieldsRejectedBeforePeerMutation(t *testing.T) {
+	pair := genTestPair(t, false)
+	d := pair[0].dev
+	before, err := d.IpcGet()
+	if err != nil {
+		t.Fatal("synthetic initial config unavailable")
+	}
+	var key string
+	for _, line := range strings.Split(before, "\n") {
+		if strings.HasPrefix(line, "public_key=") {
+			key = strings.TrimPrefix(line, "public_key=")
+			break
+		}
+	}
+	if key == "" {
+		t.Fatal("synthetic peer missing")
+	}
+	if err := d.IpcSet("public_key=" + key + "\nallowed_ip=10.111.0.1/32\n"); err != nil {
+		t.Fatal("synthetic allowed IP setup failed")
+	}
+	for _, invalid := range []string{
+		"replace_peers=true\npublic_key=invalid-synthetic-value\n",
+		"replace_peers=true\npublic_key=" + key + "\npersistent_keepalive_interval=not-a-number\n",
+	} {
+		if err := d.IpcSet(invalid); err == nil {
+			t.Fatal("invalid synthetic peer field accepted")
+		}
+		after, err := d.IpcGet()
+		if err != nil || !strings.Contains(after, "public_key="+key+"\n") ||
+			!strings.Contains(after, "allowed_ip=10.111.0.1/32\n") {
+			t.Fatal("rejected update changed synthetic peer or allowed route")
+		}
+	}
+	if err := d.IpcSet("public_key=" + key + "\npersistent_keepalive_interval=10-20\n"); err != nil {
+		t.Fatal("valid synthetic keepalive range rejected")
+	}
+}
