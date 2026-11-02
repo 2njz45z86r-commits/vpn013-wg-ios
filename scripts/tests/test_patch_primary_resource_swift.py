@@ -51,6 +51,7 @@ def main() -> None:
         assert parser.count("VPN013PrimaryResourceBudget.validLegacy(") == 1
         assert editor.count("VPN013PrimaryResourceBudget.validLegacy(") == 1
         assert '"j1", "j2", "j3", "itime"' in parser
+        assert 'VPN013PrimaryResourceBudget.requiresLegacyVersion(initialPackets: initialValues)' in parser
         assert '# VPN013-AmneziaWG = 1.5' in parser
         assert 'interface.legacyAWG15 ? [] :' in parser
         assert 'config.legacyAWG15 ? [] :' in editor
