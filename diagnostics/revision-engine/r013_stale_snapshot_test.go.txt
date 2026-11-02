@@ -1,7 +1,10 @@
 package device
 
 import (
+	"fmt"
 	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
+	"github.com/amnezia-vpn/amneziawg-go/v3/conn/bindtest"
+	"github.com/amnezia-vpn/amneziawg-go/v3/tun/tuntest"
 	"sync"
 	"testing"
 	"time"
@@ -64,8 +67,21 @@ func (b *r013BlockingBind) Send(_ [][]byte, _ conn.Endpoint) error {
 }
 
 func TestVPN013LegacySendCompletesBeforeModeCommit(t *testing.T) {
-	pair := genTestPair(t, false)
-	d := pair[0].dev
+	configs, endpoints := genConfigs(t)
+	binds := bindtest.NewChannelBinds()
+	blocker := &r013BlockingBind{Bind: binds[0], entered: make(chan struct{}), release: make(chan struct{})}
+	tun := tuntest.NewChannelTUN()
+	d := NewDevice(tun.TUN(), blocker, NewLogger(LogLevelError, "synthetic: "))
+	t.Cleanup(d.Close)
+	if err := d.IpcSet(configs[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Up(); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.IpcSet(fmt.Sprintf(endpoints[0], 12345)); err != nil {
+		t.Fatal(err)
+	}
 	if err := d.IpcSet(uapiCfg("r013_legacy15", "true", "i1", "<b 0x01>", "itime", "60")); err != nil {
 		t.Fatal(err)
 	}
@@ -81,10 +97,6 @@ func TestVPN013LegacySendCompletesBeforeModeCommit(t *testing.T) {
 	if peer == nil {
 		t.Fatal("test peer missing")
 	}
-	d.net.Lock()
-	blocker := &r013BlockingBind{Bind: d.net.bind, entered: make(chan struct{}), release: make(chan struct{})}
-	d.net.bind = blocker
-	d.net.Unlock()
 	release := sync.OnceFunc(func() { close(blocker.release) })
 	defer release()
 	sendResult := make(chan error, 1)
