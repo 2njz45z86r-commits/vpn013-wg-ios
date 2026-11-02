@@ -31,18 +31,25 @@ jobs:
                 Write-Output ("SDK payload {0} SHA256={1} signature={2} signer={3}" -f $name, $hash, $signature.Status, $subject)
                 if ($name -eq 'MsiVal2-x86_en-us.msi') {
                   try {
+                    $stage = 'create installer'
                     $installer = New-Object -ComObject WindowsInstaller.Installer
+                    $stage = 'open database'
                     $db = $installer.GetType().InvokeMember('OpenDatabase','InvokeMethod',$null,$installer,@($path,0))
+                    $stage = 'open view'
                     $view = $db.GetType().InvokeMember('OpenView','InvokeMethod',$null,$db,@('SELECT * FROM `Property`'))
+                    $stage = 'execute view'
                     $view.GetType().InvokeMember('Execute','InvokeMethod',$null,$view,$null) | Out-Null
+                    $stage = 'fetch record'
                     while ($record = $view.GetType().InvokeMember('Fetch','InvokeMethod',$null,$view,$null)) {
+                      $stage = 'read property'
                       $key = $record.GetType().InvokeMember('StringData','GetProperty',$null,$record,@(1))
                       if ($key -in @('ProductVersion','Manufacturer','ProductName')) {
                         $value = $record.GetType().InvokeMember('StringData','GetProperty',$null,$record,@(2))
                         Write-Output ("SDK MSI metadata {0}={1}" -f $key, $value)
                       }
+                      $stage = 'fetch record'
                     }
-                  } catch { Write-Output ("SDK MSI metadata unavailable: {0}" -f $_.Exception.Message) }
+                  } catch { Write-Output ("SDK MSI metadata unavailable at {0}: {1}" -f $stage, $_.Exception.Message) }
                 }
               } else { Write-Output ("SDK payload {0} absent" -f $name) }
             }
