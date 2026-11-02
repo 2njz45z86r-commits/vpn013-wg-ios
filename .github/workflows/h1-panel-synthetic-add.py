@@ -99,10 +99,22 @@ try:
                 if after != before:
                     seen.append(after)
                 time.sleep(.2)
-            print(json.dumps({'synthetic_conflicting_udp_held':True, 'synthetic_enable_accepted':accepted,
-                              'synthetic_core_changed_or_disappeared':bool(seen),
-                              'synthetic_core_running_at_end':bool(processes()),
-                              'production_contact':False}))
+            held_snapshot = {'synthetic_conflicting_udp_held':True, 'synthetic_enable_accepted':accepted,
+                             'synthetic_core_changed_or_disappeared':bool(seen),
+                             'synthetic_core_running_at_end':bool(processes()), 'production_contact':False}
+        # After releasing the synthetic blocker, check actual port occupancy
+        # independently of the panel's success reply and stored enable flag.
+        time.sleep(1)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            try:
+                probe.bind(('0.0.0.0',25122))
+                held_snapshot['synthetic_udp_free_after_release'] = True
+            except OSError:
+                held_snapshot['synthetic_udp_free_after_release'] = False
+        rows = request('panel/api/inbounds/list')
+        matches = [r for r in rows if r.get('remark') == 'fixture-conflicting-wg']
+        held_snapshot['synthetic_panel_record_enabled'] = len(matches)==1 and matches[0].get('enable') is True
+        print(json.dumps(held_snapshot))
         sys.exit(0)
     payload = {'remark':'fixture-only-wg', 'tag':'fixture-wg', 'listen':'0.0.0.0', 'port':25120,
                'protocol':'wireguard', 'enable':False, 'excludeFromSub':True,
