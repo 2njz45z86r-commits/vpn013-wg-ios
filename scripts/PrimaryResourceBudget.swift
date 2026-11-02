@@ -13,8 +13,7 @@ enum VPN013PrimaryResourceBudget {
     // an unsafe field or reinterpret it as a newer AWG packet.
     static func validLegacy(initialPackets: [String?], controlledPackets: [String?],
                             intervalSeconds: UInt32?) -> Bool {
-        guard initialPackets.count <= 5, controlledPackets.count <= 3,
-              (intervalSeconds ?? 0) <= 86_400 else { return false }
+        guard initialPackets.count <= 5, controlledPackets.count <= 3 else { return false }
         var totalWait = 0
         for group in [initialPackets, controlledPackets] {
             for optional in group {

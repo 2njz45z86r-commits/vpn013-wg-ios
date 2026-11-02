@@ -21,15 +21,15 @@
   },
   "r013_legacy15.go": {
     "beforeSHA256": null,
-    "afterSHA256": "be00ebe9e88a0a081c0c529b368606b0d5542c51a62f03c340b9a4c4087f598d"
+    "afterSHA256": "c8d1b788132be2f38d8e421fe59bc06e55768ab5de9a8f16b90f942c2f59f537"
   },
   "r013_legacy15_test.go": {
     "beforeSHA256": null,
-    "afterSHA256": "e3e689397e5f67a7a3053b9b0c1dec3475a77a67834a573212f8489b28c8244f"
+    "afterSHA256": "c88f5523f8ccb19d553544bf35e3f8742e0b6f96cdb3b11754fa8c4a5c3a26c6"
   },
   "r013_legacy_uapi_test.go": {
     "beforeSHA256": null,
-    "afterSHA256": "0bcaa8146c6c26b1ded9112749a325e5d4b5e4690ef7f2615a78d90b4c3c6724"
+    "afterSHA256": "3935a0c8ff372b79e3467d44ac8fd234b08f32f9d3c02fbd65895f2a63580e77"
   },
   "r013_legacy_fuzz_test.go": {
     "beforeSHA256": null,

@@ -75,6 +75,11 @@ func TestLegacy15ConfigValidation(t *testing.T) {
 	if err := good.validate(); err != nil {
 		t.Fatal(err)
 	}
+	long := good
+	long.intervalSeconds = ^uint32(0)
+	if err := long.validate(); err != nil {
+		t.Fatal("representable long interval rejected")
+	}
 	gap := good
 	gap.controlled[0] = ""
 	gap.controlled[1] = "<b 0x01>"

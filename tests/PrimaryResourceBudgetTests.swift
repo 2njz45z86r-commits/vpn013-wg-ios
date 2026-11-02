@@ -26,8 +26,8 @@ enum PrimaryResourceBudgetTests {
                     controlledPackets: [], intervalSeconds: nil), "legacy explicit positive sign")
         check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<r -1>"],
                      controlledPackets: [], intervalSeconds: nil), "legacy negative allocation")
-        check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: [],
-                     controlledPackets: [], intervalSeconds: 86_401), "legacy interval above limit")
+        check(true, VPN013PrimaryResourceBudget.validLegacy(initialPackets: [],
+                    controlledPackets: [], intervalSeconds: UInt32.max), "legacy long interval")
         check(true, VPN013PrimaryResourceBudget.valid(), "plain WireGuard without AWG fields")
         check(true, VPN013PrimaryResourceBudget.valid(jc: 0), "explicit zero junk count")
         check(true, VPN013PrimaryResourceBudget.valid(jc: 64, jmin: 4_096, jmax: 4_096,
