@@ -7,7 +7,6 @@ package org.amnezia.awg.model
 import android.util.Log
 import androidx.databinding.BaseObservable
 import androidx.databinding.Bindable
-import org.amnezia.awg.Application
 import org.amnezia.awg.BR
 import org.amnezia.awg.backend.Statistics
 import org.amnezia.awg.backend.Tunnel
@@ -91,12 +90,7 @@ class ObservableTunnel internal constructor(
     }
 
     suspend fun setStateAsync(state: Tunnel.State): Tunnel.State = withContext(Dispatchers.Main.immediate) {
-        // A background server switch can briefly leave this observable DOWN
-        // while the backend still owns the tunnel. Never skip an explicit stop
-        // just because the observable is stale.
-        val backendStillRunning = state == Tunnel.State.DOWN && state == this@ObservableTunnel.state &&
-            withContext(Dispatchers.IO) { Application.getBackend().runningTunnelNames.contains(name) }
-        if (state != this@ObservableTunnel.state || backendStillRunning)
+        if (state != this@ObservableTunnel.state)
             manager.setTunnelState(this@ObservableTunnel, state)
         else
             this@ObservableTunnel.state
