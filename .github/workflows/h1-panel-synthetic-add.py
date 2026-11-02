@@ -27,7 +27,10 @@ def request(path, payload=None, token=None):
     return value.get('obj')
 
 try:
-    request('login', {'username': 'fixtureuser', 'password': 'fixturepassword'})
+    initial_token = request('csrf-token')
+    if not isinstance(initial_token, str) or not initial_token:
+        raise RuntimeError('Synthetic pre-login CSRF response was not a token')
+    request('login', {'username': 'fixtureuser', 'password': 'fixturepassword'}, initial_token)
     token = request('csrf-token')
     if not isinstance(token, str) or not token:
         raise RuntimeError('Synthetic CSRF response was not a token')
