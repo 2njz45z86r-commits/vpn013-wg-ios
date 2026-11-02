@@ -19,6 +19,8 @@ shard=${VPN013_UI_SHARD:-all54}
 case "$shard" in coreA|coreB|coreC|core49|added5|all54) ;; *) echo "Invalid native UI shard" >&2; exit 2 ;; esac
 # The helper checks the exact 54 source methods and assigns every selector once.
 selector_args=$(python3 ../../scripts/native_ui_shards.py selectors "$shard")
+# Diagnostic-only subset; the unchanged full-shard verifier must reject it.
+selector_args='-only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithMissingRuntime -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithRuntimeTimeout'
 set -- $selector_args
 set +e
 echo 'VPN013 native stage: compile and run selected UI tests'

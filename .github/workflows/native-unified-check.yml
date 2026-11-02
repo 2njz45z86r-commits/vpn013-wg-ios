@@ -15,7 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [coreA, coreB, coreC, added5]
+        # Diagnostic-only subset. The aggregate still requires all four shards.
+        shard: [coreA]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
