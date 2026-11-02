@@ -630,12 +630,14 @@ class R013InstrumentedTest {
         OfflineChanges.apply { registry.importOrdinary(listOf("A Slow Fixture" to ProfileRegistry.parse(slow),"B Fast Fixture" to ProfileRegistry.parse(fast))); registry.createAuto() }
         startHome(); val manager = Application.getTunnelManager()
         val autoName = registry.records().single { it.has("members") }.getString("name")
-        val auto = manager.getTunnels()[autoName]!!
-        assertTrue("Comparison must exercise the explicit automatic fixture", registry.isAuto(auto.name))
+        assertTrue("Comparison must exercise the explicit automatic fixture", registry.isAuto(autoName))
         OfflineChanges.apply {
-            val id = registry.record(auto.name).getString("id")
+            val id = registry.record(autoName).getString("id")
             ApplicationRoutingStore.save(registry.vault, "AMNEZIAWG", setOf(id), ApplicationRoutingStore.Selection("only", only = setOf("com.android.settings")))
         }
+        // OfflineChanges reloads the manager's tunnel objects; start the current
+        // object rather than one captured before that reload.
+        val auto = manager.getTunnels()[autoName]!!
         val backend = Application.getBackend() as GoBackend
         automaticMode(true)
         auto.setStateAsync(Tunnel.State.UP)
