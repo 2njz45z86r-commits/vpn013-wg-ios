@@ -15,7 +15,7 @@ host = dict(env)
 for key in ('GOOS', 'GOARCH', 'CGO_ENABLED', 'GOFLAGS', 'CC', 'CXX', 'CGO_CFLAGS', 'CGO_LDFLAGS'):
     host.pop(key, None)
 details = {}
-summary = {'scope': f'{goos}/{arch} {package} with CGO disabled; package dependencies only, not full iOS build or release approval', 'source': 'fc580652cb26c00ccd2e1218257eeb7eb33766ee'}
+summary = {'scope': f'{goos}/{arch} {package} with CGO disabled; package dependencies only, not full iOS build or release approval', 'source': 'fbfde157ea5da6296ce33bcbbaf36833b933f9b0'}
 with tempfile.TemporaryDirectory(prefix='vpn013-sca-') as tmp:
     install_env = dict(host, GOBIN=tmp)
     install = subprocess.run(['go', 'install', 'golang.org/x/vuln/cmd/govulncheck@v1.9.0'], env=install_env, capture_output=True, timeout=240)

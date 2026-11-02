@@ -25,8 +25,8 @@ jobs:
           test '${{ inputs.publish_release }}' = false
           python3 - <<'PY'
           import subprocess
-          changed = set(subprocess.check_output(['git','diff','--name-only','fc580652cb26c00ccd2e1218257eeb7eb33766ee','HEAD'], text=True).splitlines())
-          assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py', 'diagnostics/actual-parser-harness.py', 'diagnostics/go-sca-debug.py'}
+          changed = set(subprocess.check_output(['git','diff','--name-only','fbfde157ea5da6296ce33bcbbaf36833b933f9b0','HEAD'], text=True).splitlines())
+          assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py', 'diagnostics/actual-parser-harness.py', 'diagnostics/go-sca-debug.py', 'diagnostics/guarded-json-harness.py'}
           PY
       - name: Compile and run Swift boundary tests
         run: |
@@ -40,6 +40,9 @@ jobs:
           python3 diagnostics/zip-dedup-harness.py "$RUNNER_TEMP/zip-dedup.swift"
           swiftc scripts/PrimaryResourceBudget.swift "$RUNNER_TEMP/zip-dedup.swift" -o "$RUNNER_TEMP/zip-dedup-tests"
           "$RUNNER_TEMP/zip-dedup-tests"
+          python3 diagnostics/guarded-json-harness.py "$RUNNER_TEMP/guarded-json.swift"
+          swiftc -parse-as-library "$RUNNER_TEMP/guarded-json.swift" -o "$RUNNER_TEMP/guarded-json-tests"
+          "$RUNNER_TEMP/guarded-json-tests"
       - name: Compile the actual pinned parser with synthetic model stubs
         run: |
           set -eu
@@ -73,8 +76,8 @@ jobs:
           set -eu
           python3 - <<'PY'
           import subprocess
-          changed=set(subprocess.check_output(['git','diff','--name-only','fc580652cb26c00ccd2e1218257eeb7eb33766ee','HEAD'],text=True).splitlines())
-          assert changed == {'.github/workflows/build-ios.yml','diagnostics/zip-dedup-harness.py','diagnostics/actual-parser-harness.py','diagnostics/go-sca-debug.py'}
+          changed=set(subprocess.check_output(['git','diff','--name-only','fbfde157ea5da6296ce33bcbbaf36833b933f9b0','HEAD'],text=True).splitlines())
+          assert changed == {'.github/workflows/build-ios.yml','diagnostics/zip-dedup-harness.py','diagnostics/actual-parser-harness.py','diagnostics/go-sca-debug.py','diagnostics/guarded-json-harness.py'}
           PY
           git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/go-apple"
           git -C "$RUNNER_TEMP/go-apple" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
