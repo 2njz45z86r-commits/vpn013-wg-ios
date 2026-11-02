@@ -91,7 +91,10 @@ import Foundation
         var registry = ClientRegistry()
         registry.bindings[valid.orderID] = ClientBinding(document:document,profileIDs:["germany":UUID().uuidString],baseline:["germany":"hash"],pending:valid,lastCheck:Date())
         registry.bindings[valid.orderID]?.awgVersionChoices = ["germany": true, "finland": false]
-        var oldBinding = try JSONSerialization.jsonObject(with: JSONEncoder().encode(registry.bindings[valid.orderID]!)) as! [String: Any]
+        guard let currentBinding = registry.bindings[valid.orderID] else { preconditionFailure("Synthetic binding missing") }
+        guard var oldBinding = try JSONSerialization.jsonObject(with: JSONEncoder().encode(currentBinding)) as? [String: Any] else {
+            preconditionFailure("Synthetic binding is not a JSON object")
+        }
         oldBinding.removeValue(forKey: "awgVersionChoices")
         let decodedOld = try JSONDecoder().decode(ClientBinding.self, from: JSONSerialization.data(withJSONObject: oldBinding))
         try check(decodedOld.awgVersionChoices == nil && decodedOld.profileIDs == registry.bindings[valid.orderID]?.profileIDs)
