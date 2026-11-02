@@ -95,6 +95,21 @@ BODY_EDITS: dict[str, list[tuple[str, str]]] = {
 }
 
 WALK_SHIMS: dict[str, list[tuple[str, str]]] = {
+    # On Windows, painting the inner group before validating its parent can
+    # synchronously request the parent's background and re-enter WM_PAINT.
+    # The synthetic native popup watchdog recorded this recursion. Validate the
+    # parent through the original handler first, then paint the same children.
+    "vendor/github.com/tailscale/walk/groupbox.go": [
+        (
+            "\t\tcase win.WM_PAINT:\n\t\t\twin.UpdateWindow(gb.hWndGroupBox)\n"
+            "\t\t\tif gb.Checkable() {\n\t\t\t\twin.UpdateWindow(gb.checkBox.hWnd)\n\t\t\t}\n",
+            "\t\tcase win.WM_PAINT:\n"
+            "\t\t\tresult := gb.WidgetBase.WndProc(hwnd, msg, wParam, lParam)\n"
+            "\t\t\twin.UpdateWindow(gb.hWndGroupBox)\n"
+            "\t\t\tif gb.Checkable() {\n\t\t\t\twin.UpdateWindow(gb.checkBox.hWnd)\n\t\t\t}\n"
+            "\t\t\treturn result\n",
+        ),
+    ],
     # The compiled Walk UI never imports declarative, and this blank import
     # only initializes the archived govaluate package's internal planner.
     "vendor/github.com/tailscale/walk/expression.go": [
