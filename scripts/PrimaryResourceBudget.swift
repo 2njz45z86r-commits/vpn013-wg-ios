@@ -15,6 +15,11 @@ enum VPN013PrimaryResourceBudget {
             guard let chunk = try handle.read(upToCount: limit), !chunk.isEmpty else { break }
             data.append(chunk)
         }
+        return try decodeConfig(data)
+    }
+
+    static func decodeConfig(_ source: Data) throws -> String {
+        var data = source
         guard data.count <= maximumConfigFileBytes else { throw ConfigReadError.tooLarge }
         // Preserve common text files from Windows and remove the BOM before parsing.
         let encoding: String.Encoding
