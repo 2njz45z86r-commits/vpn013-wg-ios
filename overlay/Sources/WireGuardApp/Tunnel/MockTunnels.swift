@@ -36,7 +36,7 @@ class MockTunnels {
             let generation31 = "HeaderProtectionKey = \(PrivateKey().base64Key)\nContentPaddingAddition = 0\nRekeyAfterTime = 120\nRekeyTimeout = 5\nRejectAfterTime = 180\nKeepaliveTimeout = 10\nMaxHandshakeAttempts = 20\nRandomTrailers = \(trailerFlag)\nDisableCookies = false\n"
             let extras: String
             switch index % 5 {
-            case 0: extras = index == 0 ? "I1 = <t>\n" : "" // Ambiguous I-only option; other cases are standard WireGuard.
+            case 0: extras = index == 0 || index == 5 ? "I1 = <t>\n" : "" // Two choices plus a plain WireGuard example.
             case 1: extras = classic // Classic AmneziaWG.
             case 2: extras = classic + generation2 // AmneziaWG 2.x.
             case 3: extras = classic + generation2 + generation31 // AmneziaWG 3.1 fields.

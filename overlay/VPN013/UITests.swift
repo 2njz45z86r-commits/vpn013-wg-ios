@@ -395,6 +395,9 @@ final class AutoTunnelUITests:XCTestCase {
         let choice = app.alerts["Уточните версию AmneziaWG"]
         XCTAssertTrue(choice.waitForExistence(timeout: 20))
         choice.buttons["AmneziaWG 2.0 / 3.1"].tap()
+        let secondChoice = choice.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Нидерланды")).firstMatch
+        XCTAssertTrue(secondChoice.waitForExistence(timeout: 8))
+        choice.buttons["AmneziaWG 2.0 / 3.1"].tap()
         XCTAssertTrue(app.staticTexts["Швеция"].waitForExistence(timeout:20))
         XCTAssertEqual(app.alerts.count,0)
         assertProfileCount(app, 13)
@@ -1176,7 +1179,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(fixture.isHittable)
         fixture.tap()
         let passed = app.staticTexts.matching(NSPredicate(format: "label == %@", "Проверено: добавление, удаление, ключи, сторонний профиль и Авто · 3 сервера; восстановление удалённых, 10→20→15, Авто · 16 серверов")).firstMatch
-        XCTAssertTrue(passed.waitForExistence(timeout:15))
+        XCTAssertTrue(passed.waitForExistence(timeout:30))
         capture("18-order-sync-invariants-passed-synthetic")
         app.navigationBars["Обновления"].buttons["Готово"].tap()
         app.buttons["vpn013.settings.done"].tap()

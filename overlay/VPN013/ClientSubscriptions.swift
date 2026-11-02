@@ -7,6 +7,8 @@ struct ClientBinding: Codable {
     var baseline: [String: String] = [:]
     var pending: ClientSnapshot?
     var lastCheck: Date?
+    // Optional for backward-compatible decoding of existing encrypted registries.
+    var awgVersionChoices: [String: Bool]? = nil
 }
 
 struct ClientAutoBinding: Codable {
@@ -164,7 +166,7 @@ final class ClientUpdateCoordinator {
                 let snapshot = try JSONDecoder().decode(ClientSnapshot.self, from: data)
                 try snapshot.validate(orderID: order)
                 guard snapshot.expiry > Int64(Date().timeIntervalSince1970 * 1000) else { throw ClientUpdateError.accessEnded }
-                _ = try self.configurations(snapshot)
+                _ = try self.configurations(snapshot, binding: binding, manager: manager)
                 self.registry.bindings[order]?.lastCheck = Date()
                 if snapshot.revision != binding.document.snapshot.revision || snapshot.expiry != binding.document.snapshot.expiry || !self.mappingComplete(binding, snapshot: snapshot, manager: manager) {
                     self.registry.bindings[order]?.pending = snapshot
@@ -181,30 +183,49 @@ final class ClientUpdateCoordinator {
         let available = Set(manager.mapTunnels { $0.persistentProfileIdentifier }.compactMap { $0 })
         return ClientRosterPlan.mappingComplete(binding.profileIDs, snapshot: snapshot, availableProfileIDs: available)
     }
-    private func configurations(_ snapshot: ClientSnapshot) throws -> [String: TunnelConfiguration] {
+    private func configurations(_ snapshot: ClientSnapshot, binding: ClientBinding, manager: TunnelsManager, newChoices: [String: Bool] = [:]) throws -> [String: TunnelConfiguration] {
         try snapshot.validate()
         var result: [String: TunnelConfiguration] = [:]
+        let all = manager.mapTunnels { $0 }
         for server in snapshot.servers {
             let config = try TunnelConfiguration(fromWgQuickConfig: server.config, called: server.name)
             guard !config.peers.isEmpty, config.peers.allSatisfy({ $0.endpoint != nil }) else { throw ClientUpdateError.invalidDocument }
+            let current = binding.profileIDs[server.id].flatMap { id in
+                all.first(where: { $0.persistentProfileIdentifier == id })?.tunnelConfiguration
+            }
+            // A server ID can remain the same when the provider changes its
+            // configuration. Never apply a stale version choice to new bytes.
+            let unchanged = binding.document.snapshot.servers.first(where: { $0.id == server.id })?.config == server.config
+            let selected = newChoices[server.id] ?? (unchanged ? binding.awgVersionChoices?[server.id] : nil)
+            if let choice = try ClientUpdateProtocol.legacyChoice(ambiguous: TunnelImporter.needsVersionChoice(config),
+                explicit: selected, existing: unchanged ? current?.interface.legacyAWG15 : nil, name: server.name) {
+                config.interface.legacyAWG15 = choice
+            }
             result[server.id] = config
         }
         return result
     }
-    func importDocument(_ document: ClientAccessDocument, manager: TunnelsManager, completion: @escaping (Error?) -> Void) {
+    func importDocument(_ document: ClientAccessDocument, manager: TunnelsManager, awgVersionChoices: [String: Bool] = [:], completion: @escaping (Error?) -> Void) {
         guard !busy else { completion(ClientUpdateError.busy); return }
         do {
-            try document.validate(); _ = try configurations(document.snapshot)
+            try document.validate()
             guard document.snapshot.expiry > Int64(Date().timeIntervalSince1970 * 1000) else { throw ClientUpdateError.accessEnded }
             guard loadingError == nil else { throw ClientUpdateError.invalidDocument }
             let order = document.snapshot.orderID
             var binding = registry.bindings[order] ?? ClientBinding(document: document)
+            guard Set(awgVersionChoices.keys).isSubset(of: Set(document.snapshot.servers.map { $0.id })) else { throw ClientUpdateError.invalidDocument }
+            let parsed = try configurations(document.snapshot, binding: binding, manager: manager, newChoices: awgVersionChoices)
+            for server in document.snapshot.servers where binding.document.snapshot.servers.first(where: { $0.id == server.id })?.config != server.config {
+                binding.awgVersionChoices?.removeValue(forKey: server.id)
+            }
+            if !awgVersionChoices.isEmpty { binding.awgVersionChoices = (binding.awgVersionChoices ?? [:]).merging(awgVersionChoices) { _, new in new } }
             binding.document = document; binding.pending = document.snapshot
             // Explicit ZIP import can bind exact, unclaimed existing configurations.
             let claimed = Set(registry.bindings.values.flatMap { $0.profileIDs.values })
             let all = manager.mapTunnels { $0 }
             for server in document.snapshot.servers where binding.profileIDs[server.id] == nil {
-                let canonical = try TunnelConfiguration(fromWgQuickConfig: server.config, called: server.name).asWgQuickConfig()
+                guard let config = parsed[server.id] else { throw ClientUpdateError.invalidDocument }
+                let canonical = config.asWgQuickConfig()
                 let matches = all.filter { !$0.isVPN013Automatic && !claimed.contains($0.persistentProfileIdentifier ?? "") && $0.tunnelConfiguration?.asWgQuickConfig() == canonical }
                 if matches.count == 1, let id = matches[0].persistentProfileIdentifier {
                     binding.profileIDs[server.id] = id; binding.baseline[server.id] = ClientUpdateProtocol.digest(canonical)
@@ -255,7 +276,7 @@ final class ClientUpdateCoordinator {
         let configs: [String: TunnelConfiguration]
         let plan: ClientRosterPlan
         do {
-            configs = try configurations(snapshot)
+            configs = try configurations(snapshot, binding: binding, manager: manager)
             plan = try ClientRosterPlan(previousIDs: Set(binding.profileIDs.keys), snapshot: snapshot)
             guard snapshot.expiry > Int64(Date().timeIntervalSince1970 * 1000) else { throw ClientUpdateError.accessEnded }
             for (serverID, id) in binding.profileIDs {
@@ -327,6 +348,9 @@ final class ClientUpdateCoordinator {
         }
         func remove(_ index: Int) {
             guard index < plan.removedIDs.count else {
+                for server in snapshot.servers where binding.document.snapshot.servers.first(where: { $0.id == server.id })?.config != server.config {
+                    registry.bindings[order]?.awgVersionChoices?.removeValue(forKey: server.id)
+                }
                 registry.bindings[order]?.document = ClientAccessDocument(schema: 1, kind: "vpn013-access", capability: binding.document.capability, snapshot: snapshot, trial: binding.document.trial)
                 registry.bindings[order]?.pending = nil
                 do { try saveProgress(); completion(nil) } catch { completion(error) }
@@ -337,6 +361,7 @@ final class ClientUpdateCoordinator {
             func removed() {
                 registry.bindings[order]?.profileIDs.removeValue(forKey: serverID)
                 registry.bindings[order]?.baseline.removeValue(forKey: serverID)
+                registry.bindings[order]?.awgVersionChoices?.removeValue(forKey: serverID)
                 do { try saveProgress(); remove(index + 1) } catch { completion(error) }
             }
             if let tunnel = tunnel { manager.remove(tunnel: tunnel) { error in if let error = error { completion(error) } else { removed() } } }
