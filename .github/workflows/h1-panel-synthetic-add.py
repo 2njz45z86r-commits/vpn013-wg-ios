@@ -16,8 +16,12 @@ def request(path, payload=None, token=None):
         headers['X-CSRF-Token'] = token
     body = None if payload is None else json.dumps(payload).encode()
     req = urllib.request.Request(base + path, data=body, headers=headers)
-    with opener.open(req, timeout=10) as resp:
-        value = json.load(resp)
+    try:
+        with opener.open(req, timeout=10) as resp:
+            value = json.load(resp)
+    except urllib.error.HTTPError as exc:
+        print('synthetic_http_rejected=' + path + ' status=' + str(exc.code), file=sys.stderr)
+        raise
     if not isinstance(value, dict) or value.get('success') is not True:
         raise RuntimeError('Synthetic panel rejected a request: ' + path)
     return value.get('obj')
