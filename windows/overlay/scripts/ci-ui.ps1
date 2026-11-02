@@ -6,17 +6,24 @@ $projectRoot=Split-Path $PSScriptRoot -Parent
 $previewExe=Join-Path $env:RUNNER_TEMP 'VPN013-Preview.exe'
 & (Join-Path $projectRoot '.deps/go/bin/go.exe') build -mod=vendor -tags 'load_wgnt_from_rsrc,r013preview' -ldflags '-H windowsgui' -trimpath -buildvcs=false -o $previewExe .
 if ($LASTEXITCODE -ne 0) {throw 'Native UI fixture build failed'}
-foreach($scenario in @('manual-no-stats','auto','auto-no-stats','update-offer','power','traffic','services','connection-popup')) {
+foreach($scenario in @('connection-popup','manual-no-stats','auto','auto-no-stats','update-offer','power','traffic','services')) {
   $env:VPN013_PREVIEW_SCENARIO=$scenario
   $env:VPN013_PREVIEW_VERIFY=Join-Path $env:RUNNER_TEMP ('r013-ui-'+$scenario+'.json')
-  $process=Start-Process -FilePath $previewExe -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
+  $stderr=Join-Path $env:RUNNER_TEMP ('r013-ui-stderr-'+$scenario+'.txt')
+  $stdout=Join-Path $env:RUNNER_TEMP ('r013-ui-stdout-'+$scenario+'.txt')
+  $process=Start-Process -FilePath $previewExe -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardError $stderr -RedirectStandardOutput $stdout -PassThru
   if (!$process.WaitForExit(30000)) {
     $process.Kill()
     throw "Native UI fixture timed out: $scenario"
   }
   if (!(Test-Path -LiteralPath $env:VPN013_PREVIEW_VERIFY)) {throw "Missing UI report: $scenario"}
   $report=Get-Content -LiteralPath $env:VPN013_PREVIEW_VERIFY -Raw | ConvertFrom-Json
-  if ($process.ExitCode -ne 0 -or !$report.passed) {throw "Native UI fixture failed $scenario : exitCode=$($process.ExitCode) reportPassed=$($report.passed) failure=$($report.failure)"}
+  if ($process.ExitCode -ne 0 -or !$report.passed) {
+    if (Test-Path -LiteralPath $stderr) {
+      Get-Content -LiteralPath $stderr | Where-Object { $_ -match '^(panic:|fatal error:|runtime error:|goroutine [0-9]+ \[|.*[/\\](r013_[a-z_]+|managewindow)\.go:[0-9]+)' } | Select-Object -Last 20
+    }
+    throw "Native UI fixture failed $scenario : exitCode=$($process.ExitCode) reportPassed=$($report.passed) failure=$($report.failure)"
+  }
   $expectedChecks=5
   if ($scenario -eq 'auto-no-stats') {$expectedChecks=3}
   if ($scenario -eq 'update-offer') {$expectedChecks=6}
