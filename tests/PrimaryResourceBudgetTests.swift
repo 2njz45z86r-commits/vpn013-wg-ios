@@ -11,6 +11,10 @@ enum PrimaryResourceBudgetTests {
     }
 
     static func main() throws {
+        check(true, VPN013PrimaryResourceBudget.needsLegacyVersionChoice(initialPackets: ["<b 0x01><t>"]), "ambiguous legacy timestamp")
+        check(false, VPN013PrimaryResourceBudget.needsLegacyVersionChoice(initialPackets: ["<r 1>"]), "version-neutral initial packet")
+        check(false, VPN013PrimaryResourceBudget.needsLegacyVersionChoice(initialPackets: ["<t><ds>"]), "newer-only initial tag")
+        check(false, VPN013PrimaryResourceBudget.needsLegacyVersionChoice(initialPackets: ["<t><b ff>"]), "newer-only bytes syntax")
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("vpn013-config-budget-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: file) }
         let text = "[Interface]\nAddress = 192.0.2.1/32\n"

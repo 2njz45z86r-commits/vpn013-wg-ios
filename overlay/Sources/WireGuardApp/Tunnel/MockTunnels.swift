@@ -50,6 +50,7 @@ class MockTunnels {
             precondition(extras.split(separator: "\n").allSatisfy { canonical.contains(String($0) + "\n") })
             if index % 5 == 4 {
                 precondition(parsed.interface.legacyAWG15 && parsed.interface.legacyJunk1 == "<b 0xBB><r 4>" && parsed.interface.legacyIntervalSeconds == 30)
+                precondition(!TunnelImporter.needsVersionChoice(parsed))
                 let reparsed = try TunnelConfiguration(fromWgQuickConfig: canonical)
                 precondition(reparsed.interface == parsed.interface)
                 let edit = TunnelViewModel(tunnelConfiguration: parsed)
@@ -65,6 +66,7 @@ class MockTunnels {
                 let modern = try TunnelConfiguration(fromWgQuickConfig: ambiguous, called: "Synthetic choice")
                 let explicitlyLegacy = try TunnelConfiguration(fromWgQuickConfig: "# VPN013-AmneziaWG = 1.5\n" + ambiguous)
                 precondition(!modern.interface.legacyAWG15 && explicitlyLegacy.interface.legacyAWG15)
+                precondition(TunnelImporter.needsVersionChoice(modern) && !TunnelImporter.needsVersionChoice(explicitlyLegacy))
                 let reparsedLegacy = try TunnelConfiguration(fromWgQuickConfig: explicitlyLegacy.asWgQuickConfig())
                 precondition(reparsedLegacy.interface.legacyAWG15)
                 let choice = TunnelViewModel(tunnelConfiguration: modern)
