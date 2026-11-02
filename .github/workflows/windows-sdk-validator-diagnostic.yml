@@ -27,7 +27,23 @@ jobs:
               if (Test-Path -LiteralPath $path -PathType Leaf) {
                 $signature = Get-AuthenticodeSignature -LiteralPath $path
                 $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
-                Write-Output ("SDK payload {0} SHA256={1} signature={2}" -f $name, $hash, $signature.Status)
+                $subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { 'none' }
+                Write-Output ("SDK payload {0} SHA256={1} signature={2} signer={3}" -f $name, $hash, $signature.Status, $subject)
+                if ($name -eq 'MsiVal2-x86_en-us.msi') {
+                  try {
+                    $installer = New-Object -ComObject WindowsInstaller.Installer
+                    $db = $installer.GetType().InvokeMember('OpenDatabase','InvokeMethod',$null,$installer,@($path,0))
+                    $view = $db.GetType().InvokeMember('OpenView','InvokeMethod',$null,$db,@('SELECT * FROM `Property`'))
+                    $view.GetType().InvokeMember('Execute','InvokeMethod',$null,$view,$null) | Out-Null
+                    while ($record = $view.GetType().InvokeMember('Fetch','InvokeMethod',$null,$view,$null)) {
+                      $key = $record.GetType().InvokeMember('StringData','GetProperty',$null,$record,@(1))
+                      if ($key -in @('ProductVersion','Manufacturer','ProductName')) {
+                        $value = $record.GetType().InvokeMember('StringData','GetProperty',$null,$record,@(2))
+                        Write-Output ("SDK MSI metadata {0}={1}" -f $key, $value)
+                      }
+                    }
+                  } catch { Write-Output 'SDK MSI metadata unavailable' }
+                }
               } else { Write-Output ("SDK payload {0} absent" -f $name) }
             }
           }
