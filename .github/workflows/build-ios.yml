@@ -26,7 +26,7 @@ jobs:
           python3 - <<'PY'
           import subprocess
           changed = set(subprocess.check_output(['git','diff','--name-only','fc8b1c60c7eb64774c7096bd5f89153baa654d47','HEAD'], text=True).splitlines())
-          assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py'}
+          assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py', 'diagnostics/actual-parser-harness.py'}
           PY
       - name: Compile and run Swift boundary tests
         run: |
@@ -40,3 +40,11 @@ jobs:
           python3 diagnostics/zip-dedup-harness.py "$RUNNER_TEMP/zip-dedup.swift"
           swiftc scripts/PrimaryResourceBudget.swift "$RUNNER_TEMP/zip-dedup.swift" -o "$RUNNER_TEMP/zip-dedup-tests"
           "$RUNNER_TEMP/zip-dedup-tests"
+      - name: Compile the actual pinned parser with synthetic model stubs
+        run: |
+          set -eu
+          git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/apple"
+          git -C "$RUNNER_TEMP/apple" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
+          python3 diagnostics/actual-parser-harness.py "$RUNNER_TEMP/apple" "$RUNNER_TEMP/actual-parser.swift"
+          swiftc -parse-as-library "$RUNNER_TEMP/actual-parser.swift" -o "$RUNNER_TEMP/actual-parser-tests"
+          "$RUNNER_TEMP/actual-parser-tests"
