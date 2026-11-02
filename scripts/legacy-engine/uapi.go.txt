@@ -928,6 +928,14 @@ func (d *ipcSetDevice) mergeWithDevice(device *Device) error {
 		}
 	}
 
+	// Endpoint-only UAPI refreshes must not invalidate a prepared legacy
+	// handshake. Compare masking state before committing any new values.
+	headerChanged := device.headers.init.Load() != d.headers.init ||
+		device.headers.response.Load() != d.headers.response ||
+		device.headers.cookie.Load() != d.headers.cookie ||
+		device.headers.transport.Load() != d.headers.transport ||
+		!device.headerProtection.key.Equals(d.headerProtectionKey)
+
 	device.log.Verbosef("UAPI: Updating h1 padding")
 	device.headers.init.Store(d.headers.init)
 
@@ -961,11 +969,22 @@ func (d *ipcSetDevice) mergeWithDevice(device *Device) error {
 	device.headerProtection.key = d.headerProtectionKey
 	device.obfuscation.Lock()
 	device.legacyRuntime.Lock()
-	if device.legacyConfig != d.legacy {
+	legacyChanged := device.legacyConfig != d.legacy
+	maskingChanged := headerChanged || legacyChanged ||
+		device.paddings.init.Load() != d.paddings.init ||
+		device.paddings.response.Load() != d.paddings.response ||
+		device.paddings.cookie.Load() != d.paddings.cookie ||
+		device.paddings.transport.Load() != d.paddings.transport ||
+		device.junk.count.Load() != d.junk.count ||
+		device.junk.min.Load() != d.junk.min ||
+		device.junk.max.Load() != d.junk.max
+	if legacyChanged {
 		device.legacyRuntime.sent = false
 		device.legacyRuntime.next = time.Time{}
 	}
-	d.legacy.revision = device.legacyRevision.Add(1)
+	if maskingChanged {
+		d.legacy.revision = device.legacyRevision.Add(1)
+	}
 	device.legacyConfig = d.legacy
 	device.legacyRuntime.Unlock()
 	device.legacyMode.Store(d.legacy.enabled)

@@ -13,7 +13,7 @@
   },
   "uapi.go": {
     "beforeSHA256": "8a8dae148b0b41cb9114104a4802c8233297fa93ffc81594f3ebd082c4387e82",
-    "afterSHA256": "7a96e73bcb638e7562bc794a02dbd429f0be358fba044ebb616f2e2c7e0da7b1"
+    "afterSHA256": "bb21d34d867d72b3d6ce067dd98f6e34cd7b217b4f6bd8404eeacafb4d10a000"
   },
   "r013_resource_limits.go": {
     "beforeSHA256": "046b2ff77d2122759e365866e1d668ec23e89e60160fa638a3592c1bc6f762f4",
@@ -37,6 +37,6 @@
   },
   "r013_stale_snapshot_test.go": {
     "beforeSHA256": null,
-    "afterSHA256": "9f77fdf3d4f364beb8a87450c59d570c3e39148495149af55d0725763eefd4cb"
+    "afterSHA256": "75fdf00204f11d12ae1bf2661fa126e01e42529250eef9d574431a399121626b"
   }
 }
