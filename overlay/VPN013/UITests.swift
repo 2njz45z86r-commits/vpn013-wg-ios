@@ -735,6 +735,8 @@ final class AutoTunnelUITests:XCTestCase {
         app.launch()
         let profile = app.tables.cells.containing(.staticText, identifier:"Личный сервер 1").firstMatch
         XCTAssertTrue(profile.waitForExistence(timeout:20))
+        let readyToConnect = XCTNSPredicateExpectation(predicate: NSPredicate(format:"hittable == true AND enabled == true AND value == '0'"), object: profile.switches.firstMatch)
+        XCTAssertEqual(XCTWaiter.wait(for:[readyToConnect], timeout:20), .completed, "The synthetic switch must be ready and off before activation")
         profile.switches.firstMatch.tap()
         let connected = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: profile.switches.firstMatch)
         XCTAssertEqual(XCTWaiter.wait(for:[connected], timeout:20), .completed, "The synthetic connection must become active before the popup is opened")
