@@ -29,6 +29,18 @@ def request(path, payload=None, token=None):
         raise RuntimeError('Synthetic panel rejected a request: ' + path)
     return value.get('obj')
 
+def processes():
+    matches = {}
+    for p in Path('/proc').iterdir():
+        if p.name.isdigit():
+            try:
+                args = (p/'cmdline').read_bytes().split(b'\0')
+                if args and args[0].endswith(b'xray-linux-amd64'):
+                    matches[p.name] = (p/'stat').read_text().split()[21]
+            except (FileNotFoundError, ProcessLookupError, PermissionError):
+                pass
+    return matches
+
 try:
     initial_token = request('csrf-token')
     if not isinstance(initial_token, str) or not initial_token:
@@ -42,17 +54,6 @@ try:
         found = [r for r in rows if r.get('remark') == 'fixture-only-wg']
         if len(found) != 1 or found[0].get('enable') is not False:
             raise RuntimeError('Synthetic disabled inbound unavailable')
-        def processes():
-            matches = {}
-            for p in Path('/proc').iterdir():
-                if p.name.isdigit():
-                    try:
-                        args = (p/'cmdline').read_bytes().split(b'\0')
-                        if args and args[0].endswith(b'xray-linux-amd64'):
-                            matches[p.name] = (p/'stat').read_text().split()[21]
-                    except (FileNotFoundError, ProcessLookupError, PermissionError):
-                        pass
-            return matches
         initial = processes()
         if len(initial) != 1:
             raise RuntimeError('Synthetic Xray process count was not one')
@@ -70,6 +71,38 @@ try:
         if processes() != initial:
             raise RuntimeError('Synthetic Xray process changed on enable')
         print('synthetic_panel_wireguard_udp_enabled=true synthetic_xray_process_unchanged=true')
+        sys.exit(0)
+    if len(sys.argv) > 1 and sys.argv[1] == 'occupied':
+        before = processes()
+        if len(before) != 1:
+            raise RuntimeError('Synthetic Xray process count was not one before occupied-port test')
+        payload = {'remark':'fixture-conflicting-wg', 'tag':'fixture-conflicting-wg',
+                   'listen':'0.0.0.0', 'port':25122, 'protocol':'wireguard', 'enable':False,
+                   'excludeFromSub':True, 'up':0, 'down':0, 'total':0, 'expiryTime':0,
+                   'settings':json.dumps({'secretKey':base64.b64encode(os.urandom(32)).decode(),
+                                          'clients':[], 'peers':[], 'mtu':1420, 'noKernelTun':True,
+                                          'subnetIp':'10.244.241.0', 'subnetCidr':24}),
+                   'streamSettings':'{}', 'sniffing':'{"enabled":false,"destOverride":[]}'}
+        row = request('panel/api/inbounds/add', payload, token)
+        if not isinstance(row, dict) or not isinstance(row.get('id'), int):
+            raise RuntimeError('Synthetic conflicting inbound was not created')
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as holder:
+            holder.bind(('0.0.0.0', 25122))
+            try:
+                request('panel/api/inbounds/setEnable/' + str(row['id']), {'enable':True}, token)
+                accepted = True
+            except (RuntimeError, urllib.error.HTTPError):
+                accepted = False
+            seen = []
+            for _ in range(25):
+                after = processes()
+                if after != before:
+                    seen.append(after)
+                time.sleep(.2)
+            print(json.dumps({'synthetic_conflicting_udp_held':True, 'synthetic_enable_accepted':accepted,
+                              'synthetic_core_changed_or_disappeared':bool(seen),
+                              'synthetic_core_running_at_end':bool(processes()),
+                              'production_contact':False}))
         sys.exit(0)
     payload = {'remark':'fixture-only-wg', 'tag':'fixture-wg', 'listen':'0.0.0.0', 'port':25120,
                'protocol':'wireguard', 'enable':False, 'excludeFromSub':True,
