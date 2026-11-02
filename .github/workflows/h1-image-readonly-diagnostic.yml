@@ -1,6 +1,9 @@
 name: Inspect H1 WireGuard runtime in a disposable runner
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/h1-image-readonly-diagnostic.yml'
 permissions:
   contents: read
 jobs:
