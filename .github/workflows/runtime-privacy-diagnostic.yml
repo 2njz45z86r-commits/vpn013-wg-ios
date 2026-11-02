@@ -1,0 +1,27 @@
+name: Synthetic runtime logging diagnostic (not a release)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  privacy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check diagnostic-only source and execute Swift with fake inputs
+        run: |
+          set -eu
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(['git','diff','--name-only','9bfd37bebea814b5076fb54a9339cf42cf001820','HEAD'],text=True).splitlines())
+          assert changed == {'.github/workflows/runtime-privacy-diagnostic.yml','diagnostics/runtime-log-harness.py'}
+          PY
+          for revision in fbfde157ea5da6296ce33bcbbaf36833b933f9b0 9bfd37bebea814b5076fb54a9339cf42cf001820; do
+            python3 diagnostics/runtime-log-harness.py "$revision" "$RUNNER_TEMP/runtime-log.swift"
+            swiftc -parse-as-library "$RUNNER_TEMP/runtime-log.swift" -o "$RUNNER_TEMP/runtime-log-test"
+            "$RUNNER_TEMP/runtime-log-test"
+          done
