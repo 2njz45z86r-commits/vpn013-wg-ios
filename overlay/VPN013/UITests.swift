@@ -392,6 +392,9 @@ final class AutoTunnelUITests:XCTestCase {
         let app=XCUIApplication()
         app.launchArguments=["-AppleLanguages","(ru)","-AppleLocale","ru_RU","--vpn013-test-import"]
         app.launch()
+        let choice = app.alerts["Уточните версию AmneziaWG"]
+        XCTAssertTrue(choice.waitForExistence(timeout: 20))
+        choice.buttons["AmneziaWG 2.0 / 3.1"].tap()
         XCTAssertTrue(app.staticTexts["Швеция"].waitForExistence(timeout:20))
         XCTAssertEqual(app.alerts.count,0)
         assertProfileCount(app, 13)

@@ -2,8 +2,24 @@
 // Copyright © 2018-2023 WireGuard LLC. All Rights Reserved.
 
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
 
 class TunnelImporter {
+    // A legacy and newer file may both contain the same I <t> text even
+    // though it generates a different timestamp width. Ask only when both
+    // parsers can accept the configuration and no newer-only field identifies it.
+    static func needsVersionChoice(_ configuration: TunnelConfiguration) -> Bool {
+        let i = configuration.interface
+        guard !i.legacyAWG15, i.cookieReplyPacketJunkSize == nil, i.transportPacketJunkSize == nil,
+              i.headerProtectionKey == nil, i.contentPaddingAddition == nil, i.rekeyAfterTime == nil,
+              i.rekeyTimeout == nil, i.rejectAfterTime == nil, i.keepaliveTimeout == nil,
+              i.maxHandshakeAttempts == nil, i.randomTrailers == nil, i.disableCookies == nil else { return false }
+        let initial = [i.specialJunk1, i.specialJunk2, i.specialJunk3, i.specialJunk4, i.specialJunk5]
+        return VPN013PrimaryResourceBudget.needsLegacyVersionChoice(initialPackets: initial)
+    }
+
     static func importFromFile(urls: [URL], into tunnelsManager: TunnelsManager, sourceVC: AnyObject?, errorPresenterType: ErrorPresenterProtocol.Type, completionHandler: (() -> Void)? = nil) {
         guard !urls.isEmpty else {
             completionHandler?()
@@ -96,31 +112,65 @@ class TunnelImporter {
             }
         }
         dispatchGroup.notify(queue: .main) {
-            tunnelsManager.addMultiple(tunnelConfigurations: configs.compactMap { $0 }) { numberSuccessful, lastAddError in
-                if !configs.isEmpty && numberSuccessful == configs.count {
-                    completionHandler?()
-                    return
-                }
-                let alertText: (title: String, message: String)?
-                if urls.count == 1 {
-                    if urls.first!.pathExtension.lowercased() == "zip" && !configs.isEmpty {
-                        let summary = tr(format: "alertImportedFromZipMessage (%1$d of %2$d)", numberSuccessful, configs.count)
-                        let reason = lastAddError?.alertText.message ?? lastFileImportErrorText?.message
-                        alertText = (title: numberSuccessful == 0 ? (lastAddError?.alertText.title ?? tr(format: "alertImportedFromZipTitle (%d)", numberSuccessful)) : tr(format: "alertImportedFromZipTitle (%d)", numberSuccessful),
-                                     message: summary + (reason.map { "\n\n" + $0 } ?? ""))
-                    } else {
-                        alertText = lastFileImportErrorText ?? lastAddError?.alertText
+            let undecided = configs.compactMap { $0 }.filter { needsVersionChoice($0) }
+            func addSelectedConfigurations() {
+                tunnelsManager.addMultiple(tunnelConfigurations: configs.compactMap { $0 }) { numberSuccessful, lastAddError in
+                    if !configs.isEmpty && numberSuccessful == configs.count {
+                        completionHandler?()
+                        return
                     }
-                } else {
-                    alertText = (title: tr(format: "alertImportedFromMultipleFilesTitle (%d)", numberSuccessful),
-                                 message: tr(format: "alertImportedFromMultipleFilesMessage (%1$d of %2$d)", numberSuccessful, configs.count))
-                }
-                if let alertText = alertText {
-                    errorPresenterType.showErrorAlert(title: alertText.title, message: alertText.message, from: sourceVC, onPresented: completionHandler)
-                } else {
-                    completionHandler?()
+                    let alertText: (title: String, message: String)?
+                    if urls.count == 1 {
+                        if urls.first!.pathExtension.lowercased() == "zip" && !configs.isEmpty {
+                            let summary = tr(format: "alertImportedFromZipMessage (%1$d of %2$d)", numberSuccessful, configs.count)
+                            let reason = lastAddError?.alertText.message ?? lastFileImportErrorText?.message
+                            alertText = (title: numberSuccessful == 0 ? (lastAddError?.alertText.title ?? tr(format: "alertImportedFromZipTitle (%d)", numberSuccessful)) : tr(format: "alertImportedFromZipTitle (%d)", numberSuccessful),
+                                         message: summary + (reason.map { "\n\n" + $0 } ?? ""))
+                        } else {
+                            alertText = lastFileImportErrorText ?? lastAddError?.alertText
+                        }
+                    } else {
+                        alertText = (title: tr(format: "alertImportedFromMultipleFilesTitle (%d)", numberSuccessful),
+                                     message: tr(format: "alertImportedFromMultipleFilesMessage (%1$d of %2$d)", numberSuccessful, configs.count))
+                    }
+                    if let alertText = alertText {
+                        errorPresenterType.showErrorAlert(title: alertText.title, message: alertText.message, from: sourceVC, onPresented: completionHandler)
+                    } else {
+                        completionHandler?()
+                    }
                 }
             }
+            #if os(iOS)
+            func chooseVersion(_ index: Int) {
+                guard index < undecided.count else { addSelectedConfigurations(); return }
+                guard let source = sourceVC as? UIViewController else {
+                    errorPresenterType.showErrorAlert(title: "Нужно уточнить версию AmneziaWG",
+                        message: "Не удалось открыть выбор версии для импортируемой конфигурации.",
+                        from: sourceVC, onPresented: completionHandler)
+                    return
+                }
+                let config = undecided[index]
+                let alert = UIAlertController(title: "Уточните версию AmneziaWG",
+                    message: "Для «\(config.name ?? "конфигурации")» параметр I может означать разные версии. Выберите версию сервера.",
+                    preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "AmneziaWG 1.5", style: .default) { _ in
+                    config.interface.legacyAWG15 = true; chooseVersion(index + 1)
+                })
+                alert.addAction(UIAlertAction(title: "AmneziaWG 2.0 / 3.1", style: .default) { _ in
+                    config.interface.legacyAWG15 = false; chooseVersion(index + 1)
+                })
+                alert.addAction(UIAlertAction(title: "Отменить импорт", style: .cancel) { _ in completionHandler?() })
+                (source.presentedViewController ?? source).present(alert, animated: true)
+            }
+            chooseVersion(0)
+            #else
+            if undecided.isEmpty { addSelectedConfigurations() }
+            else {
+                errorPresenterType.showErrorAlert(title: "Нужно уточнить версию AmneziaWG",
+                    message: "Импорт отменён: этот файл не указывает версию однозначно.",
+                    from: sourceVC, onPresented: completionHandler)
+            }
+            #endif
         }
     }
 }

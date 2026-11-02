@@ -45,6 +45,13 @@ enum VPN013PrimaryResourceBudget {
     static let maximumInitialSpecBytes = 16_384
     static let maximumInitialTags = 128
 
+    static func needsLegacyVersionChoice(initialPackets: [String?]) -> Bool {
+        guard initialPackets.compactMap({ $0 }).contains(where: {
+            $0.range(of: #"<\s*t\s*>"#, options: .regularExpression) != nil
+        }) else { return false }
+        return validLegacy(initialPackets: initialPackets, controlledPackets: [], intervalSeconds: nil)
+    }
+
     // AWG 1.5's <t> and <c> are eight bytes, and <wt> delays generation.
     // These limits match the separately staged legacy engine; never discard
     // an unsafe field or reinterpret it as a newer AWG packet.
