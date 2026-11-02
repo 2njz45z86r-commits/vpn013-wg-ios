@@ -250,11 +250,11 @@ func (device *Device) junkPacketsLocked(count, min, max uint32) [][]byte {
 }
 
 func (device *Device) prepareInitialObfuscation() ([][]byte, uint32, error) {
-	bufs, padding, _, err := device.r013PrepareInitialObfuscationMode()
+	bufs, padding, _, _, err := device.r013PrepareInitialObfuscationMode()
 	return bufs, padding, err
 }
 
-func (device *Device) r013PrepareInitialObfuscationMode() ([][]byte, uint32, bool, error) {
+func (device *Device) r013PrepareInitialObfuscationMode() ([][]byte, uint32, bool, uint64, error) {
 	device.obfuscation.RLock()
 	if device.legacyConfig.enabled {
 		config := device.legacyConfig
@@ -262,7 +262,7 @@ func (device *Device) r013PrepareInitialObfuscationMode() ([][]byte, uint32, boo
 		padding := device.paddings.init.Load()
 		device.obfuscation.RUnlock()
 		bufs, err := device.r013BuildLegacyInitial(config, count, min, max)
-		return bufs, padding, true, err
+		return bufs, padding, true, config.revision, err
 	}
 	defer device.obfuscation.RUnlock()
 	count, min, max := device.junk.count.Load(), device.junk.min.Load(), device.junk.max.Load()
@@ -275,7 +275,7 @@ func (device *Device) r013PrepareInitialObfuscationMode() ([][]byte, uint32, boo
 		}
 	}
 	if err := ValidateObfuscationResources(count, min, max, paddings, specs); err != nil {
-		return nil, 0, false, err
+		return nil, 0, false, 0, err
 	}
 	var bufs [][]byte
 	for _, chain := range device.ipackets {
@@ -284,14 +284,14 @@ func (device *Device) r013PrepareInitialObfuscationMode() ([][]byte, uint32, boo
 		}
 		length := chain.ObfuscatedLen(0)
 		if length < 0 || length > int(maxObfuscationPart) {
-			return nil, 0, false, ErrObfuscationResourceBudget
+			return nil, 0, false, 0, ErrObfuscationResourceBudget
 		}
 		buf := make([]byte, length)
 		chain.Obfuscate(buf, nil)
 		bufs = append(bufs, buf)
 	}
 	bufs = append(bufs, device.junkPacketsLocked(count, min, max)...)
-	return bufs, paddings[0], false, nil
+	return bufs, paddings[0], false, 0, nil
 }
 
 // Move TUN payload bytes after S4 changes while a read is blocked. Go copy

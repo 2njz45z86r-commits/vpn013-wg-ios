@@ -960,13 +960,14 @@ func (d *ipcSetDevice) mergeWithDevice(device *Device) error {
 	device.log.Verbosef("UAPI: Updating header protection key")
 	device.headerProtection.key = d.headerProtectionKey
 	device.obfuscation.Lock()
+	device.legacyRuntime.Lock()
 	if device.legacyConfig != d.legacy {
-		device.legacyRuntime.Lock()
 		device.legacyRuntime.sent = false
 		device.legacyRuntime.next = time.Time{}
-		device.legacyRuntime.Unlock()
 	}
+	d.legacy.revision = device.legacyRevision.Add(1)
 	device.legacyConfig = d.legacy
+	device.legacyRuntime.Unlock()
 	device.legacyMode.Store(d.legacy.enabled)
 	device.paddings.init.Store(d.paddings.init)
 	device.paddings.response.Store(d.paddings.response)
