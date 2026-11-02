@@ -1,0 +1,56 @@
+# Diagnostic only: never produces or publishes an installer or release.
+name: Windows popup fixture diagnostic without publication
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fetch and verify exact corresponding source
+        run: |
+          $archive=Join-Path $env:RUNNER_TEMP 'windows-source.zip'
+          curl.exe --fail --location --silent --show-error --connect-timeout 20 --max-time 180 --output $archive 'https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/windows-source-1.4.0/VPN013WG-1.4.0-windows-source.zip'
+          if ($LASTEXITCODE -ne 0) {throw 'Source download failed'}
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower() -ne 'f7c4a928eecc6e40a1d7b0bcf37bf26d7b6de1b449a2ca26f7cf1ffc2bd83e35') {throw 'Source hash mismatch'}
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:GITHUB_WORKSPACE
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Apply pinned source transformations
+        run: python windows/prepare-ci-source.py
+      - name: Prepare pinned dependencies
+        working-directory: vpn013-wg-windows
+        run: |
+          python scripts/bootstrap.py
+          if ($LASTEXITCODE -ne 0) {throw 'Toolchain preparation failed'}
+          ./scripts/bootstrap-driver.ps1
+          ./scripts/bootstrap-installer.ps1
+      - name: Execute actual synthetic UI fixture
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./scripts/ci-ui.ps1
+      - name: Preserve only synthetic UI reports and checkpoints
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-popup-diagnostic-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r013-ui-*.json
+            ${{ runner.temp }}/r013-power-*.png
+            ${{ runner.temp }}/r013-traffic-*.png
+            ${{ runner.temp }}/r013-services.png
+          if-no-files-found: warn

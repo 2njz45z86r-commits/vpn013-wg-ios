@@ -25,14 +25,29 @@ var R013PreviewPowerAudit func() (starts, stops int, lastStart, lastStop string)
 
 func EnableR013Preview() { r013Preview = true; IsAdmin = true }
 
+func r013PopupCheckpoint(stage string) {
+	if os.Getenv("VPN013_PREVIEW_SCENARIO") != "connection-popup" {
+		return
+	}
+	destination := os.Getenv("VPN013_PREVIEW_VERIFY")
+	if destination == "" {
+		return
+	}
+	data, _ := json.Marshal(map[string]string{"stage": stage})
+	_ = os.WriteFile(filepath.Join(filepath.Dir(destination), "r013-ui-popup-checkpoint.json"), data, 0600)
+}
+
 func RunR013Preview() {
 	runtime.LockOSThread()
 	EnableR013Preview()
+	r013PopupCheckpoint("before-create-window")
 	window, err := NewManageTunnelsWindow()
 	if err != nil {
 		panic(err)
 	}
+	r013PopupCheckpoint("before-show-window")
 	window.Show()
+	r013PopupCheckpoint("after-show-window")
 	if destination := os.Getenv("VPN013_PREVIEW_VERIFY"); destination != "" {
 		// Only this separate preview build owns an in-memory fake manager.
 		// The application build does not contain this entry point or fixture.
@@ -44,6 +59,7 @@ func RunR013Preview() {
 
 func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 	scenario := os.Getenv("VPN013_PREVIEW_SCENARIO")
+	r013PopupCheckpoint("before-test-setup")
 	checks := []string{}
 	var failure string
 	echoVerified := false
@@ -139,8 +155,10 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 	}
 	deadline := time.Now().Add(15 * time.Second)
 	ready := false
+	r013PopupCheckpoint("before-first-readiness-sync")
 	for !ready && time.Now().Before(deadline) {
 		syncUI(func() { ready = window.currentCard.current.active })
+		r013PopupCheckpoint("readiness-sync-returned")
 		if !ready {
 			time.Sleep(30 * time.Millisecond)
 		}
@@ -150,10 +168,7 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 		return
 	}
 	if scenario == "connection-popup" {
-		checkpoint := func(stage string) {
-			data, _ := json.Marshal(map[string]string{"stage": stage})
-			_ = os.WriteFile(filepath.Join(filepath.Dir(destination), "r013-ui-popup-checkpoint.json"), data, 0600)
-		}
+		checkpoint := r013PopupCheckpoint
 		checkpoint("before-ui-sync")
 		syncUI(func() {
 			checkpoint("entered-ui-sync")
