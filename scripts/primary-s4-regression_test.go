@@ -58,11 +58,12 @@ func TestVPN013S4BlockedReadReposition(t *testing.T) {
 	classic := []string{"jc", "4", "jmin", "40", "jmax", "70", "s1", "16", "s2", "16", "h1", "1", "h2", "2", "h3", "3", "h4", "4"}
 	v2 := append(append([]string{}, classic...), "s3", "16", "s4", "16", "i1", "<b 0x00>", "i2", "<r 4>", "i3", "<b 0x01>", "i4", "<r 8>", "i5", "<b 0x02>")
 	v31 := append(append([]string{}, v2...), "header_protection_key", "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20", "content_padding_addition", "0", "random_trailers", "false")
+	v31WithTrailers := append(append([]string{}, v31...), "random_trailers", "true")
 	for _, scenario := range []struct {
 		name    string
 		options []string
 	}{
-		{"wireguard", nil}, {"amnezia-classic", classic}, {"amnezia-2", v2}, {"amnezia-3.1", v31},
+		{"wireguard", nil}, {"amnezia-classic", classic}, {"amnezia-2", v2}, {"amnezia-3.1", v31}, {"amnezia-3.1-trailers", v31WithTrailers},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			configs, endpoints := genConfigs(t, scenario.options...)
