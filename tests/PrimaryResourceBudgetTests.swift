@@ -11,6 +11,11 @@ enum PrimaryResourceBudgetTests {
     }
 
     static func main() throws {
+        check(true, VPN013PrimaryResourceBudget.requiresLegacyVersion(initialPackets: ["<b 0xF>"]), "legacy odd-length hexadecimal")
+        check(true, VPN013PrimaryResourceBudget.requiresLegacyVersion(initialPackets: [nil, "<b 0Xaa>"]), "legacy uppercase hexadecimal prefix")
+        check(false, VPN013PrimaryResourceBudget.requiresLegacyVersion(initialPackets: ["<b 0xFF>"]), "shared hexadecimal syntax")
+        check(false, VPN013PrimaryResourceBudget.requiresLegacyVersion(initialPackets: ["<b 0xF><unknown>"]), "invalid input is not inferred as legacy")
+        check(false, VPN013PrimaryResourceBudget.requiresLegacyVersion(initialPackets: [nil, nil]), "empty input is not legacy")
         check(true, VPN013PrimaryResourceBudget.needsLegacyVersionChoice(initialPackets: ["<b 0x01><t>"]), "ambiguous legacy timestamp")
         check(false, VPN013PrimaryResourceBudget.needsLegacyVersionChoice(initialPackets: ["<r 1>"]), "version-neutral initial packet")
         check(false, VPN013PrimaryResourceBudget.needsLegacyVersionChoice(initialPackets: ["<t><ds>"]), "newer-only initial tag")

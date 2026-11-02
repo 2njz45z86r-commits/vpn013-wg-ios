@@ -63,6 +63,12 @@ class MockTunnels {
             }
             if index == 0 {
                 let ambiguous = raw
+                let oddHex = raw.replacingOccurrences(of: "I1 = <t>", with: "I1 = <b 0xF>")
+                let oddHexConfig = try TunnelConfiguration(fromWgQuickConfig: oddHex, called: "Synthetic legacy hex")
+                precondition(oddHexConfig.interface.legacyAWG15 && oddHexConfig.interface.specialJunk1 == "<b 0xF>")
+                precondition(!TunnelImporter.needsVersionChoice(oddHexConfig))
+                let oddHexRoundTrip = try TunnelConfiguration(fromWgQuickConfig: oddHexConfig.asWgQuickConfig())
+                precondition(oddHexRoundTrip.interface == oddHexConfig.interface)
                 let modern = try TunnelConfiguration(fromWgQuickConfig: ambiguous, called: "Synthetic choice")
                 let explicitlyLegacy = try TunnelConfiguration(fromWgQuickConfig: "# VPN013-AmneziaWG = 1.5\n" + ambiguous)
                 precondition(!modern.interface.legacyAWG15 && explicitlyLegacy.interface.legacyAWG15)

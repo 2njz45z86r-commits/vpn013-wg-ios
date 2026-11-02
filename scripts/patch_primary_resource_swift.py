@@ -60,6 +60,7 @@ def patch(root: Path) -> None:
             $0.range(of: #"<\\s*(c|wt)(\\s|>)"#, options: .regularExpression) != nil
         }
         interface.legacyAWG15 = legacyMarker || hasLegacyTags || ["j1", "j2", "j3", "itime"].contains { attributes[$0] != nil }
+            || VPN013PrimaryResourceBudget.requiresLegacyVersion(initialPackets: initialValues)
         interface.legacyJunk1 = attributes["j1"]
         interface.legacyJunk2 = attributes["j2"]
         interface.legacyJunk3 = attributes["j3"]

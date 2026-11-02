@@ -52,6 +52,15 @@ enum VPN013PrimaryResourceBudget {
         return validLegacy(initialPackets: initialPackets, controlledPackets: [], intervalSeconds: nil)
     }
 
+    // Some 1.5 byte literals (for example <b 0xF>) are padded by the
+    // original 1.5 engine but rejected by the newer parser. Select 1.5 only
+    // when the complete set is valid for it and invalid for the newer engine.
+    static func requiresLegacyVersion(initialPackets: [String?]) -> Bool {
+        guard initialPackets.contains(where: { !($0 ?? "").isEmpty }) else { return false }
+        return validLegacy(initialPackets: initialPackets, controlledPackets: [], intervalSeconds: nil)
+            && !valid(initialPackets: initialPackets)
+    }
+
     // AWG 1.5's <t> and <c> are eight bytes, and <wt> delays generation.
     // These limits match the separately staged legacy engine; never discard
     // an unsafe field or reinterpret it as a newer AWG packet.
