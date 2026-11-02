@@ -26,7 +26,7 @@ jobs:
           python3 - <<'PY'
           import subprocess
           changed = set(subprocess.check_output(['git','diff','--name-only','fc8b1c60c7eb64774c7096bd5f89153baa654d47','HEAD'], text=True).splitlines())
-          assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py', 'diagnostics/actual-parser-harness.py'}
+          assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py', 'diagnostics/actual-parser-harness.py', 'diagnostics/go-sca-debug.py'}
           PY
       - name: Compile and run Swift boundary tests
         run: |
@@ -70,7 +70,7 @@ jobs:
           python3 - <<'PY'
           import subprocess
           changed=set(subprocess.check_output(['git','diff','--name-only','fc8b1c60c7eb64774c7096bd5f89153baa654d47','HEAD'],text=True).splitlines())
-          assert changed == {'.github/workflows/build-ios.yml','diagnostics/zip-dedup-harness.py','diagnostics/actual-parser-harness.py'}
+          assert changed == {'.github/workflows/build-ios.yml','diagnostics/zip-dedup-harness.py','diagnostics/actual-parser-harness.py','diagnostics/go-sca-debug.py'}
           PY
           git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/go-apple"
           git -C "$RUNNER_TEMP/go-apple" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
@@ -100,11 +100,11 @@ jobs:
           import _ "github.com/amnezia-vpn/amneziawg-go/v3/device"
           EOF
           mkdir -p build/review
-          python3 scripts/check_go_security.py "$RUNNER_TEMP/staged/awg-core-owned" --encrypted-report build/review/core-linux-findings.enc.json --recipient scripts/audit-recipient.pub
+          python3 diagnostics/go-sca-debug.py
       - name: Retain encrypted findings only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: awg-core-linux-sca-${{ github.run_id }}
-          path: build/review/core-linux-findings.enc.json
+          path: build/review/core-linux-debug.enc.json
           if-no-files-found: warn

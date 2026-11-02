@@ -1,0 +1,47 @@
+"""Diagnose a staged Linux dependency check; no release approval or iOS claim."""
+from pathlib import Path
+import json
+import os
+import subprocess
+import tempfile
+
+repo = Path.cwd()
+root = Path(os.environ['RUNNER_TEMP']) / 'staged/awg-core-owned'
+env = dict(os.environ, GOTOOLCHAIN='local', GOOS='linux', GOARCH='amd64', CGO_ENABLED='0', GOFLAGS='-mod=readonly')
+host = dict(env)
+for key in ('GOOS', 'GOARCH', 'CGO_ENABLED', 'GOFLAGS', 'CC', 'CXX', 'CGO_CFLAGS', 'CGO_LDFLAGS'):
+    host.pop(key, None)
+details = {}
+summary = {'scope': 'Linux package dependencies only; not iOS or release approval', 'source': 'fc8b1c60c7eb64774c7096bd5f89153baa654d47'}
+with tempfile.TemporaryDirectory(prefix='vpn013-sca-') as tmp:
+    install_env = dict(host, GOBIN=tmp)
+    install = subprocess.run(['go', 'install', 'golang.org/x/vuln/cmd/govulncheck@v1.9.0'], env=install_env, capture_output=True, timeout=240)
+    summary['installExit'] = install.returncode
+    details['installStderr'] = install.stderr.decode('utf-8', errors='replace')[:10000]
+    package_list = subprocess.run(['go', 'list', '-deps', '.'], cwd=root, env=env, capture_output=True, timeout=120)
+    summary['packageListExit'] = package_list.returncode
+    details['packageListStderr'] = package_list.stderr.decode('utf-8', errors='replace')[:10000]
+    if install.returncode == 0 and package_list.returncode == 0:
+        scan = subprocess.run([str(Path(tmp) / 'govulncheck'), '-db=https://vuln.go.dev', '-json', '-scan=package', '.'], cwd=root, env=env, capture_output=True, timeout=240)
+        summary['scannerExit'] = scan.returncode
+        summary['scannerStderrPresent'] = bool(scan.stderr.strip())
+        details['scannerStderr'] = scan.stderr.decode('utf-8', errors='replace')[:10000]
+        assert len(scan.stdout) <= 128 * 1024 * 1024
+        raw = scan.stdout.decode('utf-8')
+        details['scannerOutput'] = raw
+        decoder = json.JSONDecoder()
+        records = []
+        while raw.strip():
+            raw = raw.lstrip(); value, end = decoder.raw_decode(raw); records.append(value); raw = raw[end:]
+        findings = [value['finding'] for value in records if 'finding' in value]
+        summary['hasConfig'] = any('config' in value for value in records)
+        summary['packageFindings'] = sum(any(frame.get('package') for frame in item.get('trace', [])) for item in findings)
+        summary['moduleOnlyFindings'] = sum(not any(frame.get('package') for frame in item.get('trace', [])) for item in findings)
+    report = repo / 'build/review/core-linux-debug.enc.json'
+    report.parent.mkdir(parents=True, exist_ok=True)
+    encrypted = subprocess.run(['go', 'run', str(repo/'scripts/audit-envelope.go'), 'encrypt', str(repo/'scripts/audit-recipient.pub'), str(report)], input=json.dumps(details).encode(), env=host, capture_output=True, timeout=90)
+    summary['encryptedDetailsSaved'] = encrypted.returncode == 0 and report.is_file()
+    print(json.dumps(summary))
+    assert summary.get('installExit') == 0 and summary.get('packageListExit') == 0
+    assert summary.get('scannerExit') == 0 and summary.get('hasConfig') and not summary.get('scannerStderrPresent')
+    assert summary.get('packageFindings') == 0 and summary['encryptedDetailsSaved']
