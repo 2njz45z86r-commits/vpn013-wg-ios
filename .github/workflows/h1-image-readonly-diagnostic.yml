@@ -1,0 +1,26 @@
+name: Inspect H1 WireGuard runtime in a disposable runner
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Inspect public image identity and binaries without launching the service
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='ghcr.io/h1cloudltd/3x-ui-ptero:3.9.0-h2'
+          docker pull "$image"
+          docker image inspect "$image" --format 'image_id={{.Id}} repo_digests={{json .RepoDigests}} architecture={{.Architecture}} entrypoint={{json .Config.Entrypoint}}'
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint /bin/sh "$image" -c '
+            set -eu
+            for x in /usr/local/x-ui/x-ui /app/x-ui /usr/local/x-ui/bin/xray-linux-amd64 /app/bin/xray-linux-amd64; do
+              if [ -x "$x" ]; then
+                printf "candidate=%s sha256=" "$x"; sha256sum "$x" | cut -d" " -f1
+                case "$x" in *xray*) "$x" version | head -n 2 ;; esac
+              fi
+            done
+          '
