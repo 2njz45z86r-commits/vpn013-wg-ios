@@ -82,6 +82,7 @@ class TunnelDetailTableViewController: UITableViewController {
         tableView.backgroundColor = VPN013Theme.background
         title = tunnelViewModel.interfaceData[.name]
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .edit, target: self, action: #selector(editTapped))
+        navigationItem.rightBarButtonItem?.accessibilityIdentifier = "vpn013.edit-profile"
         if tunnel.isVPN013Automatic {
             navigationItem.rightBarButtonItem = nil
             let label=UILabel();label.numberOfLines=0;label.font = .preferredFont(forTextStyle:.body)

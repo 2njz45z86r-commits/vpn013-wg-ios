@@ -46,7 +46,7 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     legacy_manifest = json.loads(manifest_file.read_text(encoding='utf-8'))
     expected_legacy = {'device.go', 'peer.go', 'send.go', 'uapi.go',
                        'r013_resource_limits.go', 'r013_legacy15.go',
-                       'r013_legacy15_test.go', 'r013_legacy_uapi_test.go'}
+                       'r013_legacy15_test.go', 'r013_legacy_uapi_test.go', 'r013_legacy_fuzz_test.go'}
     assert set(legacy_manifest) == expected_legacy
     staged_legacy = {}
     for name, digest in legacy_manifest.items():
@@ -66,7 +66,8 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                           'r013_vpn013_auth_classifier_test.go', 'r013_vpn013_auth_control_test.go',
                           'r013_vpn013_auth_live_test.go', 'r013_vpn013_auth_robustness_test.go',
                           'r013_vpn013_awg31_runtime_test.go', 'r013_vpn013_queued_classifier_test.go',
-                          'peer.go', 'r013_legacy15.go', 'r013_legacy15_test.go', 'r013_legacy_uapi_test.go')}
+                          'peer.go', 'r013_legacy15.go', 'r013_legacy15_test.go', 'r013_legacy_uapi_test.go',
+                          'r013_legacy_fuzz_test.go')}
     assert before == {name: hashlib.sha256((source / 'device' / name).read_bytes()).hexdigest() for name in FILES}
     # Execute the copied primary implementation on the build host. Cross-compiled
     # libraries still require their platform/native acceptance tests afterwards.
@@ -79,7 +80,7 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     assert all(hashlib.sha256((fixtures / name).read_bytes()).hexdigest() == value for name, value in expected_fixtures.items())
     env = dict(os.environ, GOOS=host_os, GOARCH=host_arch, CGO_ENABLED='0', GOFLAGS='-mod=readonly', AWG_FIXTURES=str(fixtures))
     tested = subprocess.run(['go', 'test', './device', '-count=1', '-timeout=90s',
-                             '-run', '^(TestPrimary|TestTwoDevicePing|TestAWGDevicePing|TestVPN013|TestLegacy15)', '-v'],
+                             '-run', '^(TestPrimary|TestTwoDevicePing|TestAWGDevicePing|TestVPN013|TestLegacy15|FuzzVPN013LegacyParse)', '-v'],
                             cwd=local, env=env, capture_output=True, text=True, timeout=110)
     passed = re.findall(r'^--- PASS: ([A-Za-z0-9_]+) ', tested.stdout, re.MULTILINE)
     required = {'TestTwoDevicePing', 'TestPrimaryObfuscationResourceBudget',
@@ -95,7 +96,7 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 'TestLegacy15MalformedAndBudgets', 'TestLegacy15Scheduling',
                 'TestVPN013LegacyWaitStopsWhenDeviceGoesDown',
                 'TestVPN013LegacyConcurrentUpdatesAndGeneration',
-                'TestVPN013LegacyUAPIStagingAndPeerPreservation'}
+                'TestVPN013LegacyUAPIStagingAndPeerPreservation', 'FuzzVPN013LegacyParse'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,
               'passedTests': passed, 'requiredTests': sorted(required),

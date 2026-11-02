@@ -48,8 +48,9 @@ enum VPN013PrimaryResourceBudget {
                       hex.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) }) else { return nil }
                 length += (hex.utf8.count + 1) / 2
             case "r", "wt":
-                guard let value = arg, !value.isEmpty,
-                      value.utf8.allSatisfy({ (48...57).contains($0) }), let number = Int(value) else { return nil }
+                guard let value = arg, !value.isEmpty, let number = Int(value), number >= 0 else { return nil }
+                let digits = (value.first == "+" || value.first == "-") ? value.dropFirst() : value[...]
+                guard !digits.isEmpty, digits.utf8.allSatisfy({ (48...57).contains($0) }) else { return nil }
                 if tag == "r" {
                     guard number <= 1_000 else { return nil }
                     length += number

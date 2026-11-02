@@ -30,9 +30,9 @@ SHARDS = ("coreA", "coreB", "coreC", "added5")
 # run 41172679943 finished all 16 tests just before the old 40-minute limit,
 # then timed out before exporting evidence. Keep a finite 45-minute budget.
 MAX_WATCHDOG_SECONDS = 2700
-# The 54 UI method bodies and the native WireGuard fixture assertions must
-# remain the reviewed b9ecff4 sources. Updating them requires a new review.
-UI_TEST_SOURCE_SHA256 = "d510fbbb042e9621c67a2e64f67918f8340769d88646c01260cfb54c80b80829"
+# The 54 UI method bodies and native WireGuard fixture assertions are bound
+# to exact bytes. Any change requires a new source review before release.
+UI_TEST_SOURCE_SHA256 = "16afc8357cd184ea6f0850d17baceb987887d187930d09b0896acb29cc4a60c1"
 WG_FIXTURE_SHA256 = "042857ae089e4ec98d5b2d3da4e3079c1373656429800b4cda22ddf87f568be1"
 CASE = re.compile(r"Test Case '-\[AutoTunnelUITests\.AutoTunnelUITests (test[A-Za-z0-9_]+)\]' (started|passed|failed)")
 

@@ -36,7 +36,7 @@ class MockTunnels {
             let generation31 = "HeaderProtectionKey = \(PrivateKey().base64Key)\nContentPaddingAddition = 0\nRekeyAfterTime = 120\nRekeyTimeout = 5\nRejectAfterTime = 180\nKeepaliveTimeout = 10\nMaxHandshakeAttempts = 20\nRandomTrailers = \(trailerFlag)\nDisableCookies = false\n"
             let extras: String
             switch index % 5 {
-            case 0: extras = "" // Standard WireGuard.
+            case 0: extras = index == 0 ? "I1 = <t>\n" : "" // Ambiguous I-only option; other cases are standard WireGuard.
             case 1: extras = classic // Classic AmneziaWG.
             case 2: extras = classic + generation2 // AmneziaWG 2.x.
             case 3: extras = classic + generation2 + generation31 // AmneziaWG 3.1 fields.
@@ -52,14 +52,28 @@ class MockTunnels {
                 precondition(parsed.interface.legacyAWG15 && parsed.interface.legacyJunk1 == "<b 0xBB><r 4>" && parsed.interface.legacyIntervalSeconds == 30)
                 let reparsed = try TunnelConfiguration(fromWgQuickConfig: canonical)
                 precondition(reparsed.interface == parsed.interface)
+                let edit = TunnelViewModel(tunnelConfiguration: parsed)
+                edit.interfaceData[.name] = "Synthetic edited profile"
+                switch edit.save() {
+                case .saved(let edited):
+                    precondition(edited.interface.legacyAWG15 && edited.interface.legacyJunk1 == parsed.interface.legacyJunk1 && edited.interface.legacyIntervalSeconds == 30)
+                case .error: preconditionFailure("Editing a legacy profile lost valid settings")
+                }
             }
             if index == 0 {
-                let ambiguous = raw.replacingOccurrences(of: "[Peer]", with: "I1 = <t>\n[Peer]")
-                let modern = try TunnelConfiguration(fromWgQuickConfig: ambiguous)
+                let ambiguous = raw
+                let modern = try TunnelConfiguration(fromWgQuickConfig: ambiguous, called: "Synthetic choice")
                 let explicitlyLegacy = try TunnelConfiguration(fromWgQuickConfig: "# VPN013-AmneziaWG = 1.5\n" + ambiguous)
                 precondition(!modern.interface.legacyAWG15 && explicitlyLegacy.interface.legacyAWG15)
                 let reparsedLegacy = try TunnelConfiguration(fromWgQuickConfig: explicitlyLegacy.asWgQuickConfig())
                 precondition(reparsedLegacy.interface.legacyAWG15)
+                let choice = TunnelViewModel(tunnelConfiguration: modern)
+                choice.interfaceData[.legacyAWGVersion] = "1.5"
+                switch choice.save() {
+                case .saved(let selected):
+                    precondition(selected.interface.legacyAWG15 && selected.asWgQuickConfig().contains("# VPN013-AmneziaWG = 1.5"))
+                case .error: preconditionFailure("Explicit legacy version choice was rejected")
+                }
             }
             expectedArchiveConfigs[config.name!] = canonical
             return ["Android", "iPhone"].map { (fileName: $0 + "/" + config.name! + ".conf", contents: Data(raw.utf8)) }

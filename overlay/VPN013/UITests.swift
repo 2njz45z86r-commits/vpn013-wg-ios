@@ -399,6 +399,29 @@ final class AutoTunnelUITests:XCTestCase {
             XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:name).count,1)
         }
         capture("04-shared-zip-26-files-13-imported")
+        app.tables.cells.staticTexts["Испания"].tap()
+        let edit = app.buttons["vpn013.edit-profile"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        let version = app.textFields["vpn013.awg15.version"]
+        for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }
+        XCTAssertTrue(version.waitForExistence(timeout: 5))
+        XCTAssertEqual(version.value as? String, "1.5")
+        capture("04a-legacy-profile-version-visible")
+        app.buttons["vpn013.cancel-profile-edit"].tap()
+        app.navigationBars["Испания"].buttons.element(boundBy: 0).tap()
+        // The I-only example is ambiguous. Choose 1.5 explicitly, save it and
+        // reopen the editor to prove the user's choice is actually persisted.
+        app.tables.cells.staticTexts["Беларусь"].tap()
+        XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }
+        XCTAssertTrue(version.waitForExistence(timeout: 5)); version.tap(); version.typeText("1.5")
+        app.buttons["vpn013.save-profile-edit"].tap()
+        XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }
+        XCTAssertEqual(version.value as? String, "1.5")
+        capture("04b-explicit-legacy-choice-saved")
+        app.buttons["vpn013.cancel-profile-edit"].tap()
+        app.navigationBars["Беларусь"].buttons.element(boundBy: 0).tap()
         app.buttons["vpn013.add-profile"].tap()
         app.buttons["Создать режим Авто"].tap()
         XCTAssertTrue(app.alerts["Создать режим Авто"].waitForExistence(timeout:5))

@@ -30,5 +30,9 @@
   "r013_legacy_uapi_test.go": {
     "beforeSHA256": null,
     "afterSHA256": "dc8399e6842c094944ae8aad00e49a7f4c8225d3db19386bf13562395faf373e"
+  },
+  "r013_legacy_fuzz_test.go": {
+    "beforeSHA256": null,
+    "afterSHA256": "3ebe8a9ac320e4bf28caaa11d36d32614b6bce89a60e4f4b2758a5e476c9ddd1"
   }
 }

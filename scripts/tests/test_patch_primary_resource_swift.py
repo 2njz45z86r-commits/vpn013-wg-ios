@@ -48,6 +48,13 @@ def main() -> None:
         assert parser.count("enum VPN013PrimaryResourceBudget") == 1
         assert parser.count("VPN013PrimaryResourceBudget.valid(") == 1
         assert editor.count("VPN013PrimaryResourceBudget.valid(") == 1
+        assert parser.count("VPN013PrimaryResourceBudget.validLegacy(") == 1
+        assert editor.count("VPN013PrimaryResourceBudget.validLegacy(") == 1
+        assert '"j1", "j2", "j3", "itime"' in parser
+        assert '# VPN013-AmneziaWG = 1.5' in parser
+        assert 'interface.legacyAWG15 ? [] :' in parser
+        assert 'config.legacyAWG15 ? [] :' in editor
+        assert 'case .legacyAWGVersion:' in editor and 'config.legacyJunk1 = scratchpad[.legacyJunk1]' in editor
         assert "interfaceHasInvalidCustomParam(junkPacketCountString)" not in parser
         expect_rejected(root, "repeat patch")
     with tempfile.TemporaryDirectory() as name:

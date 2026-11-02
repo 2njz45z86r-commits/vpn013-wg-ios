@@ -1,0 +1,28 @@
+package device
+
+import (
+	"bytes"
+	"testing"
+	"time"
+)
+
+// Synthetic generated inputs; this does not access network peers or user data.
+func FuzzVPN013LegacyParse(f *testing.F) {
+	for _, seed := range []string{"<b 0xABC><r 10><c><t><wt 1>", "", "<r -1>", "<wt 99999>", "<c><c>", "<b 0xZ>", "<t>", "<wr>"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, input string) {
+		spec, err := r013ParseLegacy(input)
+		if err != nil {
+			return
+		}
+		if spec.size < 0 || spec.size > r013LegacyMaxPacket || spec.wait < 0 || spec.wait > r013LegacyMaxWait {
+			t.Fatal("accepted specification exceeds resource budget")
+		}
+		buf := bytes.NewReader(make([]byte, r013LegacyMaxPacket))
+		packet, err := spec.Build(1, time.Unix(1, 0), buf, func(time.Duration) {})
+		if err != nil || len(packet) != spec.size {
+			t.Fatal("accepted specification failed to build within the declared size")
+		}
+	})
+}

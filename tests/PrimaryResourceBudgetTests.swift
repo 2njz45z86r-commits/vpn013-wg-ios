@@ -22,6 +22,10 @@ enum PrimaryResourceBudgetTests {
                      controlledPackets: [], intervalSeconds: nil), "legacy duplicate counter")
         check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<r 1001>"],
                      controlledPackets: [], intervalSeconds: nil), "legacy excessive random allocation")
+        check(true, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<r +1><wt +0>"],
+                    controlledPackets: [], intervalSeconds: nil), "legacy explicit positive sign")
+        check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<r -1>"],
+                     controlledPackets: [], intervalSeconds: nil), "legacy negative allocation")
         check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: [],
                      controlledPackets: [], intervalSeconds: 86_401), "legacy interval above limit")
         check(true, VPN013PrimaryResourceBudget.valid(), "plain WireGuard without AWG fields")

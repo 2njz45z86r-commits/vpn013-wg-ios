@@ -90,7 +90,9 @@ class TunnelEditTableViewController: UITableViewController {
         super.viewDidLoad()
         title = tunnel == nil ? tr("newTunnelViewTitle") : tr("editTunnelViewTitle")
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .save, target: self, action: #selector(saveTapped))
+        navigationItem.rightBarButtonItem?.accessibilityIdentifier = "vpn013.save-profile-edit"
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelTapped))
+        navigationItem.leftBarButtonItem?.accessibilityIdentifier = "vpn013.cancel-profile-edit"
 
         tableView.estimatedRowHeight = 44
         tableView.rowHeight = UITableView.automaticDimension
@@ -242,6 +244,7 @@ extension TunnelEditTableViewController {
     private func interfaceFieldKeyValueCell(for tableView: UITableView, at indexPath: IndexPath, with field: TunnelViewModel.InterfaceField) -> UITableViewCell {
         let cell: TunnelEditEditableKeyValueCell = tableView.dequeueReusableCell(for: indexPath)
         cell.key = field.localizedUIString
+        cell.valueTextField.accessibilityIdentifier = field == .legacyAWGVersion ? "vpn013.awg15.version" : nil
 
         switch field {
         case .name, .privateKey:
