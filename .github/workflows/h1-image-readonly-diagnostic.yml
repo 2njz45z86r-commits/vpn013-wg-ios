@@ -29,6 +29,7 @@ jobs:
             done
           '
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint /bin/cat "$image" /usr/local/bin/ptero-entrypoint.sh
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint /bin/cat "$image" /app/start.sh
   synthetic-dynamic-inbound:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
