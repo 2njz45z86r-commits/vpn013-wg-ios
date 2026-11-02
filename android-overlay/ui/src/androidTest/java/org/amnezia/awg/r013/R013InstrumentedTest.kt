@@ -669,6 +669,13 @@ class R013InstrumentedTest {
         assertTrue(backend.getLastHandshake(auto) > 0)
         assertEquals("Comparison rewrote a saved profile or membership",saved,registry.vault.read().toString())
         screenshot("hourly-selected-real-vpn")
+        withContext(Dispatchers.Main.immediate) {
+            // Reproduce the observed stale view after a real synthetic switch.
+            auto.onStateChanged(Tunnel.State.DOWN)
+            assertTrue(backend.runningTunnelNames.contains(auto.name))
+            assertEquals(Tunnel.State.DOWN, auto.setStateAsync(Tunnel.State.DOWN))
+        }
+        assertTrue("Explicit stop must reach the backend even with a stale view",backend.runningTunnelNames.isEmpty())
     }
     @Test fun kOrdinaryProfileUsesBuiltInAutoAndNativePauseSwitch() = runBlocking {
         val good = fixture().replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
