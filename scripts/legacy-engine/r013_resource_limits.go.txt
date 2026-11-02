@@ -120,6 +120,8 @@ func ValidateObfuscationResources(count, min, max uint32, paddings [4]uint32, sp
 func preflightObfuscationSet(lines []string, current *ipcSetDevice) error {
 	count, min, max := current.junk.count, current.junk.min, current.junk.max
 	headerKey := current.headerProtectionKey
+	headers := [4]UintRange{current.headers.init, current.headers.response,
+		current.headers.cookie, current.headers.transport}
 	legacy := current.legacy
 	for _, line := range lines {
 		if line == "" {
@@ -203,6 +205,12 @@ func preflightObfuscationSet(lines []string, current *ipcSetDevice) error {
 				return ipcErrorf(ipc.IpcErrorInvalid, "invalid padding parameter")
 			}
 			paddings[int(key[1]-'1')] = uint32(n)
+		case "h1", "h2", "h3", "h4":
+			var header UintRange
+			if err := header.FromString(value); err != nil {
+				return ipcErrorf(ipc.IpcErrorInvalid, "invalid header range")
+			}
+			headers[int(key[1]-'1')] = header
 		case "i1", "i2", "i3", "i4", "i5":
 			if legacy.enabled {
 				legacy.initial[int(key[1]-'1')] = value
@@ -223,6 +231,13 @@ func preflightObfuscationSet(lines []string, current *ipcSetDevice) error {
 	}
 	if legacy.enabled && !headerKey.IsZero() {
 		return ipcErrorf(ipc.IpcErrorInvalid, "legacy mode cannot use header protection")
+	}
+	for i := 0; i < len(headers); i++ {
+		for j := i + 1; j < len(headers); j++ {
+			if headers[i].Overlap(headers[j]) {
+				return ipcErrorf(ipc.IpcErrorInvalid, "header ranges overlap")
+			}
+		}
 	}
 	current.legacy = legacy
 	if err := ValidateObfuscationResources(count, min, max, paddings, specs); err != nil {

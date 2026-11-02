@@ -136,3 +136,57 @@ func TestVPN013LegacySparsePackets(t *testing.T) {
 		t.Fatal("sparse J3 was not sent next")
 	}
 }
+
+// A rejected UAPI update must not replace a running synthetic peer before
+// validating that the complete header ranges do not overlap.
+func TestVPN013HeaderOverlapRejectedBeforePeerMutation(t *testing.T) {
+	pair := genTestPair(t, false)
+	d := pair[0].dev
+	before, err := d.IpcGet()
+	if err != nil {
+		t.Fatal("synthetic initial config unavailable")
+	}
+	var original []string
+	for _, line := range strings.Split(before, "\n") {
+		if strings.HasPrefix(line, "public_key=") || strings.HasPrefix(line, "h1=") ||
+			strings.HasPrefix(line, "h2=") || strings.HasPrefix(line, "h3=") || strings.HasPrefix(line, "h4=") {
+			original = append(original, line)
+		}
+	}
+	if len(original) < 5 {
+		t.Fatal("synthetic peer or headers missing")
+	}
+	for _, bad := range []string{
+		"h1=123456\nh2=123456\nh3=777777\nh4=888888\n",
+		"h1=123456\nh2=654321\nh3=123456\nh4=888888\n",
+		"h1=123456\nh2=654321\nh3=777777\nh4=123456\n",
+		"h1=123456\nh2=654321\nh3=654321\nh4=888888\n",
+		"h1=123456\nh2=654321\nh3=777777\nh4=654321\n",
+		"h1=123456\nh2=654321\nh3=777777\nh4=777777\n",
+		"h1=100-200\nh2=200-300\nh3=777777\nh4=888888\n",
+		"h1=not-a-range\nh2=654321\nh3=777777\nh4=888888\n",
+	} {
+		cfg := bad + "replace_peers=true\npublic_key=" + strings.Repeat("22", 32) + "\nallowed_ip=10.0.0.3/32\n"
+		if err := d.IpcSet(cfg); err == nil {
+			t.Fatal("overlapping headers accepted")
+		}
+		after, err := d.IpcGet()
+		if err != nil {
+			t.Fatal("synthetic config unavailable after rejection")
+		}
+		var got []string
+		for _, line := range strings.Split(after, "\n") {
+			if strings.HasPrefix(line, "public_key=") || strings.HasPrefix(line, "h1=") ||
+				strings.HasPrefix(line, "h2=") || strings.HasPrefix(line, "h3=") || strings.HasPrefix(line, "h4=") {
+				got = append(got, line)
+			}
+		}
+		if strings.Join(original, "\n") != strings.Join(got, "\n") {
+			t.Fatal("rejected update changed synthetic headers or peers")
+		}
+	}
+	valid := "h1=100-199\nh2=200-300\nh3=777777\nh4=888888\n"
+	if err := d.IpcSet(valid); err != nil {
+		t.Fatal("separate header ranges rejected")
+	}
+}
