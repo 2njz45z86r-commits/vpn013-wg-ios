@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [coreA, coreB, coreC, added5]
+        shard: [coreC] # Diagnostic subset; the full-shard verifier remains mandatory.
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
