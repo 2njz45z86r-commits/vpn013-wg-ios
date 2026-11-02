@@ -20,6 +20,35 @@ class TunnelImporter {
         return VPN013PrimaryResourceBudget.needsLegacyVersionChoice(initialPackets: initial)
     }
 
+    #if os(iOS)
+    static func askVersions(_ entries: [(String, TunnelConfiguration)], sourceVC: AnyObject?, completion: @escaping ([String: Bool]?) -> Void) {
+        let undecided = entries.filter { needsVersionChoice($0.1) }
+        guard !undecided.isEmpty else { completion([:]); return }
+        guard let source = sourceVC as? UIViewController else { completion(nil); return }
+        var choices: [String: Bool] = [:]
+        func choose(_ index: Int) {
+            guard index < undecided.count else { completion(choices); return }
+            let (id, config) = undecided[index]
+            let alert = UIAlertController(title: "Уточните версию AmneziaWG",
+                message: "Для «\(config.name ?? "конфигурации")» параметр I может означать разные версии. Выберите версию сервера.",
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "AmneziaWG 1.5", style: .default) { [weak alert] _ in
+                choices[id] = true
+                if let alert = alert { alert.dismiss(animated: true) { choose(index + 1) } }
+                else { choose(index + 1) }
+            })
+            alert.addAction(UIAlertAction(title: "AmneziaWG 2.0 / 3.1", style: .default) { [weak alert] _ in
+                choices[id] = false
+                if let alert = alert { alert.dismiss(animated: true) { choose(index + 1) } }
+                else { choose(index + 1) }
+            })
+            alert.addAction(UIAlertAction(title: "Отменить импорт", style: .cancel) { _ in completion(nil) })
+            (source.presentedViewController ?? source).present(alert, animated: true)
+        }
+        choose(0)
+    }
+    #endif
+
     static func importFromFile(urls: [URL], into tunnelsManager: TunnelsManager, sourceVC: AnyObject?, errorPresenterType: ErrorPresenterProtocol.Type, completionHandler: (() -> Void)? = nil) {
         guard !urls.isEmpty else {
             completionHandler?()
@@ -37,9 +66,15 @@ class TunnelImporter {
             }
             if let document = document {
                 guard urls.count == 1 else { throw ClientUpdateError.invalidDocument }
-                ClientUpdateCoordinator.shared.importDocument(document, manager: tunnelsManager) { error in
-                    let message = error?.localizedDescription ?? "Заявка №\(document.snapshot.orderID) связана с приложением. Серверы и режим Авто будут обновляться при открытии приложения и по кнопке «Обновить»."
-                    errorPresenterType.showErrorAlert(title: error == nil ? "Заявка подключена" : "Обновление конфигураций", message: message, from: sourceVC, onPresented: completionHandler)
+                let entries = try document.snapshot.servers.map { server in
+                    (server.id, try TunnelConfiguration(fromWgQuickConfig: server.config, called: server.name))
+                }
+                askVersions(entries, sourceVC: sourceVC) { choices in
+                    guard let choices = choices else { completionHandler?(); return }
+                    ClientUpdateCoordinator.shared.importDocument(document, manager: tunnelsManager, awgVersionChoices: choices) { error in
+                        let message = error?.localizedDescription ?? "Заявка №\(document.snapshot.orderID) связана с приложением. Серверы и режим Авто будут обновляться при открытии приложения и по кнопке «Обновить»."
+                        errorPresenterType.showErrorAlert(title: error == nil ? "Заявка подключена" : "Обновление конфигураций", message: message, from: sourceVC, onPresented: completionHandler)
+                    }
                 }
                 return
             }
@@ -112,7 +147,7 @@ class TunnelImporter {
             }
         }
         dispatchGroup.notify(queue: .main) {
-            let undecided = configs.compactMap { $0 }.filter { needsVersionChoice($0) }
+            let entries = configs.enumerated().compactMap { index, config in config.map { (String(index), $0) } }
             func addSelectedConfigurations() {
                 tunnelsManager.addMultiple(tunnelConfigurations: configs.compactMap { $0 }) { numberSuccessful, lastAddError in
                     if !configs.isEmpty && numberSuccessful == configs.count {
@@ -141,30 +176,15 @@ class TunnelImporter {
                 }
             }
             #if os(iOS)
-            func chooseVersion(_ index: Int) {
-                guard index < undecided.count else { addSelectedConfigurations(); return }
-                guard let source = sourceVC as? UIViewController else {
-                    errorPresenterType.showErrorAlert(title: "Нужно уточнить версию AmneziaWG",
-                        message: "Не удалось открыть выбор версии для импортируемой конфигурации.",
-                        from: sourceVC, onPresented: completionHandler)
-                    return
+            askVersions(entries, sourceVC: sourceVC) { choices in
+                guard let choices = choices else { completionHandler?(); return }
+                for (id, config) in entries {
+                    if let choice = choices[id] { config.interface.legacyAWG15 = choice }
                 }
-                let config = undecided[index]
-                let alert = UIAlertController(title: "Уточните версию AmneziaWG",
-                    message: "Для «\(config.name ?? "конфигурации")» параметр I может означать разные версии. Выберите версию сервера.",
-                    preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "AmneziaWG 1.5", style: .default) { _ in
-                    config.interface.legacyAWG15 = true; chooseVersion(index + 1)
-                })
-                alert.addAction(UIAlertAction(title: "AmneziaWG 2.0 / 3.1", style: .default) { _ in
-                    config.interface.legacyAWG15 = false; chooseVersion(index + 1)
-                })
-                alert.addAction(UIAlertAction(title: "Отменить импорт", style: .cancel) { _ in completionHandler?() })
-                (source.presentedViewController ?? source).present(alert, animated: true)
+                addSelectedConfigurations()
             }
-            chooseVersion(0)
             #else
-            if undecided.isEmpty { addSelectedConfigurations() }
+            if entries.allSatisfy({ !needsVersionChoice($0.1) }) { addSelectedConfigurations() }
             else {
                 errorPresenterType.showErrorAlert(title: "Нужно уточнить версию AmneziaWG",
                     message: "Импорт отменён: этот файл не указывает версию однозначно.",

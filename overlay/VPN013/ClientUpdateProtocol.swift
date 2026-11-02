@@ -3,7 +3,7 @@ import Foundation
 import CryptoKit
 
 enum ClientUpdateError: LocalizedError {
-    case invalidDocument, invalidResponse, accessEnded, network, localChanges(String), activeVPN, busy
+    case invalidDocument, invalidResponse, accessEnded, network, localChanges(String), versionChoiceRequired(String), activeVPN, busy
     var errorDescription: String? {
         switch self {
         case .invalidDocument: return "Документ обновления повреждён или не относится к VPN013. Существующие конфигурации сохранены."
@@ -11,6 +11,7 @@ enum ClientUpdateError: LocalizedError {
         case .accessEnded: return "Доступ к обновлению заявки закончился или отозван. Откройте «Мои заявки» в боте."
         case .network: return "Сервис обновлений недоступен. Проверьте интернет и повторите позже."
         case .localChanges(let name): return "Профиль «\(name)» изменён вручную. Обновление остановлено, чтобы сохранить ваши настройки."
+        case .versionChoiceRequired(let name): return "Для профиля «\(name)» нужно уточнить версию AmneziaWG. Повторно импортируйте ZIP заявки и выберите версию. Существующие профили сохранены."
         case .activeVPN: return "Обновление загружено. Оно применится после отключения VPN и автоподключения, когда приложение открыто."
         case .busy: return "Обновление уже выполняется."
         }
@@ -21,6 +22,14 @@ enum ClientUpdateProtocol {
     static let manifestName = "VPN013-Access"
     static let origins = ["https://connect.vpn555.shop:8443", "https://connect.vpn555.shop:8444"]
     static let maximumResponseBytes = 1_048_576
+    // Existing profiles keep their actual mode; new ambiguous profiles require
+    // a per-server explicit choice before any profile or registry mutation.
+    static func legacyChoice(ambiguous: Bool, explicit: Bool?, existing: Bool?, name: String) throws -> Bool? {
+        guard ambiguous else { return nil }
+        if let explicit = explicit { return explicit }
+        if let existing = existing { return existing }
+        throw ClientUpdateError.versionChoiceRequired(name)
+    }
     static func digest(_ value: String) -> String { SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined() }
     static func validID(_ value: String) -> Bool { value.range(of: "^[a-f0-9]{12}$", options: .regularExpression) != nil }
     static func validHash(_ value: String) -> Bool { value.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil }

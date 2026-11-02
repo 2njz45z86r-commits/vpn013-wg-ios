@@ -126,7 +126,7 @@ final class NativeTrialCoordinator: NSObject, UNUserNotificationCenterDelegate {
                     guard doc.snapshot.orderID == info.orderID, doc.snapshot.expiry == info.expiresAt,
                           doc.trial?.renewalURL == info.renewalURL else { throw ClientUpdateError.invalidDocument }
                     let configs = try entries.filter { $0.fileBaseName != ClientUpdateProtocol.manifestName }.map { entry -> String in
-                        guard let text = String(data: entry.contents, encoding: .utf8) else { throw ClientUpdateError.invalidDocument }
+                        guard let text = try? VPN013PrimaryResourceBudget.decodeConfig(entry.contents) else { throw ClientUpdateError.invalidDocument }
                         return try TunnelConfiguration(fromWgQuickConfig: text, called: entry.fileBaseName).asWgQuickConfig()
                     }
                     let expected = try doc.snapshot.servers.map { try TunnelConfiguration(fromWgQuickConfig: $0.config, called: $0.name).asWgQuickConfig() }
@@ -138,21 +138,33 @@ final class NativeTrialCoordinator: NSObject, UNUserNotificationCenterDelegate {
                     do {
                         let doc = try parsed.get(); self.importing = true
                         self.progress?.actions.forEach { $0.isEnabled = false }
-                        ClientUpdateCoordinator.shared.importDocument(doc, manager: manager) { error in
-                            self.importing = false
-                            if let error = error { self.failed(error, stamp: stamp); return }
-                            self.scheduleNotifications()
-                            self.finish(stamp: stamp) {
-                                guard let presenter = self.presenter else { return }
-                                let deadline = Date(timeIntervalSince1970: Double(info.expiresAt) / 1000)
-                                self.message(info.isTrial ? "Тестовые профили добавлены" : "Конфигурации обновлены", "Добавлено профилей: \(doc.snapshot.servers.count). Доступ до " + DateFormatter.localizedString(from: deadline, dateStyle: .medium, timeStyle: .short) + ". Выберите сервер и включите VPN. Для напоминаний разрешите уведомления; продление доступно в приложении.", from: presenter) {
-                                    self.notifications.requestAuthorization(options: [.alert, .sound]) { _, _ in
-                                        DispatchQueue.main.async { self.scheduleNotifications() }
+                        let entries = try doc.snapshot.servers.map { server in
+                            (server.id, try TunnelConfiguration(fromWgQuickConfig: server.config, called: server.name))
+                        }
+                        let choose = {
+                            TunnelImporter.askVersions(entries, sourceVC: self.presenter) { choices in
+                                guard self.generation == stamp else { self.importing = false; return }
+                                guard let choices = choices else { self.importing = false; self.cancel(); return }
+                                ClientUpdateCoordinator.shared.importDocument(doc, manager: manager, awgVersionChoices: choices) { error in
+                                    self.importing = false
+                                    if let error = error { self.failed(error, stamp: stamp); return }
+                                    self.scheduleNotifications()
+                                    self.finish(stamp: stamp) {
+                                        guard let presenter = self.presenter else { return }
+                                        let deadline = Date(timeIntervalSince1970: Double(info.expiresAt) / 1000)
+                                        self.message(info.isTrial ? "Тестовые профили добавлены" : "Конфигурации обновлены", "Добавлено профилей: \(doc.snapshot.servers.count). Доступ до " + DateFormatter.localizedString(from: deadline, dateStyle: .medium, timeStyle: .short) + ". Выберите сервер и включите VPN. Для напоминаний разрешите уведомления; продление доступно в приложении.", from: presenter) {
+                                            self.notifications.requestAuthorization(options: [.alert, .sound]) { _, _ in
+                                                DispatchQueue.main.async { self.scheduleNotifications() }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    } catch { self.failed(error, stamp: stamp) }
+                        if entries.contains(where: { TunnelImporter.needsVersionChoice($0.1) }), let alert = self.progress {
+                            self.progress = nil; alert.dismiss(animated: true, completion: choose)
+                        } else { choose() }
+                    } catch { self.importing = false; self.failed(error, stamp: stamp) }
                 }
             }
         } catch { failed(error, stamp: stamp) }

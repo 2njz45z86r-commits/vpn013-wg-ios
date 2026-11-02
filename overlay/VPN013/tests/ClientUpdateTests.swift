@@ -12,6 +12,12 @@ import Foundation
         let a = ClientServer(id:"germany",name:"Germany",config:"synthetic-fixture-configuration-A")
         let b = ClientServer(id:"finland",name:"Finland",config:"synthetic-fixture-configuration-B")
         let valid = snapshot([a,b])
+        try check(try ClientUpdateProtocol.legacyChoice(ambiguous: false, explicit: nil, existing: nil, name: "fixture") == nil)
+        try check(try ClientUpdateProtocol.legacyChoice(ambiguous: true, explicit: true, existing: false, name: "fixture") == true)
+        try check(try ClientUpdateProtocol.legacyChoice(ambiguous: true, explicit: false, existing: true, name: "fixture") == false)
+        try check(try ClientUpdateProtocol.legacyChoice(ambiguous: true, explicit: nil, existing: true, name: "fixture") == true)
+        try check(try ClientUpdateProtocol.legacyChoice(ambiguous: true, explicit: nil, existing: false, name: "fixture") == false)
+        fails { _ = try ClientUpdateProtocol.legacyChoice(ambiguous: true, explicit: nil, existing: nil, name: "fixture") }
         let mapped = ["germany":"profile-a", "finland":"profile-b"]
         try check(ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: ["profile-a","profile-b","unrelated"]))
         try check(!ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: ["profile-b"]))
@@ -84,9 +90,15 @@ import Foundation
         try check(try store.load().bindings.isEmpty)
         var registry = ClientRegistry()
         registry.bindings[valid.orderID] = ClientBinding(document:document,profileIDs:["germany":UUID().uuidString],baseline:["germany":"hash"],pending:valid,lastCheck:Date())
+        registry.bindings[valid.orderID]?.awgVersionChoices = ["germany": true, "finland": false]
+        var oldBinding = try JSONSerialization.jsonObject(with: JSONEncoder().encode(registry.bindings[valid.orderID]!)) as! [String: Any]
+        oldBinding.removeValue(forKey: "awgVersionChoices")
+        let decodedOld = try JSONDecoder().decode(ClientBinding.self, from: JSONSerialization.data(withJSONObject: oldBinding))
+        try check(decodedOld.awgVersionChoices == nil && decodedOld.profileIDs == registry.bindings[valid.orderID]?.profileIDs)
         registry.nativeTrial = fresh
         try store.save(registry)
         try check(try store.load().bindings[valid.orderID]?.document.capability == document.capability)
+        try check(try store.load().bindings[valid.orderID]?.awgVersionChoices == ["germany": true, "finland": false])
         let encrypted = try Data(contentsOf:root.appendingPathComponent("client-subscriptions-v1.enc"))
         try check(encrypted.range(of:Data(document.capability.utf8)) == nil)
         try check(encrypted.range(of:Data(a.config.utf8)) == nil)
