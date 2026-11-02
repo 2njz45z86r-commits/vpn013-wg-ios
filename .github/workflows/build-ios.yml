@@ -25,7 +25,7 @@ jobs:
           test '${{ inputs.publish_release }}' = false
           python3 - <<'PY'
           import subprocess
-          changed = set(subprocess.check_output(['git','diff','--name-only','fc8b1c60c7eb64774c7096bd5f89153baa654d47','HEAD'], text=True).splitlines())
+          changed = set(subprocess.check_output(['git','diff','--name-only','d16fd7addc84735b46a5f8921bdda3d9886fc893','HEAD'], text=True).splitlines())
           assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py', 'diagnostics/actual-parser-harness.py', 'diagnostics/go-sca-debug.py'}
           PY
       - name: Compile and run Swift boundary tests
@@ -73,7 +73,7 @@ jobs:
           set -eu
           python3 - <<'PY'
           import subprocess
-          changed=set(subprocess.check_output(['git','diff','--name-only','fc8b1c60c7eb64774c7096bd5f89153baa654d47','HEAD'],text=True).splitlines())
+          changed=set(subprocess.check_output(['git','diff','--name-only','d16fd7addc84735b46a5f8921bdda3d9886fc893','HEAD'],text=True).splitlines())
           assert changed == {'.github/workflows/build-ios.yml','diagnostics/zip-dedup-harness.py','diagnostics/actual-parser-harness.py','diagnostics/go-sca-debug.py'}
           PY
           git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/go-apple"
