@@ -106,7 +106,7 @@ jobs:
           $pe = [BitConverter]::ToInt32($bytes,60)
           if ($pe -lt 64 -or $pe + 6 -gt $bytes.Length -or [BitConverter]::ToUInt32($bytes,$pe) -ne 0x4550 -or [BitConverter]::ToUInt16($bytes,$pe+4) -ne 0x14c) { throw 'SDK Evalcom2 is not the expected 32-bit PE image' }
           $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::ClassesRoot,[Microsoft.Win32.RegistryView]::Registry32)
-          $keyPath = 'CLSID\{6E5E1910-8053-4660-B795-6B612E29BC58}\InprocServer32'
+            $keyPath = 'CLSID\{DC550E10-DBA5-11D1-A850-006097ABDE17}\InprocServer32'
           try {
             $existing = $base.OpenSubKey($keyPath)
             try { $target = if ($existing) { $existing.GetValue('') } else { $null } }
@@ -121,4 +121,18 @@ jobs:
             try { if (!$registered -or $registered.GetValue('') -ine $dll) { throw 'SDK Evalcom registration did not point to the verified component' } }
             finally { if ($registered) { $registered.Dispose() } }
           } finally { $base.Dispose() }
-          Write-Output 'PASS: verified Microsoft SDK 32-bit Evalcom component registered on disposable runner'
+          Write-Output 'PASS: verified Microsoft SDK 32-bit Evalcom automation component registered on disposable runner'
+          $docClass = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::ClassesRoot,[Microsoft.Win32.RegistryView]::Registry32)
+          try {
+            $docKey = $docClass.OpenSubKey('CLSID\{6E5E1910-8053-4660-B795-6B612E29BC58}\InprocServer32')
+            try { Write-Output ("SDK documented C++ CLSID target={0}" -f $(if ($docKey) { $docKey.GetValue('') } else { '<absent>' })) }
+            finally { if ($docKey) { $docKey.Dispose() } }
+          } finally { $docClass.Dispose() }
+          $validator = Join-Path ${env:ProgramFiles(x86)} 'MsiVal2\Msival2.exe'
+          $cub = Join-Path ${env:ProgramFiles(x86)} 'MsiVal2\darice.cub'
+          $sdkMsi = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin\10.0.26100.0\x86\MsiVal2-x86_en-us.msi'
+          foreach ($file in @($validator,$cub,$sdkMsi)) { if (!(Test-Path -LiteralPath $file -PathType Leaf)) { throw 'SDK validation fixture missing' } }
+          & $validator $sdkMsi $cub
+          $validatorExit = $LASTEXITCODE
+          Write-Output ("SDK fixture ICE validation exit={0}" -f $validatorExit)
+          if ($validatorExit -ne 0) { throw 'SDK fixture validation did not pass' }
