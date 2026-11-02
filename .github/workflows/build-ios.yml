@@ -1,142 +1,37 @@
-name: Build and inspect VPN013 WG
+name: iPhone ARM runner discovery (not a release)
 on:
   workflow_dispatch:
-    inputs:
-      development_check:
-        description: Validate unified development source; never retain or publish an IPA
-        type: boolean
-        default: false
-      publish_release:
-        description: Publish only after final artifact review
-        type: boolean
-        default: false
-  push:
-    paths:
-      - 'overlay/**'
-      - 'build-on-mac.sh'
-      - 'inspect-on-mac.sh'
-      - 'publish-client-release.py'
-      - 'capture-ios-simulators.py'
-      - 'scripts/native_ui_shards.py'
-      - 'scripts/tests/test_native_ui_shards.py'
-      - '.github/workflows/build-ios.yml'
-      - '.github/workflows/native-unified-check.yml'
 permissions:
   contents: read
-  actions: read
-concurrency:
-  group: vpn013-ios-${{ inputs.development_check && format('development-{0}', github.ref_name) || 'release' }}
-  cancel-in-progress: false
 jobs:
-  security-review:
-    if: inputs.development_check != true
-    uses: ./.github/workflows/security-review.yml
-  native-ui:
-    permissions:
-      contents: read
-      actions: read
-    uses: ./.github/workflows/native-unified-check.yml
-  build:
-    if: inputs.development_check != true
-    needs: [security-review, native-ui]
-    runs-on: macos-26-intel
-    timeout-minutes: 65
-    permissions:
-      contents: write
-      actions: read
+  discovery:
+    runs-on: macos-26
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - name: Check tools and evidence export compatibility
-        run: |
-          xcodebuild -version
-          swift --version
-          xcrun xcresulttool export attachments --help >/dev/null
-          xcrun xcresulttool get test-results summary --help >/dev/null
-      - name: Test core and build unsigned app
-        run: sh build-on-mac.sh
-      - name: Check native Go dependencies without public finding details
+      - name: Verify candidate, available simulators, and Swift privacy behavior
         run: |
           set -eu
-          if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
-          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1
-          export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
-          export CC="$(xcrun --sdk iphoneos --find clang)"
-          export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -miphoneos-version-min=14.0"
-          export CGO_LDFLAGS="$CGO_CFLAGS"
-          set +e
-          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-findings.enc.json --recipient scripts/audit-recipient.pub
-          patched_result=$?
-          export GOFLAGS=-mod=readonly
-          python3 scripts/check_go_security.py build/awg/Sources/WireGuardKitGo --encrypted-report build/review/go-upstream-findings.enc.json --recipient scripts/audit-recipient.pub
-          upstream_result=$?
-          test "$patched_result" -eq 0 && test "$upstream_result" -eq 0
-      - name: Verify this run's combined 54-selector native evidence
-        id: native
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -eu
-          mkdir -p build/native-ui-artifact
-          gh run download "$GITHUB_RUN_ID" \
-            --name "unified-native-review-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --dir build/native-ui-artifact
-          python3 scripts/native_ui_shards.py verify-combined \
-            --artifact build/native-ui-artifact/unified-native-review.zip \
-            --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
-            --review build/review
-      - name: Package credential-free inspection evidence
-        if: always()
-        run: |
-          mkdir -p build/review
           python3 - <<'PY'
-          from pathlib import Path
-          import zipfile
-          with zipfile.ZipFile('build/native-review.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
-              for path in Path('build/review').rglob('*'):
-                  if path.is_file() and path.suffix in ('.png', '.json'):
-                      archive.write(path, path.as_posix().removeprefix('build/'))
+          import subprocess
+          changed=subprocess.check_output(['git','diff','--name-only','8afe0ccf22224d24fcfbaa9b5da62f6adb1bd52a','HEAD'],text=True).splitlines()
+          assert changed == ['.github/workflows/build-ios.yml']
           PY
-      - name: Prepare verified IPA and exact public metadata
-        if: success()
-        run: |
-          set -eu
-          test '${{ steps.native.outcome }}' = success
-          test -f build/VPN013AWG-unsigned.ipa
-          python3 publish-client-release.py --prepare-only
-          shasum -a 256 build/VPN013-*.ipa build/native-review.zip build/client-release.json > build/SHA256SUMS.txt
-      - name: Retain successfully checked IPA before release publication
-        if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ios-verified-${{ github.run_id }}
-          retention-days: 7
-          if-no-files-found: error
-          path: |
-            build/VPN013-*.ipa
-            build/native-review.zip
-            build/client-release.json
-            build/SHA256SUMS.txt
-      - name: Retain failed inspection without an installable file
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ios-diagnostics-${{ github.run_id }}
-          retention-days: 7
-          if-no-files-found: warn
-          path: build/native-review.zip
-      - name: Publish checked IPA when explicitly dispatched
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.publish_release == true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -eu
-          gh release create "unsigned-${GITHUB_RUN_ID}" \
-            build/VPN013-*.ipa build/native-review.zip build/SHA256SUMS.txt \
-            --target "$GITHUB_SHA" --prerelease --title "VPN013 unsigned build ${GITHUB_RUN_NUMBER}" \
-            --notes 'Requires owner signing and physical iPhone VPN verification. No customer credentials included.'
-          python3 publish-client-release.py
-      - name: Export credential-free development files for verification
-        if: always()
-        run: python3 export-build-evidence.py
+          xcodebuild -version
+          uname -m
+          xcrun simctl list devices available -j > "$RUNNER_TEMP/simulators.json"
+          python3 - <<'PY'
+          import json,os
+          d=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'simulators.json')))
+          for runtime,devices in d.get('devices',{}).items():
+            names=[x.get('name') for x in devices if x.get('name','').startswith('iPhone ')]
+            if names: print(runtime, sorted(names))
+          PY
+          python3 scripts/select_iphone_simulator.py < "$RUNNER_TEMP/simulators.json" > "$RUNNER_TEMP/selected.txt"
+          test -s "$RUNNER_TEMP/selected.txt"
+          python3 scripts/tests/make_runtime_log_harness.py "$RUNNER_TEMP/runtime-log.swift"
+          swiftc -parse-as-library "$RUNNER_TEMP/runtime-log.swift" -o "$RUNNER_TEMP/runtime-log-test"
+          "$RUNNER_TEMP/runtime-log-test"
