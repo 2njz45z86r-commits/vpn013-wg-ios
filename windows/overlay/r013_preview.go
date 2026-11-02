@@ -45,7 +45,7 @@ func runR013Preview() bool {
 		profiles := []manager.Tunnel{{Name: "+Первый"}, {Name: "Finland"}, {Name: "Germany"}, {Name: "Netherlands"}, {Name: "R013-Auto"}, {Name: "Дом"}}
 		scenario := os.Getenv("VPN013_PREVIEW_SCENARIO")
 		activeName := ""
-		if scenario == "manual" || scenario == "manual-no-stats" || scenario == "power" {
+		if scenario == "manual" || scenario == "manual-no-stats" || scenario == "power" || scenario == "connection-popup" {
 			activeName = "Finland"
 		}
 		if scenario == "auto" || scenario == "auto-no-stats" {

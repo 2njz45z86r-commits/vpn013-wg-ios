@@ -120,12 +120,32 @@ WALK_SHIMS: dict[str, list[tuple[str, str]]] = {
     ],
     "vendor/github.com/tailscale/walk/form.go": [
         (
+            "\t\tfb.quitLayoutPerformer <- struct{}{}\n",
+            "\t\tselect {\n"
+            "\t\tcase fb.quitLayoutPerformer <- struct{}{}:\n"
+            "\t\tcase <-App().Context().Done():\n"
+            "\t\t}\n",
+        ),
+        (
             "\tfb.SetSuspended(false)\n}\n\nfunc (fb *FormBase) Dispose()",
             "\tfb.SetSuspended(false)\n}\n\n"
             "// StartHidden initializes a form without changing visibility before App.Run.\n"
             "// VPN013 uses this to preserve its existing tray-first startup behavior.\n"
             "func (fb *FormBase) StartHidden() {\n\tfb.start()\n}\n\n"
             "func (fb *FormBase) Dispose()",
+        ),
+    ],
+    # The layout worker must stop on app cancellation without closing the
+    # request channel: a form may be disposed after the message loop exits.
+    "vendor/github.com/tailscale/walk/layout.go": [
+        (
+            "\t\t\tcase <-ctxDone:\n\t\t\t\tclose(quit)\n"
+            "\t\t\t\t// Remove ctxDone from futher consideration.\n\t\t\t\tctxDone = nil\n",
+            "\t\t\tcase <-ctxDone:\n"
+            "\t\t\t\tclose(performLayout)\n\t\t\t\tclose(layoutResults)\n"
+            "\t\t\t\tclose(inSizeLoop)\n\t\t\t\tclose(updateStopwatch)\n"
+            "\t\t\t\tif cancel != nil {\n\t\t\t\t\tclose(cancel)\n\t\t\t\t}\n"
+            "\t\t\t\tclose(done)\n\t\t\t\treturn\n",
         ),
     ],
     "vendor/github.com/tailscale/walk/tableview.go": [
