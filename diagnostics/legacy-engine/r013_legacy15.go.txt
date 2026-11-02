@@ -44,9 +44,6 @@ func (c r013LegacyConfig) validate() error {
 	if !c.enabled {
 		return nil
 	}
-	if c.intervalSeconds > 24*60*60 {
-		return errors.New("legacy interval exceeds budget")
-	}
 	totalWait := time.Duration(0)
 	for _, specs := range [][]string{c.initial[:], c.controlled[:]} {
 		for _, raw := range specs {

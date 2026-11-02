@@ -120,7 +120,7 @@ func TestVPN013LegacyWaitStopsWhenDeviceGoesDown(t *testing.T) {
 func TestVPN013LegacySparsePackets(t *testing.T) {
 	pair := genTestPair(t, false)
 	d := pair[0].dev
-	cfg := r013LegacyConfig{enabled: true, intervalSeconds: 60}
+	cfg := r013LegacyConfig{enabled: true, intervalSeconds: ^uint32(0)}
 	cfg.initial[1] = "<b 0x12>"
 	cfg.controlled[2] = "<b 0x34>"
 	if err := cfg.validate(); err != nil {
