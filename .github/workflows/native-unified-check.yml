@@ -15,7 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [coreA, coreB, coreC, added5]
+        # Diagnostic-only branch: aggregation must fail because the full suite is absent.
+        shard: [coreB]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
