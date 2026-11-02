@@ -53,6 +53,9 @@ jobs:
           $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
           $env:CGO_ENABLED='1'
           $env:CC='x86_64-w64-mingw32-gcc'
+          # The preview must contain the same embedded Windows manifest as the
+          # application; build-r013 generates the resource object and icons.
+          ./scripts/build-r013.ps1
           ./scripts/ci-ui.ps1
       - name: Retain bounded early popup checkpoint
         if: always() && steps.popup_diagnostic.outcome != 'skipped'
