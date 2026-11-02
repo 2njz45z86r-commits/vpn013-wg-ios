@@ -1271,17 +1271,7 @@ class TunnelContainer: NSObject {
                                 fromUapiConfig: settings, basedOn: base)
                             completionHandler(runtime)
                         } catch {
-                            var keys = Set<String>()
-                            for line in settings.split(separator: "\n") {
-                                if let equalsIndex = line.firstIndex(of: "=") {
-                                    keys.insert(String(line[..<equalsIndex]))
-                                }
-                            }
-                            let keyList = keys.sorted().joined(separator: ", ")
-                            wg_log(
-                                .error,
-                                message: "Runtime config parse failed: \(error). Keys: [\(keyList)]"
-                            )
+                            wg_log(.error, staticMessage: "Runtime config parse failed")
                             completionHandler(self.tunnelConfiguration)
                         }
                     }))
