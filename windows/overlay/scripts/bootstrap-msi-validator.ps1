@@ -30,6 +30,17 @@ $payloadHashes = [ordered]@{
     'b80b7321357f7c9f281536f9440dfe68.cab' = 'F4417618F207A6AF7971F1266E86E175807B1BE07FB5DF727A56EAAC9678DBC7'
     'c2aabf6ea5c1d348ec22f3aeb92f8656.cab' = 'F6479BC17C44CCEB20DE4E752FE29260B10BE12DE0A09CA0E664C5F132C18D9D'
 }
+# SDK 10.0.26100.9457, independently observed on two disposable runners.
+# Microsoft SDK list: https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads
+# These four exact bytes still require Microsoft Authenticode validation below.
+$payloadHashes9457 = [ordered]@{
+    'MsiVal2-x86_en-us.msi' = '919087CC73C10608903B25AD78010A60C0EB608271312C9844E3EA217C1D494D'
+    '8e4755178e6b5bcba8d3538c3630b7a5.cab' = 'AD21B2F01C473F8D8925C255B6A51C498426DBE54FDE3159A8070A493CA07A97'
+    'b80b7321357f7c9f281536f9440dfe68.cab' = '94305BC9AA3DEF81D5B2BD7D89D56E651A86977A8936BF50C1B1E452847423F7'
+    'c2aabf6ea5c1d348ec22f3aeb92f8656.cab' = 'C1D18EFF9178F8184F190844352EF71671220B7EFC993F1B0414FEA52DEEF95E'
+}
+$selectedPayloadHashes = $null
+$selectedPayloadVersion = $null
 
 function Assert-ContainedFile([string]$Path, [string]$Root) {
     $full = [IO.Path]::GetFullPath($Path)
@@ -92,16 +103,21 @@ function Find-PinnedMsiToolsPayload {
     $directory = Join-Path $kitRoot 'bin\10.0.26100.0\x86'
     $msi = Join-Path $directory 'MsiVal2-x86_en-us.msi'
     if (!(Test-Path -LiteralPath $msi -PathType Leaf)) { return $null }
-    foreach ($fileName in $payloadHashes.Keys) {
+    Assert-ContainedFile $msi $kitRoot
+    $msiHash = (Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToUpperInvariant()
+    $expectedHashes = if ($msiHash -ceq $payloadHashes9457['MsiVal2-x86_en-us.msi']) { $payloadHashes9457 } else { $payloadHashes }
+    foreach ($fileName in $expectedHashes.Keys) {
         $path = Join-Path $directory $fileName
         if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw "SDK MSI Tools payload is incomplete: $fileName" }
         Assert-ContainedFile $path $kitRoot
         $file = Get-Item -LiteralPath $path -Force
         if ($file.Length -lt 1KB -or $file.Length -gt 32MB) { throw "SDK MSI Tools payload size is invalid: $fileName" }
         $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToUpperInvariant()
-        if ($hash -cne $payloadHashes[$fileName]) { throw "SDK MSI Tools payload hash differs from pinned signed 26100 package: $fileName" }
+        if ($hash -cne $expectedHashes[$fileName]) { throw "SDK MSI Tools payload hash differs from pinned signed 26100 package: $fileName" }
         [void](Get-MicrosoftSignature $path)
     }
+    $script:selectedPayloadHashes = $expectedHashes
+    $script:selectedPayloadVersion = if ($expectedHashes -eq $payloadHashes9457) { '10.0.26100.9457' } else { '10.0.26100.7705' }
     return $msi
 }
 
@@ -206,7 +222,8 @@ $evidence = [ordered]@{
     sdkBootstrapSHA256 = $installerHash
     sdkInstalledNow = $sdkInstalledNow
     msiToolsPackageInstalledNow = $msiToolsInstalledNow
-    pinnedMsiToolsPayloadSHA256 = $payloadHashes
+    pinnedMsiToolsPayloadSHA256 = $selectedPayloadHashes
+    matchedMsiToolsPayloadVersion = $selectedPayloadVersion
     msival2Path = $pair.Tool
     msival2SHA256 = $toolHash
     msival2FileVersion = $versionInfo.FileVersion
