@@ -150,14 +150,22 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 		return
 	}
 	if scenario == "connection-popup" {
+		checkpoint := func(stage string) {
+			data, _ := json.Marshal(map[string]string{"stage": stage})
+			_ = os.WriteFile(filepath.Join(filepath.Dir(destination), "r013-ui-popup-checkpoint.json"), data, 0600)
+		}
+		checkpoint("before-ui-sync")
 		syncUI(func() {
+			checkpoint("entered-ui-sync")
 			starts, stops, _, _ := R013PreviewPowerAudit()
 			if window.currentPopup.Visible() {
 				failure = "Connection popup was open by default"
 				return
 			}
 			checks = append(checks, "Connection popup is closed by default")
+			checkpoint("before-open")
 			window.connectionButton.SendMessage(win.BM_CLICK, 0, 0)
+			checkpoint("after-open")
 			if !window.currentPopup.Visible() || window.currentPopup.Title() != "AmneziaWG · Подключение" {
 				failure = "Connection popup did not open with its section title"
 				return
@@ -173,7 +181,9 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 				return
 			}
 			checks = append(checks, "Popup contains current-server ping control")
+			checkpoint("before-close")
 			window.currentPopup.SendMessage(win.WM_CLOSE, 0, 0)
+			checkpoint("after-close")
 			afterStarts, afterStops, _, _ := R013PreviewPowerAudit()
 			if window.currentPopup.Visible() || starts != afterStarts || stops != afterStops || !window.currentCard.current.active {
 				failure = "Closing popup altered connection"
@@ -181,6 +191,7 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 			}
 			checks = append(checks, "Closing popup leaves active connection unchanged")
 		})
+		checkpoint("after-ui-sync")
 		return
 	}
 	if scenario == "power" {
