@@ -99,6 +99,7 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 'TestVPN013LegacyUAPIStagingAndPeerPreservation', 'TestVPN013LegacySparsePackets',
                 'TestVPN013LegacyStaleSnapshotAfterModeSwitch', 'TestVPN013LegacyRejectPreparedPacketAfterModeSwitch',
                 'TestVPN013LegacySendCompletesBeforeModeCommit',
+                'TestVPN013LegacyEndpointRefreshKeepsRevision', 'TestVPN013LegacyMaskingChangesAdvanceRevision',
                 'FuzzVPN013LegacyParse'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,
