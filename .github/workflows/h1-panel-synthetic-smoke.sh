@@ -45,3 +45,4 @@ after=$(docker exec "$name" sqlite3 /home/container/db/x-ui.db "select value fro
 printf 'synthetic_subscription_before=%s synthetic_subscription_after=%s\n' "$before" "$after"
 test "$after" = 25121
 echo 'synthetic_panel_test=true disabled_inbound_moved_subscription_port_on_restart=true isolated_network=true production_contact=false'
+docker exec "$name" python3 /tmp/h1-panel-synthetic-add.py activate

@@ -3,7 +3,10 @@ import base64
 import http.cookiejar
 import json
 import os
+from pathlib import Path
+import socket
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -34,6 +37,40 @@ try:
     token = request('csrf-token')
     if not isinstance(token, str) or not token:
         raise RuntimeError('Synthetic CSRF response was not a token')
+    if len(sys.argv) > 1 and sys.argv[1] == 'activate':
+        rows = request('panel/api/inbounds/list')
+        found = [r for r in rows if r.get('remark') == 'fixture-only-wg']
+        if len(found) != 1 or found[0].get('enable') is not False:
+            raise RuntimeError('Synthetic disabled inbound unavailable')
+        def processes():
+            matches = {}
+            for p in Path('/proc').iterdir():
+                if p.name.isdigit():
+                    try:
+                        args = (p/'cmdline').read_bytes().split(b'\0')
+                        if args and args[0].endswith(b'xray-linux-amd64'):
+                            matches[p.name] = (p/'stat').read_text().split()[21]
+                    except (FileNotFoundError, ProcessLookupError, PermissionError):
+                        pass
+            return matches
+        initial = processes()
+        if len(initial) != 1:
+            raise RuntimeError('Synthetic Xray process count was not one')
+        request('panel/api/inbounds/setEnable/' + str(found[0]['id']), {'enable':True}, token)
+        for _ in range(60):
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+                try:
+                    probe.bind(('127.0.0.1', 25120))
+                except OSError:
+                    break
+            time.sleep(.2)
+        else:
+            raise RuntimeError('Synthetic WireGuard UDP listener unavailable')
+        time.sleep(2)
+        if processes() != initial:
+            raise RuntimeError('Synthetic Xray process changed on enable')
+        print('synthetic_panel_wireguard_udp_enabled=true synthetic_xray_process_unchanged=true')
+        sys.exit(0)
     payload = {'remark':'fixture-only-wg', 'tag':'fixture-wg', 'listen':'0.0.0.0', 'port':25120,
                'protocol':'wireguard', 'enable':False, 'excludeFromSub':True,
                'up':0, 'down':0, 'total':0, 'expiryTime':0,
