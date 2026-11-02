@@ -214,6 +214,9 @@ if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
   focused_instrument output/review/focused-coordinator.txt -e class org.amnezia.awg.r013.R013InstrumentedTest#jRealCoordinatorChoosesFasterPeerWithActualPolicyAndUnchangedProfiles -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture"
   coordinator_ok=false
   if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/focused-coordinator.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/focused-coordinator.txt; then coordinator_ok=true; fi
+  focused_instrument output/review/focused-cleanup.txt -e class org.amnezia.awg.r013.R013InstrumentedTest#jRealCoordinatorChoosesFasterPeerWithActualPolicyAndUnchangedProfiles,org.amnezia.awg.r013.R013InstrumentedTest#kOrdinaryProfileUsesBuiltInAutoAndNativePauseSwitch,org.amnezia.awg.r013.R013InstrumentedTest#multiServerSubscriptionImportsPrimaryNodesOnly -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture"
+  cleanup_ok=false
+  if grep -E '^OK \(3 tests\)[[:space:]]*$' output/review/focused-cleanup.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/focused-cleanup.txt; then cleanup_ok=true; fi
   focused_instrument output/review/focused-semantic.txt -e class org.amnezia.awg.r013.R013InstrumentedTest#multiServerSubscriptionImportsPrimaryNodesOnly
   semantic_ok=false
   if grep -E '^OK \(1 test\)[[:space:]]*$' output/review/focused-semantic.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/focused-semantic.txt; then semantic_ok=true; fi
@@ -237,8 +240,8 @@ if [ "${R013_FOCUS_RUNTIME:-false}" = true ]; then
   proxy_ok=false
   if grep -E '^OK \(2 tests\)[[:space:]]*$' output/review/proxy-runtime.txt && ! grep -E 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' output/review/proxy-runtime.txt; then proxy_ok=true; fi
   unset proxy_fixture fixture candidate_fixture
-  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedSemanticCases":1,"expectedPopupScreenCases":1,"expectedPopupLiveCases":1,"expectedSurfaceCases":2,"expectedServiceCases":1,"expectedProxyCases":2,"expectedPrimaryResourceCases":1,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
-  test "$coordinator_ok" = true && test "$semantic_ok" = true && test "$popup_screen_ok" = true && test "$popup_live_ok" = true && test "$surface_ok" = true && test "$services_ok" = true && test "$proxy_ok" = true && test "$resources_ok" = true
+  printf '%s\n' '{"diagnosticOnly":true,"expectedCoordinatorCases":1,"expectedCleanupCases":3,"expectedSemanticCases":1,"expectedPopupScreenCases":1,"expectedPopupLiveCases":1,"expectedSurfaceCases":2,"expectedServiceCases":1,"expectedProxyCases":2,"expectedPrimaryResourceCases":1,"fullNativeAcceptance":false,"published":false}' > output/review/focused-scope.json
+  test "$coordinator_ok" = true && test "$cleanup_ok" = true && test "$semantic_ok" = true && test "$popup_screen_ok" = true && test "$popup_live_ok" = true && test "$surface_ok" = true && test "$services_ok" = true && test "$proxy_ok" = true && test "$resources_ok" = true
   exit $?
 fi
 adb shell am instrument -w -r -e class org.amnezia.awg.r013.R013InstrumentedTest -e syntheticConfig "$fixture" -e syntheticCandidate "$candidate_fixture" com.vpn013.awg.debug.test/androidx.test.runner.AndroidJUnitRunner > output/review/instrumentation.txt

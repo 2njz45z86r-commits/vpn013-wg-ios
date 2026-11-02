@@ -55,7 +55,10 @@ class R013InstrumentedTest {
     @After fun finish() = runBlocking { stopAll(); instrumentation.runOnMainSync { activity?.finish() }; Unit }
     private suspend fun stopAll() { for (t in Application.getTunnelManager().getTunnels().toList()) if (t.state == Tunnel.State.UP) t.setStateAsync(Tunnel.State.DOWN) }
     private suspend fun offlineStateFailure(stage: String, cause: Exception): AssertionError = withContext(Dispatchers.IO) {
-        AssertionError("Synthetic $stage blocked: tunnel=${Application.getBackend().runningTunnelNames.isNotEmpty()} proxyActive=${ProxyVpnService.activeId != null} proxyRequested=${ProxyVpnService.requestedId != null} coordinatorBusy=${UnifiedAutoCoordinator.busy}", cause)
+        val running = Application.getBackend().runningTunnelNames
+        val tunnels = Application.getTunnelManager().getTunnels().toList()
+        val matched = tunnels.filter { it.name in running }
+        AssertionError("Synthetic $stage blocked: tunnel=${running.isNotEmpty()} runningCount=${running.size} managedCount=${tunnels.size} matchingCount=${matched.size} matchingUpCount=${matched.count { it.state == Tunnel.State.UP }} proxyActive=${ProxyVpnService.activeId != null} proxyRequested=${ProxyVpnService.requestedId != null} coordinatorBusy=${UnifiedAutoCoordinator.busy}", cause)
     }
     private suspend fun automaticMode(enabled: Boolean) = withContext(Dispatchers.IO) {
         registry.setAutomaticEnabled(enabled); (Application.getBackend() as GoBackend).setAutomaticEnabled(enabled)
