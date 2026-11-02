@@ -4,7 +4,7 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
 if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
 echo 'VPN013 native stage: select simulator'
-device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;v=json.load(sys.stdin);print(next(x["udid"] for rows in v["devices"].values() for x in rows if x["name"]=="iPhone 16 Pro"))')
+device=$(xcrun simctl list devices available -j | python3 scripts/select_iphone_simulator.py)
 echo 'VPN013 native stage: boot simulator'
 xcrun simctl boot "$device" || true
 echo 'VPN013 native stage: wait for simulator boot'

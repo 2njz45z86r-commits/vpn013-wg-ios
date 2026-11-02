@@ -23,7 +23,7 @@ jobs:
       - name: Check exact shard partition and evidence rejection guards
         env:
           PYTHONDONTWRITEBYTECODE: '1'
-        run: python3 -m unittest scripts.tests.test_native_ui_shards scripts.tests.test_runtime_logging -q
+        run: python3 -m unittest scripts.tests.test_native_ui_shards scripts.tests.test_runtime_logging scripts.tests.test_select_iphone_simulator -q
       - name: Compile the exact app and extension in an isolated development runner
         id: compile
         run: sh build-on-mac.sh
