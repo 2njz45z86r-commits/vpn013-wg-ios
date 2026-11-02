@@ -52,6 +52,10 @@ jobs:
     if: inputs.development_check == true && inputs.publish_release != true
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ios-nocgo]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -90,9 +94,10 @@ jobs:
           assert result['effectiveReplacementVerified']
           print('Exact staged AWG core: required synthetic host tests passed')
           PY
-      - name: Scan Linux package dependencies without public finding details
+      - name: Scan selected package dependencies without public finding details
         env:
           GOTOOLCHAIN: local
+          VPN013_SCAN_TARGET: ${{ matrix.target }}
         run: |
           set -eu
           mkdir -p build/review
@@ -101,6 +106,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: awg-core-linux-sca-${{ github.run_id }}
+          name: awg-core-${{ matrix.target }}-sca-${{ github.run_id }}
           path: build/review/core-linux-debug.enc.json
           if-no-files-found: warn

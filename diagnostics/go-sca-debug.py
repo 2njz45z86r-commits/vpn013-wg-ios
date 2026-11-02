@@ -7,22 +7,25 @@ import tempfile
 
 repo = Path.cwd()
 root = Path(os.environ['RUNNER_TEMP']) / 'staged/awg-core-owned'
-env = dict(os.environ, GOTOOLCHAIN='local', GOOS='linux', GOARCH='amd64', CGO_ENABLED='0', GOFLAGS='-mod=readonly')
+target = os.environ.get('VPN013_SCAN_TARGET', 'linux')
+assert target in ('linux', 'ios-nocgo')
+goos, arch, package = ('ios', 'arm64', './device') if target == 'ios-nocgo' else ('linux', 'amd64', '.')
+env = dict(os.environ, GOTOOLCHAIN='local', GOOS=goos, GOARCH=arch, CGO_ENABLED='0', GOFLAGS='-mod=readonly')
 host = dict(env)
 for key in ('GOOS', 'GOARCH', 'CGO_ENABLED', 'GOFLAGS', 'CC', 'CXX', 'CGO_CFLAGS', 'CGO_LDFLAGS'):
     host.pop(key, None)
 details = {}
-summary = {'scope': 'Linux package dependencies only; not iOS or release approval', 'source': 'fc8b1c60c7eb64774c7096bd5f89153baa654d47'}
+summary = {'scope': f'{goos}/{arch} {package} with CGO disabled; package dependencies only, not full iOS build or release approval', 'source': 'fc8b1c60c7eb64774c7096bd5f89153baa654d47'}
 with tempfile.TemporaryDirectory(prefix='vpn013-sca-') as tmp:
     install_env = dict(host, GOBIN=tmp)
     install = subprocess.run(['go', 'install', 'golang.org/x/vuln/cmd/govulncheck@v1.9.0'], env=install_env, capture_output=True, timeout=240)
     summary['installExit'] = install.returncode
     details['installStderr'] = install.stderr.decode('utf-8', errors='replace')[:10000]
-    package_list = subprocess.run(['go', 'list', '-deps', '.'], cwd=root, env=env, capture_output=True, timeout=120)
+    package_list = subprocess.run(['go', 'list', '-deps', package], cwd=root, env=env, capture_output=True, timeout=120)
     summary['packageListExit'] = package_list.returncode
     details['packageListStderr'] = package_list.stderr.decode('utf-8', errors='replace')[:10000]
     if install.returncode == 0 and package_list.returncode == 0:
-        scan = subprocess.run([str(Path(tmp) / 'govulncheck'), '-db=https://vuln.go.dev', '-json', '-scan=package', '.'], cwd=root, env=env, capture_output=True, timeout=240)
+        scan = subprocess.run([str(Path(tmp) / 'govulncheck'), '-db=https://vuln.go.dev', '-json', '-scan=package', package], cwd=root, env=env, capture_output=True, timeout=240)
         summary['scannerExit'] = scan.returncode
         summary['scannerStderrPresent'] = bool(scan.stderr.strip())
         details['scannerStderr'] = scan.stderr.decode('utf-8', errors='replace')[:10000]
