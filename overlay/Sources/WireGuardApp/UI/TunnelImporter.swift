@@ -54,10 +54,17 @@ class TunnelImporter {
                 DispatchQueue.global(qos: .userInitiated).async {
                     let fileContents: String
                     do {
-                        fileContents = try String(contentsOf: url)
+                        fileContents = try VPN013PrimaryResourceBudget.readConfigFile(url)
                     } catch let error {
                         DispatchQueue.main.async {
-                            if let cocoaError = error as? CocoaError, cocoaError.isFileError {
+                            if let configError = error as? VPN013PrimaryResourceBudget.ConfigReadError {
+                                let message: String
+                                switch configError {
+                                case .tooLarge: message = "Файл конфигурации превышает 1 МиБ."
+                                case .invalidEncoding: message = "Файл конфигурации должен быть текстовым файлом UTF-8, UTF-16 или UTF-32."
+                                }
+                                lastFileImportErrorText = (title: "Файл конфигурации не принят", message: message)
+                            } else if let cocoaError = error as? CocoaError, cocoaError.isFileError {
                                 lastFileImportErrorText = (title: tr("alertCantOpenInputConfFileTitle"), message: error.localizedDescription)
                             } else {
                                 lastFileImportErrorText = (title: tr("alertCantOpenInputConfFileTitle"), message: tr(format: "alertCantOpenInputConfFileMessage (%@)", fileName))

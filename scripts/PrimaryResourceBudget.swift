@@ -1,6 +1,38 @@
+import Foundation
+
 // Kept independent of WireGuardKit so the same budget can be checked before
 // importing a full config and before saving an edited interface.
 enum VPN013PrimaryResourceBudget {
+    enum ConfigReadError: Error { case tooLarge, invalidEncoding }
+    static let maximumConfigFileBytes = 1_048_576 // Same per-file limit as ZIP import.
+
+    static func readConfigFile(_ url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var data = Data()
+        while data.count <= maximumConfigFileBytes {
+            let limit = min(65_536, maximumConfigFileBytes + 1 - data.count)
+            guard let chunk = try handle.read(upToCount: limit), !chunk.isEmpty else { break }
+            data.append(chunk)
+        }
+        guard data.count <= maximumConfigFileBytes else { throw ConfigReadError.tooLarge }
+        // Preserve common text files from Windows and remove the BOM before parsing.
+        let encoding: String.Encoding
+        if data.starts(with: [0x00, 0x00, 0xfe, 0xff]) {
+            data.removeFirst(4); encoding = .utf32BigEndian
+        } else if data.starts(with: [0xff, 0xfe, 0x00, 0x00]) {
+            data.removeFirst(4); encoding = .utf32LittleEndian
+        } else if data.starts(with: [0xfe, 0xff]) {
+            data.removeFirst(2); encoding = .utf16BigEndian
+        } else if data.starts(with: [0xff, 0xfe]) {
+            data.removeFirst(2); encoding = .utf16LittleEndian
+        } else {
+            if data.starts(with: [0xef, 0xbb, 0xbf]) { data.removeFirst(3) }
+            encoding = .utf8
+        }
+        guard let text = String(data: data, encoding: encoding) else { throw ConfigReadError.invalidEncoding }
+        return text
+    }
     static let maximumJunkPacketCount = 64
     static let maximumJunkPacketSize = 4_096
     static let maximumJunkBytesPerHandshake = 262_144
