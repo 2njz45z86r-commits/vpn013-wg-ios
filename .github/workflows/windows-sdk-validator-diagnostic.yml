@@ -90,3 +90,35 @@ jobs:
               } finally { $base.Dispose() }
             }
           }
+      - name: Diagnose signed SDK Evalcom registration on disposable runner
+        shell: powershell
+        run: |
+          if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:GITHUB_REPOSITORY -cne '2njz45z86r-commits/vpn013-wg-ios') { throw 'Disposable hosted runner required' }
+          $dll = Join-Path ${env:ProgramFiles(x86)} 'MsiVal2\evalcom2.dll'
+          $reg = Join-Path $env:SystemRoot 'SysWOW64\regsvr32.exe'
+          foreach ($file in @($dll,$reg)) {
+            if (!(Test-Path -LiteralPath $file -PathType Leaf)) { throw 'Expected SDK component absent' }
+            $signature = Get-AuthenticodeSignature -LiteralPath $file
+            if ($signature.Status -ne 'Valid' -or !$signature.SignerCertificate -or $signature.SignerCertificate.Subject -notmatch '(?i)(^|,\s*)O=Microsoft Corporation(,|$)') { throw 'Microsoft component signature invalid' }
+          }
+          if ((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash -cne '028B9DFD55A7BC110EE68C4DBCA4C55644A5204B2BF705EF9CDCF29F88400D15') { throw 'Unexpected SDK Evalcom2 bytes' }
+          $bytes = [IO.File]::ReadAllBytes($dll)
+          $pe = [BitConverter]::ToInt32($bytes,60)
+          if ($pe -lt 64 -or $pe + 6 -gt $bytes.Length -or [BitConverter]::ToUInt32($bytes,$pe) -ne 0x4550 -or [BitConverter]::ToUInt16($bytes,$pe+4) -ne 0x14c) { throw 'SDK Evalcom2 is not the expected 32-bit PE image' }
+          $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::ClassesRoot,[Microsoft.Win32.RegistryView]::Registry32)
+          $keyPath = 'CLSID\{6E5E1910-8053-4660-B795-6B612E29BC58}\InprocServer32'
+          try {
+            $existing = $base.OpenSubKey($keyPath)
+            try { $target = if ($existing) { $existing.GetValue('') } else { $null } }
+            finally { if ($existing) { $existing.Dispose() } }
+            if ($target -and $target -ine $dll) { throw 'Existing 32-bit Evalcom registration points elsewhere' }
+            if (!$target) {
+              $proc = Start-Process -FilePath $reg -ArgumentList @('/s',('"' + $dll + '"')) -WindowStyle Hidden -PassThru
+              if (!$proc.WaitForExit(30000)) { throw 'SDK Evalcom registration timed out' }
+              if ($proc.ExitCode -ne 0) { throw "SDK Evalcom registration failed: $($proc.ExitCode)" }
+            }
+            $registered = $base.OpenSubKey($keyPath)
+            try { if (!$registered -or $registered.GetValue('') -ine $dll) { throw 'SDK Evalcom registration did not point to the verified component' } }
+            finally { if ($registered) { $registered.Dispose() } }
+          } finally { $base.Dispose() }
+          Write-Output 'PASS: verified Microsoft SDK 32-bit Evalcom component registered on disposable runner'
