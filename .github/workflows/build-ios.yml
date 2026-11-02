@@ -23,7 +23,7 @@ jobs:
         run: |
           test '${{ inputs.development_check }}' = true
           test '${{ inputs.publish_release }}' = false
-          test "$(git diff --name-only 1e4490cf8ff40e008f7966aa621bd4234a1f0de2 HEAD)" = .github/workflows/build-ios.yml
+          test "$(git diff --name-only b9b2c6871dc6cefa80508883c59dd50e77a1ebba HEAD)" = .github/workflows/build-ios.yml
       - name: Compile and run Swift boundary tests
         run: |
           set -eu
