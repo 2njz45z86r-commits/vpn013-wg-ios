@@ -90,8 +90,8 @@
     },
     {
       "path": "ui/r013_updates.go",
-      "old_sha256": "9b7a6e5f9f2780eb74dd4421cdb7413825d65dc42b9ca2d7cef075306cc4e1be",
-      "new_sha256": "3f26fcc183e43163d7b8058b4b99632a2ea9ec331f8108534d2fbc6b6f838ce7"
+      "old_sha256": "f73aa1cd4ea26565e7b6ad42942328107e00b62b4f63b4a56ea62a297f7641cc",
+      "new_sha256": "3f186432092983ea9fecfc3c689dcbeab3386f6df4b5c4a45e35feb5c623ef92"
     },
     {
       "path": "ui/raise.go",

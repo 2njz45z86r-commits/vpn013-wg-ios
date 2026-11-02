@@ -11,6 +11,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-windows-client/r013"
 	"github.com/amnezia-vpn/amneziawg-windows-client/version"
 	"github.com/lxn/walk"
+	"github.com/lxn/win"
 )
 
 type r013UpgradeOffer struct {
@@ -45,6 +46,9 @@ func (tp *TunnelsPage) addR013UpgradeOffer(parent walk.Container) error {
 	tp.r013Upgrade = &r013UpgradeOffer{row: row, label: label, button: button}
 	button.Clicked().Attach(tp.installR013OfferedUpdate)
 	row.SetVisible(false)
+	// A hidden parent makes IsWindowVisible false even when the child still
+	// has WS_VISIBLE. Clear the child's own style before the parent is shown.
+	win.ShowWindow(row.Handle(), win.SW_HIDE)
 	return nil
 }
 
@@ -56,6 +60,7 @@ func (tp *TunnelsPage) showR013Upgrade(release *r013.Release) {
 	if release == nil || !release.Newer(version.Number, r013.CurrentBuild) {
 		offer.release = nil
 		offer.row.SetVisible(false)
+		win.ShowWindow(offer.row.Handle(), win.SW_HIDE)
 		return
 	}
 	copy := *release
