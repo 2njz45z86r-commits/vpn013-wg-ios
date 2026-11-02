@@ -95,10 +95,6 @@ jobs:
           GOTOOLCHAIN: local
         run: |
           set -eu
-          cat > "$RUNNER_TEMP/staged/awg-core-owned/diagnostic_import.go" <<'EOF'
-          package diagnostic
-          import _ "github.com/amnezia-vpn/amneziawg-go/v3/device"
-          EOF
           mkdir -p build/review
           python3 diagnostics/go-sca-debug.py
       - name: Retain encrypted findings only
