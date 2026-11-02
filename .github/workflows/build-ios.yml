@@ -23,7 +23,11 @@ jobs:
         run: |
           test '${{ inputs.development_check }}' = true
           test '${{ inputs.publish_release }}' = false
-          test "$(git diff --name-only a58b3a3a42293ea76557f1c175a8e04d93b5f4f6 HEAD)" = .github/workflows/build-ios.yml
+          python3 - <<'PY'
+          import subprocess
+          changed = set(subprocess.check_output(['git','diff','--name-only','b10b82153965135a810ee997ed02807deaac5851','HEAD'], text=True).splitlines())
+          assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py'}
+          PY
       - name: Compile and run Swift boundary tests
         run: |
           set -eu
@@ -33,3 +37,6 @@ jobs:
           python3 scripts/tests/make_client_choice_harness.py "$RUNNER_TEMP/client-choice.swift"
           swiftc -parse-as-library "$RUNNER_TEMP/client-choice.swift" -o "$RUNNER_TEMP/client-choice-tests"
           "$RUNNER_TEMP/client-choice-tests"
+          python3 diagnostics/zip-dedup-harness.py "$RUNNER_TEMP/zip-dedup.swift"
+          swiftc scripts/PrimaryResourceBudget.swift "$RUNNER_TEMP/zip-dedup.swift" -o "$RUNNER_TEMP/zip-dedup-tests"
+          "$RUNNER_TEMP/zip-dedup-tests"
