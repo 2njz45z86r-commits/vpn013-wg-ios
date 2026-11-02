@@ -1,27 +1,27 @@
 {
   "device.go": {
     "beforeSHA256": "0964e294c1f5046b2d9daea00cdf0fd5eee5ff08668ae757bb2e0795724629cf",
-    "afterSHA256": "76f93e474469e3be8dbec73c2aca6711bffa996e3b86fc4ead56e97f6714b926"
+    "afterSHA256": "7a2c50490d6ab69e79f5dbff8a35332da4577c78ddb333abc6d12bec79c0913e"
   },
   "peer.go": {
     "beforeSHA256": "f5ff3a404559e8907a870e082154111b97467716c15650697fee41633263006d",
-    "afterSHA256": "c1a531644ea3897d545ae176a7d822c38d274c5f1b91ab323ec7ee068811b8b4"
+    "afterSHA256": "796a444da5ea5a45e1ea5e943040ef37ef923e42d9abf8e449953166e1a27fbd"
   },
   "send.go": {
     "beforeSHA256": "5e4c9284b1b3b454d68041e569c7c1522eb6cfcece3c9ff43e49c847ecbf17e2",
-    "afterSHA256": "4b882e8fdacd1058ac0ec94b95d6cd8a93235f04f988dd75774e81edc795a696"
+    "afterSHA256": "5314bf7b8df654bb3080c50a51080d765773cff62a86779c0cf6683912eba2ad"
   },
   "uapi.go": {
     "beforeSHA256": "8a8dae148b0b41cb9114104a4802c8233297fa93ffc81594f3ebd082c4387e82",
-    "afterSHA256": "6e0b2a2fbc4bb6ce6f2830a022f178145ccebf1fe303dea7715d29a5e78a6580"
+    "afterSHA256": "7a96e73bcb638e7562bc794a02dbd429f0be358fba044ebb616f2e2c7e0da7b1"
   },
   "r013_resource_limits.go": {
     "beforeSHA256": "046b2ff77d2122759e365866e1d668ec23e89e60160fa638a3592c1bc6f762f4",
-    "afterSHA256": "c5d01e1ad8d9ca90ddf851670a040320e7ea8d1a3a4ba384af5fd29a45a17947"
+    "afterSHA256": "1e0e17c125b5b0d3258d82c5c084c1933e1f24179d0eeffa9486b9bbd353a0e4"
   },
   "r013_legacy15.go": {
     "beforeSHA256": null,
-    "afterSHA256": "c8d1b788132be2f38d8e421fe59bc06e55768ab5de9a8f16b90f942c2f59f537"
+    "afterSHA256": "ca54294f55919984f574a76be4e2e0f6af0b2e4c3aaa035f0629dc0d8b8d69a9"
   },
   "r013_legacy15_test.go": {
     "beforeSHA256": null,
@@ -29,10 +29,14 @@
   },
   "r013_legacy_uapi_test.go": {
     "beforeSHA256": null,
-    "afterSHA256": "3935a0c8ff372b79e3467d44ac8fd234b08f32f9d3c02fbd65895f2a63580e77"
+    "afterSHA256": "d0734b50279d54d40632965d3033039c56ac54ddc0544f1cbcdd7ce1b76d6a34"
   },
   "r013_legacy_fuzz_test.go": {
     "beforeSHA256": null,
     "afterSHA256": "3ebe8a9ac320e4bf28caaa11d36d32614b6bce89a60e4f4b2758a5e476c9ddd1"
+  },
+  "r013_stale_snapshot_test.go": {
+    "beforeSHA256": null,
+    "afterSHA256": "9f77fdf3d4f364beb8a87450c59d570c3e39148495149af55d0725763eefd4cb"
   }
 }

@@ -134,12 +134,12 @@ func (peer *Peer) SendHandshakeInitiation(isRetry bool) error {
 		return err
 	}
 
-	sendBuffer, initialPadding, legacyMode, err := peer.device.r013PrepareInitialObfuscationMode()
+	sendBuffer, initialPadding, legacyMode, legacyRevision, err := peer.device.r013PrepareInitialObfuscationMode()
 	if err != nil {
 		return err
 	}
 	if legacyMode && len(sendBuffer) > 0 {
-		if err := peer.r013SendLegacyJunk(sendBuffer); err != nil {
+		if err := peer.r013SendLegacyJunk(sendBuffer, legacyRevision); err != nil {
 			return err
 		}
 		sendBuffer = nil

@@ -111,11 +111,12 @@ type Device struct {
 		transport atomic.Uint32
 	}
 
-	ipackets      [5]*obfChain
-	legacyConfig  r013LegacyConfig // protected by obfuscation
-	legacyMode    atomic.Bool
-	legacyCounter atomic.Uint64
-	legacyRuntime struct {
+	ipackets       [5]*obfChain
+	legacyConfig   r013LegacyConfig // protected by obfuscation
+	legacyMode     atomic.Bool
+	legacyRevision atomic.Uint64 // changes whenever a staged UAPI update commits
+	legacyCounter  atomic.Uint64
+	legacyRuntime  struct {
 		sync.Mutex
 		sent bool
 		next time.Time

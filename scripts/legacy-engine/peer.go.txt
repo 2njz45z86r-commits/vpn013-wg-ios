@@ -121,13 +121,25 @@ func (peer *Peer) SendBuffers(buffers [][]byte) error {
 	return peer.r013SendBuffers(buffers, true)
 }
 
-func (peer *Peer) r013SendLegacyJunk(buffers [][]byte) error {
-	return peer.r013SendBuffers(buffers, false)
+func (peer *Peer) r013SendLegacyJunk(buffers [][]byte, revision uint64) error {
+	// Match the existing UAPI lock order: network before obfuscation.
+	peer.device.net.RLock()
+	defer peer.device.net.RUnlock()
+	peer.device.obfuscation.RLock()
+	defer peer.device.obfuscation.RUnlock()
+	if !peer.device.legacyConfig.enabled || peer.device.legacyConfig.revision != revision {
+		return errR013LegacyStale
+	}
+	return peer.r013SendBuffersNetLocked(buffers, false)
 }
 
 func (peer *Peer) r013SendBuffers(buffers [][]byte, countLegacy bool) error {
 	peer.device.net.RLock()
 	defer peer.device.net.RUnlock()
+	return peer.r013SendBuffersNetLocked(buffers, countLegacy)
+}
+
+func (peer *Peer) r013SendBuffersNetLocked(buffers [][]byte, countLegacy bool) error {
 
 	if peer.device.isClosed() {
 		return nil

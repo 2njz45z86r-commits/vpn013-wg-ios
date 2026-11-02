@@ -1,6 +1,7 @@
 package device
 
 import (
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -58,7 +59,7 @@ func TestVPN013LegacyConcurrentUpdatesAndGeneration(t *testing.T) {
 	pair := genTestPair(t, false)
 	d := pair[0].dev
 	var wg sync.WaitGroup
-	errors := make(chan bool, 4)
+	failures := make(chan bool, 4)
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
@@ -70,7 +71,7 @@ func TestVPN013LegacyConcurrentUpdatesAndGeneration(t *testing.T) {
 				conf = uapiCfg("r013_legacy15", "false", "i1", "<b 0x01>")
 			}
 			if d.IpcSet(conf) != nil {
-				errors <- true
+				failures <- true
 				return
 			}
 		}
@@ -79,16 +80,16 @@ func TestVPN013LegacyConcurrentUpdatesAndGeneration(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < 500; i++ {
-				if _, _, _, err := d.r013PrepareInitialObfuscationMode(); err != nil {
-					errors <- true
+				if _, _, _, _, err := d.r013PrepareInitialObfuscationMode(); err != nil && !errors.Is(err, errR013LegacyStale) {
+					failures <- true
 					return
 				}
 			}
 		}()
 	}
 	wg.Wait()
-	close(errors)
-	for range errors {
+	close(failures)
+	for range failures {
 		t.Error("synthetic legacy operation failed")
 	}
 }
@@ -101,7 +102,7 @@ func TestVPN013LegacyWaitStopsWhenDeviceGoesDown(t *testing.T) {
 	}
 	started := make(chan struct{})
 	done := make(chan error, 1)
-	go func() { close(started); _, _, _, err := d.r013PrepareInitialObfuscationMode(); done <- err }()
+	go func() { close(started); _, _, _, _, err := d.r013PrepareInitialObfuscationMode(); done <- err }()
 	<-started
 	time.Sleep(50 * time.Millisecond)
 	if err := d.Down(); err != nil {
@@ -120,7 +121,7 @@ func TestVPN013LegacyWaitStopsWhenDeviceGoesDown(t *testing.T) {
 func TestVPN013LegacySparsePackets(t *testing.T) {
 	pair := genTestPair(t, false)
 	d := pair[0].dev
-	cfg := r013LegacyConfig{enabled: true, intervalSeconds: ^uint32(0)}
+	cfg := r013LegacyConfig{enabled: true, intervalSeconds: ^uint32(0), revision: d.legacyRevision.Load()}
 	cfg.initial[1] = "<b 0x12>"
 	cfg.controlled[2] = "<b 0x34>"
 	if err := cfg.validate(); err != nil {
