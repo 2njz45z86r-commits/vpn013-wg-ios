@@ -42,6 +42,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) {throw 'Toolchain preparation failed'}
           ./scripts/bootstrap-driver.ps1
           ./scripts/bootstrap-installer.ps1
+      # Early evidence is diagnostic only. The unmodified mandatory UI step
+      # later in this job still controls acceptance of the complete workflow.
+      - name: Diagnose popup fixture before full native inventory
+        id: popup_diagnostic
+        continue-on-error: true
+        working-directory: vpn013-wg-windows
+        run: |
+          $env:GOPATH=Join-Path $PWD '.deps/gopath'
+          $env:PATH=(Join-Path $PWD '.deps/llvm-mingw-20231128-ucrt-x86_64/bin')+';'+$env:PATH
+          $env:CGO_ENABLED='1'
+          $env:CC='x86_64-w64-mingw32-gcc'
+          ./scripts/ci-ui.ps1
+      - name: Retain bounded early popup checkpoint
+        if: always() && steps.popup_diagnostic.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-popup-checkpoint-${{ github.run_id }}
+          path: ${{ runner.temp }}/r013-ui-*.json
+          if-no-files-found: warn
       - name: Verify patched primary resource rejection on the fenced Windows device
         working-directory: vpn013-wg-windows
         run: |

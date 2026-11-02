@@ -11,6 +11,9 @@ foreach($scenario in @('connection-popup','manual-no-stats','auto','auto-no-stat
   $env:VPN013_PREVIEW_VERIFY=Join-Path $env:RUNNER_TEMP ('r013-ui-'+$scenario+'.json')
   $stderr=Join-Path $env:RUNNER_TEMP ('r013-ui-stderr-'+$scenario+'.txt')
   $stdout=Join-Path $env:RUNNER_TEMP ('r013-ui-stdout-'+$scenario+'.txt')
+  foreach ($stale in @($env:VPN013_PREVIEW_VERIFY,$stderr,$stdout,(Join-Path $env:RUNNER_TEMP 'r013-ui-popup-checkpoint.json'))) {
+    if (Test-Path -LiteralPath $stale) { Remove-Item -LiteralPath $stale -Force }
+  }
   $process=Start-Process -FilePath $previewExe -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardError $stderr -RedirectStandardOutput $stdout -PassThru
   if (!$process.WaitForExit(30000)) {
     $process.Kill()
