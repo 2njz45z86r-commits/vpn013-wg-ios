@@ -70,8 +70,8 @@
     },
     {
       "path": "ui/r013_preview_windows.go",
-      "old_sha256": "be541720f9cfc802d27b1390c727fe3fcbfe9c7e39d8c4429406801804abf41a",
-      "new_sha256": "470794092ee78238dea5f6e35118bfb1067d1f58c946facfdfb22aea6e89672d"
+      "old_sha256": "7e12c3f60945a73f59a55bbad62405b01578cb772d58bf937f4ca64ed7d5bd5b",
+      "new_sha256": "557c3b02286c0242e1c8d008d0e1d0e2f2405bd814259f6951e346bca9332c65"
     },
     {
       "path": "ui/r013_services_preview_windows.go",

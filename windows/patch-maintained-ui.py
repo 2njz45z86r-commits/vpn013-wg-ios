@@ -83,11 +83,11 @@ BODY_EDITS: dict[str, list[tuple[str, str]]] = {
     ],
     "ui/r013_preview_windows.go": [
         (
-            "\tEnableR013Preview()\n\tr013PopupCheckpoint(\"before-create-window\")\n\twindow, err := NewManageTunnelsWindow()",
+            "\tEnableR013Preview()\n\tr013PopupWatchdog()\n\tr013PopupCheckpoint(\"before-create-window\")\n\twindow, err := NewManageTunnelsWindow()",
             "\tEnableR013Preview()\n\tregisterManageTunnelsWindow()\n"
             "\tif _, err := walk.InitApp(); err != nil {\n"
             "\t\tpanic(fmt.Errorf(\"initialize UI preview: %w\", err))\n\t}\n"
-            "\tr013PopupCheckpoint(\"before-create-window\")\n"
+            "\tr013PopupWatchdog()\n\tr013PopupCheckpoint(\"before-create-window\")\n"
             "\twindow, err := NewManageTunnelsWindow()",
         ),
         ("\twindow.Run()\n\twindow.Dispose()", "\twalk.App().Run()\n\twindow.Dispose()"),

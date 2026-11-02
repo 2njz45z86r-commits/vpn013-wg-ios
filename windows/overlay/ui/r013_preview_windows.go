@@ -37,9 +37,42 @@ func r013PopupCheckpoint(stage string) {
 	_ = os.WriteFile(filepath.Join(filepath.Dir(destination), "r013-ui-popup-checkpoint.json"), data, 0600)
 }
 
+// Collect function names only for the disposable synthetic preview if it
+// stalls. Arguments, memory values, paths and application data are omitted.
+func r013PopupWatchdog() {
+	if os.Getenv("VPN013_PREVIEW_SCENARIO") != "connection-popup" {
+		return
+	}
+	destination := os.Getenv("VPN013_PREVIEW_VERIFY")
+	if destination == "" {
+		return
+	}
+	go func() {
+		time.Sleep(22 * time.Second)
+		buffer := make([]byte, 1<<20)
+		n := runtime.Stack(buffer, true)
+		frames := make([]string, 0, 128)
+		for _, line := range strings.Split(string(buffer[:n]), "\n") {
+			if strings.HasPrefix(line, "goroutine ") {
+				frames = append(frames, line)
+				continue
+			}
+			if len(line) == 0 || line[0] == '\t' {
+				continue
+			}
+			if at := strings.LastIndexByte(line, '('); at > 0 {
+				frames = append(frames, line[:at])
+			}
+		}
+		data, _ := json.Marshal(map[string]any{"frames": frames, "truncated": n == len(buffer)})
+		_ = os.WriteFile(filepath.Join(filepath.Dir(destination), "r013-ui-popup-watchdog.json"), data, 0600)
+	}()
+}
+
 func RunR013Preview() {
 	runtime.LockOSThread()
 	EnableR013Preview()
+	r013PopupWatchdog()
 	r013PopupCheckpoint("before-create-window")
 	window, err := NewManageTunnelsWindow()
 	if err != nil {
