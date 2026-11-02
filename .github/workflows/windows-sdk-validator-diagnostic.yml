@@ -49,7 +49,25 @@ jobs:
                       }
                       $stage = 'fetch record'
                     }
-                  } catch { Write-Output ("SDK MSI metadata unavailable at {0}: {1}" -f $stage, $_.Exception.Message) }
+                  } catch {
+                    Write-Output ("SDK MSI metadata unavailable at {0}: {1}" -f $stage, $_.Exception.Message)
+                    $vbs = @(
+                      'Set installer = CreateObject("WindowsInstaller.Installer")',
+                      'Set db = installer.OpenDatabase(WScript.Arguments.Item(0), 0)',
+                      'Set view = db.OpenView("SELECT * FROM `Property`")',
+                      'view.Execute',
+                      'Do',
+                      ' Set record = view.Fetch',
+                      ' If record Is Nothing Then Exit Do',
+                      ' name = record.StringData(1)',
+                      ' If name = "ProductName" Or name = "ProductVersion" Or name = "Manufacturer" Then WScript.Echo "SDK MSI metadata " & name & "=" & record.StringData(2)',
+                      'Loop'
+                    )
+                    $script = Join-Path $env:RUNNER_TEMP 'vpn013-sdk-metadata.vbs'
+                    Set-Content -LiteralPath $script -Value $vbs -Encoding ASCII
+                    & cscript.exe //nologo $script $path
+                    if ($LASTEXITCODE -ne 0) { Write-Output "SDK MSI VBScript metadata exit $LASTEXITCODE" }
+                  }
                 }
               } else { Write-Output ("SDK payload {0} absent" -f $name) }
             }
