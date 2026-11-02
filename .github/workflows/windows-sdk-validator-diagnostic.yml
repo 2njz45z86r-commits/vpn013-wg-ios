@@ -1,0 +1,33 @@
+name: Diagnose pinned Windows SDK validator
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/windows-sdk-validator-diagnostic.yml'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check validator bootstrap and report SDK payload identity
+        shell: pwsh
+        run: |
+          try {
+            & ./windows/overlay/scripts/bootstrap-msi-validator.ps1
+          } finally {
+            $dir = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin\10.0.26100.0\x86'
+            $names = @('MsiVal2-x86_en-us.msi', '8e4755178e6b5bcba8d3538c3630b7a5.cab', 'b80b7321357f7c9f281536f9440dfe68.cab', 'c2aabf6ea5c1d348ec22f3aeb92f8656.cab')
+            foreach ($name in $names) {
+              $path = Join-Path $dir $name
+              if (Test-Path -LiteralPath $path -PathType Leaf) {
+                $signature = Get-AuthenticodeSignature -LiteralPath $path
+                $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+                Write-Output ("SDK payload {0} SHA256={1} signature={2}" -f $name, $hash, $signature.Status)
+              } else { Write-Output ("SDK payload {0} absent" -f $name) }
+            }
+          }
