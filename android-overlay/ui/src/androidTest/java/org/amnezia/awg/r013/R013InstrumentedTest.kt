@@ -53,7 +53,18 @@ class R013InstrumentedTest {
         (Application.getBackend() as GoBackend).setAutomaticEnabled(false)
     }
     @After fun finish() = runBlocking { stopAll(); instrumentation.runOnMainSync { activity?.finish() }; Unit }
-    private suspend fun stopAll() { for (t in Application.getTunnelManager().getTunnels().toList()) if (t.state == Tunnel.State.UP) t.setStateAsync(Tunnel.State.DOWN) }
+    private suspend fun stopAll() {
+        val manager = Application.getTunnelManager()
+        val tunnels = manager.getTunnels().toList()
+        val running = withContext(Dispatchers.IO) { Application.getBackend().runningTunnelNames }
+        check(running.all { name -> tunnels.any { it.name == name } }) { "Unknown synthetic backend tunnel during cleanup" }
+        for (t in tunnels) {
+            // The observable state can lag the backend after a coordinator switch.
+            // Go through the manager directly: setStateAsync skips an already-DOWN observable.
+            if (t.name in running || t.state == Tunnel.State.UP) manager.setTunnelState(t, Tunnel.State.DOWN)
+        }
+        check(withContext(Dispatchers.IO) { Application.getBackend().runningTunnelNames.isEmpty() }) { "Synthetic backend tunnel remained after cleanup" }
+    }
     private suspend fun offlineStateFailure(stage: String, cause: Exception): AssertionError = withContext(Dispatchers.IO) {
         val running = Application.getBackend().runningTunnelNames
         val tunnels = Application.getTunnelManager().getTunnels().toList()
