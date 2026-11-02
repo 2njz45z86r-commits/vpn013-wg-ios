@@ -740,6 +740,14 @@ final class AutoTunnelUITests:XCTestCase {
         profile.switches.firstMatch.tap()
         let connected = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: profile.switches.firstMatch)
         XCTAssertEqual(XCTWaiter.wait(for:[connected], timeout:20), .completed, "The synthetic connection must become active before the popup is opened")
+        if fixture == "--vpn013-test-current-card-timeout" {
+            // The simulator has no real system VPN session. Exercise the
+            // foreground status refresh while keeping this model-only fixture active.
+            XCUIDevice.shared.press(.home)
+            app.activate()
+            let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: profile.switches.firstMatch)
+            XCTAssertEqual(XCTWaiter.wait(for:[restored], timeout:20), .completed, "The active synthetic connection must survive a foreground refresh")
+        }
         openConnectionPopup(app)
         let ping = app.buttons["vpn013.current-ping"]
         XCTAssertTrue(ping.waitForExistence(timeout:8))

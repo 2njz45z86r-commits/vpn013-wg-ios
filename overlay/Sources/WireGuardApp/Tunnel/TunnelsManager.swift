@@ -1297,7 +1297,8 @@ class TunnelContainer: NSObject {
         // foreground refresh must not replace that state with the inactive
         // NETunnelProviderSession stub. Button/row actions still update status.
         let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("--vpn013-test-start-current") || arguments.contains("--vpn013-test-power-connecting") {
+        if arguments.contains("--vpn013-test-start-current") || arguments.contains("--vpn013-test-power-connecting")
+            || arguments.contains("--vpn013-test-current-card-timeout") || arguments.contains("--vpn013-test-current-card-missing") {
             return
         }
         #endif
