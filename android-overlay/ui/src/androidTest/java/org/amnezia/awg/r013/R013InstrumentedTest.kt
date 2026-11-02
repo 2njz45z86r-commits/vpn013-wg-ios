@@ -419,6 +419,7 @@ class R013InstrumentedTest {
         OfflineChanges.apply { registry.importOrdinary(listOf("Finland" to ProfileRegistry.parse(config()),"Дом" to ProfileRegistry.parse(config()))); registry.createAuto() }
         startHome(); waitFor { texts().any { it.startsWith("Профили ·") } }
         assertTrue(texts().contains("Проверить пинг"))
+        waitFor { val labels = texts(); labels.any { it.startsWith("Авто ·") } && labels.contains("Finland") }
         val labels = texts(); assertTrue(labels.indexOfFirst { it.startsWith("Авто ·") } < labels.indexOf("Finland"))
         openConnectionPopup("AmneziaWG")
         val popupPing = popupNodes().first { it.contentDescription?.toString() == "Проверить пинг текущего сервера" }
