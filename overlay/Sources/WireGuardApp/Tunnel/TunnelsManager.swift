@@ -660,7 +660,7 @@ class TunnelsManager {
 
     func startActivation(of tunnel: TunnelContainer, automaticPrepared: Bool = false) {
         #if targetEnvironment(simulator) && DEBUG
-        let traceFixture = ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout")
+        let traceFixture = ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") || ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-missing")
         if traceFixture {
             NSLog("VPN013Fixture activate prepared=%@ changing=%@ managed=%@ contains=%@ status=%@",
                   automaticPrepared ? "true" : "false", CrossProtocolPlan.changingSources ? "true" : "false",
@@ -684,7 +684,7 @@ class TunnelsManager {
         if !automaticPrepared {
             prepareBuiltinAutomatic(tunnel) { [weak self, weak tunnel] error in
                 #if targetEnvironment(simulator) && DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") {
+                if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") || ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-missing") {
                     NSLog("VPN013Fixture prepare completed error=%@ retained=%@", error == nil ? "false" : "true", self != nil && tunnel != nil ? "true" : "false")
                 }
                 #endif
@@ -731,7 +731,7 @@ class TunnelsManager {
 
         #if targetEnvironment(simulator)
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") { NSLog("VPN013Fixture set active") }
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") || ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-missing") { NSLog("VPN013Fixture set active") }
             #endif
             tunnel.status = .active
         #else
@@ -804,7 +804,7 @@ class TunnelsManager {
             #endif
         } catch {
             #if targetEnvironment(simulator) && DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") { NSLog("VPN013Fixture prepare failed") }
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") || ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-missing") { NSLog("VPN013Fixture prepare failed") }
             #endif
             tunnel.tunnelProvider.protocolConfiguration = old; completion(error)
         }

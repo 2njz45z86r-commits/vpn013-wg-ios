@@ -188,7 +188,7 @@ class TunnelListCell: UITableViewCell {
 
     @objc private func switchToggled() {
         #if targetEnvironment(simulator) && DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") {
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") || ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-missing") {
             NSLog("VPN013Fixture row-switch on=%@", statusSwitch.isOn ? "true" : "false")
         }
         #endif

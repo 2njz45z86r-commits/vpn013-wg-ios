@@ -21,7 +21,7 @@ case "$shard" in coreA|coreB|coreC|core49|added5|all54) ;; *) echo "Invalid nati
 selector_args=$(python3 ../../scripts/native_ui_shards.py selectors "$shard")
 # Diagnostic-only branch. The unchanged full-shard verifier must reject this
 # subset; its xcresult is retained solely for investigating these two cases.
-selector_args='-only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithRuntimeTimeout -only-testing:AutoTunnelUITests/AutoTunnelUITests/testServiceCatalogGroupsExclusiveModesAndRememberedSelection'
+selector_args='-only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithMissingRuntime -only-testing:AutoTunnelUITests/AutoTunnelUITests/testManualCurrentPingWithRuntimeTimeout'
 set -- $selector_args
 set +e
 echo 'VPN013 native stage: compile and run selected UI tests'
@@ -33,6 +33,19 @@ xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug 
 result=$?
 set -e
 cd ../..
+export VPN013_SIMULATOR_ID="$device"
+python3 - <<'PY'
+import json, os, subprocess
+from pathlib import Path
+result={'available':False,'events':[]}
+try:
+ p=subprocess.run(['xcrun','simctl','spawn',os.environ['VPN013_SIMULATOR_ID'],'log','show','--style','compact','--last','30m','--predicate','eventMessage CONTAINS "VPN013Fixture"'],capture_output=True,text=True,timeout=30,check=False)
+ result['available']=p.returncode==0
+ if result['available']:
+  result['events']=[line.split('VPN013Fixture',1)[1][:220] for line in p.stdout.splitlines() if 'VPN013Fixture' in line][-100:]
+except (OSError, subprocess.TimeoutExpired): pass
+Path('build/review/fixture-trace.json').write_text(json.dumps(result))
+PY
 python3 - <<'PY'
 from pathlib import Path
 import re
