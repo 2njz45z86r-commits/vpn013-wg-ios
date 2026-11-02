@@ -40,8 +40,8 @@
     },
     {
       "path": "ui/managewindow.go",
-      "old_sha256": "b7fcaba4a1b0c5942b58e9d6537ee6ad0fb095fc542d33696da64c9fbfd6d02d",
-      "new_sha256": "2019a68ad4c1b10bfc6effcfc2ab453a538cf894d0ad1ada43073cea906feab6"
+      "old_sha256": "fbd5551df9bc722f6770146128df7733c831ddd487186332ccf11899f9b38a4a",
+      "new_sha256": "12b7e02956edf445ccd2fd1c1c46b68d2c5d32b80bdbc5c81124cfe6054adf74"
     },
     {
       "path": "ui/r013_brand.go",
@@ -50,13 +50,13 @@
     },
     {
       "path": "ui/r013_current.go",
-      "old_sha256": "324f2c79efedaaddd4b7191b871b0ed3d9622cd4c823338297f32d7fcdde4837",
-      "new_sha256": "007b555d16395da62fa079dce9c5a5c3942375b438dd326f858504541760284b"
+      "old_sha256": "31d7571a7d9a317617550718829d7ada3fd1c9f03ae76d16b76f2b02604311c6",
+      "new_sha256": "1a11f22239d3fdc4647a05a92ab98b3e8a99fcdf934de496474ae0cdcb42538e"
     },
     {
       "path": "ui/r013_features.go",
-      "old_sha256": "56c6fce780082d8ffa8f194d3bec67b673b986aab51a70554db3a0afdf6d90be",
-      "new_sha256": "3dc6ac1964f2338fbc64dba4ced31dcaaeb11ae24abeef29ca7cbb7d119f869f"
+      "old_sha256": "f1694bdf552308d07661cc982c654dfd56dcbc3516dc069ff97e5927d205f194",
+      "new_sha256": "187e132f3576ca9786761305089f644227e144081a87d6b0b2314f103ac49ba9"
     },
     {
       "path": "ui/r013_native_trial.go",
@@ -70,8 +70,8 @@
     },
     {
       "path": "ui/r013_preview_windows.go",
-      "old_sha256": "43455b8121813118f356cdecf242926f8021ec59c8d63b729e7fe928800af030",
-      "new_sha256": "797f033b2a1cf7299956e3e37253b1129f951b50b9d8e3c24feb90970ffcbfa5"
+      "old_sha256": "859edf46fea29cb3e8a222f97791d6cbad237f6135c4ec6d327a0a33b5056fee",
+      "new_sha256": "3b45fb039be710d9d8b42b7239da84f869d9b253e89e182ab7816903ba3bfe45"
     },
     {
       "path": "ui/r013_services_preview_windows.go",
@@ -85,8 +85,8 @@
     },
     {
       "path": "ui/r013_traffic_preview_windows.go",
-      "old_sha256": "53e82b0faaa2de4b82af039f0ef98d3ed94f0db666fb5afda5919781cfc71166",
-      "new_sha256": "ed59b1850421db6dcf7e3bb3ed11c006b2ac420f60b293f27a8b140cb07b1c79"
+      "old_sha256": "67b257c579420b342dd764808d339a0977de43a340a8cf60b309ea589c6384bc",
+      "new_sha256": "e9af5e44da8a9e9533a1ab33a519e2f056065bc269d02a0f595f82fc5273bde1"
     },
     {
       "path": "ui/r013_updates.go",
