@@ -25,7 +25,7 @@ jobs:
           test '${{ inputs.publish_release }}' = false
           python3 - <<'PY'
           import subprocess
-          changed = set(subprocess.check_output(['git','diff','--name-only','b10b82153965135a810ee997ed02807deaac5851','HEAD'], text=True).splitlines())
+          changed = set(subprocess.check_output(['git','diff','--name-only','fc8b1c60c7eb64774c7096bd5f89153baa654d47','HEAD'], text=True).splitlines())
           assert changed == {'.github/workflows/build-ios.yml', 'diagnostics/zip-dedup-harness.py'}
           PY
       - name: Compile and run Swift boundary tests
