@@ -39,7 +39,7 @@ jobs:
   build:
     if: inputs.development_check != true
     needs: [security-review, native-ui]
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 65
     permissions:
       contents: write
