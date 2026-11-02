@@ -46,7 +46,7 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     legacy_manifest = json.loads(manifest_file.read_text(encoding='utf-8'))
     expected_legacy = {'device.go', 'peer.go', 'send.go', 'uapi.go',
                        'r013_resource_limits.go', 'r013_legacy15.go',
-                       'r013_legacy15_test.go', 'r013_legacy_uapi_test.go', 'r013_legacy_fuzz_test.go'}
+                       'r013_legacy15_test.go', 'r013_legacy_uapi_test.go', 'r013_legacy_fuzz_test.go', 'r013_stale_snapshot_test.go'}
     assert set(legacy_manifest) == expected_legacy
     staged_legacy = {}
     for name, digest in legacy_manifest.items():
@@ -67,7 +67,7 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                           'r013_vpn013_auth_live_test.go', 'r013_vpn013_auth_robustness_test.go',
                           'r013_vpn013_awg31_runtime_test.go', 'r013_vpn013_queued_classifier_test.go',
                           'peer.go', 'r013_legacy15.go', 'r013_legacy15_test.go', 'r013_legacy_uapi_test.go',
-                          'r013_legacy_fuzz_test.go')}
+                          'r013_legacy_fuzz_test.go', 'r013_stale_snapshot_test.go')}
     assert before == {name: hashlib.sha256((source / 'device' / name).read_bytes()).hexdigest() for name in FILES}
     # Execute the copied primary implementation on the build host. Cross-compiled
     # libraries still require their platform/native acceptance tests afterwards.
@@ -97,6 +97,8 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 'TestVPN013LegacyWaitStopsWhenDeviceGoesDown',
                 'TestVPN013LegacyConcurrentUpdatesAndGeneration',
                 'TestVPN013LegacyUAPIStagingAndPeerPreservation', 'TestVPN013LegacySparsePackets',
+                'TestVPN013LegacyStaleSnapshotAfterModeSwitch', 'TestVPN013LegacyRejectPreparedPacketAfterModeSwitch',
+                'TestVPN013LegacySendCompletesBeforeModeCommit',
                 'FuzzVPN013LegacyParse'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,

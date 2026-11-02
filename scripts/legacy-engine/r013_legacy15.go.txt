@@ -31,7 +31,10 @@ type r013LegacySpec struct {
 
 // Staged per-device legacy configuration. It is not active unless explicitly
 // selected by the client; ordinary WireGuard and AWG 2/3 keep their own path.
+var errR013LegacyStale = errors.New("legacy configuration changed during preparation")
+
 type r013LegacyConfig struct {
+	revision        uint64
 	enabled         bool
 	initial         [5]string
 	controlled      [3]string
@@ -204,6 +207,9 @@ func (device *Device) r013BuildLegacyInitial(config r013LegacyConfig, count, min
 	}
 	device.legacyRuntime.Lock()
 	defer device.legacyRuntime.Unlock()
+	if device.legacyRevision.Load() != config.revision {
+		return nil, errR013LegacyStale
+	}
 	now := time.Now()
 	hasInitial := false
 	for _, raw := range config.initial {
