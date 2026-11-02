@@ -1,0 +1,307 @@
+// SPDX-License-Identifier: MIT
+package device
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"strconv"
+	"strings"
+
+	"github.com/amnezia-vpn/amneziawg-go/v3/ipc"
+)
+
+const (
+	maxJunkCount        uint32 = 64
+	maxObfuscationPart  uint32 = 4096
+	maxJunkAggregate    uint64 = 256 * 1024
+	maxInitialAggregate uint32 = 5 * maxObfuscationPart
+	maxInitialSpecBytes        = 16 * 1024
+)
+
+var ErrObfuscationResourceBudget = errors.New("obfuscation resource budget exceeded")
+
+// Jc=0 preserves ordinary WireGuard, including dormant Jmin/Jmax settings.
+func ValidateJunkPacketSettings(count, min, max uint32) error {
+	if count == 0 {
+		return nil
+	}
+	if count > maxJunkCount || min > max || max > maxObfuscationPart ||
+		uint64(count)*uint64(max) > maxJunkAggregate {
+		return ErrObfuscationResourceBudget
+	}
+	return nil
+}
+
+// ValidateInitialPacketSpec checks the exact tags consumed by newObfChain.
+// It runs before the tag builders and their unbounded Atoi-derived lengths.
+func ValidateInitialPacketSpec(spec string) (uint32, error) {
+	if len(spec) > maxInitialSpecBytes {
+		return 0, ErrObfuscationResourceBudget
+	}
+	var total uint32
+	remaining := spec
+	for {
+		start := strings.IndexByte(remaining, '<')
+		if start < 0 {
+			break
+		} // newObfChain ignores inert text outside tags.
+		remaining = remaining[start+1:]
+		end := strings.IndexByte(remaining, '>')
+		if end < 0 {
+			return 0, ErrObfuscationResourceBudget
+		}
+		parts := strings.Fields(remaining[:end])
+		remaining = remaining[end+1:]
+		if len(parts) == 0 {
+			return 0, ErrObfuscationResourceBudget
+		}
+		value := ""
+		if len(parts) > 1 {
+			value = parts[1]
+		}
+		var size uint32
+		switch parts[0] {
+		case "r", "rc", "rd", "dz":
+			n, err := strconv.ParseInt(value, 10, 64)
+			if err != nil || n < 0 || n > int64(maxObfuscationPart) {
+				return 0, ErrObfuscationResourceBudget
+			}
+			size = uint32(n)
+		case "b":
+			if value == "" {
+				return 0, ErrObfuscationResourceBudget
+			}
+			encoded := strings.TrimPrefix(value, "0x")
+			if len(encoded) == 0 || len(encoded)%2 != 0 || len(encoded)/2 > int(maxObfuscationPart) {
+				return 0, ErrObfuscationResourceBudget
+			}
+			if _, err := hex.DecodeString(encoded); err != nil {
+				return 0, ErrObfuscationResourceBudget
+			}
+			size = uint32(len(encoded) / 2)
+		case "t":
+			size = 4
+		case "d", "ds":
+		default:
+			return 0, ErrObfuscationResourceBudget
+		}
+		if size > maxObfuscationPart-total {
+			return 0, ErrObfuscationResourceBudget
+		}
+		total += size
+	}
+	return total, nil
+}
+
+func ValidateObfuscationResources(count, min, max uint32, paddings [4]uint32, specs [5]string) error {
+	if err := ValidateJunkPacketSettings(count, min, max); err != nil {
+		return err
+	}
+	for _, padding := range paddings {
+		if padding > maxObfuscationPart {
+			return ErrObfuscationResourceBudget
+		}
+	}
+	var total uint32
+	for _, spec := range specs {
+		size, err := ValidateInitialPacketSpec(spec)
+		if err != nil || size > maxInitialAggregate-total {
+			return ErrObfuscationResourceBudget
+		}
+		total += size
+	}
+	return nil
+}
+
+// Preflight only the resource fields, using the effective final set values.
+// Other UAPI mutations keep their existing semantics; this function ensures
+// unsafe resource input and read failure cannot partially mutate the device.
+func preflightObfuscationSet(lines []string, current *ipcSetDevice) error {
+	count, min, max := current.junk.count, current.junk.min, current.junk.max
+	headerKey := current.headerProtectionKey
+	legacy := current.legacy
+	for _, line := range lines {
+		if line == "" {
+			break
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		if key == "public_key" {
+			break
+		}
+		if key == "r013_legacy15" {
+			if value != "true" && value != "false" {
+				return ipcErrorf(ipc.IpcErrorInvalid, "invalid legacy mode")
+			}
+			want := value == "true"
+			if want != legacy.enabled {
+				legacy = r013LegacyConfig{enabled: want}
+				current.ipackets = [5]*obfChain{}
+			}
+		}
+	}
+	paddings := [4]uint32{current.paddings.init, current.paddings.response,
+		current.paddings.cookie, current.paddings.transport}
+	var specs [5]string
+	for i, chain := range current.ipackets {
+		if chain != nil {
+			specs[i] = chain.Spec
+		}
+	}
+	deviceFields := true
+	for _, line := range lines {
+		if line == "" {
+			break
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			return ipcErrorf(ipc.IpcErrorProtocol, "UAPI line has no separator")
+		}
+		if key == "public_key" {
+			deviceFields = false
+			continue
+		}
+		if !deviceFields {
+			continue
+		}
+		switch key {
+		case "r013_legacy15":
+			// Already staged before processing initial packet fields.
+		case "j1", "j2", "j3":
+			if !legacy.enabled {
+				return ipcErrorf(ipc.IpcErrorInvalid, "legacy controlled packet requires legacy mode")
+			}
+			legacy.controlled[int(key[1]-'1')] = value
+		case "itime":
+			if !legacy.enabled {
+				return ipcErrorf(ipc.IpcErrorInvalid, "legacy interval requires legacy mode")
+			}
+			n, err := strconv.ParseUint(value, 10, 32)
+			if err != nil {
+				return ipcErrorf(ipc.IpcErrorInvalid, "invalid legacy interval")
+			}
+			legacy.intervalSeconds = uint32(n)
+		case "jc", "jmin", "jmax":
+			n, err := strconv.ParseUint(value, 10, 32)
+			if err != nil {
+				return ipcErrorf(ipc.IpcErrorInvalid, "invalid junk parameter")
+			}
+			switch key {
+			case "jc":
+				count = uint32(n)
+			case "jmin":
+				min = uint32(n)
+			case "jmax":
+				max = uint32(n)
+			}
+		case "s1", "s2", "s3", "s4":
+			n, err := strconv.ParseUint(value, 10, 16)
+			if err != nil {
+				return ipcErrorf(ipc.IpcErrorInvalid, "invalid padding parameter")
+			}
+			paddings[int(key[1]-'1')] = uint32(n)
+		case "i1", "i2", "i3", "i4", "i5":
+			if legacy.enabled {
+				legacy.initial[int(key[1]-'1')] = value
+				continue
+			}
+			if _, err := ValidateInitialPacketSpec(value); err != nil {
+				return ipcErrorf(ipc.IpcErrorInvalid, "unsafe initial packet: %w", err)
+			}
+			specs[int(key[1]-'1')] = value
+		case "header_protection_key":
+			if err := headerKey.FromHex(value); err != nil {
+				return ipcErrorf(ipc.IpcErrorInvalid, "invalid header protection key")
+			}
+		}
+	}
+	if err := legacy.validate(); err != nil {
+		return ipcErrorf(ipc.IpcErrorInvalid, "unsafe legacy packet configuration")
+	}
+	if legacy.enabled && !headerKey.IsZero() {
+		return ipcErrorf(ipc.IpcErrorInvalid, "legacy mode cannot use header protection")
+	}
+	current.legacy = legacy
+	if err := ValidateObfuscationResources(count, min, max, paddings, specs); err != nil {
+		return ipcErrorf(ipc.IpcErrorInvalid, "unsafe obfuscation resources: %w", err)
+	}
+	if !headerKey.IsZero() {
+		for _, padding := range paddings {
+			if padding < HeaderCipherNonceSize {
+				return ipcErrorf(ipc.IpcErrorInvalid, "header protection padding is too short")
+			}
+		}
+	}
+	return nil
+}
+
+// Caller holds device.obfuscation.RLock and has validated the whole budget.
+func (device *Device) junkPacketsLocked(count, min, max uint32) [][]byte {
+	var bufs [][]byte
+	for range count {
+		buf := make([]byte, min+fastrandn(max-min))
+		_, _ = rand.Read(buf)
+		bufs = append(bufs, buf)
+	}
+	return bufs
+}
+
+func (device *Device) prepareInitialObfuscation() ([][]byte, uint32, error) {
+	bufs, padding, _, err := device.r013PrepareInitialObfuscationMode()
+	return bufs, padding, err
+}
+
+func (device *Device) r013PrepareInitialObfuscationMode() ([][]byte, uint32, bool, error) {
+	device.obfuscation.RLock()
+	if device.legacyConfig.enabled {
+		config := device.legacyConfig
+		count, min, max := device.junk.count.Load(), device.junk.min.Load(), device.junk.max.Load()
+		padding := device.paddings.init.Load()
+		device.obfuscation.RUnlock()
+		bufs, err := device.r013BuildLegacyInitial(config, count, min, max)
+		return bufs, padding, true, err
+	}
+	defer device.obfuscation.RUnlock()
+	count, min, max := device.junk.count.Load(), device.junk.min.Load(), device.junk.max.Load()
+	paddings := [4]uint32{device.paddings.init.Load(), device.paddings.response.Load(),
+		device.paddings.cookie.Load(), device.paddings.transport.Load()}
+	var specs [5]string
+	for i, chain := range device.ipackets {
+		if chain != nil {
+			specs[i] = chain.Spec
+		}
+	}
+	if err := ValidateObfuscationResources(count, min, max, paddings, specs); err != nil {
+		return nil, 0, false, err
+	}
+	var bufs [][]byte
+	for _, chain := range device.ipackets {
+		if chain == nil {
+			continue
+		}
+		length := chain.ObfuscatedLen(0)
+		if length < 0 || length > int(maxObfuscationPart) {
+			return nil, 0, false, ErrObfuscationResourceBudget
+		}
+		buf := make([]byte, length)
+		chain.Obfuscate(buf, nil)
+		bufs = append(bufs, buf)
+	}
+	bufs = append(bufs, device.junkPacketsLocked(count, min, max)...)
+	return bufs, paddings[0], false, nil
+}
+
+// Move TUN payload bytes after S4 changes while a read is blocked. Go copy
+// supports overlapping slices; validate both bounds before taking slices.
+func r013MoveTUNPayload(buf []byte, size, oldOffset, newOffset int) bool {
+	if size < 0 || oldOffset < 0 || newOffset < 0 || oldOffset > len(buf) || newOffset > len(buf) || size > len(buf)-oldOffset || size > len(buf)-newOffset {
+		return false
+	}
+	if oldOffset != newOffset {
+		copy(buf[newOffset:newOffset+size], buf[oldOffset:oldOffset+size])
+	}
+	return true
+}
