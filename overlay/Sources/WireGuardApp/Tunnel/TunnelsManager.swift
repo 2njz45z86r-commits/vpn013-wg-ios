@@ -659,6 +659,14 @@ class TunnelsManager {
     }
 
     func startActivation(of tunnel: TunnelContainer, automaticPrepared: Bool = false) {
+        #if targetEnvironment(simulator) && DEBUG
+        let traceFixture = ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout")
+        if traceFixture {
+            NSLog("VPN013Fixture activate prepared=%@ changing=%@ managed=%@ contains=%@ status=%@",
+                  automaticPrepared ? "true" : "false", CrossProtocolPlan.changingSources ? "true" : "false",
+                  managedUpdateInProgress ? "true" : "false", tunnels.contains(tunnel) ? "true" : "false", String(describing: tunnel.status))
+        }
+        #endif
         #if os(iOS)
         guard !CrossProtocolPlan.changingSources else {
             activationDelegate?.tunnelActivationAttemptFailed(tunnel: tunnel, error: .tunnelIsNotInactive); return
@@ -675,6 +683,11 @@ class TunnelsManager {
         #if os(iOS)
         if !automaticPrepared {
             prepareBuiltinAutomatic(tunnel) { [weak self, weak tunnel] error in
+                #if targetEnvironment(simulator) && DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") {
+                    NSLog("VPN013Fixture prepare completed error=%@ retained=%@", error == nil ? "false" : "true", self != nil && tunnel != nil ? "true" : "false")
+                }
+                #endif
                 guard let self = self, let tunnel = tunnel, self.tunnels.contains(tunnel) else { return }
                 if let error = error {
                     self.activationDelegate?.tunnelActivationAttemptFailed(tunnel: tunnel, error: .failedWhileSaving(systemError: error))
@@ -717,6 +730,9 @@ class TunnelsManager {
         }
 
         #if targetEnvironment(simulator)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") { NSLog("VPN013Fixture set active") }
+            #endif
             tunnel.status = .active
         #else
             tunnel.startActivation(activationDelegate: activationDelegate)
@@ -786,7 +802,12 @@ class TunnelsManager {
                 }
             }
             #endif
-        } catch { tunnel.tunnelProvider.protocolConfiguration = old; completion(error) }
+        } catch {
+            #if targetEnvironment(simulator) && DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--vpn013-test-current-card-timeout") { NSLog("VPN013Fixture prepare failed") }
+            #endif
+            tunnel.tunnelProvider.protocolConfiguration = old; completion(error)
+        }
     }
 
     func applyAutomaticPreference(completion: @escaping (Error?) -> Void) {

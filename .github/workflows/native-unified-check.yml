@@ -60,7 +60,7 @@ jobs:
               path = Path('build') / source
               if path.is_file():
                   lines = path.read_text(errors='replace').splitlines()
-                  selected = [s for s in lines if 'error:' in s or 'XCTAssert' in s or 'Test Case ' in s or '** TEST' in s or 'BUILD ' in s]
+                  selected = [s for s in lines if 'VPN013Fixture' in s or 'error:' in s or 'XCTAssert' in s or 'Test Case ' in s or '** TEST' in s or 'BUILD ' in s]
                   (Path('build/review') / (source + '.summary.json')).write_text(json.dumps(selected[-160:]))
           PY
           python3 - <<'PY'

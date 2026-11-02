@@ -38,7 +38,7 @@ from pathlib import Path
 import re
 lines=Path('build/simulator-test.log').read_text(errors='replace').splitlines()
 for line in lines:
- if re.search(r'error:|XCTAssert|Test Case .* (passed|failed)|Executed |TEST (FAILED|SUCCEEDED)',line):print(line)
+ if re.search(r'VPN013Fixture|error:|XCTAssert|Test Case .* (passed|failed)|Executed |TEST (FAILED|SUCCEEDED)',line):print(line)
 PY
 if [ -d build/AutoTunnel.xcresult ]; then
  xcrun xcresulttool export attachments --path build/AutoTunnel.xcresult --output-path build/review/flow
