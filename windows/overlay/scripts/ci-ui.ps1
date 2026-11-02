@@ -4,6 +4,15 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hoste
 }
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $previewExe=Join-Path $env:RUNNER_TEMP 'VPN013-Preview.exe'
+function Save-PreviewDiagnostic([string]$LogPath,[string]$Scenario,[string]$Stage,[int]$ExitCode) {
+  $lines=@()
+  if (Test-Path -LiteralPath $LogPath) {
+    $lines=@(Get-Content -LiteralPath $LogPath | Where-Object { $_ -match '^(panic:|fatal error:|runtime error:|goroutine [0-9]+ \[|.*[/\\](r013_[a-z_]+|managewindow|ui)\.go:[0-9]+)' } | Select-Object -Last 20)
+  }
+  $record=@{scenario=$Scenario;stage=$Stage;exitCode=$ExitCode;sanitizedLines=$lines} | ConvertTo-Json -Depth 4
+  $record | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP ('r013-ui-diagnostic-'+$Scenario+'.json')) -Encoding utf8
+  $lines | ForEach-Object { Write-Output $_ }
+}
 & (Join-Path $projectRoot '.deps/go/bin/go.exe') build -mod=vendor -tags 'load_wgnt_from_rsrc,r013preview' -ldflags '-H windowsgui' -trimpath -buildvcs=false -o $previewExe .
 if ($LASTEXITCODE -ne 0) {throw 'Native UI fixture build failed'}
 foreach($scenario in @('connection-popup','manual-no-stats','auto','auto-no-stats','update-offer','power','traffic','services')) {
@@ -11,20 +20,23 @@ foreach($scenario in @('connection-popup','manual-no-stats','auto','auto-no-stat
   $env:VPN013_PREVIEW_VERIFY=Join-Path $env:RUNNER_TEMP ('r013-ui-'+$scenario+'.json')
   $stderr=Join-Path $env:RUNNER_TEMP ('r013-ui-stderr-'+$scenario+'.txt')
   $stdout=Join-Path $env:RUNNER_TEMP ('r013-ui-stdout-'+$scenario+'.txt')
-  foreach ($stale in @($env:VPN013_PREVIEW_VERIFY,$stderr,$stdout,(Join-Path $env:RUNNER_TEMP 'r013-ui-popup-checkpoint.json'))) {
+  foreach ($stale in @($env:VPN013_PREVIEW_VERIFY,$stderr,$stdout,(Join-Path $env:RUNNER_TEMP 'r013-ui-popup-checkpoint.json'),(Join-Path $env:RUNNER_TEMP ('r013-ui-diagnostic-'+$scenario+'.json')))) {
     if (Test-Path -LiteralPath $stale) { Remove-Item -LiteralPath $stale -Force }
   }
   $process=Start-Process -FilePath $previewExe -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardError $stderr -RedirectStandardOutput $stdout -PassThru
   if (!$process.WaitForExit(30000)) {
     $process.Kill()
+    $process.WaitForExit()
+    Save-PreviewDiagnostic $stderr $scenario 'timeout' $process.ExitCode
     throw "Native UI fixture timed out: $scenario"
   }
-  if (!(Test-Path -LiteralPath $env:VPN013_PREVIEW_VERIFY)) {throw "Missing UI report: $scenario"}
+  if (!(Test-Path -LiteralPath $env:VPN013_PREVIEW_VERIFY)) {
+    Save-PreviewDiagnostic $stderr $scenario 'missing-report' $process.ExitCode
+    throw "Missing UI report: $scenario; exitCode=$($process.ExitCode)"
+  }
   $report=Get-Content -LiteralPath $env:VPN013_PREVIEW_VERIFY -Raw | ConvertFrom-Json
   if ($process.ExitCode -ne 0 -or !$report.passed) {
-    if (Test-Path -LiteralPath $stderr) {
-      Get-Content -LiteralPath $stderr | Where-Object { $_ -match '^(panic:|fatal error:|runtime error:|goroutine [0-9]+ \[|.*[/\\](r013_[a-z_]+|managewindow)\.go:[0-9]+)' } | Select-Object -Last 20
-    }
+    Save-PreviewDiagnostic $stderr $scenario 'failure' $process.ExitCode
     throw "Native UI fixture failed $scenario : exitCode=$($process.ExitCode) reportPassed=$($report.passed) failure=$($report.failure)"
   }
   $expectedChecks=5
