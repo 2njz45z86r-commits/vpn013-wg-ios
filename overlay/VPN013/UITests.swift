@@ -28,7 +28,7 @@ final class AutoTunnelUITests:XCTestCase {
             only.tap(); XCTAssertEqual(only.value as? String, "1"); XCTAssertEqual(bypass.value as? String, "0")
             let search = app.searchFields.firstMatch
             search.tap(); search.typeText("Facebook")
-            let service = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.services.item.")).firstMatch
+            let service = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "vpn013.services.item.", "Facebook")).firstMatch
             XCTAssertTrue(service.waitForExistence(timeout: 5)); XCTAssertTrue(service.label.contains("Facebook"))
             service.tap(); XCTAssertEqual(service.value as? String, "Выбрано")
             bypass.tap(); XCTAssertEqual(only.value as? String, "0"); XCTAssertEqual(bypass.value as? String, "1")
@@ -38,7 +38,7 @@ final class AutoTunnelUITests:XCTestCase {
             openCatalog(); only.tap()
             let savedSearch = app.searchFields.firstMatch
             savedSearch.tap(); savedSearch.typeText("Facebook")
-            let saved = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.services.item.")).firstMatch
+            let saved = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "vpn013.services.item.", "Facebook")).firstMatch
             XCTAssertTrue(saved.waitForExistence(timeout: 5))
             // Search filtering and UITableView reload can briefly expose a stale cell.
             // Wait for the actual searched service and its saved selection; never
