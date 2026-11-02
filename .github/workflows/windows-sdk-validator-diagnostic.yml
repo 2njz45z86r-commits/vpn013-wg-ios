@@ -42,7 +42,7 @@ jobs:
                         Write-Output ("SDK MSI metadata {0}={1}" -f $key, $value)
                       }
                     }
-                  } catch { Write-Output 'SDK MSI metadata unavailable' }
+                  } catch { Write-Output ("SDK MSI metadata unavailable: {0}" -f $_.Exception.Message) }
                 }
               } else { Write-Output ("SDK payload {0} absent" -f $name) }
             }
