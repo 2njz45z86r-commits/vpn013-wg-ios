@@ -45,11 +45,18 @@ class R013InstrumentedTest {
         check(BuildConfig.DEBUG && context.packageName == "com.vpn013.awg.debug")
         Application.getTunnelManager().getTunnels()
         stopAll()
-        OfflineChanges.apply { registry.vault.write(JSONObject().put("schema",1).put("profiles",JSONObject()).put("orders",JSONObject()).put("automaticEnabled",false)) }
+        try {
+            OfflineChanges.apply { registry.vault.write(JSONObject().put("schema",1).put("profiles",JSONObject()).put("orders",JSONObject()).put("automaticEnabled",false)) }
+        } catch (error: OfflineChanges.ActiveVPNException) {
+            throw offlineStateFailure("prepare", error)
+        }
         (Application.getBackend() as GoBackend).setAutomaticEnabled(false)
     }
     @After fun finish() = runBlocking { stopAll(); instrumentation.runOnMainSync { activity?.finish() }; Unit }
     private suspend fun stopAll() { for (t in Application.getTunnelManager().getTunnels().toList()) if (t.state == Tunnel.State.UP) t.setStateAsync(Tunnel.State.DOWN) }
+    private suspend fun offlineStateFailure(stage: String, cause: Exception): AssertionError = withContext(Dispatchers.IO) {
+        AssertionError("Synthetic $stage blocked: tunnel=${Application.getBackend().runningTunnelNames.isNotEmpty()} proxyActive=${ProxyVpnService.activeId != null} proxyRequested=${ProxyVpnService.requestedId != null} coordinatorBusy=${UnifiedAutoCoordinator.busy}", cause)
+    }
     private suspend fun automaticMode(enabled: Boolean) = withContext(Dispatchers.IO) {
         registry.setAutomaticEnabled(enabled); (Application.getBackend() as GoBackend).setAutomaticEnabled(enabled)
     }
@@ -651,7 +658,11 @@ class R013InstrumentedTest {
     }
     @Test fun kOrdinaryProfileUsesBuiltInAutoAndNativePauseSwitch() = runBlocking {
         val good = fixture().replace("AllowedIPs = 10.13.99.1/32","AllowedIPs = 0.0.0.0/0")
-        OfflineChanges.apply { registry.create("Built-in Auto Fixture",ProfileRegistry.parse(good)) }
+        try {
+            OfflineChanges.apply { registry.create("Built-in Auto Fixture",ProfileRegistry.parse(good)) }
+        } catch (error: OfflineChanges.ActiveVPNException) {
+            throw offlineStateFailure("create-fixture", error)
+        }
         automaticMode(true); startHome()
         val tunnel = Application.getTunnelManager().getTunnels()["Built-in Auto Fixture"]!!
         val backend = Application.getBackend() as GoBackend
