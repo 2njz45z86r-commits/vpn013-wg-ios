@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/h1-image-readonly-diagnostic.yml'
+      - '.github/workflows/wg-dynamic-diagnostic.py'
 permissions:
   contents: read
 jobs:
@@ -27,3 +28,21 @@ jobs:
               fi
             done
           '
+  synthetic-dynamic-inbound:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify official Xray 26.6.27 and test loopback-only dynamic inbound
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://github.com/XTLS/Xray-core/releases/download/v26.6.27/Xray-linux-64.zip'
+          curl --fail --location --silent --show-error --retry 2 "$url" -o "$RUNNER_TEMP/xray.zip"
+          echo 'b3e5902d06d6282fe53cfa2fc426058b9aeaa429b2c812e20887cd47f26d08bf  '"$RUNNER_TEMP/xray.zip" | sha256sum --check
+          unzip -p "$RUNNER_TEMP/xray.zip" xray > "$RUNNER_TEMP/xray"
+          chmod 500 "$RUNNER_TEMP/xray"
+          "$RUNNER_TEMP/xray" version | head -n 2
+          python3 .github/workflows/wg-dynamic-diagnostic.py "$RUNNER_TEMP/xray"
