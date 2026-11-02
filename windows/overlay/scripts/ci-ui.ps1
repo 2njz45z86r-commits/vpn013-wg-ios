@@ -6,7 +6,7 @@ $projectRoot=Split-Path $PSScriptRoot -Parent
 $previewExe=Join-Path $env:RUNNER_TEMP 'VPN013-Preview.exe'
 & (Join-Path $projectRoot '.deps/go/bin/go.exe') build -mod=vendor -tags 'load_wgnt_from_rsrc,r013preview' -ldflags '-H windowsgui' -trimpath -buildvcs=false -o $previewExe .
 if ($LASTEXITCODE -ne 0) {throw 'Native UI fixture build failed'}
-foreach($scenario in @('manual-no-stats','auto','auto-no-stats','update-offer','power','traffic','services')) {
+foreach($scenario in @('manual-no-stats','auto','auto-no-stats','update-offer','power','traffic','services','connection-popup')) {
   $env:VPN013_PREVIEW_SCENARIO=$scenario
   $env:VPN013_PREVIEW_VERIFY=Join-Path $env:RUNNER_TEMP ('r013-ui-'+$scenario+'.json')
   $process=Start-Process -FilePath $previewExe -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
@@ -23,7 +23,7 @@ foreach($scenario in @('manual-no-stats','auto','auto-no-stats','update-offer','
   if ($scenario -eq 'power') {$expectedChecks=10}
   if ($scenario -eq 'traffic') {$expectedChecks=8}
   if ($scenario -eq 'services') {$expectedChecks=8}
-  if ($report.checks.Count -ne $expectedChecks -or $report.actualLoopbackEcho -ne ($scenario -notin @('auto-no-stats','update-offer','power','traffic','services'))) {throw "Incomplete native UI proof: $scenario"}
+  if ($report.checks.Count -ne $expectedChecks -or $report.actualLoopbackEcho -ne ($scenario -notin @('auto-no-stats','update-offer','power','traffic','services','connection-popup'))) {throw "Incomplete native UI proof: $scenario"}
   if ($scenario -eq 'services') {
     $capture=Join-Path $env:RUNNER_TEMP 'r013-services.png'
     if (!(Test-Path -LiteralPath $capture) -or (Get-Item -LiteralPath $capture).Length -lt 1000) {throw 'Required native service chooser capture missing'}

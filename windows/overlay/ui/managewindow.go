@@ -20,11 +20,13 @@ import (
 type ManageTunnelsWindow struct {
 	walk.FormBase
 
-	tabs        *walk.TabWidget
-	tunnelsPage *TunnelsPage
-	logPage     *LogPage
-	updatePage  *UpdatePage
-	currentCard *r013CurrentCard
+	tabs             *walk.TabWidget
+	tunnelsPage      *TunnelsPage
+	logPage          *LogPage
+	updatePage       *UpdatePage
+	currentCard      *r013CurrentCard
+	currentPopup     *walk.Dialog
+	connectionButton *walk.PushButton
 
 	tunnelChangedCB *manager.TunnelChangeCallback
 }
@@ -78,6 +80,16 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 	vlayout.SetMargins(walk.Margins{5, 5, 5, 5})
 	mtw.SetLayout(vlayout)
 	addR013Header(mtw)
+	if mtw.currentPopup, err = walk.NewDialog(mtw); err != nil {
+		return nil, err
+	}
+	mtw.currentPopup.SetTitle("AmneziaWG · Подключение")
+	mtw.currentPopup.SetLayout(walk.NewVBoxLayout())
+	mtw.currentPopup.SetSize(walk.Size{Width: 600, Height: 240})
+	mtw.currentPopup.Closing().Attach(func(canceled *bool, _ walk.CloseReason) {
+		*canceled = true
+		mtw.currentPopup.Hide()
+	})
 	if mtw.currentCard, err = addR013CurrentCard(mtw); err != nil {
 		return nil, err
 	}
@@ -118,6 +130,7 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 	mtw.tabs.Pages().Add(mtw.logPage.TabPage)
 	addR013Footer(mtw)
 	themeWindow(mtw)
+	themeWindow(mtw.currentPopup)
 	themeWindow(mtw.tunnelsPage)
 	themeWindow(mtw.logPage)
 	// Flat native toolbars draw on their parent rather than their own brush.
@@ -151,6 +164,9 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 
 func (mtw *ManageTunnelsWindow) Dispose() {
 	mtw.currentCard.dispose()
+	if mtw.currentPopup != nil {
+		mtw.currentPopup.Dispose()
+	}
 	if mtw.tunnelChangedCB != nil {
 		mtw.tunnelChangedCB.Unregister()
 		mtw.tunnelChangedCB = nil

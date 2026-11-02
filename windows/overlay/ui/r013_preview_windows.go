@@ -149,7 +149,42 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 		failure = "Current fixture did not become active"
 		return
 	}
+	if scenario == "connection-popup" {
+		syncUI(func() {
+			starts, stops, _, _ := R013PreviewPowerAudit()
+			if window.currentPopup.Visible() {
+				failure = "Connection popup was open by default"
+				return
+			}
+			checks = append(checks, "Connection popup is closed by default")
+			window.connectionButton.SendMessage(win.BM_CLICK, 0, 0)
+			if !window.currentPopup.Visible() || window.currentPopup.Title() != "AmneziaWG · Подключение" {
+				failure = "Connection popup did not open with its section title"
+				return
+			}
+			checks = append(checks, "Button opens AmneziaWG connection popup")
+			if !window.currentCard.current.active || window.currentCard.current.name == "" || !window.currentCard.power.Enabled() {
+				failure = "Popup lacks actual active state or power control"
+				return
+			}
+			checks = append(checks, "Popup shows actual active profile and enabled power control")
+			if window.currentCard.button == nil || window.currentCard.result == nil {
+				failure = "Popup lacks ping control"
+				return
+			}
+			checks = append(checks, "Popup contains current-server ping control")
+			window.currentPopup.SendMessage(win.WM_CLOSE, 0, 0)
+			afterStarts, afterStops, _, _ := R013PreviewPowerAudit()
+			if window.currentPopup.Visible() || starts != afterStarts || stops != afterStops || !window.currentCard.current.active {
+				failure = "Closing popup altered connection"
+				return
+			}
+			checks = append(checks, "Closing popup leaves active connection unchanged")
+		})
+		return
+	}
 	if scenario == "power" {
+		syncUI(func() { window.currentPopup.Show() })
 		check := func(ok bool, message string) bool {
 			if !ok {
 				failure = message
@@ -159,7 +194,7 @@ func verifyR013Preview(window *ManageTunnelsWindow, destination string) {
 			return true
 		}
 		capture := func(name string) {
-			bitmap, err := walk.NewBitmapFromWindow(window)
+			bitmap, err := walk.NewBitmapFromWindow(window.currentPopup)
 			if err != nil {
 				failure = "Native capture failed"
 				return

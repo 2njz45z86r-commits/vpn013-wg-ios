@@ -49,7 +49,7 @@ type r013CurrentCard struct {
 func addR013CurrentCard(owner *ManageTunnelsWindow) (*r013CurrentCard, error) {
 	c := &r013CurrentCard{owner: owner, refresh: make(chan struct{}, 1)}
 	var err error
-	if c.group, err = walk.NewGroupBox(owner); err != nil {
+	if c.group, err = walk.NewGroupBox(owner.currentPopup); err != nil {
 		return nil, err
 	}
 	c.group.SetTitle("Текущее подключение · Не подключено")

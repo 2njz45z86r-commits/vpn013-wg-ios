@@ -44,6 +44,7 @@ func verifyR013TrafficPreview(window *ManageTunnelsWindow, destination string, s
 		return value
 	}
 	syncUI(func() {
+		window.currentPopup.Show()
 		c := window.currentCard
 		if c.cancel != nil {
 			c.cancel()
@@ -65,7 +66,7 @@ func verifyR013TrafficPreview(window *ManageTunnelsWindow, destination string, s
 		return
 	}
 	syncUI(func() {
-		bitmap, err := walk.NewBitmapFromWindow(window)
+		bitmap, err := walk.NewBitmapFromWindow(window.currentPopup)
 		if err != nil {
 			failure = "Native traffic capture failed"
 			return
