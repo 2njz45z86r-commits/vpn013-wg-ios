@@ -39,12 +39,34 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     awg31_patch = Path(__file__).with_name('patch-primary-awg31.py')
     assert awg31_patch.is_file() and not awg31_patch.is_symlink()
     subprocess.run([sys.executable, str(awg31_patch), str(local)], check=True)
+    # Stage the exact Linux race-tested 1.5 prototype only on the pinned base.
+    # Check every input before changing any file; no Go module cache is edited.
+    legacy_dir = Path(__file__).with_name('legacy-engine').resolve(strict=True)
+    manifest_file = legacy_dir / 'manifest.json'
+    legacy_manifest = json.loads(manifest_file.read_text(encoding='utf-8'))
+    expected_legacy = {'device.go', 'peer.go', 'send.go', 'uapi.go',
+                       'r013_resource_limits.go', 'r013_legacy15.go',
+                       'r013_legacy15_test.go', 'r013_legacy_uapi_test.go'}
+    assert set(legacy_manifest) == expected_legacy
+    staged_legacy = {}
+    for name, digest in legacy_manifest.items():
+        source_file = legacy_dir / (name + '.txt')
+        target = local / 'device' / name
+        assert source_file.is_file() and not source_file.is_symlink()
+        raw = source_file.read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == digest['afterSHA256']
+        before_digest = hashlib.sha256(target.read_bytes()).hexdigest() if target.exists() else None
+        assert before_digest == digest['beforeSHA256'] and not target.is_symlink()
+        staged_legacy[target] = raw
+    for target, raw in staged_legacy.items():
+        target.write_bytes(raw)
     after = {name: hashlib.sha256((local / 'device' / name).read_bytes()).hexdigest()
              for name in (*FILES, 'r013_resource_limits.go', 'r013_resource_limits_test.go', 'r013_s4_regression_test.go',
                           'r013_awg31_classifier.go', 'r013_awg31_testhelper_test.go',
                           'r013_vpn013_auth_classifier_test.go', 'r013_vpn013_auth_control_test.go',
                           'r013_vpn013_auth_live_test.go', 'r013_vpn013_auth_robustness_test.go',
-                          'r013_vpn013_awg31_runtime_test.go', 'r013_vpn013_queued_classifier_test.go')}
+                          'r013_vpn013_awg31_runtime_test.go', 'r013_vpn013_queued_classifier_test.go',
+                          'peer.go', 'r013_legacy15.go', 'r013_legacy15_test.go', 'r013_legacy_uapi_test.go')}
     assert before == {name: hashlib.sha256((source / 'device' / name).read_bytes()).hexdigest() for name in FILES}
     # Execute the copied primary implementation on the build host. Cross-compiled
     # libraries still require their platform/native acceptance tests afterwards.
@@ -57,7 +79,7 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     assert all(hashlib.sha256((fixtures / name).read_bytes()).hexdigest() == value for name, value in expected_fixtures.items())
     env = dict(os.environ, GOOS=host_os, GOARCH=host_arch, CGO_ENABLED='0', GOFLAGS='-mod=readonly', AWG_FIXTURES=str(fixtures))
     tested = subprocess.run(['go', 'test', './device', '-count=1', '-timeout=90s',
-                             '-run', '^(TestPrimary|TestTwoDevicePing|TestAWGDevicePing|TestVPN013)', '-v'],
+                             '-run', '^(TestPrimary|TestTwoDevicePing|TestAWGDevicePing|TestVPN013|TestLegacy15)', '-v'],
                             cwd=local, env=env, capture_output=True, text=True, timeout=110)
     passed = re.findall(r'^--- PASS: ([A-Za-z0-9_]+) ', tested.stdout, re.MULTILINE)
     required = {'TestTwoDevicePing', 'TestPrimaryObfuscationResourceBudget',
@@ -68,7 +90,12 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 'TestVPN013AuthenticatedTransportFallback', 'TestVPN013AuthenticatedControlFallback',
                 'TestVPN013AuthenticatedFallbackLocalTraffic', 'TestVPN013ClassifierMalformedFramesDoNotPanic',
                 'TestVPN013PaddingFitsPeerWindow', 'TestVPN013DisabledCookiesPermitLoadedHandshake',
-                'TestVPN013QueuedCandidateRejectsForgedTraffic'}
+                'TestVPN013QueuedCandidateRejectsForgedTraffic', 'TestLegacy15PacketSemantics',
+                'TestLegacy15ControlledWaitAndOddHex', 'TestLegacy15ConfigValidation',
+                'TestLegacy15MalformedAndBudgets', 'TestLegacy15Scheduling',
+                'TestVPN013LegacyWaitStopsWhenDeviceGoesDown',
+                'TestVPN013LegacyConcurrentUpdatesAndGeneration',
+                'TestVPN013LegacyUAPIStagingAndPeerPreservation'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,
               'passedTests': passed, 'requiredTests': sorted(required),
@@ -84,5 +111,6 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
     assert Path(effective['Replace']['Dir']).resolve(strict=True) == local.resolve(strict=True)
     return {'module': MODULE, 'version': VERSION, 'moduleCacheUnchanged': True,
             'patchSHA256': patch_hash, 'awg31PatchSHA256': hashlib.sha256(awg31_patch.read_bytes()).hexdigest(),
+            'legacyManifestSHA256': hashlib.sha256(manifest_file.read_bytes()).hexdigest(),
             'beforeSHA256': before, 'afterSHA256': after,
             'effectiveReplacementVerified': True, 'primaryHostTests': report}

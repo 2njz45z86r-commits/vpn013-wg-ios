@@ -20,6 +20,7 @@ class TunnelDetailTableViewController: UITableViewController {
         .initPacketJunkSize, .responsePacketJunkSize, .cookieReplyPacketJunkSize, .transportPacketJunkSize,
         .initPacketMagicHeader, .responsePacketMagicHeader, .underloadPacketMagicHeader, .transportPacketMagicHeader,
         .specialJunk1, .specialJunk2, .specialJunk3, .specialJunk4, .specialJunk5,
+        .legacyAWGVersion, .legacyJunk1, .legacyJunk2, .legacyJunk3, .legacyInterval,
         .headerProtectionKey, .contentPaddingAddition, .rekeyAfterTime, .rekeyTimeout,
         .rejectAfterTime, .keepaliveTimeout, .maxHandshakeAttempts, .randomTrailers, .disableCookies
     ]

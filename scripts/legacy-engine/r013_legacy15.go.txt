@@ -1,0 +1,305 @@
+// Isolated synthetic prototype for legacy AWG 1.5 semantics. Not r013LegacyPart of VPN013.
+package device
+
+import (
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/hex"
+	"errors"
+	"io"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+const r013LegacyMaxPacket = 4096
+const r013LegacyMaxSpec = 16384
+const r013LegacyMaxTags = 128
+const r013LegacyMaxWait = time.Second * 15
+
+type r013LegacyPart struct {
+	tag    string
+	data   []byte
+	amount int
+}
+type r013LegacySpec struct {
+	parts []r013LegacyPart
+	size  int
+	wait  time.Duration
+}
+
+// Staged per-device legacy configuration. It is not active unless explicitly
+// selected by the client; ordinary WireGuard and AWG 2/3 keep their own path.
+type r013LegacyConfig struct {
+	enabled         bool
+	initial         [5]string
+	controlled      [3]string
+	intervalSeconds uint32
+}
+
+// Validate all fields before any UAPI peer/key mutations. Reject unsafe or
+// incomplete input instead of silently dropping legacy masking parameters.
+func (c r013LegacyConfig) validate() error {
+	if !c.enabled {
+		return nil
+	}
+	if c.intervalSeconds > 24*60*60 {
+		return errors.New("legacy interval exceeds budget")
+	}
+	totalWait := time.Duration(0)
+	for _, specs := range [][]string{c.initial[:], c.controlled[:]} {
+		seenGap := false
+		for _, raw := range specs {
+			if raw == "" {
+				seenGap = true
+				continue
+			}
+			if seenGap {
+				return errors.New("legacy packets must be consecutive")
+			}
+			s, err := r013ParseLegacy(raw)
+			if err != nil {
+				return err
+			}
+			totalWait += s.wait
+			if totalWait > r013LegacyMaxWait {
+				return errors.New("legacy aggregate wait exceeds budget")
+			}
+		}
+	}
+	return nil
+}
+
+// r013ParseLegacy implements the legacy b/r/c/t/wt tags with finite resource budgets.
+// Legacy t and c are 8-byte big-endian values, unlike the newer t builder.
+func r013ParseLegacy(value string) (r013LegacySpec, error) {
+	var out r013LegacySpec
+	var counter, timestamp bool
+	if len(value) > r013LegacyMaxSpec {
+		return out, errors.New("legacy spec exceeds budget")
+	}
+	remaining := value
+	for {
+		open := strings.IndexByte(remaining, '<')
+		if open < 0 {
+			break
+		}
+		remaining = remaining[open+1:]
+		close := strings.IndexByte(remaining, '>')
+		if close < 0 {
+			return r013LegacySpec{}, errors.New("unterminated tag")
+		}
+		words := strings.Fields(remaining[:close])
+		remaining = remaining[close+1:]
+		if len(words) == 0 || len(words) > 2 || len(out.parts) >= r013LegacyMaxTags {
+			return r013LegacySpec{}, errors.New("invalid tag")
+		}
+		tag := words[0]
+		arg := ""
+		if len(words) == 2 {
+			arg = words[1]
+		}
+		p := r013LegacyPart{tag: tag}
+		switch tag {
+		case "b":
+			if !strings.HasPrefix(arg, "0x") && !strings.HasPrefix(arg, "0X") {
+				return r013LegacySpec{}, errors.New("invalid bytes tag")
+			}
+			h := arg[2:]
+			if len(h)%2 == 1 {
+				h = "0" + h
+			}
+			if h == "" || len(h) > 2*r013LegacyMaxPacket {
+				return r013LegacySpec{}, errors.New("invalid bytes length")
+			}
+			decoded, err := hex.DecodeString(h)
+			if err != nil {
+				return r013LegacySpec{}, errors.New("invalid bytes")
+			}
+			p.data = decoded
+			p.amount = len(decoded)
+		case "r":
+			n, err := strconv.Atoi(arg)
+			if err != nil || n < 0 || n > 1000 {
+				return r013LegacySpec{}, errors.New("invalid random length")
+			}
+			p.amount = n
+		case "c":
+			if arg != "" || counter {
+				return r013LegacySpec{}, errors.New("invalid counter")
+			}
+			counter = true
+			p.amount = 8
+		case "t":
+			if arg != "" || timestamp {
+				return r013LegacySpec{}, errors.New("invalid timestamp")
+			}
+			timestamp = true
+			p.amount = 8
+		case "wt":
+			n, err := strconv.Atoi(arg)
+			if err != nil || n < 0 || n > 5000 {
+				return r013LegacySpec{}, errors.New("invalid wait")
+			}
+			p.amount = n
+			out.wait += time.Duration(n) * time.Millisecond
+			if out.wait > r013LegacyMaxWait {
+				return r013LegacySpec{}, errors.New("wait exceeds budget")
+			}
+		default:
+			return r013LegacySpec{}, errors.New("unknown legacy tag")
+		}
+		if tag != "wt" {
+			out.size += p.amount
+			if out.size > r013LegacyMaxPacket {
+				return r013LegacySpec{}, errors.New("legacy packet exceeds budget")
+			}
+		}
+		out.parts = append(out.parts, p)
+	}
+	if len(out.parts) == 0 {
+		return r013LegacySpec{}, errors.New("empty spec")
+	}
+	return out, nil
+}
+
+// Build takes injectable randomness, time, and delay for reproducible tests.
+func (s r013LegacySpec) Build(counter uint64, now time.Time, random io.Reader, delay func(time.Duration)) ([]byte, error) {
+	return s.buildClock(counter, func() time.Time { return now }, random, delay)
+}
+
+func (s r013LegacySpec) buildClock(counter uint64, now func() time.Time, random io.Reader, delay func(time.Duration)) ([]byte, error) {
+	packet := make([]byte, 0, s.size)
+	for _, p := range s.parts {
+		switch p.tag {
+		case "b":
+			packet = append(packet, p.data...)
+		case "r":
+			n := make([]byte, p.amount)
+			if _, err := io.ReadFull(random, n); err != nil {
+				return nil, err
+			}
+			packet = append(packet, n...)
+		case "c", "t":
+			var n [8]byte
+			v := counter
+			if p.tag == "t" {
+				v = uint64(now().Unix())
+			}
+			binary.BigEndian.PutUint64(n[:], v)
+			packet = append(packet, n[:]...)
+		case "wt":
+			delay(time.Duration(p.amount) * time.Millisecond)
+		default:
+			return nil, errors.New("unexpected legacy tag")
+		}
+	}
+	if len(packet) != s.size {
+		return nil, errors.New("legacy packet size mismatch")
+	}
+	return packet, nil
+}
+
+// Bounded, interruptible legacy 1.5 handshake preparation. Only synthetic
+// callers use this experimental code until its security review is complete.
+func (device *Device) r013BuildLegacyInitial(config r013LegacyConfig, count, min, max uint32) ([][]byte, error) {
+	if err := config.validate(); err != nil {
+		return nil, err
+	}
+	if err := ValidateJunkPacketSettings(count, min, max); err != nil {
+		return nil, err
+	}
+	device.legacyRuntime.Lock()
+	defer device.legacyRuntime.Unlock()
+	now := time.Now()
+	useInitial := config.initial[0] != "" && (!device.legacyRuntime.sent || now.After(device.legacyRuntime.next))
+	var selected []string
+	if useInitial {
+		selected = config.initial[:]
+	} else {
+		selected = config.controlled[:]
+	}
+	var packets [][]byte
+	cancelled := false
+	delay := func(d time.Duration) {
+		if d <= 0 || cancelled {
+			return
+		}
+		end := time.Now().Add(d)
+		for time.Now().Before(end) {
+			if device.deviceState() != deviceStateUp {
+				cancelled = true
+				return
+			}
+			step := time.Until(end)
+			if step > 25*time.Millisecond {
+				step = 25 * time.Millisecond
+			}
+			time.Sleep(step)
+		}
+	}
+	for _, raw := range selected {
+		if raw == "" {
+			break
+		}
+		spec, err := r013ParseLegacy(raw)
+		if err != nil {
+			return nil, err
+		}
+		counter := device.legacyCounter.Load()
+		packet, err := spec.buildClock(counter, time.Now, rand.Reader, delay)
+		if err != nil {
+			return nil, err
+		}
+		if cancelled {
+			return nil, errors.New("legacy handshake interrupted")
+		}
+		device.legacyCounter.Add(1)
+		packets = append(packets, packet)
+	}
+	if len(packets) > 0 {
+		device.legacyCounter.Add(uint64(count))
+	}
+	if useInitial {
+		device.legacyRuntime.sent = true
+		device.legacyRuntime.next = time.Now().Add(time.Duration(config.intervalSeconds) * time.Second)
+	}
+	return append(packets, device.junkPacketsLocked(count, min, max)...), nil
+}
+
+// r013LegacySchedule mirrors the old handler: initial I packets first and after ITime,
+// otherwise J packets. This prototype has no network access or credentials.
+type r013LegacySchedule struct {
+	mu                  sync.Mutex
+	initial, controlled []r013LegacySpec
+	interval            time.Duration
+	sent                bool
+	next                time.Time
+}
+
+func r013NewLegacySchedule(initial, controlled []r013LegacySpec, interval time.Duration) (*r013LegacySchedule, error) {
+	if len(initial) > 5 || len(controlled) > 3 || interval < 0 || interval > time.Hour*24 {
+		return nil, errors.New("invalid legacy schedule")
+	}
+	total := time.Duration(0)
+	for _, group := range [][]r013LegacySpec{initial, controlled} {
+		for _, s := range group {
+			total += s.wait
+		}
+	}
+	if total > r013LegacyMaxWait {
+		return nil, errors.New("aggregate wait exceeds budget")
+	}
+	return &r013LegacySchedule{initial: append([]r013LegacySpec(nil), initial...), controlled: append([]r013LegacySpec(nil), controlled...), interval: interval}, nil
+}
+func (s *r013LegacySchedule) Select(now time.Time) []r013LegacySpec {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.initial) > 0 && (!s.sent || now.After(s.next)) {
+		s.sent = true
+		s.next = now.Add(s.interval)
+		return append([]r013LegacySpec(nil), s.initial...)
+	}
+	return append([]r013LegacySpec(nil), s.controlled...)
+}

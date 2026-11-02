@@ -10,6 +10,20 @@ enum PrimaryResourceBudgetTests {
     }
 
     static func main() {
+        check(true, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<b 0xABC><r 1000><c><t><wt 5000>"],
+                    controlledPackets: ["<b 0Xaa>"], intervalSeconds: 86_400), "legacy bounded 1.5 fields")
+        check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<wt 5001>"],
+                     controlledPackets: [], intervalSeconds: 0), "legacy wait above limit")
+        check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<wt 5000><wt 5000>"],
+                     controlledPackets: ["<wt 5000><wt 1>"], intervalSeconds: nil), "legacy aggregate wait")
+        check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: [nil, "<r 1>"],
+                     controlledPackets: [], intervalSeconds: nil), "legacy gap in sequence")
+        check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<c><c>"],
+                     controlledPackets: [], intervalSeconds: nil), "legacy duplicate counter")
+        check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: ["<r 1001>"],
+                     controlledPackets: [], intervalSeconds: nil), "legacy excessive random allocation")
+        check(false, VPN013PrimaryResourceBudget.validLegacy(initialPackets: [],
+                     controlledPackets: [], intervalSeconds: 86_401), "legacy interval above limit")
         check(true, VPN013PrimaryResourceBudget.valid(), "plain WireGuard without AWG fields")
         check(true, VPN013PrimaryResourceBudget.valid(jc: 0), "explicit zero junk count")
         check(true, VPN013PrimaryResourceBudget.valid(jc: 64, jmin: 4_096, jmax: 4_096,

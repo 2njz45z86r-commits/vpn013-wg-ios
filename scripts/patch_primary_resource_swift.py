@@ -40,6 +40,42 @@ def patch(root: Path) -> None:
         raise ValueError("Swift budget helper is absent or contains a duplicate marker")
 
     parser = originals[PARSER]
+    parser = replace_once(parser, '        let lines = wgQuickConfig.split { $0.isNewline }',
+        '''        // A comment is standards-compatible and preserves an explicit local
+        // choice when the original I fields do not identify their AWG version.
+        let vpn013LegacyMarker = wgQuickConfig.split(whereSeparator: { $0.isNewline }).contains {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines) == "# VPN013-AmneziaWG = 1.5"
+        }
+        let lines = wgQuickConfig.split { $0.isNewline }''', 'legacy marker')
+    parser = replace_once(parser, '                        "i1",\n',
+        '                        "j1", "j2", "j3", "itime",\n                        "i1",\n', 'legacy input keys')
+    parser = replace_once(parser, 'TunnelConfiguration.collate(interfaceAttributes: attributes)',
+        'TunnelConfiguration.collate(interfaceAttributes: attributes, legacyMarker: vpn013LegacyMarker)', 'legacy marker passing')
+    parser = replace_once(parser, 'private static func collate(interfaceAttributes attributes: [String: String]) throws -> InterfaceConfiguration {',
+        'private static func collate(interfaceAttributes attributes: [String: String], legacyMarker: Bool) throws -> InterfaceConfiguration {', 'legacy collate')
+    parser = replace_once(parser, '        var interface = InterfaceConfiguration(privateKey: privateKey)\n',
+        '''        var interface = InterfaceConfiguration(privateKey: privateKey)
+        let initialValues = [attributes["i1"], attributes["i2"], attributes["i3"], attributes["i4"], attributes["i5"]]
+        let hasLegacyTags = initialValues.compactMap { $0 }.contains {
+            $0.range(of: #"<\\s*(c|wt)(\\s|>)"#, options: .regularExpression) != nil
+        }
+        interface.legacyAWG15 = legacyMarker || hasLegacyTags || ["j1", "j2", "j3", "itime"].contains { attributes[$0] != nil }
+        interface.legacyJunk1 = attributes["j1"]
+        interface.legacyJunk2 = attributes["j2"]
+        interface.legacyJunk3 = attributes["j3"]
+        if let value = attributes["itime"] {
+            guard let seconds = UInt32(value) else { throw ParseError.interfaceHasInvalidCustomParam("ITime") }
+            interface.legacyIntervalSeconds = seconds
+        }
+''', 'legacy interface properties')
+    parser = replace_once(parser, '        var output = "[Interface]\\n"\n',
+        '''        var output = "[Interface]\\n"
+        if interface.legacyAWG15 { output.append("# VPN013-AmneziaWG = 1.5\\n") }
+        if let value = interface.legacyJunk1 { output.append("J1 = \\(value)\\n") }
+        if let value = interface.legacyJunk2 { output.append("J2 = \\(value)\\n") }
+        if let value = interface.legacyJunk3 { output.append("J3 = \\(value)\\n") }
+        if let value = interface.legacyIntervalSeconds { output.append("ITime = \\(value)\\n") }
+''', 'legacy config export')
     for variable, safe_label in (
         ("junkPacketCountString", "Jc"),
         ("junkPacketMinSizeString", "Jmin"),
@@ -62,10 +98,24 @@ def patch(root: Path) -> None:
             jmax: interface.junkPacketMaxSize,
             paddings: [interface.initPacketJunkSize, interface.responsePacketJunkSize,
                        interface.cookieReplyPacketJunkSize, interface.transportPacketJunkSize],
-            initialPackets: [interface.specialJunk1, interface.specialJunk2, interface.specialJunk3,
+            initialPackets: interface.legacyAWG15 ? [] : [interface.specialJunk1, interface.specialJunk2, interface.specialJunk3,
                              interface.specialJunk4, interface.specialJunk5]
         ) else {
             throw ParseError.interfaceHasInvalidCustomParam("J/S/I resource limits")
+        }
+        if interface.legacyAWG15 {
+            guard interface.headerProtectionKey == nil, interface.contentPaddingAddition == nil,
+                  interface.rekeyAfterTime == nil, interface.rekeyTimeout == nil,
+                  interface.rejectAfterTime == nil, interface.keepaliveTimeout == nil,
+                  interface.maxHandshakeAttempts == nil, interface.randomTrailers == nil,
+                  interface.disableCookies == nil,
+                  VPN013PrimaryResourceBudget.validLegacy(
+                    initialPackets: [interface.specialJunk1, interface.specialJunk2, interface.specialJunk3,
+                                     interface.specialJunk4, interface.specialJunk5],
+                    controlledPackets: [interface.legacyJunk1, interface.legacyJunk2, interface.legacyJunk3],
+                    intervalSeconds: interface.legacyIntervalSeconds) else {
+                throw ParseError.interfaceHasInvalidCustomParam("AWG 1.5 J/I resource limits")
+            }
         }
 """
     parser = replace_once(
@@ -77,16 +127,69 @@ def patch(root: Path) -> None:
     parser += "\n" + MARKER + "\n" + helper.rstrip() + "\n"
 
     editor = originals[EDITOR]
+    editor = replace_once(editor, '        case specialJunk5\n',
+        '        case specialJunk5\n        case legacyAWGVersion\n        case legacyJunk1\n        case legacyJunk2\n        case legacyJunk3\n        case legacyInterval\n', 'legacy editor fields')
+    editor = replace_once(editor, '            case .specialJunk5: return tr("I5")\n',
+        '''            case .specialJunk5: return tr("I5")
+            case .legacyAWGVersion: return "Версия AmneziaWG (1.5 или авто)"
+            case .legacyJunk1: return "J1 (AmneziaWG 1.5)"
+            case .legacyJunk2: return "J2 (AmneziaWG 1.5)"
+            case .legacyJunk3: return "J3 (AmneziaWG 1.5)"
+            case .legacyInterval: return "ITime (AmneziaWG 1.5)"
+''', 'legacy editor labels')
+    editor = replace_once(editor, '            if let headerProtectionKey = config.headerProtectionKey {\n',
+        '''            if config.legacyAWG15 { scratchpad[.legacyAWGVersion] = "1.5" }
+            scratchpad[.legacyJunk1] = config.legacyJunk1
+            scratchpad[.legacyJunk2] = config.legacyJunk2
+            scratchpad[.legacyJunk3] = config.legacyJunk3
+            if let seconds = config.legacyIntervalSeconds { scratchpad[.legacyInterval] = String(seconds) }
+            if let headerProtectionKey = config.headerProtectionKey {
+''', 'legacy editor populate')
+    editor = replace_once(editor, '            if let headerProtectionKeyString = scratchpad[.headerProtectionKey], !headerProtectionKeyString.isEmpty {\n',
+        '''            let legacyVersion = scratchpad[.legacyAWGVersion]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard legacyVersion.isEmpty || legacyVersion == "1.5" || legacyVersion.lowercased() == "авто" else {
+                return .error("Укажите версию AmneziaWG 1.5 или оставьте поле пустым.")
+            }
+            config.legacyAWG15 = legacyVersion == "1.5"
+            config.legacyJunk1 = scratchpad[.legacyJunk1]
+            config.legacyJunk2 = scratchpad[.legacyJunk2]
+            config.legacyJunk3 = scratchpad[.legacyJunk3]
+            if let interval = scratchpad[.legacyInterval], !interval.isEmpty {
+                guard let seconds = UInt32(interval) else { return .error("ITime должен быть числом секунд.") }
+                config.legacyIntervalSeconds = seconds
+            }
+            if !config.legacyAWG15 && [config.legacyJunk1, config.legacyJunk2, config.legacyJunk3].contains(where: { $0 != nil }) {
+                return .error("Для J1–J3 укажите версию AmneziaWG 1.5.")
+            }
+            if !config.legacyAWG15 && config.legacyIntervalSeconds != nil {
+                return .error("Для ITime укажите версию AmneziaWG 1.5.")
+            }
+            if let headerProtectionKeyString = scratchpad[.headerProtectionKey], !headerProtectionKeyString.isEmpty {
+''', 'legacy editor values')
     editor_validation = """            guard VPN013PrimaryResourceBudget.valid(
                 jc: config.junkPacketCount,
                 jmin: config.junkPacketMinSize,
                 jmax: config.junkPacketMaxSize,
                 paddings: [config.initPacketJunkSize, config.responsePacketJunkSize,
                            config.cookieReplyPacketJunkSize, config.transportPacketJunkSize],
-                initialPackets: [config.specialJunk1, config.specialJunk2, config.specialJunk3,
+                initialPackets: config.legacyAWG15 ? [] : [config.specialJunk1, config.specialJunk2, config.specialJunk3,
                                  config.specialJunk4, config.specialJunk5]
             ) else {
                 return .error("Параметры маскировки AmneziaWG превышают безопасные пределы или несовместимы.")
+            }
+            if config.legacyAWG15 {
+                guard config.headerProtectionKey == nil, config.contentPaddingAddition == nil,
+                      config.rekeyAfterTime == nil, config.rekeyTimeout == nil,
+                      config.rejectAfterTime == nil, config.keepaliveTimeout == nil,
+                      config.maxHandshakeAttempts == nil, config.randomTrailers == nil,
+                      config.disableCookies == nil,
+                      VPN013PrimaryResourceBudget.validLegacy(
+                        initialPackets: [config.specialJunk1, config.specialJunk2, config.specialJunk3,
+                                         config.specialJunk4, config.specialJunk5],
+                        controlledPackets: [config.legacyJunk1, config.legacyJunk2, config.legacyJunk3],
+                        intervalSeconds: config.legacyIntervalSeconds) else {
+                    return .error("Параметры AmneziaWG 1.5 несовместимы или превышают безопасные пределы.")
+                }
             }
 
 """

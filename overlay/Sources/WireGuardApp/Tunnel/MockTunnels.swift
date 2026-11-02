@@ -31,14 +31,16 @@ class MockTunnels {
             var raw = config.asWgQuickConfig()
             let classic = "Jc = 4\nJmin = 40\nJmax = 70\nS1 = 16\nS2 = 16\nH1 = 1\nH2 = 2\nH3 = 3\nH4 = 4\n"
             let generation2 = "S3 = 16\nS4 = 16\nI1 = <b 0x00>\nI2 = <r 4>\nI3 = <b 0x01>\nI4 = <r 8>\nI5 = <b 0x02>\n"
+            let legacy15 = "I1 = <b 0xA><c><t><wt 1>\nJ1 = <b 0xBB><r 4>\nJ2 = <b 0xCC>\nITime = 30\n"
             let trailerFlag = index % 8 == 3 ? "true" : "false"
             let generation31 = "HeaderProtectionKey = \(PrivateKey().base64Key)\nContentPaddingAddition = 0\nRekeyAfterTime = 120\nRekeyTimeout = 5\nRejectAfterTime = 180\nKeepaliveTimeout = 10\nMaxHandshakeAttempts = 20\nRandomTrailers = \(trailerFlag)\nDisableCookies = false\n"
             let extras: String
-            switch index % 4 {
+            switch index % 5 {
             case 0: extras = "" // Standard WireGuard.
             case 1: extras = classic // Classic AmneziaWG.
             case 2: extras = classic + generation2 // AmneziaWG 2.x.
-            default: extras = classic + generation2 + generation31 // AmneziaWG 3.1 fields.
+            case 3: extras = classic + generation2 + generation31 // AmneziaWG 3.1 fields.
+            default: extras = classic + legacy15 // AmneziaWG 1.5 legacy tags and J/ITime.
             }
             raw = raw.replacingOccurrences(of: "[Peer]", with: extras + "\n[Peer]")
             let parsed = try TunnelConfiguration(fromWgQuickConfig: raw, called: config.name!)
@@ -46,6 +48,19 @@ class MockTunnels {
             // Compare every requested option to its parsed/exported value, rather
             // than comparing two parsings which could both drop the same field.
             precondition(extras.split(separator: "\n").allSatisfy { canonical.contains(String($0) + "\n") })
+            if index % 5 == 4 {
+                precondition(parsed.interface.legacyAWG15 && parsed.interface.legacyJunk1 == "<b 0xBB><r 4>" && parsed.interface.legacyIntervalSeconds == 30)
+                let reparsed = try TunnelConfiguration(fromWgQuickConfig: canonical)
+                precondition(reparsed.interface == parsed.interface)
+            }
+            if index == 0 {
+                let ambiguous = raw.replacingOccurrences(of: "[Peer]", with: "I1 = <t>\n[Peer]")
+                let modern = try TunnelConfiguration(fromWgQuickConfig: ambiguous)
+                let explicitlyLegacy = try TunnelConfiguration(fromWgQuickConfig: "# VPN013-AmneziaWG = 1.5\n" + ambiguous)
+                precondition(!modern.interface.legacyAWG15 && explicitlyLegacy.interface.legacyAWG15)
+                let reparsedLegacy = try TunnelConfiguration(fromWgQuickConfig: explicitlyLegacy.asWgQuickConfig())
+                precondition(reparsedLegacy.interface.legacyAWG15)
+            }
             expectedArchiveConfigs[config.name!] = canonical
             return ["Android", "iPhone"].map { (fileName: $0 + "/" + config.name! + ".conf", contents: Data(raw.utf8)) }
         }

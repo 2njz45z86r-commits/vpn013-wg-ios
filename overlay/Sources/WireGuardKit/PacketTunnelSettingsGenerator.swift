@@ -103,6 +103,7 @@ class PacketTunnelSettingsGenerator {
         var resolutionResults = [EndpointResolutionResult?]()
         var wgSettings = ""
         wgSettings.append("private_key=\(tunnelConfiguration.interface.privateKey.hexKey)\n")
+        wgSettings.append("r013_legacy15=\(tunnelConfiguration.interface.legacyAWG15 ? "true" : "false")\n")
         if let listenPort = tunnelConfiguration.interface.listenPort {
             wgSettings.append("listen_port=\(listenPort)\n")
         }
@@ -154,6 +155,20 @@ class PacketTunnelSettingsGenerator {
         }
         if let specialJunk5 = tunnelConfiguration.interface.specialJunk5 {
             wgSettings.append("i5=\(specialJunk5)\n")
+        }
+        if tunnelConfiguration.interface.legacyAWG15 {
+            let initial = [tunnelConfiguration.interface.specialJunk1, tunnelConfiguration.interface.specialJunk2,
+                           tunnelConfiguration.interface.specialJunk3, tunnelConfiguration.interface.specialJunk4,
+                           tunnelConfiguration.interface.specialJunk5]
+            for (index, value) in initial.enumerated() where value == nil {
+                wgSettings.append("i\(index + 1)=\n")
+            }
+            let controlled = [tunnelConfiguration.interface.legacyJunk1, tunnelConfiguration.interface.legacyJunk2,
+                              tunnelConfiguration.interface.legacyJunk3]
+            for (index, value) in controlled.enumerated() {
+                wgSettings.append("j\(index + 1)=\(value ?? "")\n")
+            }
+            wgSettings.append("itime=\(tunnelConfiguration.interface.legacyIntervalSeconds ?? 0)\n")
         }
         if let headerProtectionKey = tunnelConfiguration.interface.headerProtectionKey {
             wgSettings.append("header_protection_key=\(headerProtectionKey.hexKey)\n")

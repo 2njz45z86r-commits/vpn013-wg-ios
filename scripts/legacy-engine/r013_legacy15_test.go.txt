@@ -1,0 +1,89 @@
+package device
+
+import (
+	"bytes"
+	"encoding/binary"
+	"testing"
+	"time"
+)
+
+func TestLegacy15PacketSemantics(t *testing.T) {
+	s, err := r013ParseLegacy("<b 0xf6ab3267fa><c><b 0xf6ab><t><r 10>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1700000000, 0)
+	got, err := s.Build(23, now, bytes.NewReader(bytes.Repeat([]byte{0xaa}, 10)), func(time.Duration) { t.Fatal("unexpected wait") })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 33 || binary.BigEndian.Uint64(got[5:13]) != 23 || binary.BigEndian.Uint64(got[15:23]) != uint64(now.Unix()) {
+		t.Fatal("legacy counter/timestamp layout changed")
+	}
+	if !bytes.Equal(got[23:], bytes.Repeat([]byte{0xaa}, 10)) {
+		t.Fatal("random payload changed")
+	}
+}
+func TestLegacy15ControlledWaitAndOddHex(t *testing.T) {
+	s, err := r013ParseLegacy("<b 0Xf><wt 1000><c><t>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var waits []time.Duration
+	got, err := s.Build(7, time.Unix(12, 0), bytes.NewReader(nil), func(d time.Duration) { waits = append(waits, d) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 17 || got[0] != 0x0f || len(waits) != 1 || waits[0] != time.Second {
+		t.Fatal("legacy byte or wait semantics changed")
+	}
+}
+func TestLegacy15Scheduling(t *testing.T) {
+	first, _ := r013ParseLegacy("<b 0x01>")
+	control, _ := r013ParseLegacy("<b 0x02>")
+	s, err := r013NewLegacySchedule([]r013LegacySpec{first}, []r013LegacySpec{control}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1000, 0)
+	for _, tc := range []struct {
+		at   time.Time
+		want byte
+	}{{now, 1}, {now.Add(time.Second), 2}, {now.Add(time.Minute), 2}, {now.Add(time.Minute + time.Nanosecond), 1}} {
+		selected := s.Select(tc.at)
+		p, e := selected[0].Build(0, tc.at, bytes.NewReader(nil), func(time.Duration) {})
+		if e != nil || len(p) != 1 || p[0] != tc.want {
+			t.Fatal("incorrect legacy schedule")
+		}
+	}
+}
+func TestLegacy15MalformedAndBudgets(t *testing.T) {
+	for _, v := range []string{"", "<c><c>", "<t><t>", "<wt -1>", "<wt 5001>", "<r -1>", "<r 1001>", "<b xyz>", "<c 1>", "<unknown>", "<b 0x01"} {
+		if _, err := r013ParseLegacy(v); err == nil {
+			t.Fatalf("accepted invalid synthetic spec: %s", v)
+		}
+	}
+	if _, err := r013ParseLegacy("<wt 5000><wt 5000><wt 5000><wt 1>"); err == nil {
+		t.Fatal("accepted aggregate wait beyond budget")
+	}
+}
+
+func TestLegacy15ConfigValidation(t *testing.T) {
+	good := r013LegacyConfig{enabled: true, intervalSeconds: 60}
+	good.initial[0] = "<b 0xf1f2><c><t>"
+	good.controlled[0] = "<b 0xa1a2><wt 2>"
+	if err := good.validate(); err != nil {
+		t.Fatal(err)
+	}
+	gap := good
+	gap.controlled[0] = ""
+	gap.controlled[1] = "<b 0x01>"
+	if err := gap.validate(); err == nil {
+		t.Fatal("legacy sequence gap accepted")
+	}
+	bad := good
+	bad.controlled[0] = "<wt 5000><wt 5000><wt 5000><wt 1>"
+	if err := bad.validate(); err == nil {
+		t.Fatal("legacy aggregate wait accepted")
+	}
+}

@@ -8,6 +8,71 @@ enum VPN013PrimaryResourceBudget {
     static let maximumInitialSpecBytes = 16_384
     static let maximumInitialTags = 128
 
+    // AWG 1.5's <t> and <c> are eight bytes, and <wt> delays generation.
+    // These limits match the separately staged legacy engine; never discard
+    // an unsafe field or reinterpret it as a newer AWG packet.
+    static func validLegacy(initialPackets: [String?], controlledPackets: [String?],
+                            intervalSeconds: UInt32?) -> Bool {
+        guard initialPackets.count <= 5, controlledPackets.count <= 3,
+              (intervalSeconds ?? 0) <= 86_400 else { return false }
+        var totalWait = 0
+        for group in [initialPackets, controlledPackets] {
+            var sawGap = false
+            for optional in group {
+                guard let spec = optional, !spec.isEmpty else { sawGap = true; continue }
+                guard !sawGap, let wait = legacyPacketWait(spec) else { return false }
+                totalWait += wait
+                guard totalWait <= 15_000 else { return false }
+            }
+        }
+        return true
+    }
+
+    private static func legacyPacketWait(_ spec: String) -> Int? {
+        guard spec.utf8.count <= maximumInitialSpecBytes else { return nil }
+        var remaining = spec[...]
+        var length = 0, tags = 0, wait = 0
+        var hasCounter = false, hasTimestamp = false
+        while let opening = remaining.firstIndex(of: "<") {
+            let start = remaining.index(after: opening)
+            guard let closing = remaining[start...].firstIndex(of: ">") else { return nil }
+            let fields = remaining[start..<closing].split(whereSeparator: { $0.isWhitespace })
+            tags += 1
+            guard tags <= maximumInitialTags, let tag = fields.first, fields.count <= 2 else { return nil }
+            let arg = fields.count == 2 ? fields[1] : nil
+            switch tag {
+            case "b":
+                guard let value = arg, value.hasPrefix("0x") || value.hasPrefix("0X") else { return nil }
+                let hex = value.dropFirst(2)
+                guard !hex.isEmpty, hex.utf8.count <= maximumInitialPacketSize * 2,
+                      hex.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) }) else { return nil }
+                length += (hex.utf8.count + 1) / 2
+            case "r", "wt":
+                guard let value = arg, !value.isEmpty,
+                      value.utf8.allSatisfy({ (48...57).contains($0) }), let number = Int(value) else { return nil }
+                if tag == "r" {
+                    guard number <= 1_000 else { return nil }
+                    length += number
+                } else {
+                    guard number <= 5_000 else { return nil }
+                    wait += number
+                }
+            case "c":
+                guard arg == nil, !hasCounter else { return nil }
+                hasCounter = true
+                length += 8
+            case "t":
+                guard arg == nil, !hasTimestamp else { return nil }
+                hasTimestamp = true
+                length += 8
+            default: return nil
+            }
+            guard length <= maximumInitialPacketSize, wait <= 15_000 else { return nil }
+            remaining = remaining[remaining.index(after: closing)...]
+        }
+        return tags > 0 ? wait : nil
+    }
+
     static func valid(jc: UInt16? = nil,
                       jmin: UInt16? = nil,
                       jmax: UInt16? = nil,
