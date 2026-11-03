@@ -1,0 +1,15 @@
+name: Validate iPhone owner candidate without publication
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/validate-owner-native.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  native:
+    uses: ./.github/workflows/native-unified-check.yml
