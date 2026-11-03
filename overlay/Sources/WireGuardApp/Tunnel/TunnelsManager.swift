@@ -1326,7 +1326,7 @@ class TunnelContainer: NSObject {
             return
         }
 
-        wg_log(.debug, message: "startActivation: Entering (tunnel: \(name))")
+        wg_log(.debug, staticMessage: "startActivation: Entering")
 
         status = .activating  // Ensure that no other tunnel can attempt activation until this tunnel is done trying
 
@@ -1428,7 +1428,7 @@ class TunnelContainer: NSObject {
     }
 
     fileprivate func startDeactivation() {
-        wg_log(.debug, message: "startDeactivation: Tunnel: \(name)")
+        wg_log(.debug, staticMessage: "startDeactivation: Tunnel")
         #if os(iOS)
             cancelHandshakeMonitoring()
         #endif

@@ -1,5 +1,11 @@
 from pathlib import Path
 source=Path('overlay/Sources/WireGuardKit/WireGuardAdapter.swift').read_text(encoding='utf-8')
+manager=Path('overlay/Sources/WireGuardApp/Tunnel/TunnelsManager.swift').read_text(encoding='utf-8')
+migration=Path('overlay/Sources/Shared/Model/NETunnelProviderProtocol+Extension.swift').read_text(encoding='utf-8')
+for expected in ['staticMessage: "startActivation: Entering"','staticMessage: "startDeactivation: Tunnel"']:
+    assert expected in manager
+for expected in ['staticMessage: "Migrating tunnel configuration"','staticMessage: "Migrating iOS keychain reference"']:
+    assert expected in migration
 start=source.index('    /// Report resolution outcomes without retaining endpoint addresses or error text.')
 end=source.index('    /// Helper method used by network path monitor.',start)
 methods=source[start:end]
