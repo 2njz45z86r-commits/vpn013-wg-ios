@@ -28,6 +28,19 @@ final class ProxySinglePacketAdapter {
         return Data(bytes: result, count: count)
     }
 
+    #if os(iOS)
+    /// Experimental preparation only; no routes, device state or VPN are changed.
+    /// The returned data contains key material and must never be logged or persisted.
+    static func prepareWireGuard(_ configuration: TunnelConfiguration) -> (converted: Data, settings: NEPacketTunnelNetworkSettings)? {
+        guard let original = WireGuardAdapter.preciseProfileSnapshot(configuration),
+              let settings = isolatedCopy(original.settings),
+              let mtu = settings.mtu?.intValue,
+              let converted = convertedWireGuardSettings(uapi: original.uapi, addresses: original.addresses, effectiveMTU: mtu)
+        else { return nil }
+        return (converted, settings)
+    }
+    #endif
+
     func start(_ payload: ProxyTunnelPayload, resolvedHost: String? = nil, additionalHosts: [String: String] = [:], excludedHosts: [String] = [], completion: @escaping (Error?) -> Void) {
         dispatchPrecondition(condition: .onQueue(.main))
         let token = UUID(); epoch = token; pending = completion
