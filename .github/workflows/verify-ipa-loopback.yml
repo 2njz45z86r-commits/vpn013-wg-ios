@@ -30,4 +30,4 @@ jobs:
           export VPN013_LOOPBACK_PORT="$(cat "$RUNNER_TEMP/vpn013-loopback/port")"
           "$RUNNER_TEMP/vpn013-loopback/test"
           wait "$server_pid"
-          python3 -c 'import json, pathlib, sys; x=json.loads(pathlib.Path(sys.argv[1]).read_text()); assert x == {"payload_sent": 65536, "advertised": 131072, "client_closed": True}; print("PASS loopback server observed client disconnect before response completion")' "$RUNNER_TEMP/vpn013-loopback/result.json"
+          python3 -c 'import json, pathlib, sys; x=json.loads(pathlib.Path(sys.argv[1]).read_text()); sys.exit("Loopback server did not observe the expected disconnect") if x != {"payload_sent": 65536, "advertised": 131072, "client_closed": True} else print("PASS loopback server observed client disconnect before response completion")' "$RUNNER_TEMP/vpn013-loopback/result.json"
