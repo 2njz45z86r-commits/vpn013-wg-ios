@@ -1,0 +1,58 @@
+name: Check subscription TLS trust with disposable local certificate
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/ios-subscription-tls-audit-20261103]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test default certificate trust without changing trust store
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test_dir="$(mktemp -d "$RUNNER_TEMP/vpn013-tls-audit.XXXXXXXX")"
+          server_pid=''
+          cleanup() {
+            if [ -n "$server_pid" ]; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+            fi
+            rm -f -- "$test_dir/key.pem" "$test_dir/cert.pem"
+          }
+          trap cleanup EXIT
+          cat > "$test_dir/req.cnf" <<'EOF'
+          [req]
+          distinguished_name=dn
+          x509_extensions=ext
+          prompt=no
+          [dn]
+          CN=127.0.0.1
+          [ext]
+          subjectAltName=IP:127.0.0.1
+          EOF
+          openssl req -new -x509 -newkey rsa:2048 -nodes -days 1 -config "$test_dir/req.cnf" -extensions ext -keyout "$test_dir/key.pem" -out "$test_dir/cert.pem" >/dev/null 2>&1
+          python3 tests/subscription_tls_audit_server.py "$test_dir" &
+          server_pid=$!
+          for _ in $(seq 1 100); do [ -s "$test_dir/port" ] && break; sleep 0.1; done
+          test -s "$test_dir/port"
+          xcrun swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift overlay/VPN013/SubscriptionRequest.swift overlay/VPN013/ProxySubscriptionDownload.swift tests/ProxySubscriptionTLSAudit.swift -o "$test_dir/tls-audit"
+          "$test_dir/tls-audit" "$(cat "$test_dir/port")" "$test_dir"
+          touch "$test_dir/stop"
+          wait "$server_pid"
+          server_pid=''
+          python3 - "$test_dir/outcomes" <<'PY'
+          import pathlib, sys
+          events = pathlib.Path(sys.argv[1]).read_text(encoding='ascii').splitlines()
+          required = {'downloader:rejected', 'default:rejected'}
+          if not required.issubset(events) or any(not event.endswith(':rejected') for event in events):
+              raise SystemExit('FAIL: local TLS handshakes did not reach the server and fail')
+          print('PASS: local TLS handshakes reached the disposable server and were rejected')
+          PY
