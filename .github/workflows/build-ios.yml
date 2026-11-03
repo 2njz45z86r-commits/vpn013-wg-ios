@@ -39,7 +39,7 @@ jobs:
           for (name,input) in inputs {
             guard let u = URL(string: input) else { print(name+":invalid"); continue }
             let valid = u.scheme == "https" && u.host == "github.com" && u.user == nil && u.password == nil && (u.port == nil || u.port == 443) && u.query == nil && u.fragment == nil && u.path.hasPrefix(prefix) && u.path.hasSuffix(".ipa")
-            let standardized = u.standardized?.path.hasPrefix(prefix) ?? false
+            let standardized = u.standardized.path.hasPrefix(prefix)
             print(name+":allowed="+String(valid)+",standardizedPathInside="+String(standardized))
           }
           SWIFT
