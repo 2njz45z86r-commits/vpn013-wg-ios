@@ -18,6 +18,8 @@ backend_start=source.index('    // Backend messages can include peer identifiers
 backend_end=source.index('    /// Setup WireGuard log handler.',backend_start)
 backend=source[backend_start:backend_end]
 assert 'WireGuardAdapter.safeBackendLog(swiftString, level: tunnelLogLevel)' in source
+assert r"\(self.state)" not in source and r"\(error.localizedDescription)" not in source
+assert source.count(r"\(self.stateLogLabel)") == 2
 assert methods.count('private func log') == 3
 prefix='''import Foundation
 struct Endpoint { let host: String }

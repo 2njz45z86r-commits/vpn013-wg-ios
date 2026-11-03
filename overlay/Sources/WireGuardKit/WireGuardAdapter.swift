@@ -98,6 +98,13 @@ public class WireGuardAdapter {
 
     /// Adapter state.
     private var state: State = .stopped
+    private var stateLogLabel: String {
+        switch state {
+        case .stopped: return "stopped"
+        case .started: return "started"
+        case .temporaryShutdown: return "temporaryShutdown"
+        }
+    }
     private var ipv4ServiceRouting: WireGuardIPv4ServiceRouting?
 
     /// A route edit never restarts a running device. Automatic member changes
@@ -306,7 +313,7 @@ public class WireGuardAdapter {
                 self.workQueue.async { completionHandler(error) }
             }
 
-            self.logHandler(.verbose, "Adapter stop requested (state=\(self.state))")
+            self.logHandler(.verbose, "Adapter stop requested (state=\(self.stateLogLabel))")
             switch self.state {
             case .started(let handle, _):
                 wgTurnOff(handle)
@@ -564,7 +571,7 @@ public class WireGuardAdapter {
         defer { finishPrimary(primaryTicket) }
         self.logHandler(.verbose, "Network change detected with \(path.status) route and interface order \(path.availableInterfaces)")
         let lastUpdate = self.lastNetworkSettingsUpdateAt.map { String(describing: $0) } ?? "nil"
-        self.logHandler(.verbose, "Path update state: state=\(self.state) everHadHandshake=\(self.everHadHandshake) lastNetworkSettingsUpdateAt=\(lastUpdate)")
+        self.logHandler(.verbose, "Path update state: state=\(self.stateLogLabel) everHadHandshake=\(self.everHadHandshake) lastNetworkSettingsUpdateAt=\(lastUpdate)")
 
         #if os(macOS)
         if case .started(let handle, _) = self.state {
@@ -615,7 +622,7 @@ public class WireGuardAdapter {
                     settingsGenerator
                 )
             } catch {
-                self.logHandler(.error, "Failed to restart backend: \(error.localizedDescription)")
+                self.logHandler(.error, "Failed to restart backend: code=\((error as NSError).code)")
             }
 
         case .stopped:
