@@ -1,4 +1,45 @@
 // SPDX-License-Identifier: MIT
+import Foundation
+import CryptoKit
+
+/// Checks integrity relative to the HTTPS-delivered manifest; this is not a code signature check.
+struct ClientReleaseVerification {
+    static let maximumBytes: Int64 = 256 * 1024 * 1024
+    static let maximumRedirects = 5
+    private(set) var byteCount: Int64 = 0
+    private var digest = SHA256()
+    let limit: Int64
+
+    init(limit: Int64 = maximumBytes) { self.limit = limit }
+
+    static func allowsRedirect(_ url: URL, count: Int) -> Bool {
+        let hosts: Set<String> = ["github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"]
+        guard count > 0, count <= maximumRedirects, url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased(), hosts.contains(host),
+              url.user == nil, url.password == nil, url.port == nil || url.port == 443,
+              url.fragment == nil else { return false }
+        return true
+    }
+
+    func acceptsResponse(status: Int, contentLength: Int64) -> Bool {
+        status == 200 && (contentLength == -1 || (contentLength > 0 && contentLength <= limit))
+    }
+
+    mutating func append(_ data: Data) -> Bool {
+        guard Int64(data.count) <= limit - byteCount else { return false }
+        byteCount += Int64(data.count)
+        digest.update(data: data)
+        return true
+    }
+
+    mutating func matches(_ expected: String) -> Bool {
+        guard byteCount > 0 else { return false }
+        let actual = digest.finalize().map { String(format: "%02x", $0) }.joined()
+        return actual == expected
+    }
+}
+
+#if canImport(UIKit)
 import UIKit
 
 final class ClientUpdatesViewController: UITableViewController {
@@ -67,7 +108,7 @@ final class ClientUpdatesViewController: UITableViewController {
                 cell.isUserInteractionEnabled = !coordinator.busy
             } else {
                 cell.textLabel?.text = "Скачать IPA"
-                cell.detailTextLabel?.text = "Прямая загрузка в браузере, без перехода в Telegram. Перед установкой подпишите IPA своим действующим сертификатом."
+                cell.detailTextLabel?.text = "После загрузки приложение проверит контрольную сумму и предложит сохранить IPA. Затем подпишите файл своим сертификатом."
                 cell.textLabel?.textColor = VPN013Theme.accent
                 cell.accessibilityIdentifier = "vpn013.update-download"
                 cell.accessoryType = .disclosureIndicator
@@ -135,6 +176,7 @@ final class ClientUpdatesViewController: UITableViewController {
 
 /// Public software downloads never carry order capabilities or open Telegram.
 enum ClientReleaseDownload {
+    private static var active: ClientVerifiedDownload?
     static func open(_ release: ClientAppRelease, from presenter: UIViewController) {
         do {
             try release.validate()
@@ -146,17 +188,141 @@ enum ClientReleaseDownload {
                 return
             }
             #endif
-            UIApplication.shared.open(url, options: [:]) { [weak presenter] opened in
-                guard !opened, let presenter = presenter else { return }
-                let alert = UIAlertController(title: "Загрузка IPA", message: "Не удалось открыть прямую ссылку на загрузку. Повторите попытку.", preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "Понятно", style: .default))
-                presenter.present(alert, animated: true)
+            guard active == nil else { return }
+            let progress = UIAlertController(title: "Загрузка IPA", message: "Загружаем файл и проверяем контрольную сумму…", preferredStyle: .alert)
+            let download = try ClientVerifiedDownload(url: url, expectedHash: release.sha256) { [weak presenter, weak progress] result in
+                let cancelled = active?.cancelledByUser == true
+                active = nil
+                if cancelled {
+                    if case .success(let file) = result { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+                    return
+                }
+                guard let progress = progress else {
+                    if case .success(let file) = result { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+                    return
+                }
+                let presentResult = {
+                    guard let presenter = presenter, presenter.viewIfLoaded?.window != nil else {
+                        if case .success(let file) = result { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+                        return
+                    }
+                    switch result {
+                    case .success(let file):
+                        let sheet = UIActivityViewController(activityItems: [file], applicationActivities: nil)
+                        sheet.popoverPresentationController?.sourceView = presenter.view
+                        sheet.popoverPresentationController?.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1)
+                        sheet.completionWithItemsHandler = { _, _, _, _ in try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+                        presenter.present(sheet, animated: true)
+                    case .failure(let error):
+                        guard (error as? URLError)?.code != .cancelled else { return }
+                        let alert = UIAlertController(title: "Загрузка IPA", message: "Не удалось загрузить файл или проверить его контрольную сумму. Повторите проверку обновлений.", preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "Понятно", style: .default)); presenter.present(alert, animated: true)
+                    }
+                }
+                if progress.presentingViewController != nil { progress.dismiss(animated: true, completion: presentResult) }
+                else { presentResult() }
             }
+            active = download
+            progress.addAction(UIAlertAction(title: "Отмена", style: .cancel) { _ in download.cancel() })
+            let presentProgress = {
+                guard presenter.viewIfLoaded?.window != nil else { download.cancel(); download.start(); return }
+                presenter.present(progress, animated: true) { download.start() }
+            }
+            if let current = presenter.presentedViewController { current.dismiss(animated: true, completion: presentProgress) }
+            else { presentProgress() }
         } catch {
             let alert = UIAlertController(title: "Загрузка IPA", message: "Ссылка на обновление не прошла проверку. Проверьте обновления ещё раз.", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "Понятно", style: .default))
             presenter.present(alert, animated: true)
         }
+    }
+}
+
+/// Streams into an app-private temporary file; no partially downloaded file is shared.
+private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
+    private let url: URL
+    private let expectedHash: String
+    private let directory: URL
+    private let file: URL
+    private let output: FileHandle
+    private let completion: (Result<URL, Error>) -> Void
+    private var verification = ClientReleaseVerification()
+    private var redirects = 0
+    private var responseAccepted = false
+    private var failure: Error?
+    private var session: URLSession?
+    private var task: URLSessionDataTask?
+    // start and cancel are both called by the UI on the main queue.
+    private var cancelledBeforeStart = false
+    private(set) var cancelledByUser = false
+
+    init(url: URL, expectedHash: String, completion: @escaping (Result<URL, Error>) -> Void) throws {
+        self.url = url; self.expectedHash = expectedHash; self.completion = completion
+        let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("vpn013-ipa-" + UUID().uuidString, isDirectory: true)
+        let tempFile = tempDirectory.appendingPathComponent("VPN013.ipa")
+        directory = tempDirectory; file = tempFile
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        guard FileManager.default.createFile(atPath: tempFile.path, contents: nil, attributes: [.posixPermissions: 0o600, .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]) else {
+            try? FileManager.default.removeItem(at: tempDirectory); throw ClientUpdateError.invalidResponse
+        }
+        do { output = try FileHandle(forWritingTo: tempFile) }
+        catch { try? FileManager.default.removeItem(at: tempDirectory); throw error }
+        super.init()
+    }
+
+    func start() {
+        guard !cancelledBeforeStart else {
+            try? output.close(); try? FileManager.default.removeItem(at: directory)
+            completion(.failure(URLError(.cancelled))); return
+        }
+        let config = URLSessionConfiguration.ephemeral
+        config.httpCookieStorage = nil; config.urlCredentialStorage = nil; config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.timeoutIntervalForRequest = 60; config.timeoutIntervalForResource = 600
+        let queue = OperationQueue(); queue.maxConcurrentOperationCount = 1
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: queue)
+        self.session = session
+        let task = session.dataTask(with: url); self.task = task; task.resume()
+    }
+    func cancel() {
+        cancelledByUser = true
+        if let task = task { task.cancel() } else { cancelledBeforeStart = true }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        redirects += 1
+        guard let url = request.url, ClientReleaseVerification.allowsRedirect(url, count: redirects) else {
+            failure = ClientUpdateError.invalidResponse; completionHandler(nil); return
+        }
+        completionHandler(request)
+    }
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        guard let response = response as? HTTPURLResponse,
+              verification.acceptsResponse(status: response.statusCode, contentLength: response.expectedContentLength) else {
+            failure = ClientUpdateError.invalidResponse; completionHandler(.cancel); return
+        }
+        responseAccepted = true; completionHandler(.allow)
+    }
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard failure == nil, verification.append(data) else {
+            failure = ClientUpdateError.invalidResponse; dataTask.cancel(); return
+        }
+        do { try output.write(contentsOf: data) }
+        catch { failure = error; dataTask.cancel() }
+    }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        var result: Result<URL, Error>
+        do {
+            try output.close()
+            if let failure = failure { throw failure }
+            if let error = error { throw error }
+            guard responseAccepted, verification.matches(expectedHash) else { throw ClientUpdateError.invalidResponse }
+            result = .success(file)
+        } catch {
+            try? FileManager.default.removeItem(at: directory); result = .failure(error)
+        }
+        session.finishTasksAndInvalidate()
+        DispatchQueue.main.async { self.completion(result) }
     }
 }
 
@@ -168,3 +334,4 @@ extension TunnelsListTableViewController {
         present(controller, animated: true)
     }
 }
+#endif
