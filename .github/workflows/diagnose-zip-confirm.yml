@@ -1,0 +1,72 @@
+name: Diagnose ZIP subscription confirmation on iPhone simulator
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/diagnose-zip-confirm.yml'
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: macos-26-intel
+    timeout-minutes: 55
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build exact app and extension without publication
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          sh build-on-mac.sh
+      - name: Run ZIP confirmation XCTest on a real iOS simulator
+        run: |
+          set -eu
+          export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
+          if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
+          python3 scripts/native_ui_shards.py selectors coreC > "$RUNNER_TEMP/coreC-selectors.txt"
+          grep -F 'testSharedOwnerProxyZIPSelectsIncyAndPreviewsProfile' "$RUNNER_TEMP/coreC-selectors.txt" > /dev/null
+          device=$(xcrun simctl list devices available -j | python3 scripts/select_iphone_simulator.py)
+          xcrun simctl boot "$device" || true
+          xcrun simctl bootstatus "$device" -b
+          cmp -s build/awg/VPN013/UITests.swift overlay/VPN013/UITests.swift
+          cd build/awg
+          set +e
+          xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
+            -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedOwnerProxyZIPSelectsIncyAndPreviewsProfile \
+            -derivedDataPath ../ZIPConfirmDerivedData -resultBundlePath ../ZIPConfirm.xcresult \
+            CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= test > ../zip-confirm.log 2>&1
+          result=$?
+          set -e
+          cd ../..
+          grep -E 'Test Case .* (started|passed|failed)|error:|TEST (FAILED|SUCCEEDED)' build/zip-confirm.log || true
+          if [ -d build/ZIPConfirm.xcresult ]; then
+            xcrun xcresulttool get test-results summary --path build/ZIPConfirm.xcresult > build/review/zip-confirm-summary.json || true
+          fi
+          test "$result" -eq 0
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          from scripts.native_ui_shards import exact_log, exact_summary
+          name='testSharedOwnerProxyZIPSelectsIncyAndPreviewsProfile'
+          summary=json.loads(Path('build/review/zip-confirm-summary.json').read_text())
+          log=Path('build/zip-confirm.log').read_text(errors='replace')
+          exact_summary(summary, 1)
+          exact_log(log, [name])
+          proof={'sourceSha':os.environ['GITHUB_SHA'], 'runId':os.environ['GITHUB_RUN_ID'],
+                 'selector':name, 'actualTests':1, 'physicalIPhoneTested':False}
+          Path('build/review/zip-confirm-proof.json').write_text(json.dumps(proof,indent=2))
+          print('PASS: one actual ZIP confirmation XCTest, zero failures and zero skips')
+          PY
+      - name: Retain result summary without an IPA
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vpn013-zip-confirm-${{ github.run_id }}
+          path: |
+            build/review/zip-confirm-summary.json
+            build/review/zip-confirm-proof.json
+          if-no-files-found: warn
