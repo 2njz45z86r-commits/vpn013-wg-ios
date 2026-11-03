@@ -1,0 +1,21 @@
+name: Check subscription hostname trust without trust-store changes
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/ios-subscription-hostname-audit-20261103]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Run default downloader against public mismatch fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift overlay/VPN013/SubscriptionRequest.swift overlay/VPN013/ProxySubscriptionDownload.swift tests/ProxySubscriptionHostnameAudit.swift -o "$RUNNER_TEMP/hostname-audit"
+          "$RUNNER_TEMP/hostname-audit"
