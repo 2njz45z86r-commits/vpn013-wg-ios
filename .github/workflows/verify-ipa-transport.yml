@@ -17,6 +17,9 @@ jobs:
       - name: Check streaming hash and transport using isolated synthetic URLs
         run: |
           set -eu
+          python3 scripts/tests/make_runtime_config_summary_harness.py "$RUNNER_TEMP/runtime-config-summary.swift"
+          swiftc -parse-as-library "$RUNNER_TEMP/runtime-config-summary.swift" -o "$RUNNER_TEMP/runtime-config-summary"
+          "$RUNNER_TEMP/runtime-config-summary"
           swiftc -parse-as-library -swift-version 5 overlay/VPN013/ClientUpdatesViewController.swift tests/ClientReleaseVerificationTests.swift -o "$RUNNER_TEMP/release-verification"
           "$RUNNER_TEMP/release-verification"
           swiftc -D VPN013_DOWNLOAD_TESTS -parse-as-library -swift-version 5 overlay/VPN013/ClientUpdatesViewController.swift tests/ClientVerifiedDownloadTests.swift -o "$RUNNER_TEMP/verified-download"
