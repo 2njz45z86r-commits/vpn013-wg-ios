@@ -33,6 +33,27 @@ class OwnerCodeSignChecks(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):
                 module.check(Path("synthetic/AmneziaWG.app"))
 
+    def test_refuses_wrong_entitlement_type_or_substring(self):
+        key = "com.apple.developer.networking.networkextension"
+        for value in ("packet-tunnel-provider", "not-packet-tunnel-provider", ["not-packet-tunnel-provider"],
+                      ["packet-tunnel-provider", 4], 1):
+            with self.subTest(value=value):
+                reply = SimpleNamespace(stdout=plistlib.dumps({key: value}))
+                with patch.object(module.subprocess, "run", side_effect=[None, reply]):
+                    with self.assertRaises(ValueError):
+                        module.check(Path("synthetic/AmneziaWG.app"))
+
+    def test_refuses_extra_presigning_entitlements(self):
+        key = "com.apple.developer.networking.networkextension"
+        for rights in ({key: ["packet-tunnel-provider"], "get-task-allow": True},
+                       {key: ["packet-tunnel-provider"], "unexpected.access": True},
+                       {key: ["packet-tunnel-provider", "app-proxy-provider"]}):
+            with self.subTest(rights=rights):
+                reply = SimpleNamespace(stdout=plistlib.dumps(rights))
+                with patch.object(module.subprocess, "run", side_effect=[None, reply]):
+                    with self.assertRaises(ValueError):
+                        module.check(Path("synthetic/AmneziaWG.app"))
+
 
 if __name__ == "__main__":
     unittest.main()

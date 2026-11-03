@@ -2,6 +2,7 @@ import importlib.util
 import os
 from pathlib import Path
 import plistlib
+import stat
 import tempfile
 import unittest
 import warnings
@@ -72,6 +73,36 @@ class OwnerPackageValidation(unittest.TestCase):
                       [(module.APP + '/Info.plist', b'duplicate')]):
             with self.subTest(extra=extra[0][0]):
                 create_ipa(self.path, extra=extra)
+                with self.assertRaises(ValueError):
+                    module.validate(self.path, REPORT)
+
+    def test_rejects_case_unicode_and_file_directory_collisions(self):
+        cases = [
+            [(module.APP + "/info.plist", b"case collision")],
+            [(module.APP + "/résumé.txt", b"one"), (module.APP + "/re\u0301sume\u0301.txt", b"two")],
+            [(module.APP + "/Resources", b"file"), (module.APP + "/Resources/item", b"child")],
+        ]
+        for extra in cases:
+            with self.subTest(path=extra[0][0]):
+                create_ipa(self.path, extra=extra)
+                with self.assertRaises(ValueError):
+                    module.validate(self.path, REPORT)
+
+    def test_explicit_parent_directory_is_allowed_after_child(self):
+        create_ipa(self.path, extra=[(module.APP + "/Resources/item", b"item"),
+                                     (module.APP + "/Resources/", b"")])
+        self.assertTrue(module.validate(self.path, REPORT)["requiresOwnerSigning"])
+
+    def test_rejects_unix_special_types_and_mismatched_file_type(self):
+        for mode, name in ((stat.S_IFIFO, "fifo"), (stat.S_IFSOCK, "socket"),
+                           (stat.S_IFCHR, "character"), (stat.S_IFBLK, "block"),
+                           (stat.S_IFLNK, "link"), (stat.S_IFDIR, "directory-without-slash"),
+                           (stat.S_IFREG, "file-with-slash/")):
+            with self.subTest(name=name):
+                member = zipfile.ZipInfo(module.APP + "/" + name)
+                member.create_system = 3
+                member.external_attr = (mode | 0o600) << 16
+                create_ipa(self.path, extra=[(member, b"x")])
                 with self.assertRaises(ValueError):
                     module.validate(self.path, REPORT)
 

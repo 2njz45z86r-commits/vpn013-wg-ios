@@ -9,6 +9,7 @@ import plistlib
 import re
 import stat
 import sys
+import unicodedata
 import zipfile
 
 APP = "Payload/AmneziaWG.app"
@@ -33,15 +34,29 @@ def validate(ipa, build_report):
         if not entries or len(entries) > MAX_ENTRIES or sum(x.file_size for x in entries) > MAX_UNPACKED:
             raise ValueError("IPA entries exceed bounds")
         names = set()
+        logical_paths = {}
         for entry in entries:
             name = entry.filename
             parts = PurePosixPath(name).parts
             components = name.rstrip("/").split("/")
-            if (not parts or name.startswith("/") or "\\" in name or any(p in ("", ".", "..") for p in components)
+            archive_type = stat.S_IFMT(entry.external_attr >> 16)
+            expected_type = stat.S_IFDIR if entry.is_dir() else stat.S_IFREG
+            if (not parts or len(components) > 64 or len(name.encode("utf-8")) > 4096
+                    or name.startswith("/") or "\\" in name or any(p in ("", ".", "..") for p in components)
                     or not (name == "Payload/" or name == APP + "/" or name.startswith(APP + "/"))
-                    or name in names or stat.S_ISLNK(entry.external_attr >> 16)):
+                    or name in names or archive_type not in (0, expected_type)):
                 raise ValueError("Unsafe, duplicate, or unexpected archive entry")
             names.add(name)
+            # Default macOS volumes may compare case and Unicode spelling
+            # differently from ZIP. Reject ambiguous names before extraction.
+            for length in range(1, len(components) + 1):
+                path = "/".join(components[:length])
+                key = unicodedata.normalize("NFD", path).casefold()
+                kind = "directory" if length < len(components) or entry.is_dir() else "file"
+                previous = logical_paths.get(key)
+                if previous is not None and previous != (path, kind):
+                    raise ValueError("Ambiguous path or file/directory collision")
+                logical_paths[key] = (path, kind)
         if archive.testzip() is not None:
             raise ValueError("IPA CRC verification failed")
         versions = []
