@@ -1,0 +1,24 @@
+name: Verify IPA transport on Mac without publication
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-ipa-transport.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  transport:
+    runs-on: macos-26-intel
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check streaming hash and transport using isolated synthetic URLs
+        run: |
+          set -eu
+          swiftc -parse-as-library -swift-version 5 overlay/VPN013/ClientUpdatesViewController.swift tests/ClientReleaseVerificationTests.swift -o "$RUNNER_TEMP/release-verification"
+          "$RUNNER_TEMP/release-verification"
+          swiftc -D VPN013_DOWNLOAD_TESTS -parse-as-library -swift-version 5 overlay/VPN013/ClientUpdatesViewController.swift tests/ClientVerifiedDownloadTests.swift -o "$RUNNER_TEMP/verified-download"
+          "$RUNNER_TEMP/verified-download" | tee "$RUNNER_TEMP/verified-download.log"
+          grep -Fx 'PASS 9/9 actual URLSession and file-download scenarios; synthetic URLProtocol; no external network' "$RUNNER_TEMP/verified-download.log"
