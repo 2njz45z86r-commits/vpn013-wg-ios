@@ -125,6 +125,7 @@ final class ServiceRoutingViewController: UITableViewController, UISearchResults
     @objc private func save() {
         do {
             if wireGuard { _ = try catalog.resolveWireGuard(selection) } else { _ = try catalog.resolve(selection) }
+            try catalog.validateNewSelection(selection)
             navigationItem.rightBarButtonItem?.isEnabled = false
             saveSelection(selection) { [weak self] error in
                 guard let self = self else { return }

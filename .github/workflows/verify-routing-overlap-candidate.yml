@@ -1,0 +1,21 @@
+name: Check routing overlap candidate without publication
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-routing-overlap-candidate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  overlap:
+    runs-on: macos-26-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Execute real catalog overlap guard with synthetic and pinned catalog data
+        run: |
+          set -eu
+          swiftc -parse-as-library -swift-version 5 overlay/VPN013/ServiceRoutingCatalog.swift tests/ServiceRoutingOverlapTests.swift -o "$RUNNER_TEMP/service-overlap-test"
+          "$RUNNER_TEMP/service-overlap-test" overlay/VPN013

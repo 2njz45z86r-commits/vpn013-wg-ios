@@ -246,6 +246,8 @@ final class ProxyProfilesManager {
     /// Catalog switches overlay each selected server's own manual baseline.
     /// Turning them off restores that baseline, rather than copying server one.
     func update(_ selected: [Entry], services: ServiceRoutingSelection, completion: @escaping (Error?) -> Void) {
+        do { try ServiceRoutingCatalog.shared.get().validateNewSelection(services) }
+        catch { completion(error); return }
         var policies = [UUID: ProxyRoutingPolicy]()
         for entry in selected {
             var policy = entry.value.routing; policy.serviceSelection = services

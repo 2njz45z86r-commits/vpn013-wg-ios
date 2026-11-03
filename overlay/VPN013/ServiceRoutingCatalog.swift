@@ -4,12 +4,63 @@ import CryptoKit
 
 enum ServiceCatalogError: Error, LocalizedError {
     case invalid, wireGuardDomains, automaticStart
+    case overlappingServices(String, String)
     var errorDescription: String? {
         switch self {
         case .invalid: return "Каталог маршрутизации недоступен или выбор не прошёл проверку. Прежние правила сохранены."
         case .wireGuardDomains: return "Этот сервис требует маршрутизации по доменам, которая здесь пока недоступна для WireGuard. Прежние правила сохранены."
         case .automaticStart: return "Сначала отключите подключение по требованию для выбранных серверов. Действующие подключения не изменены."
+        case .overlappingServices(let selected, let other): return "Сервисы «\(selected)» и «\(other)» используют общие IPv4-сети и могут маршрутизироваться вместе. Точное разделение пока не подтверждено, поэтому новые правила не применены. Прежние правила сохранены."
         }
+    }
+}
+
+/// Compare the actual pinned IPv4 ranges, including containment, without
+/// exposing technical addresses in the UI. This is a guard for *new* saves,
+/// not a change to resolution of already saved or active configurations.
+struct ServiceIPv4Overlap {
+    struct Interval {
+        let first: UInt64
+        let last: UInt64
+        let service: String
+    }
+
+    static func interval(_ text: String, service: String) throws -> Interval {
+        let parts = text.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2, let prefix = Int(parts[1]), (0...32).contains(prefix),
+              String(prefix) == parts[1] else { throw ServiceCatalogError.invalid }
+        let octets = parts[0].split(separator: ".", omittingEmptySubsequences: false)
+        guard octets.count == 4 else { throw ServiceCatalogError.invalid }
+        var address: UInt64 = 0
+        for octet in octets {
+            guard let value = UInt8(octet), String(value) == octet else { throw ServiceCatalogError.invalid }
+            address = (address << 8) | UInt64(value)
+        }
+        let count = UInt64(1) << (32 - prefix)
+        guard address % count == 0 else { throw ServiceCatalogError.invalid }
+        return Interval(first: address, last: address + count - 1, service: service)
+    }
+
+    static func firstConflict(networks: [String: [String]], selected: Set<String>) throws -> (String, String)? {
+        guard selected.isSubset(of: Set(networks.keys)) else { throw ServiceCatalogError.invalid }
+        var chosen = [Interval](); var others = [Interval]()
+        for (service, values) in networks {
+            for value in values {
+                let range = try interval(value, service: service)
+                if selected.contains(service) { chosen.append(range) } else { others.append(range) }
+            }
+        }
+        func ordered(_ lhs: Interval, _ rhs: Interval) -> Bool {
+            lhs.first == rhs.first ? lhs.last < rhs.last : lhs.first < rhs.first
+        }
+        chosen.sort(by: ordered); others.sort(by: ordered)
+        var left = 0; var right = 0
+        while left < chosen.count && right < others.count {
+            let a = chosen[left]; let b = others[right]
+            if a.first <= b.last && b.first <= a.last { return (a.service, b.service) }
+            if a.last < b.first { left += 1 } else { right += 1 }
+        }
+        return nil
     }
 }
 
@@ -54,6 +105,7 @@ final class ServiceRoutingCatalog {
     private struct GroupsFile: Decodable { let version: Int; let groups: [ServiceCatalogGroup] }
     private let rules: [String: Rules]
     private let ids: Set<String>
+    private let names: [String: String]
     let groups: [ServiceCatalogGroup]
     static let shared: Result<ServiceRoutingCatalog, Error> = Result { try load(bundle: .main) }
 
@@ -88,6 +140,7 @@ final class ServiceRoutingCatalog {
               Set(grouped.groups.map { $0.id }).count == grouped.groups.count,
               flat.allSatisfy({ display.services.contains($0) }) else { throw ServiceCatalogError.invalid }
         self.rules = technical.services; self.ids = ids; self.groups = grouped.groups
+        self.names = Dictionary(uniqueKeysWithValues: display.services.map { ($0.id, $0.name) })
     }
 
     func resolve(_ selection: ServiceRoutingSelection) throws -> Plan? {
@@ -124,5 +177,15 @@ final class ServiceRoutingCatalog {
         guard let plan = try resolve(selection) else { return nil }
         guard plan.domains.isEmpty, !plan.networks.isEmpty else { throw ServiceCatalogError.wireGuardDomains }
         return plan
+    }
+
+    /// Refuse an inaccurate new distinction; existing selections still resolve.
+    func validateNewSelection(_ selection: ServiceRoutingSelection) throws {
+        guard try resolve(selection) != nil else { return }
+        let conflicts = try ServiceIPv4Overlap.firstConflict(networks: rules.mapValues { $0.ipv4 }, selected: Set(selection.activeIDs))
+        if let (selected, other) = conflicts {
+            guard let selectedName = names[selected], let otherName = names[other] else { throw ServiceCatalogError.invalid }
+            throw ServiceCatalogError.overlappingServices(selectedName, otherName)
+        }
     }
 }

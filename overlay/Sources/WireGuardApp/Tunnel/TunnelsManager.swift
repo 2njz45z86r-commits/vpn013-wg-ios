@@ -1812,6 +1812,7 @@ extension TunnelsManager {
     private func prepareServiceRouting(_ targets: [WireGuardRoutingTarget], selection: ServiceRoutingSelection) throws -> [(WireGuardRoutingTarget, NETunnelProviderProtocol)] {
         guard !targets.isEmpty, targets.count <= 512, Set(targets.map { $0.id }).count == targets.count else { throw ProxyOperationError.unreadable }
         let resolved = try ServiceRoutingCatalog.shared.get().resolveWireGuard(selection)
+        try ServiceRoutingCatalog.shared.get().validateNewSelection(selection)
         let routing = try resolved.map { try WireGuardIPv4ServiceRouting(mode: $0.mode == .only ? .only : .bypass, networks: $0.networks) }
         let data = try JSONEncoder().encode(selection)
         guard data.count <= 32_768 else { throw ServiceCatalogError.invalid }
