@@ -47,7 +47,7 @@ final class SyntheticReleaseProtocol: URLProtocol {
             // session refuses the proposed redirect. A real server closes it.
             client?.urlProtocolDidFinishLoading(self)
         case "/cancel":
-            client?.urlProtocol(self, didReceive: response(200), cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didReceive: response(200, ["Content-Length": "3"]), cacheStoragePolicy: .notAllowed)
             trace("protocol-response-sent")
             client?.urlProtocol(self, didLoad: Data("a".utf8))
             trace("protocol-data-sent")
