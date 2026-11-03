@@ -259,6 +259,7 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
     private(set) var cancelledByUser = false
     #if VPN013_DOWNLOAD_TESTS
     private var syntheticConfiguration: URLSessionConfiguration?
+    private var syntheticAfterFirstWrite: (() -> Void)?
     func configureForTest(_ configuration: URLSessionConfiguration, limit: Int64) {
         precondition(session == nil && task == nil && limit > 0)
         syntheticConfiguration = configuration
@@ -266,6 +267,10 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
     }
     var testDirectory: URL { directory }
     var testRedirectCount: Int { redirects }
+    func observeFirstWriteForTest(_ callback: @escaping () -> Void) {
+        precondition(session == nil && task == nil)
+        syntheticAfterFirstWrite = callback
+    }
     #endif
 
     init(url: URL, expectedHash: String, completion: @escaping (Result<URL, Error>) -> Void) throws {
@@ -323,7 +328,15 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
         guard failure == nil, verification.append(data) else {
             failure = ClientUpdateError.invalidResponse; dataTask.cancel(); return
         }
-        do { try output.write(contentsOf: data) }
+        do {
+            try output.write(contentsOf: data)
+            #if VPN013_DOWNLOAD_TESTS
+            if !data.isEmpty, let callback = syntheticAfterFirstWrite {
+                syntheticAfterFirstWrite = nil
+                callback()
+            }
+            #endif
+        }
         catch { failure = error; dataTask.cancel() }
     }
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -355,6 +368,7 @@ final class ClientVerifiedDownloadTestDriver {
     }
     func start() { download.start() }
     func cancel() { download.cancel() }
+    func observeFirstWrite(_ callback: @escaping () -> Void) { download.observeFirstWriteForTest(callback) }
 }
 #endif
 #endif

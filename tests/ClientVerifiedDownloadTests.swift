@@ -8,14 +8,13 @@ enum ClientUpdateError: Error { case invalidResponse }
 final class SyntheticReleaseProtocol: URLProtocol {
     static let lock = NSLock()
     static var requests: [String] = []
-    static var streamed: (() -> Void)?
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-    static func clear() { lock.lock(); requests = []; streamed = nil; lock.unlock() }
+    static func clear() { lock.lock(); requests = []; lock.unlock() }
     static func captured() -> [String] { lock.lock(); defer { lock.unlock() }; return requests }
     override func startLoading() {
         guard let url = request.url else { fatalError("Synthetic URL missing") }
-        Self.lock.lock(); Self.requests.append(url.absoluteString); let onStream = Self.streamed; Self.lock.unlock()
+        Self.lock.lock(); Self.requests.append(url.absoluteString); Self.lock.unlock()
         func response(_ status: Int, _ headers: [String: String] = [:]) -> HTTPURLResponse {
             HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
         }
@@ -45,7 +44,6 @@ final class SyntheticReleaseProtocol: URLProtocol {
         case "/cancel":
             client?.urlProtocol(self, didReceive: response(200), cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data("a".utf8))
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { onStream?() }
         default:
             if url.path.hasPrefix("/redirect-chain-"), let number = Int(url.lastPathComponent.dropFirst("redirect-chain-".count)) {
                 let target = URL(string: "https://github.com/redirect-chain-\(number + 1)")!
@@ -76,10 +74,18 @@ final class SyntheticReleaseProtocol: URLProtocol {
             callbacks += 1; result = value
         }
         let dir = driver.directory
+        var observedWrittenByte = false
         if cancelOnData {
-            SyntheticReleaseProtocol.lock.lock()
-            SyntheticReleaseProtocol.streamed = { driver.cancel() }
-            SyntheticReleaseProtocol.lock.unlock()
+            driver.observeFirstWrite {
+                let file = dir.appendingPathComponent("VPN013.ipa")
+                guard let bytes = try? Data(contentsOf: file), bytes == Data("a".utf8) else {
+                    preconditionFailure("Cancellation fixture did not observe the written synthetic byte")
+                }
+                DispatchQueue.main.async {
+                    observedWrittenByte = true
+                    driver.cancel()
+                }
+            }
         }
         if cancelBeforeStart { driver.cancel() }
         driver.start()
@@ -108,6 +114,7 @@ final class SyntheticReleaseProtocol: URLProtocol {
             precondition(driver.redirectCount == 1, "URLSession did not invoke the real redirect delegate")
         }
         if path == "redirect-chain-0" { precondition(driver.redirectCount == 6, "Redirect limit was not exercised") }
+        if cancelOnData { precondition(observedWrittenByte, "Cancellation must follow a verified file write") }
         if path == "redirect-denied" { precondition(!requests.contains { $0.contains("untrusted.invalid") }, "Disallowed redirect was followed") }
         // Give duplicate completion callbacks a chance to surface.
         RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
