@@ -148,7 +148,7 @@ class TunnelsManager {
                         wg_log(
                             .info,
                             message:
-                                "Removing orphaned tunnel with non-verifying keychain entry: \(tunnelManager.localizedDescription ?? "<unknown>")"
+                                "Removing orphaned tunnel with non-verifying keychain entry"
                         )
                         tunnelManager.removeFromPreferences { _ in }
                         tunnelManagers.remove(at: index)
@@ -692,7 +692,7 @@ class TunnelsManager {
             wg_log(
                 .info,
                 message:
-                    "Tunnel '\(tunnel.name)' waiting for deactivation of '\(tunnelInOperation.name)'"
+                    "Tunnel waiting for deactivation of another tunnel"
             )
             tunnel.status = .waiting
             activateWaitingTunnelOnDeactivation(of: tunnelInOperation)
@@ -703,7 +703,7 @@ class TunnelsManager {
                             wg_log(
                                 .error,
                                 message:
-                                    "Unable to activate tunnel '\(tunnel.name)' because on-demand could not be disabled on active tunnel '\(tunnel.name)'"
+                                    "Unable to activate tunnel because on-demand could not be disabled on active tunnel"
                             )
                             return
                         }
@@ -839,7 +839,7 @@ class TunnelsManager {
             wg_log(
                 .debug,
                 message:
-                    "Tunnel '\(tunnel.name)' connection status changed to '\(tunnel.tunnelProvider.connection.status)'"
+                    "Tunnel connection status changed to '\(tunnel.tunnelProvider.connection.status)'"
             )
 
             if session.status == .connected {
@@ -965,7 +965,7 @@ class TunnelContainer: NSObject {
                     wg_log(
                         .debug,
                         message:
-                            "Status update notification timeout for tunnel '\(self.name)'. Tunnel status is now '\(self.tunnelProvider.connection.status)'."
+                            "Status update notification timeout. Tunnel status is now '\(self.tunnelProvider.connection.status)'."
                     )
                     switch self.tunnelProvider.connection.status {
                     case .connected, .disconnected, .invalid:
