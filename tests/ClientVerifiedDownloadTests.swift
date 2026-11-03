@@ -5,6 +5,10 @@ import CryptoKit
 
 enum ClientUpdateError: Error { case invalidResponse }
 
+func trace(_ stage: String) {
+    FileHandle.standardError.write(Data(("TEST-FIXTURE " + stage + "\n").utf8))
+}
+
 final class SyntheticReleaseProtocol: URLProtocol {
     static let lock = NSLock()
     static var requests: [String] = []
@@ -14,6 +18,7 @@ final class SyntheticReleaseProtocol: URLProtocol {
     static func captured() -> [String] { lock.lock(); defer { lock.unlock() }; return requests }
     override func startLoading() {
         guard let url = request.url else { fatalError("Synthetic URL missing") }
+        trace("protocol-start \(url.path)")
         Self.lock.lock(); Self.requests.append(url.absoluteString); Self.lock.unlock()
         func response(_ status: Int, _ headers: [String: String] = [:]) -> HTTPURLResponse {
             HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
@@ -43,7 +48,9 @@ final class SyntheticReleaseProtocol: URLProtocol {
             client?.urlProtocolDidFinishLoading(self)
         case "/cancel":
             client?.urlProtocol(self, didReceive: response(200), cacheStoragePolicy: .notAllowed)
+            trace("protocol-response-sent")
             client?.urlProtocol(self, didLoad: Data("a".utf8))
+            trace("protocol-data-sent")
         default:
             if url.path.hasPrefix("/redirect-chain-"), let number = Int(url.lastPathComponent.dropFirst("redirect-chain-".count)) {
                 let target = URL(string: "https://github.com/redirect-chain-\(number + 1)")!
@@ -54,7 +61,7 @@ final class SyntheticReleaseProtocol: URLProtocol {
             }
         }
     }
-    override func stopLoading() { }
+    override func stopLoading() { trace("protocol-stop") }
 }
 
 @main struct ClientVerifiedDownloadTests {
@@ -63,6 +70,7 @@ final class SyntheticReleaseProtocol: URLProtocol {
                     cancelBeforeStart: Bool = false, cancelOnData: Bool = false,
                     expectSuccess: Bool = false, expectedRequests: Int? = nil) throws {
         precondition(Thread.isMainThread)
+        trace("case-start \(path) before=\(cancelBeforeStart) after-write=\(cancelOnData)")
         SyntheticReleaseProtocol.clear()
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [SyntheticReleaseProtocol.self]
@@ -71,17 +79,21 @@ final class SyntheticReleaseProtocol: URLProtocol {
         var callbacks = 0
         let driver = try ClientVerifiedDownloadTestDriver(url: url, expectedHash: hash ?? correctHash,
                                                           configuration: config, limit: limit) { value in
+            trace("completion-called")
             callbacks += 1; result = value
         }
         let dir = driver.directory
         var observedWrittenByte = false
         if cancelOnData {
             driver.observeFirstWrite {
+                trace("file-observer-enter")
                 let file = dir.appendingPathComponent("VPN013.ipa")
                 guard let bytes = try? Data(contentsOf: file), bytes == Data("a".utf8) else {
                     preconditionFailure("Cancellation fixture did not observe the written synthetic byte")
                 }
+                trace("file-observer-confirmed")
                 DispatchQueue.main.async {
+                    trace("main-cancel-dispatched")
                     observedWrittenByte = true
                     driver.cancel()
                 }

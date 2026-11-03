@@ -260,6 +260,9 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
     #if VPN013_DOWNLOAD_TESTS
     private var syntheticConfiguration: URLSessionConfiguration?
     private var syntheticAfterFirstWrite: (() -> Void)?
+    private func syntheticTrace(_ stage: String) {
+        FileHandle.standardError.write(Data(("TEST-TRANSPORT " + stage + "\n").utf8))
+    }
     func configureForTest(_ configuration: URLSessionConfiguration, limit: Int64) {
         precondition(session == nil && task == nil && limit > 0)
         syntheticConfiguration = configuration
@@ -288,6 +291,9 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
     }
 
     func start() {
+        #if VPN013_DOWNLOAD_TESTS
+        syntheticTrace("start")
+        #endif
         guard !cancelledBeforeStart else {
             try? output.close(); try? FileManager.default.removeItem(at: directory)
             completion(.failure(URLError(.cancelled))); return
@@ -306,6 +312,9 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
         let task = session.dataTask(with: url); self.task = task; task.resume()
     }
     func cancel() {
+        #if VPN013_DOWNLOAD_TESTS
+        syntheticTrace("cancel-called")
+        #endif
         cancelledByUser = true
         if let task = task { task.cancel() } else { cancelledBeforeStart = true }
     }
@@ -318,6 +327,9 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
         completionHandler(request)
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        #if VPN013_DOWNLOAD_TESTS
+        syntheticTrace("response-received")
+        #endif
         guard let response = response as? HTTPURLResponse,
               verification.acceptsResponse(status: response.statusCode, contentLength: response.expectedContentLength) else {
             failure = ClientUpdateError.invalidResponse; completionHandler(.cancel); return
@@ -325,21 +337,30 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
         responseAccepted = true; completionHandler(.allow)
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        #if VPN013_DOWNLOAD_TESTS
+        syntheticTrace("data-received")
+        #endif
         guard failure == nil, verification.append(data) else {
             failure = ClientUpdateError.invalidResponse; dataTask.cancel(); return
         }
         do {
             try output.write(contentsOf: data)
             #if VPN013_DOWNLOAD_TESTS
+            syntheticTrace("write-returned")
             if !data.isEmpty, let callback = syntheticAfterFirstWrite {
                 syntheticAfterFirstWrite = nil
+                syntheticTrace("write-callback-enter")
                 callback()
+                syntheticTrace("write-callback-return")
             }
             #endif
         }
         catch { failure = error; dataTask.cancel() }
     }
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        #if VPN013_DOWNLOAD_TESTS
+        syntheticTrace("task-complete")
+        #endif
         var result: Result<URL, Error>
         do {
             try output.close()
