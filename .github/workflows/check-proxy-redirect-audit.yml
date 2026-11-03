@@ -1,0 +1,19 @@
+name: Check synthetic subscription redirects
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/ios-proxy-redirect-audit-20261103]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-26-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Run real subscription downloader with synthetic URLProtocol
+        run: |
+          xcrun swiftc -parse-as-library -swift-version 5 overlay/VPN013/ProxyProfile.swift overlay/VPN013/SubscriptionRequest.swift overlay/VPN013/ProxySubscriptionDownload.swift tests/ProxySubscriptionRedirectAudit.swift -o "$RUNNER_TEMP/redirect-audit"
+          "$RUNNER_TEMP/redirect-audit"
