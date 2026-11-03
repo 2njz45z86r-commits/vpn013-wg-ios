@@ -10,6 +10,24 @@ xcrun simctl boot "$device" || true
 echo 'VPN013 native stage: wait for simulator boot'
 xcrun simctl bootstatus "$device" -b
 echo 'VPN013 native stage: simulator booted'
+# In the disposable CI simulator, exercise the operating system's real
+# LocalAuthentication prompt with synthetic profiles and a simulated face.
+# This changes no application authentication code or physical device.
+if [ "${VPN013_SIMULATOR_BIOMETRIC:-0}" = 1 ]; then
+ test "${GITHUB_ACTIONS:-}" = true
+ test "${VPN013_IPHONE_ONLY:-0}" = 1
+ xcrun simctl spawn "$device" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1
+ xcrun simctl spawn "$device" notifyutil -p com.apple.BiometricKit.enrollmentChanged
+ (
+  i=0
+  while [ "$i" -lt 1350 ]; do
+   xcrun simctl spawn "$device" notifyutil -p com.apple.BiometricKit_Sim.pearl.match >/dev/null 2>&1 || true
+   i=$((i + 1)); sleep 2
+  done
+ ) &
+ biometric_pid=$!
+ trap 'kill "$biometric_pid" 2>/dev/null || true' EXIT
+fi
 cd build/awg
 # Prove the compiled UI cases and native persistence fixture are the reviewed
 # overlay bytes before selecting either shard.

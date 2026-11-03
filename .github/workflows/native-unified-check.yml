@@ -51,6 +51,7 @@ jobs:
         if: always() && steps.compile.outcome == 'success'
         env:
           VPN013_IPHONE_ONLY: '1'
+          VPN013_SIMULATOR_BIOMETRIC: ${{ matrix.shard == 'coreC' && '1' || '0' }}
         run: python3 scripts/native_ui_shards.py run '${{ matrix.shard }}' --seconds 2700
       - name: Retain only credential-free diagnostic evidence, never an installable IPA
         if: always()
