@@ -1,0 +1,22 @@
+name: focused-2c-wg-awg-parser-audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/ios-parser-2c-audit-20261103]
+permissions:
+  contents: read
+jobs:
+  parser:
+    runs-on: macos-26-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Compile and execute pinned generated parser with synthetic model stubs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/awg-source"
+          git -C "$RUNNER_TEMP/awg-source" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
+          python3 diagnostics/actual-parser-harness.py "$RUNNER_TEMP/awg-source" "$RUNNER_TEMP/parser-test.swift"
+          xcrun swiftc -parse-as-library -swift-version 5 "$RUNNER_TEMP/parser-test.swift" -o "$RUNNER_TEMP/parser-test"
+          "$RUNNER_TEMP/parser-test"
