@@ -21,6 +21,7 @@ sources = {
     'ServiceRoutingUI.swift': [app],
     'ProxyPreferences.swift': [app, *extensions],
     'ProxyPacketAdapter.swift': extensions,
+    'PreciseNetworkSettings.swift': extensions,
     'ProxyAutomaticAdapter.swift': extensions,
     'ProxyProfilesManager.swift': [app],
     'UnifiedClientUI.swift': [app],
