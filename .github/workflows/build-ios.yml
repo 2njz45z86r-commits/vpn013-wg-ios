@@ -14,7 +14,7 @@ jobs:
       - name: Build source-pinned diagnostic app and extension
         id: compile
         run: sh build-on-mac.sh
-      - name: Execute the single real UI test with simulator-only event trace
+      - name: Repeat the real UI test up to eight times, stopping at the first failure
         if: steps.compile.outcome == 'success'
         env:
           VPN013_IPHONE_ONLY: '1'
@@ -26,10 +26,10 @@ jobs:
           import json
           from pathlib import Path
           summary=json.loads(Path('build/review/test-summary.json').read_text())
-          assert summary.get('result')=='Passed' and summary.get('passedTests')==1
+          assert summary.get('result')=='Passed' and summary.get('passedTests',0)>=1
           assert summary.get('failedTests')==0 and summary.get('skippedTests')==0
           log=Path('build/simulator-test.log').read_text(errors='replace')
-          assert "testAutoPinnedFirstWithCurrentMemberAndPing]' passed" in log
+          assert log.count("testAutoPinnedFirstWithCurrentMemberAndPing]' passed") == 8, 'exactly eight actual passes required'
           PY
       - name: Package diagnostic evidence, never an IPA
         if: always()
@@ -42,7 +42,7 @@ jobs:
           if log.exists():
               selected=[s for s in log.read_text(errors='replace').splitlines() if 'error:' in s or 'XCTAssert' in s or 'Test Case ' in s or 'TEST FAILED' in s or 'TEST SUCCEEDED' in s]
               Path('build/review/log-summary.json').write_text(json.dumps(selected[-60:]))
-          Path('build/review/run-state.json').write_text(json.dumps({'sourceSha':os.environ['GITHUB_SHA'],'runId':os.environ['GITHUB_RUN_ID'],'scope':'one synthetic UI test, no physical device, no IPA, no release'}))
+          Path('build/review/run-state.json').write_text(json.dumps({'sourceSha':os.environ['GITHUB_SHA'],'runId':os.environ['GITHUB_RUN_ID'],'scope':'one synthetic UI test repeated up to eight times, no physical device, no IPA, no release'}))
           with zipfile.ZipFile('build/ping-diagnostic.zip','w',zipfile.ZIP_DEFLATED) as z:
               for p in Path('build/review').rglob('*'):
                   if p.is_file() and p.suffix in ('.png','.json'): z.write(p,p.as_posix().removeprefix('build/'))
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: auto-ping-diagnostic-${{ github.run_id }}
+          name: auto-ping-repeat-diagnostic-${{ github.run_id }}
           path: build/ping-diagnostic.zip
           retention-days: 7
           if-no-files-found: error
