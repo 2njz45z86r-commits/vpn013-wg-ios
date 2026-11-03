@@ -1,0 +1,25 @@
+name: Check synthetic ZIP import boundaries
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/ios-zip-boundary-tests-20261103]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-26-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build real importer and minizip, run synthetic archives
+        run: |
+          git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git "$RUNNER_TEMP/upstream"
+          git -C "$RUNNER_TEMP/upstream" checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
+          ZIPDIR="$RUNNER_TEMP/upstream/Sources/WireGuardApp/ZipArchive/3rdparty/minizip"
+          printf '#include "zip.h"\n#include "unzip.h"\n' > "$RUNNER_TEMP/zip-bridge.h"
+          for file in ioapi zip unzip; do clang -c "$ZIPDIR/$file.c" -I "$ZIPDIR" -o "$RUNNER_TEMP/$file.o"; done
+          python3 tests/create_zip_boundary_fixtures.py "$RUNNER_TEMP/fixtures"
+          xcrun swiftc -parse-as-library -import-objc-header "$RUNNER_TEMP/zip-bridge.h" -Xcc -I -Xcc "$ZIPDIR" overlay/Sources/WireGuardApp/ZipArchive/ZipArchive.swift tests/ZipBoundaryTests.swift "$RUNNER_TEMP/ioapi.o" "$RUNNER_TEMP/zip.o" "$RUNNER_TEMP/unzip.o" -lz -o "$RUNNER_TEMP/zip-test"
+          "$RUNNER_TEMP/zip-test" "$RUNNER_TEMP/fixtures"
