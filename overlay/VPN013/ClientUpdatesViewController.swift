@@ -238,6 +238,8 @@ enum ClientReleaseDownload {
     }
 }
 
+#endif
+#if canImport(UIKit) || VPN013_DOWNLOAD_TESTS
 /// Streams into an app-private temporary file; no partially downloaded file is shared.
 private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
     private let url: URL
@@ -255,6 +257,15 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
     // start and cancel are both called by the UI on the main queue.
     private var cancelledBeforeStart = false
     private(set) var cancelledByUser = false
+    #if VPN013_DOWNLOAD_TESTS
+    private var syntheticConfiguration: URLSessionConfiguration?
+    func configureForTest(_ configuration: URLSessionConfiguration, limit: Int64) {
+        precondition(session == nil && task == nil && limit > 0)
+        syntheticConfiguration = configuration
+        verification = ClientReleaseVerification(limit: limit)
+    }
+    var testDirectory: URL { directory }
+    #endif
 
     init(url: URL, expectedHash: String, completion: @escaping (Result<URL, Error>) -> Void) throws {
         self.url = url; self.expectedHash = expectedHash; self.completion = completion
@@ -275,7 +286,11 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
             try? output.close(); try? FileManager.default.removeItem(at: directory)
             completion(.failure(URLError(.cancelled))); return
         }
+        #if VPN013_DOWNLOAD_TESTS
+        let config = syntheticConfiguration ?? URLSessionConfiguration.ephemeral
+        #else
         let config = URLSessionConfiguration.ephemeral
+        #endif
         config.httpCookieStorage = nil; config.urlCredentialStorage = nil; config.urlCache = nil
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.timeoutIntervalForRequest = 60; config.timeoutIntervalForResource = 600
@@ -326,6 +341,23 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
     }
 }
 
+#if VPN013_DOWNLOAD_TESTS
+// This wrapper is compiled only into the isolated macOS test executable.
+final class ClientVerifiedDownloadTestDriver {
+    private let download: ClientVerifiedDownload
+    var directory: URL { download.testDirectory }
+    init(url: URL, expectedHash: String, configuration: URLSessionConfiguration, limit: Int64,
+         completion: @escaping (Result<URL, Error>) -> Void) throws {
+        download = try ClientVerifiedDownload(url: url, expectedHash: expectedHash, completion: completion)
+        download.configureForTest(configuration, limit: limit)
+    }
+    func start() { download.start() }
+    func cancel() { download.cancel() }
+}
+#endif
+#endif
+
+#if canImport(UIKit)
 extension TunnelsListTableViewController {
     @objc func clientUpdatesTapped() {
         guard let manager = tunnelsManager else { return }
