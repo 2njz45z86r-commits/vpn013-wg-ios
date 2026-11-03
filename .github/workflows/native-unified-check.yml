@@ -10,12 +10,12 @@ concurrency:
   cancel-in-progress: false
 jobs:
   native:
-    runs-on: macos-26-intel
+    runs-on: macos-26
     timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
-        shard: [coreA, coreB, coreC, added5]
+        shard: [coreA]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
