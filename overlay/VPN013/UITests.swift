@@ -705,6 +705,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.staticTexts["vpn013.current-endpoint"].label.contains("127.0.0.1:4444"))
         XCTAssertTrue(app.staticTexts["vpn013.current-traffic"].exists)
         XCTAssertTrue(ping.isEnabled && ping.isHittable)
+        if ping.frame.height + 0.001 < 44 { capture("20-current-ping-short-visible-target") }
         XCTAssertGreaterThanOrEqual(ping.frame.height + 0.001, 44, "Allow only floating-point coordinate rounding; the 44-point target remains required")
         ping.tap()
         let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch

@@ -320,6 +320,9 @@ final class VPN013ConnectionPopup: UIViewController {
         modalPresentationStyle = .pageSheet
         if #available(iOS 15.0, *) {
             sheetPresentationController?.detents = [.medium(), .large()]
+            // Open with enough room for the connection controls; the user can
+            // still drag the sheet down to its medium size.
+            sheetPresentationController?.selectedDetentIdentifier = .large
             sheetPresentationController?.prefersGrabberVisible = true
         }
     }
