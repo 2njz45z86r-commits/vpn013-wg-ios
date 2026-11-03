@@ -1,0 +1,38 @@
+{
+  "module": "github.com/amnezia-vpn/amnezia-xray-core",
+  "version": "v1.260728.0",
+  "files": {
+    "proxy/wireguard/client.go": {
+      "sourceSHA256": "2b0265f67d6456fb59f464254bd19e965bbb9a679b05b36538320ce614194d1a",
+      "prototypeSHA256": "2ed305a04a3849814ebeb6ed3574b2a32aad4d109718abf574ad6e79e841e1b7"
+    },
+    "proxy/wireguard/bind.go": {
+      "sourceSHA256": "3ee350d635c9021710b8731efcec81a2bb241536454c1aef233244b372ac54b1",
+      "prototypeSHA256": "d1c27c43b0ffb60f67a97b370f2b97aee1b469111aea6be43aca0c3769a23962"
+    },
+    "proxy/wireguard/config.proto": {
+      "sourceSHA256": "03a08add1e61b6172028073c00ddefa5055dfe46880099cf7acf40667857126c",
+      "prototypeSHA256": "dfa1cd6b8d84f21e29645b4a55a212736e613bc5ab6719a3441260218b407253"
+    },
+    "proxy/wireguard/config.pb.go": {
+      "sourceSHA256": "fd8a50fe3296f0062936109dfa482f0eb1b4d521c34260b40dd7ae99f3fce47a",
+      "prototypeSHA256": "a5a070b3956291523a778b91e4078a1fbc9f40ad7e02d86952e0a43d8f2bc871"
+    },
+    "infra/conf/wireguard.go": {
+      "sourceSHA256": "860ff2f88199dcb3a39d20bca331ef255712aea6120fc1de6f2183316fb631e9",
+      "prototypeSHA256": "a037461f91aad9be0bc5a5026398dc13ff9209fa2f62097e383c322dea2f65f0"
+    },
+    "proxy/wireguard/vpn013_awg.go": {
+      "sourceSHA256": null,
+      "prototypeSHA256": "18bd2600909d5888d471805fc2162f99afa2783e7ff2df4cc90a447bb65091fc"
+    },
+    "proxy/wireguard/vpn013_gated_tun.go": {
+      "sourceSHA256": null,
+      "prototypeSHA256": "5c7587714193eb867ea646cfe901f0f309fd849c67f365b251ac8b1b6c1c5e79"
+    },
+    "proxy/wireguard/vpn013_awg_test.go": {
+      "sourceSHA256": null,
+      "prototypeSHA256": "b1b504c9933b479b89319ce98a59cac0075dbf5025e2bf7313746f298eb14f50"
+    }
+  }
+}

@@ -6,3 +6,4 @@ windows/dependencies/go.sum text eol=lf
 windows/overlay/r013routing/networks.cidr text eol=lf
 .github/release-publication/** -text
 scripts/awg31-fixtures/** -text
+scripts/precise-routing-prototype/** -text
