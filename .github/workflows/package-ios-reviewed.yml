@@ -1,0 +1,57 @@
+name: Package reviewed VPN013 iPhone client
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: vpn013-reviewed-ios-package-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  security:
+    uses: ./.github/workflows/security-review.yml
+
+  native_tests:
+    needs: security
+    uses: ./.github/workflows/native-unified-check.yml
+
+  package:
+    needs: [security, native_tests]
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify exact checked-out source and current review
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          python3 scripts/security_release_gate.py
+          python3 -m unittest scripts.tests.test_verify_owner_ipa scripts.tests.test_verify_owner_codesign -q
+      - name: Build iPhone app and VPN extension for owner signing
+        run: sh build-on-mac.sh
+      - name: Verify package contents and record provenance
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 scripts/verify_owner_ipa.py build/VPN013AWG-unsigned.ipa build/review/bundle-verification.json build/review/owner-package.json
+          mkdir -p build/owner-package-check
+          ditto -x -k build/VPN013AWG-unsigned.ipa build/owner-package-check
+          python3 scripts/verify_owner_codesign.py build/owner-package-check/Payload/AmneziaWG.app
+      - name: Retain reviewed IPA for owner signing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vpn013-ios-reviewed-owner-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            build/VPN013AWG-unsigned.ipa
+            build/review/owner-package.json
+            build/review/bundle-verification.json
