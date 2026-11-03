@@ -3,12 +3,23 @@ set -eu
 export HOMEBREW_NO_AUTO_UPDATE=1
 mkdir -p build/review
 python3 - <<'PY'
-import hashlib,json,os,platform,tarfile,urllib.request
+import hashlib,json,os,platform,tarfile,time,urllib.error,urllib.request
 from pathlib import Path
 if os.popen('go version 2>/dev/null').read().split()[2:3] and 'go1.26.10' in os.popen('go version').read():
  print('Go 1.26 installed')
 else:
- data=json.load(urllib.request.urlopen('https://go.dev/dl/?mode=json&include=all',timeout=30))
+ # A transient metadata outage must not discard an otherwise valid run.
+ # Retry only service/rate-limit errors; the selected archive still has to
+ # match the SHA-256 published by the official metadata endpoint.
+ for attempt in range(4):
+  try:
+   with urllib.request.urlopen('https://go.dev/dl/?mode=json&include=all',timeout=30) as response:
+    data=json.load(response)
+   break
+  except urllib.error.HTTPError as error:
+   if error.code not in (429, 500, 502, 503, 504) or attempt == 3: raise
+   print(f'Go metadata temporarily unavailable (HTTP {error.code}); retrying',flush=True)
+   time.sleep(2 ** (attempt + 1))
  release=next(x for x in data if x['version']=='go1.26.10')
  arch='arm64' if platform.machine()=='arm64' else 'amd64'
  f=next(f for f in release['files'] if f['os']=='darwin' and f['arch']==arch and f['kind']=='archive')
