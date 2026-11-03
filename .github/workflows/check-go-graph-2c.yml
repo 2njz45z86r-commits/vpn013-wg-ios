@@ -1,0 +1,76 @@
+name: Focused iOS Go dependency graph for 2c
+on:
+  push:
+    branches: [codex/ios-go-graph-2c-20261103]
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: macos-26-intel
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Reconstruct pinned toolchain and generated modfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/review
+          python3 - <<'PY'
+          import hashlib,json,os,platform,tarfile,urllib.request
+          from pathlib import Path
+          if 'go1.26.10' not in os.popen('go version 2>/dev/null').read():
+              data=json.load(urllib.request.urlopen('https://go.dev/dl/?mode=json&include=all', timeout=30))
+              release=next(x for x in data if x['version']=='go1.26.10')
+              arch='arm64' if platform.machine()=='arm64' else 'amd64'
+              entry=next(x for x in release['files'] if x['os']=='darwin' and x['arch']==arch and x['kind']=='archive')
+              path=Path('build/go.tgz')
+              urllib.request.urlretrieve('https://go.dev/dl/'+entry['filename'], path)
+              assert hashlib.sha256(path.read_bytes()).hexdigest()==entry['sha256']
+              with tarfile.open(path) as archive: archive.extractall('build/toolchain',filter='data')
+          PY
+          if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
+          git clone --quiet https://github.com/amnezia-vpn/amneziawg-apple.git build/awg
+          git -C build/awg checkout --quiet 9d5ee60edefa95b933a738dd7cda671dd18021fc
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('overlay'); target=Path('build/awg')
+          files=[p for p in source.rglob('*') if p.is_file()]
+          assert len(files)==122
+          for p in files:
+              assert not p.is_symlink()
+              dest=target/p.relative_to(source)
+              dest.parent.mkdir(parents=True,exist_ok=True)
+              dest.write_bytes(p.read_bytes())
+          PY
+          python3 scripts/prepare_proxy_tun.py build/awg/Sources/WireGuardKitGo build/proxy-fd
+          cp build/proxy-fd/proxy-tun-provenance.json build/review/
+          shasum -a 256 build/proxy-fd/proxy-tun.mod build/proxy-fd/proxy-tun.sum > build/review/linked-module-sha256.txt
+      - name: Inspect affected packages in linked iOS arm64 CGO graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
+          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1
+          export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
+          export CC="$(xcrun --sdk iphoneos --find clang)"
+          export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -miphoneos-version-min=14.0"
+          export CGO_LDFLAGS="$CGO_CFLAGS"
+          (cd build/awg/Sources/WireGuardKitGo && go list -deps -f '{{.ImportPath}}' .) > "$RUNNER_TEMP/dependency-paths.txt"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          paths=set((Path(os.environ['RUNNER_TEMP'])/'dependency-paths.txt').read_text().splitlines())
+          checks=('github.com/klauspost/compress/s2','golang.org/x/net/html','golang.org/x/crypto/openpgp')
+          result={'packageCount':len(paths),'targetPackages':{target:sorted(p for p in paths if p==target or p.startswith(target+'/')) for target in checks},'scope':'iOS arm64 CGO Go package dependency graph; not symbol reachability or signed binary'}
+          Path('build/review/affected-package-graph.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ios-go-graph-2c-${{ github.run_id }}
+          path: build/review/
+          if-no-files-found: error
+          retention-days: 7
