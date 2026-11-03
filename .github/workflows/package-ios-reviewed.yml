@@ -23,7 +23,7 @@ jobs:
 
   native_tests:
     needs: security
-    uses: ./.github/workflows/validate-owner-native-intel.yml
+    uses: ./.github/workflows/native-unified-check.yml
 
   package:
     needs: [security, native_tests]
