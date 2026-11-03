@@ -8,6 +8,9 @@ for expected in ['staticMessage: "Migrating tunnel configuration"','staticMessag
     assert expected in migration
 for token in [r"\(name)", r"\(self.name)", r"\(tunnel.name)", r"\(tunnelInOperation.name)", r"\(tunnelManager.localizedDescription"]:
     assert token not in manager and token not in migration
+for token in [r"\(error)", r"\(error!)", r"\(lastError!)", r"domain=\(domain)"]:
+    assert token not in manager
+assert manager.count('as NSError).code)') >= 13
 start=source.index('    /// Report resolution outcomes without retaining endpoint addresses or error text.')
 end=source.index('    /// Helper method used by network path monitor.',start)
 methods=source[start:end]

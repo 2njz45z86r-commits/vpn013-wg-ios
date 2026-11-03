@@ -95,7 +95,7 @@ class TunnelsManager {
         #else
             NETunnelProviderManager.loadAllFromPreferences { managers, error in
                 if let error = error {
-                    wg_log(.error, message: "Failed to load tunnel provider managers: \(error)")
+                    wg_log(.error, message: "Failed to load tunnel provider managers: code=\((error as NSError).code)")
                     completionHandler(
                         .failure(
                             TunnelsManagerError.systemErrorOnListingTunnels(systemError: error)))
@@ -279,7 +279,7 @@ class TunnelsManager {
 
         tunnelProviderManager.saveToPreferences { [weak self] error in
             if let error = error {
-                wg_log(.error, message: "Add: Saving configuration failed: \(error)")
+                wg_log(.error, message: "Add: Saving configuration failed: code=\((error as NSError).code)")
                 (tunnelProviderManager.protocolConfiguration as? NETunnelProviderProtocol)?
                     .destroyConfigurationReference()
                 completionHandler(
@@ -446,7 +446,7 @@ class TunnelsManager {
             if let error = error {
                 tunnelProviderManager.protocolConfiguration = previousProtocol
                 tunnel.name = oldName
-                wg_log(.error, message: "Modify: Saving configuration failed: \(error)")
+                wg_log(.error, message: "Modify: Saving configuration failed: code=\((error as NSError).code)")
                 completionHandler(TunnelsManagerError.systemErrorOnModifyTunnel(systemError: error))
                 return
             }
@@ -481,7 +481,7 @@ class TunnelsManager {
                         wg_log(
                             .error,
                             message:
-                                "Modify: Re-loading after saving configuration failed: \(error)")
+                                "Modify: Re-loading after saving configuration failed: code=\((error as NSError).code)")
                         completionHandler(
                             TunnelsManagerError.systemErrorOnModifyTunnel(systemError: error))
                     } else {
@@ -516,7 +516,7 @@ class TunnelsManager {
         let tunnelProviderManager = tunnel.tunnelProvider
         let removeCompletion: (Error?) -> Void = { [weak self] error in
             if let error = error {
-                wg_log(.error, message: "Remove: Saving configuration failed: \(error)")
+                wg_log(.error, message: "Remove: Saving configuration failed: code=\((error as NSError).code)")
                 completionHandler(TunnelsManagerError.systemErrorOnRemoveTunnel(systemError: error))
                 return
             }
@@ -599,7 +599,7 @@ class TunnelsManager {
         tunnelProviderManager.isEnabled = true
         tunnelProviderManager.saveToPreferences { error in
             if let error = error {
-                wg_log(.error, message: "Modify On-Demand: Saving configuration failed: \(error)")
+                wg_log(.error, message: "Modify On-Demand: Saving configuration failed: code=\((error as NSError).code)")
                 completionHandler(TunnelsManagerError.systemErrorOnModifyTunnel(systemError: error))
                 return
             }
@@ -613,7 +613,7 @@ class TunnelsManager {
                         wg_log(
                             .error,
                             message:
-                                "Modify On-Demand: Re-loading after saving configuration failed: \(error)"
+                                "Modify On-Demand: Re-loading after saving configuration failed: code=\((error as NSError).code)"
                         )
                         completionHandler(
                             TunnelsManagerError.systemErrorOnModifyTunnel(systemError: error))
@@ -1320,7 +1320,7 @@ class TunnelContainer: NSObject {
         if recursionCount >= 8 {
             wg_log(
                 .error,
-                message: "startActivation: Failed after 8 attempts. Giving up with \(lastError!)")
+                message: "startActivation: Failed after 8 attempts. Giving up with code=\((lastError! as NSError).code)")
             activationDelegate?.tunnelActivationAttemptFailed(
                 tunnel: self, error: .failedBecauseOfTooManyErrors(lastSystemError: lastError!))
             return
@@ -1344,7 +1344,7 @@ class TunnelContainer: NSObject {
             tunnelProvider.saveToPreferences { [weak self] error in
                 guard let self = self else { return }
                 if error != nil {
-                    wg_log(.error, message: "Error saving tunnel after re-enabling: \(error!)")
+                    wg_log(.error, message: "Error saving tunnel after re-enabling: code=\((error! as NSError).code)")
                     activationDelegate?.tunnelActivationAttemptFailed(
                         tunnel: self, error: .failedWhileSaving(systemError: error!))
                     return
@@ -1386,10 +1386,9 @@ class TunnelContainer: NSObject {
         } catch let error {
             isAttemptingActivation = false
             let diagnostic = error as NSError
-            let domain = String(diagnostic.domain.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "_") }.prefix(96))
-            wg_log(.error, message: "Activation failure: stage=\(activationStage) domain=\(domain) code=\(diagnostic.code)")
+            wg_log(.error, message: "Activation failure: stage=\(activationStage) code=\(diagnostic.code)")
             guard let systemError = error as? NEVPNError else {
-                wg_log(.error, message: "Failed to activate tunnel: Error: \(error)")
+                wg_log(.error, message: "Failed to activate tunnel: Error: code=\((error as NSError).code)")
                 status = .inactive
                 activationDelegate?.tunnelActivationAttemptFailed(
                     tunnel: self, error: .failedWhileStarting(systemError: error))
@@ -1399,7 +1398,7 @@ class TunnelContainer: NSObject {
                 systemError.code == NEVPNError.configurationInvalid
                     || systemError.code == NEVPNError.configurationStale
             else {
-                wg_log(.error, message: "Failed to activate tunnel: VPN Error: \(error)")
+                wg_log(.error, message: "Failed to activate tunnel: VPN Error: code=\((error as NSError).code)")
                 status = .inactive
                 activationDelegate?.tunnelActivationAttemptFailed(
                     tunnel: self, error: .failedWhileStarting(systemError: systemError))
@@ -1411,7 +1410,7 @@ class TunnelContainer: NSObject {
             tunnelProvider.loadFromPreferences { [weak self] error in
                 guard let self = self else { return }
                 if error != nil {
-                    wg_log(.error, message: "startActivation: Error reloading tunnel: \(error!)")
+                    wg_log(.error, message: "startActivation: Error reloading tunnel: code=\((error! as NSError).code)")
                     self.status = .inactive
                     activationDelegate?.tunnelActivationAttemptFailed(
                         tunnel: self, error: .failedWhileLoading(systemError: systemError))
@@ -1611,7 +1610,7 @@ extension NETunnelProviderManager {
                 wg_log(.debug, message: "Handshake wait succeeded")
             case .failure(let error):
                 handshakeState = .failed
-                wg_log(.debug, message: "Handshake wait failed: \(error)")
+                wg_log(.debug, message: "Handshake wait failed: code=\((error as NSError).code)")
             }
             let completion = handshakeCompletion
             handshakeCompletion = nil
