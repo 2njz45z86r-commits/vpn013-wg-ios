@@ -32,7 +32,7 @@ SHARDS = ("coreA", "coreB", "coreC", "added5")
 MAX_WATCHDOG_SECONDS = 2700
 # The 54 UI method bodies and native WireGuard fixture assertions are bound
 # to exact bytes. Any change requires a new source review before release.
-UI_TEST_SOURCE_SHA256 = "036a0436ba4c7c3bf06480e029202e56f6a4d0b9411317e6435998d0b4392629"
+UI_TEST_SOURCE_SHA256 = "f0fae7f7d5549d684b2bc4dfd110716228a710a213c4eefb9b999b6d120d5478"
 WG_FIXTURE_SHA256 = "042857ae089e4ec98d5b2d3da4e3079c1373656429800b4cda22ddf87f568be1"
 CASE = re.compile(r"Test Case '-\[AutoTunnelUITests\.AutoTunnelUITests (test[A-Za-z0-9_]+)\]' (started|passed|failed)")
 

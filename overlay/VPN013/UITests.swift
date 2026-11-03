@@ -433,7 +433,9 @@ final class AutoTunnelUITests:XCTestCase {
         app.tables.cells.staticTexts["Беларусь"].tap()
         guard openAuthenticatedEditor() else { return }
         for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }
-        XCTAssertTrue(version.waitForExistence(timeout: 5)); version.tap(); version.typeText("1.5")
+        XCTAssertTrue(version.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields.matching(identifier: "vpn013.awg15.version").count, 1, "Reused peer fields must not inherit the version identifier")
+        version.tap(); version.typeText("1.5")
         app.buttons["vpn013.save-profile-edit"].tap()
         guard openAuthenticatedEditor() else { return }
         for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }

@@ -376,6 +376,9 @@ extension TunnelEditTableViewController {
     private func peerFieldKeyValueCell(for tableView: UITableView, at indexPath: IndexPath, peerData: TunnelViewModel.PeerData, field: TunnelViewModel.PeerField) -> UITableViewCell {
         let cell: TunnelEditEditableKeyValueCell = tableView.dequeueReusableCell(for: indexPath)
         cell.key = field.localizedUIString
+        // An editable interface cell can be reused for a peer field. Do not
+        // leave the legacy-version identifier attached to a different value.
+        cell.valueTextField.accessibilityIdentifier = nil
 
         switch field {
         case .publicKey:
