@@ -14,6 +14,20 @@ final class ProxySinglePacketAdapter {
     private var pending: ((Error?) -> Void)?
     init(provider: NEPacketTunnelProvider) { self.provider = provider }
 
+    // Diagnostic bridge only. This does not start an engine or alter settings.
+    // The request and result contain credentials; never log or persist either.
+    static func convertedWireGuardSettings(uapi: String, addresses: [String], effectiveMTU: Int) -> Data? {
+        struct Request: Encodable { let uapi: String; let addresses: [String]; let mtu: Int }
+        guard let encoded = try? JSONEncoder().encode(Request(uapi: uapi, addresses: addresses, mtu: effectiveMTU)),
+              encoded.count > 0, encoded.count <= 1_048_576,
+              let request = String(data: encoded, encoding: .utf8),
+              let result = request.withCString({ R013ProxyConvertWireGuard($0) }) else { return nil }
+        let count = strnlen(result, 1_048_577)
+        defer { memset(result, 0, count); free(result) }
+        guard count > 0, count <= 1_048_576 else { return nil }
+        return Data(bytes: result, count: count)
+    }
+
     func start(_ payload: ProxyTunnelPayload, resolvedHost: String? = nil, additionalHosts: [String: String] = [:], excludedHosts: [String] = [], completion: @escaping (Error?) -> Void) {
         dispatchPrecondition(condition: .onQueue(.main))
         let token = UUID(); epoch = token; pending = completion

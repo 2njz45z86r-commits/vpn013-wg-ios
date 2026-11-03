@@ -22,6 +22,7 @@ extern void wgDisableSomeRoamingForBrokenMobileSemantics(int handle);
 extern const char *wgVersion();
 extern int R013ProxyStart(const char *configuration, int32_t tun_fd);
 extern int R013ProxyValidate(const char *configuration);
+extern char *R013ProxyConvertWireGuard(const char *request);
 extern void R013ProxyStop(void);
 extern char *R013ProxyStatistics(void);
 extern uint64_t R013ProxyProbeReset(void);

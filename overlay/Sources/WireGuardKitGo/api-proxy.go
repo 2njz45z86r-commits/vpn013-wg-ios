@@ -6,6 +6,7 @@ package main
 /*
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 */
 import "C"
 
@@ -22,11 +23,13 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unsafe"
 
 	xnet "github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/features/stats"
 	"github.com/xtls/xray-core/infra/conf/serial"
+	wgproxy "github.com/xtls/xray-core/proxy/wireguard"
 	"golang.org/x/sys/unix"
 
 	_ "github.com/xtls/xray-core/app/dispatcher"
@@ -56,6 +59,58 @@ var r013Proxy struct {
 	instance            *core.Instance
 	fd                  int
 	previousMemoryLimit int64
+}
+
+// Diagnostic-only conversion entry point. The caller owns the returned C
+// string and must free it; nil means invalid or unsupported input. The function
+// neither starts a tunnel nor applies routes or DNS, and must not log secrets.
+//
+//export R013ProxyConvertWireGuard
+func R013ProxyConvertWireGuard(raw *C.char) (out *C.char) {
+	defer func() {
+		if recover() != nil {
+			out = nil
+		}
+	}()
+	if raw == nil {
+		return nil
+	}
+	length := C.strnlen(raw, 1048577)
+	if length == 0 || length > 1048576 {
+		return nil
+	}
+	data := C.GoBytes(unsafe.Pointer(raw), C.int(length))
+	encoded := r013ConvertWireGuardJSON(data)
+	if len(encoded) == 0 {
+		return nil
+	}
+	return C.CString(string(encoded))
+}
+
+// Process bounded input without logging or returning details of invalid data.
+func r013ConvertWireGuardJSON(data []byte) []byte {
+	if len(data) == 0 || len(data) > 1048576 {
+		return nil
+	}
+	var request struct {
+		UAPI      string   `json:"uapi"`
+		Addresses []string `json:"addresses"`
+		MTU       int      `json:"mtu"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF {
+		return nil
+	}
+	settings, err := wgproxy.VPN013ConvertUAPI(request.UAPI, request.Addresses, request.MTU)
+	if err != nil {
+		return nil
+	}
+	encoded, err := json.Marshal(settings)
+	if err != nil {
+		return nil
+	}
+	return encoded
 }
 
 //export R013ProxyValidate
