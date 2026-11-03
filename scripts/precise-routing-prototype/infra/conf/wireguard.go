@@ -15,11 +15,12 @@ import (
 )
 
 type WireGuardPeerConfig struct {
-	PublicKey    string   `json:"publicKey"`
-	PreSharedKey string   `json:"preSharedKey"`
-	Endpoint     string   `json:"endpoint"`
-	KeepAlive    uint32   `json:"keepAlive"`
-	AllowedIPs   []string `json:"allowedIPs,omitempty"`
+	PublicKey       string   `json:"publicKey"`
+	PreSharedKey    string   `json:"preSharedKey"`
+	Endpoint        string   `json:"endpoint"`
+	KeepAlive       uint32   `json:"keepAlive"`
+	VPN013KeepAlive string   `json:"vpn013KeepAlive,omitempty"`
+	AllowedIPs      []string `json:"allowedIPs,omitempty"`
 
 	Level uint32 `json:"level"`
 	Email string `json:"email"`
@@ -44,7 +45,12 @@ func (c *WireGuardPeerConfig) Build() (*wireguard.PeerConfig, error) {
 	}
 
 	config.Endpoint = c.Endpoint
-	if c.KeepAlive != 0 {
+	if c.VPN013KeepAlive != "" {
+		if c.KeepAlive != 0 || wireguard.VPN013ValidateKeepAlive(c.VPN013KeepAlive) != nil {
+			return nil, errors.New("invalid VPN013 WireGuard keepalive")
+		}
+		config.KeepAlive = c.VPN013KeepAlive
+	} else if c.KeepAlive != 0 {
 		config.KeepAlive = strconv.FormatUint(uint64(c.KeepAlive), 10)
 	}
 	if c.AllowedIPs == nil {

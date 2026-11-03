@@ -6,7 +6,21 @@ import (
 	"errors"
 	"sort"
 	"strings"
+
+	"github.com/amnezia-vpn/amneziawg-go/v3/device"
 )
+
+// Match the actual AWG UAPI range parser without returning its input in errors.
+func VPN013ValidateKeepAlive(value string) error {
+	if len(value) == 0 || len(value) > 21 {
+		return errors.New("invalid WireGuard keepalive")
+	}
+	var parsed device.UintRange
+	if err := parsed.FromString(value); err != nil {
+		return errors.New("invalid WireGuard keepalive")
+	}
+	return nil
+}
 
 var vpn013AllowedAWGFields = map[string]bool{
 	"r013_legacy15": true, "jc": true, "jmin": true, "jmax": true,

@@ -153,3 +153,17 @@ func TestVPN013AWGTotalBudgetAndEmptyWireGuard(t *testing.T) {
 		t.Fatal("aggregate limit not enforced")
 	}
 }
+
+func TestVPN013AWGKeepaliveRangeValidation(t *testing.T) {
+	for _, value := range []string{"0", "25", "0-65535", "4294967295"} {
+		if VPN013ValidateKeepAlive(value) != nil {
+			t.Fatal("valid keepalive rejected")
+		}
+	}
+	for _, value := range []string{"", "1\nprivate_key=bad", "2-1", "4294967296", "SECRET_MARKER"} {
+		err := VPN013ValidateKeepAlive(value)
+		if err == nil || (value != "" && strings.Contains(err.Error(), value)) {
+			t.Fatal("invalid keepalive accepted or leaked")
+		}
+	}
+}

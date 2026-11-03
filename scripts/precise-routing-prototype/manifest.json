@@ -20,11 +20,11 @@
     },
     "infra/conf/wireguard.go": {
       "sourceSHA256": "860ff2f88199dcb3a39d20bca331ef255712aea6120fc1de6f2183316fb631e9",
-      "prototypeSHA256": "a037461f91aad9be0bc5a5026398dc13ff9209fa2f62097e383c322dea2f65f0"
+      "prototypeSHA256": "6c1c721e7e1b658cc0329967a30a36338b301b7b52e76d40abe12a6745717f57"
     },
     "proxy/wireguard/vpn013_awg.go": {
       "sourceSHA256": null,
-      "prototypeSHA256": "18bd2600909d5888d471805fc2162f99afa2783e7ff2df4cc90a447bb65091fc"
+      "prototypeSHA256": "f833bb1f38aec8f38e404f3d7c4ad5f3eb26bd166e93b9e640b4427ce6440f30"
     },
     "proxy/wireguard/vpn013_gated_tun.go": {
       "sourceSHA256": null,
@@ -32,7 +32,7 @@
     },
     "proxy/wireguard/vpn013_awg_test.go": {
       "sourceSHA256": null,
-      "prototypeSHA256": "b1b504c9933b479b89319ce98a59cac0075dbf5025e2bf7313746f298eb14f50"
+      "prototypeSHA256": "47704709503d07f6d714153a560854ec64ba109201535c57b5419c8448baa854"
     }
   }
 }

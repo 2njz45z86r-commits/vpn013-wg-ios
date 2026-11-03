@@ -25,6 +25,11 @@ for name, hashes in manifest['files'].items():
         assert destination.is_file() and sha(destination) == hashes['sourceSHA256']
 for name in sorted(allowed):
     destination = target / name
+    # Go's module cache is read-only on Unix; copytree preserves directory modes.
+    # Make only verified directories in this private checkout writable.
+    parent = destination.parent
+    assert not parent.is_symlink() and parent.resolve().is_relative_to(target)
+    parent.chmod(0o700)
     if destination.exists(): destination.chmod(0o600)
     shutil.copyfile(directory / name, destination)
     assert sha(destination) == manifest['files'][name]['prototypeSHA256']

@@ -60,7 +60,7 @@ jobs:
           from pathlib import Path
           root=Path(os.environ['RUNNER_TEMP'])
           rows=[json.loads(x) for x in (root/'race.jsonl').read_text().splitlines() if x.startswith('{')]
-          names={'TestVPN013AWGInvalidValueNotLogged','TestVPN013AWGSemanticFailureClosesTUN','TestVPN013TUNEventsWaitForConfiguration','TestVPN013AWGAllowedOrdered','TestVPN013AWGRejectsInjectionAndUnbounded','TestVPN013AWGTotalBudgetAndEmptyWireGuard'}
+          names={'TestVPN013AWGInvalidValueNotLogged','TestVPN013AWGSemanticFailureClosesTUN','TestVPN013TUNEventsWaitForConfiguration','TestVPN013AWGAllowedOrdered','TestVPN013AWGRejectsInjectionAndUnbounded','TestVPN013AWGTotalBudgetAndEmptyWireGuard','TestVPN013AWGKeepaliveRangeValidation'}
           counts={n:sum(x.get('Action')=='pass' and x.get('Test')==n for x in rows) for n in names}
           bad=[x.get('Test','package') for x in rows if x.get('Action') in ('fail','skip')]
           race=any('DATA RACE' in x.get('Output','') for x in rows)
