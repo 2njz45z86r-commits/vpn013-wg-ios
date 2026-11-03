@@ -26,6 +26,9 @@ jobs:
           python3 scripts/make-precise-swift-bridge-smoke.py
           swiftc build/precise-swift-bridge-smoke.swift build/precise-host.a -framework Security -framework CoreFoundation -framework SystemConfiguration -lresolv -o build/precise-swift-bridge-smoke
           build/precise-swift-bridge-smoke
+          python3 scripts/make-private-log-smoke.py
+          swiftc build/private-log-smoke.swift -o build/private-log-smoke
+          build/private-log-smoke
           cp scripts/precise-network-settings-test.swift build/main.swift
           swiftc overlay/VPN013/PreciseNetworkSettings.swift build/main.swift -framework NetworkExtension -o build/precise-settings-host
           build/precise-settings-host
@@ -47,7 +50,7 @@ jobs:
           report={'sourceSha':os.environ['GITHUB_SHA'],'runId':os.environ['GITHUB_RUN_ID'],
                   'sourcePinnedFiles':len(manifest['files']),'deviceAppBuilt':app.is_dir(),
                   'extensionBuilt':(app/'PlugIns/WireGuardNetworkExtension.appex').is_dir(),
-                  'bridgeJSONHostTested':True,'swiftCGoHostTested':True,'networkSnapshotHostTested':True,'networkSnapshotSimulatorTested':True,'physicalDeviceTested':False,'signedForDistribution':False,'routingIntegrated':False,
+                  'bridgeJSONHostTested':True,'swiftCGoHostTested':True,'privateAdapterLogHostTested':True,'networkSnapshotHostTested':True,'networkSnapshotSimulatorTested':True,'physicalDeviceTested':False,'signedForDistribution':False,'routingIntegrated':False,
                   'scope':'Compile-only isolated diagnostic; no IPA retained, no device VPN proof, no release.'}
           Path('build/precise-native-compile.json').write_text(json.dumps(report,indent=2))
           print(json.dumps(report))
