@@ -6,6 +6,8 @@ for expected in ['staticMessage: "startActivation: Entering"','staticMessage: "s
     assert expected in manager
 for expected in ['staticMessage: "Migrating tunnel configuration"','staticMessage: "Migrating iOS keychain reference"']:
     assert expected in migration
+for token in [r"\(name)", r"\(self.name)", r"\(tunnel.name)", r"\(tunnelInOperation.name)", r"\(tunnelManager.localizedDescription"]:
+    assert token not in manager and token not in migration
 start=source.index('    /// Report resolution outcomes without retaining endpoint addresses or error text.')
 end=source.index('    /// Helper method used by network path monitor.',start)
 methods=source[start:end]
