@@ -1,0 +1,33 @@
+name: Verify IPA streaming cancellation on loopback Mac
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-ipa-loopback.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  loopback:
+    runs-on: macos-26-intel
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Exercise real HTTP URLSession cancellation on loopback
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/vpn013-loopback"
+          python3 tests/client_download_loopback_server.py "$RUNNER_TEMP/vpn013-loopback/port" "$RUNNER_TEMP/vpn013-loopback/result.json" &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 20); do
+            test ! -s "$RUNNER_TEMP/vpn013-loopback/port" || break
+            sleep 1
+          done
+          test -s "$RUNNER_TEMP/vpn013-loopback/port"
+          swiftc -D VPN013_DOWNLOAD_TESTS -parse-as-library -swift-version 5 overlay/VPN013/ClientUpdatesViewController.swift tests/ClientVerifiedDownloadLoopbackTests.swift -o "$RUNNER_TEMP/vpn013-loopback/test"
+          export VPN013_LOOPBACK_PORT="$(cat "$RUNNER_TEMP/vpn013-loopback/port")"
+          "$RUNNER_TEMP/vpn013-loopback/test"
+          wait "$server_pid"
+          python3 -c 'import json, pathlib, sys; x=json.loads(pathlib.Path(sys.argv[1]).read_text()); assert x == {"payload_sent": 65536, "advertised": 131072, "client_closed": True}; print("PASS loopback server observed client disconnect before response completion")' "$RUNNER_TEMP/vpn013-loopback/result.json"
