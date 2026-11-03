@@ -12,7 +12,9 @@ assert manifest['module'] == 'github.com/amnezia-vpn/amnezia-xray-core'
 assert manifest['version'] == 'v1.260728.0'
 allowed = {'proxy/wireguard/client.go', 'proxy/wireguard/bind.go', 'proxy/wireguard/config.proto',
            'proxy/wireguard/config.pb.go', 'infra/conf/wireguard.go', 'proxy/wireguard/vpn013_awg.go',
-           'proxy/wireguard/vpn013_gated_tun.go', 'proxy/wireguard/vpn013_awg_test.go'}
+           'proxy/wireguard/vpn013_gated_tun.go', 'proxy/wireguard/vpn013_awg_test.go',
+           'proxy/wireguard/vpn013_listen_port_test.go', 'proxy/wireguard/vpn013_precise_converter.go',
+           'proxy/wireguard/vpn013_precise_converter_test.go', 'proxy/wireguard/vpn013_precise_parser_test.go'}
 assert set(manifest['files']) == allowed
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 for name, hashes in manifest['files'].items():
@@ -33,4 +35,4 @@ for name in sorted(allowed):
     if destination.exists(): destination.chmod(0o600)
     shutil.copyfile(directory / name, destination)
     assert sha(destination) == manifest['files'][name]['prototypeSHA256']
-print('Eight source-pinned diagnostic files applied to private copy')
+print('Twelve source-pinned diagnostic files applied to private copy')

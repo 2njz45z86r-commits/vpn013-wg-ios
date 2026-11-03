@@ -27,6 +27,11 @@ type bind struct {
 }
 
 func (b *bind) Open(port uint16) (fns []conn.ReceiveFunc, actualPort uint16, err error) {
+	// The current Xray listener only supports automatic local ports. Silently
+	// ignoring a configured port would change imported profile semantics.
+	if port != 0 {
+		return nil, 0, goerrors.New("explicit WireGuard listen port is not supported")
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
