@@ -711,7 +711,19 @@ final class AutoTunnelUITests:XCTestCase {
         }
         XCTAssertTrue(app.tables.cells.element(boundBy:0).staticTexts["Авто · 3 сервера"].waitForExistence(timeout:6), "Auto must precede ! and 0 names")
         let auto = app.tables.cells.element(boundBy:0)
-        auto.switches.firstMatch.tap()
+        let autoSwitch = auto.switches.firstMatch
+        autoSwitch.tap()
+        let active = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '1'"), object: autoSwitch)
+        let activeResult = XCTWaiter.wait(for: [active], timeout: 20)
+        XCTAssertEqual(activeResult, .completed, "Synthetic Auto must activate before opening its current-server card")
+        guard activeResult == .completed else { capture("20-auto-activation-failed-synthetic"); return }
+        // Exercise simulator foreground refresh without treating its inactive system stub as a real VPN state.
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '1'"), object: autoSwitch)
+        let restoredResult = XCTWaiter.wait(for: [restored], timeout: 20)
+        XCTAssertEqual(restoredResult, .completed, "Synthetic Auto must survive simulator foreground refresh")
+        guard restoredResult == .completed else { capture("20-auto-foreground-failed-synthetic"); return }
         openConnectionPopup(app)
         let ping = app.buttons["vpn013.current-ping"]
         XCTAssertTrue(ping.waitForExistence(timeout:8))
