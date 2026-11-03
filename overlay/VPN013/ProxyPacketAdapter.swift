@@ -31,8 +31,8 @@ final class ProxySinglePacketAdapter {
     #if os(iOS)
     /// Experimental preparation only; no routes, device state or VPN are changed.
     /// The returned data contains key material and must never be logged or persisted.
-    static func prepareWireGuard(_ configuration: TunnelConfiguration) -> (converted: Data, settings: NEPacketTunnelNetworkSettings)? {
-        guard let original = WireGuardAdapter.preciseProfileSnapshot(configuration),
+    static func prepareWireGuard(_ configuration: TunnelConfiguration, resolvedEndpoint: Endpoint? = nil) -> (converted: Data, settings: NEPacketTunnelNetworkSettings)? {
+        guard let original = WireGuardAdapter.preciseProfileSnapshot(configuration, resolvedEndpoint: resolvedEndpoint),
               let settings = isolatedCopy(original.settings),
               let mtu = settings.mtu?.intValue,
               let converted = convertedWireGuardSettings(uapi: original.uapi, addresses: original.addresses, effectiveMTU: mtu)

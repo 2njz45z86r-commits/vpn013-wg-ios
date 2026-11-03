@@ -1,6 +1,7 @@
 from pathlib import Path
 s=Path('build/generated-uapi-bridge-smoke.swift').read_text(encoding='utf-8')
 s=s.replace('import Darwin\n','import Darwin\nimport NetworkExtension\n',1)
+s=s.replace('struct Endpoint { let host: Host; let stringRepresentation: String }', 'struct Endpoint: Equatable { let host: Host; let stringRepresentation: String; var port: String { String(stringRepresentation.split(separator: ":").last!) }; static func == (lhs: Endpoint, rhs: Endpoint) -> Bool { lhs.stringRepresentation == rhs.stringRepresentation } }',1)
 s=s.replace('    var privateKey: Key\n','    var privateKey: Key\n    var addresses: [Address] = [Address(stringRepresentation:"10.0.0.2/32"),Address(stringRepresentation:"fd13::2/128")]\n',1)
 s=s.replace('struct Peer { var publicKey: Key;','struct Peer { var publicKey: Key; var endpoint: Endpoint? = nil;',1)
 s=s.replace('class Generator {','class PacketTunnelSettingsGenerator {',1)
@@ -26,7 +27,17 @@ guard let prepared=prepared, prepared.settings.mtu?.intValue == 1280,
 guard prepareWireGuard(TunnelConfiguration(interface:fixed,peers:[peer])) == nil,
       prepareWireGuard(TunnelConfiguration(interface:Interface(privateKey:key),peers:[peer,peer])) == nil else { fatalError("unsupported source accepted") }
 var namedPeer=peer; namedPeer.endpoint=Endpoint(host:.name("private.example.invalid"),stringRepresentation:"private.example.invalid:8443")
-guard prepareWireGuard(TunnelConfiguration(interface:Interface(privateKey:key),peers:[namedPeer])) == nil else { fatalError("unresolved hostname accepted") }
-print("Synthetic snapshot→copy→Swift/C/Go chain passed; stub models, no VPN or network settings applied")
+let named=TunnelConfiguration(interface:Interface(privateKey:key),peers:[namedPeer])
+guard prepareWireGuard(named) == nil else { fatalError("unresolved hostname accepted") }
+let resolved=Endpoint(host:.numeric,stringRepresentation:"127.0.0.1:8443")
+guard let mapped=prepareWireGuard(named,resolvedEndpoint:resolved),
+      let mappedValue=try JSONSerialization.jsonObject(with:mapped.converted) as? [String:Any],
+      let mappedPeers=mappedValue["peers"] as? [[String:Any]],
+      mappedPeers.first?["endpoint"] as? String == resolved.stringRepresentation else { fatalError("pre-resolved domain not retained") }
+let wrongPort=Endpoint(host:.numeric,stringRepresentation:"127.0.0.1:9999")
+guard prepareWireGuard(named,resolvedEndpoint:wrongPort) == nil,
+      prepareWireGuard(named,resolvedEndpoint:namedPeer.endpoint) == nil,
+      prepareWireGuard(TunnelConfiguration(interface:Interface(privateKey:key),peers:[peer]),resolvedEndpoint:Endpoint(host:.numeric,stringRepresentation:"192.0.2.1:8443")) == nil else { fatalError("unsafe endpoint substitution accepted") }
+print("Synthetic snapshot→copy→Swift/C/Go chain passed, including caller-resolved domain and wrong-port rejection; stub models, no VPN or network settings applied")
 '''
 Path('build/precise-profile-chain-smoke.swift').write_text(s+'\nclass WireGuardAdapter {\n'+snapshot+'\n}\n'+copy+'\n'+prepare+'\n'+smoke,encoding='utf-8')

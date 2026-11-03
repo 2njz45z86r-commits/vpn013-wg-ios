@@ -80,16 +80,23 @@ public class WireGuardAdapter {
     #if os(iOS)
     /// Experimental preparation only. It neither starts the VPN nor applies settings.
     /// The returned UAPI contains key material and must never be logged or persisted.
-    public static func preciseProfileSnapshot(_ config: TunnelConfiguration) -> (uapi: String, addresses: [String], settings: NEPacketTunnelNetworkSettings)? {
-        guard config.peers.count == 1, let endpoint = config.peers[0].endpoint,
+    public static func preciseProfileSnapshot(_ config: TunnelConfiguration, resolvedEndpoint: Endpoint? = nil) -> (uapi: String, addresses: [String], settings: NEPacketTunnelNetworkSettings)? {
+        guard config.peers.count == 1, let originalEndpoint = config.peers[0].endpoint,
               (config.interface.listenPort ?? 0) == 0 else { return nil }
+        // DNS must happen on the caller's cancellable pre-start path. Never change the server port.
+        let endpoint = resolvedEndpoint ?? originalEndpoint
+        guard endpoint.port == originalEndpoint.port else { return nil }
         if case .name = endpoint.host { return nil }
+        if case .name = originalEndpoint.host {
+            guard resolvedEndpoint != nil else { return nil }
+        } else if endpoint != originalEndpoint { return nil }
         let addresses = config.interface.addresses.map { $0.stringRepresentation }
         guard !addresses.isEmpty, addresses.count <= 32 else { return nil }
         let generator = PacketTunnelSettingsGenerator(tunnelConfiguration: config, resolvedEndpoints: [endpoint])
         let (uapi, resolutions) = generator.uapiConfiguration()
         guard !uapi.isEmpty, uapi.utf8.count <= 1_048_576, resolutions.count == 1,
-              let resolution = resolutions[0], case .success = resolution else { return nil }
+              let resolution = resolutions[0], case .success((_, let finalEndpoint)) = resolution,
+              finalEndpoint.port == originalEndpoint.port else { return nil }
         let settings = generator.generateNetworkSettings()
         guard let mtu = settings.mtu?.intValue, (576...65535).contains(mtu) else { return nil }
         return (uapi, addresses, settings)
