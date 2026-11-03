@@ -19,6 +19,18 @@ import Foundation
         try check(try ClientUpdateProtocol.legacyChoice(ambiguous: true, explicit: nil, existing: false, name: "fixture") == false)
         fails { _ = try ClientUpdateProtocol.legacyChoice(ambiguous: true, explicit: nil, existing: nil, name: "fixture") }
         let mapped = ["germany":"profile-a", "finland":"profile-b"]
+        // Two imported servers with identical configurations must never claim
+        // the same existing system profile, including across subscriptions.
+        var ownership = try ClientProfileOwnership(profileMaps: [["other-server": "other-profile"]])
+        try check(ownership.claimUnique(["profile-a"]) == "profile-a")
+        try check(ownership.claimUnique(["profile-a"]) == nil)
+        try check(ownership.claimUnique(["other-profile"]) == nil)
+        try check(ownership.claimUnique(["profile-b", "profile-c"]) == nil)
+        try check(ownership.claimUnique(["profile-b"]) == "profile-b")
+        fails { _ = try ClientProfileOwnership(profileMaps: [["a": "same", "b": "same"]]) }
+        fails { _ = try ClientProfileOwnership(profileMaps: [["a": "same"], ["b": "same"]]) }
+        fails { _ = try ClientProfileOwnership(profileMaps: [["a": ""]]) }
+        _ = try ClientProfileOwnership(profileMaps: [["a": "first"], ["b": "second"]]); count += 1
         try check(ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: ["profile-a","profile-b","unrelated"]))
         try check(!ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: ["profile-b"]))
         try check(!ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: []))

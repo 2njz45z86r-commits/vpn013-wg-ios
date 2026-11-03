@@ -24,6 +24,33 @@ struct ClientRegistry: Codable {
     var renewalsAwaitingReturn: [String: Int64]? = nil
 }
 
+/// A system profile must belong to at most one server across all subscriptions.
+/// Reject inconsistent saved registries without trying to guess which owner is right.
+struct ClientProfileOwnership {
+    struct Conflict: LocalizedError {
+        var errorDescription: String? {
+            "Обновление остановлено: один VPN-профиль привязан к нескольким серверам. Существующие профили сохранены."
+        }
+    }
+    private var claimed: Set<String> = []
+
+    init(profileMaps: [[String: String]]) throws {
+        for map in profileMaps {
+            for id in map.values {
+                guard !id.isEmpty, claimed.insert(id).inserted else { throw Conflict() }
+            }
+        }
+    }
+
+    /// Reserve a match immediately so another server cannot claim it.
+    mutating func claimUnique(_ candidateIDs: [String]) -> String? {
+        let matches = candidateIDs.filter { !$0.isEmpty && !claimed.contains($0) }
+        guard matches.count == 1, let id = matches.first else { return nil }
+        claimed.insert(id)
+        return id
+    }
+}
+
 /// Capabilities and cached configurations stay encrypted in this app's sandbox.
 /// This uses the same no-App-Group storage that supports the existing ESign setup.
 final class ClientRegistryStore {
@@ -211,6 +238,7 @@ final class ClientUpdateCoordinator {
             try document.validate()
             guard document.snapshot.expiry > Int64(Date().timeIntervalSince1970 * 1000) else { throw ClientUpdateError.accessEnded }
             guard loadingError == nil else { throw ClientUpdateError.invalidDocument }
+            var ownership = try ClientProfileOwnership(profileMaps: registry.bindings.values.map { $0.profileIDs })
             let order = document.snapshot.orderID
             var binding = registry.bindings[order] ?? ClientBinding(document: document)
             guard Set(awgVersionChoices.keys).isSubset(of: Set(document.snapshot.servers.map { $0.id })) else { throw ClientUpdateError.invalidDocument }
@@ -221,13 +249,12 @@ final class ClientUpdateCoordinator {
             if !awgVersionChoices.isEmpty { binding.awgVersionChoices = (binding.awgVersionChoices ?? [:]).merging(awgVersionChoices) { _, new in new } }
             binding.document = document; binding.pending = document.snapshot
             // Explicit ZIP import can bind exact, unclaimed existing configurations.
-            let claimed = Set(registry.bindings.values.flatMap { $0.profileIDs.values })
             let all = manager.mapTunnels { $0 }
             for server in document.snapshot.servers where binding.profileIDs[server.id] == nil {
                 guard let config = parsed[server.id] else { throw ClientUpdateError.invalidDocument }
                 let canonical = config.asWgQuickConfig()
-                let matches = all.filter { !$0.isVPN013Automatic && !claimed.contains($0.persistentProfileIdentifier ?? "") && $0.tunnelConfiguration?.asWgQuickConfig() == canonical }
-                if matches.count == 1, let id = matches[0].persistentProfileIdentifier {
+                let matches = all.filter { !$0.isVPN013Automatic && $0.tunnelConfiguration?.asWgQuickConfig() == canonical }.compactMap { $0.persistentProfileIdentifier }
+                if let id = ownership.claimUnique(matches) {
                     binding.profileIDs[server.id] = id; binding.baseline[server.id] = ClientUpdateProtocol.digest(canonical)
                 }
             }
@@ -258,6 +285,8 @@ final class ClientUpdateCoordinator {
         guard !busy else { completion(ClientUpdateError.busy); return }
         let orders = registry.bindings.keys.filter { registry.bindings[$0]?.pending != nil }.sorted()
         guard !orders.isEmpty else { completion(nil); return }
+        do { _ = try ClientProfileOwnership(profileMaps: registry.bindings.values.map { $0.profileIDs }) }
+        catch { publish(error.localizedDescription); completion(error); return }
         guard !manager.mapTunnels(transform: { $0.status != .inactive || $0.isActivateOnDemandEnabled }).contains(true) else { completion(ClientUpdateError.activeVPN); return }
         busy = true; manager.beginManagedUpdate(); inferOldAuto(manager: manager)
         func next(_ index: Int) {
@@ -307,6 +336,10 @@ final class ClientUpdateCoordinator {
             }
             func recorded(_ tunnel: TunnelContainer) {
                 guard let id = tunnel.persistentProfileIdentifier else { completion(ClientUpdateError.invalidResponse); return }
+                var candidateMaps = registry.bindings.mapValues { $0.profileIDs }
+                candidateMaps[order]?[server.id] = id
+                do { _ = try ClientProfileOwnership(profileMaps: Array(candidateMaps.values)) }
+                catch { completion(error); return }
                 registry.bindings[order]?.profileIDs[server.id] = id
                 registry.bindings[order]?.baseline[server.id] = ClientUpdateProtocol.digest(named.asWgQuickConfig())
                 do { try saveProgress(); update(index + 1) } catch { completion(error) }
