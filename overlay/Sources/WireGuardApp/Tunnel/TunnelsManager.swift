@@ -119,14 +119,18 @@ class TunnelsManager {
                     guard
                         let proto = tunnelManager.protocolConfiguration as? NETunnelProviderProtocol
                     else { continue }
+                    #if os(iOS)
+                    // A private profile can be temporarily unreadable or even
+                    // have a damaged envelope. Its presence never proves it is
+                    // an orphan; keep it for explicit recovery by its owner.
+                    if proto.providerConfiguration?[PrivateTunnelStore.idKey] != nil ||
+                       proto.providerConfiguration?[PrivateTunnelStore.dataKey] != nil { continue }
+                    #endif
                     if proto.migrateConfigurationIfNeeded(
                         called: tunnelManager.localizedDescription ?? "unknown")
                     {
                         tunnelManager.saveToPreferences { _ in }
                     }
-                    #if os(iOS)
-                    if proto.privateEnvelope != nil && proto.verifyConfigurationReference() { continue }
-                    #endif
                     #if os(iOS)
                         let passwordRef =
                             proto.verifyConfigurationReference() ? proto.passwordReference : nil

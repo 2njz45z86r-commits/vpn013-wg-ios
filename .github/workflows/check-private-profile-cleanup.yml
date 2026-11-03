@@ -1,0 +1,20 @@
+name: Check private profile cleanup protection
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/ios-preserve-unreadable-profiles-20261103]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-26-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Execute actual cleanup loop with synthetic profile managers
+        run: |
+          python3 scripts/tests/make_private_profile_cleanup_harness.py "$RUNNER_TEMP/cleanup.swift"
+          xcrun swiftc -parse-as-library "$RUNNER_TEMP/cleanup.swift" -o "$RUNNER_TEMP/cleanup-test"
+          "$RUNNER_TEMP/cleanup-test"

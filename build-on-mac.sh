@@ -2,6 +2,10 @@
 set -eu
 export HOMEBREW_NO_AUTO_UPDATE=1
 mkdir -p build/review
+python3 scripts/tests/make_private_profile_cleanup_harness.py build/private-profile-cleanup.swift
+swiftc -parse-as-library build/private-profile-cleanup.swift -o build/private-profile-cleanup-test
+build/private-profile-cleanup-test > build/review/private-profile-cleanup-tests.txt
+cat build/review/private-profile-cleanup-tests.txt
 python3 - <<'PY'
 import hashlib,json,os,platform,tarfile,time,urllib.error,urllib.request
 from pathlib import Path
