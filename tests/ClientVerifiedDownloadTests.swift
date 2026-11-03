@@ -39,6 +39,9 @@ final class SyntheticReleaseProtocol: URLProtocol {
         case "/redirect-denied":
             let target = URL(string: "https://untrusted.invalid/ok")!
             client?.urlProtocol(self, wasRedirectedTo: URLRequest(url: target), redirectResponse: response(302, ["Location": target.absoluteString]))
+            // The fake protocol must end its original response even if the
+            // session refuses the proposed redirect. A real server closes it.
+            client?.urlProtocolDidFinishLoading(self)
         case "/cancel":
             client?.urlProtocol(self, didReceive: response(200), cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data("a".utf8))
@@ -47,6 +50,7 @@ final class SyntheticReleaseProtocol: URLProtocol {
             if url.path.hasPrefix("/redirect-chain-"), let number = Int(url.lastPathComponent.dropFirst("redirect-chain-".count)) {
                 let target = URL(string: "https://github.com/redirect-chain-\(number + 1)")!
                 client?.urlProtocol(self, wasRedirectedTo: URLRequest(url: target), redirectResponse: response(302, ["Location": target.absoluteString]))
+                if number == 5 { client?.urlProtocolDidFinishLoading(self) }
             } else {
                 client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
             }
@@ -100,6 +104,10 @@ final class SyntheticReleaseProtocol: URLProtocol {
         }
         let requests = SyntheticReleaseProtocol.captured()
         if let expectedRequests = expectedRequests { precondition(requests.count == expectedRequests, "Unexpected request count for \(path): \(requests)") }
+        if path == "redirect-denied" || path == "redirect-allowed" {
+            precondition(driver.redirectCount == 1, "URLSession did not invoke the real redirect delegate")
+        }
+        if path == "redirect-chain-0" { precondition(driver.redirectCount == 6, "Redirect limit was not exercised") }
         if path == "redirect-denied" { precondition(!requests.contains { $0.contains("untrusted.invalid") }, "Disallowed redirect was followed") }
         // Give duplicate completion callbacks a chance to surface.
         RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))

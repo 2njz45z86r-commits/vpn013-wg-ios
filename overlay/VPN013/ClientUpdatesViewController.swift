@@ -265,6 +265,7 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
         verification = ClientReleaseVerification(limit: limit)
     }
     var testDirectory: URL { directory }
+    var testRedirectCount: Int { redirects }
     #endif
 
     init(url: URL, expectedHash: String, completion: @escaping (Result<URL, Error>) -> Void) throws {
@@ -346,6 +347,7 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
 final class ClientVerifiedDownloadTestDriver {
     private let download: ClientVerifiedDownload
     var directory: URL { download.testDirectory }
+    var redirectCount: Int { download.testRedirectCount }
     init(url: URL, expectedHash: String, configuration: URLSessionConfiguration, limit: Int64,
          completion: @escaping (Result<URL, Error>) -> Void) throws {
         download = try ClientVerifiedDownload(url: url, expectedHash: expectedHash, completion: completion)
