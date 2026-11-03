@@ -71,14 +71,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let rxPrefix = "rx_bytes="
         let txPrefix = "tx_bytes="
         for line in settings.split(separator: "\n") {
+            func decimalValue(after prefix: String) -> String? {
+                let value = line.dropFirst(prefix.count)
+                guard !value.isEmpty, value.utf8.count <= 20,
+                      value.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }),
+                      let number = UInt64(value) else { return nil }
+                return String(number)
+            }
             if line.hasPrefix("public_key=") {
                 peerCount += 1
             } else if line.hasPrefix(handshakePrefix) {
-                handshakeValues.append(String(line.dropFirst(handshakePrefix.count)))
+                if let value = decimalValue(after: handshakePrefix) { handshakeValues.append(value) }
             } else if line.hasPrefix(rxPrefix) {
-                rxValues.append(String(line.dropFirst(rxPrefix.count)))
+                if let value = decimalValue(after: rxPrefix) { rxValues.append(value) }
             } else if line.hasPrefix(txPrefix) {
-                txValues.append(String(line.dropFirst(txPrefix.count)))
+                if let value = decimalValue(after: txPrefix) { txValues.append(value) }
             }
         }
         wg_log(.debug, message: "Runtime config summary: peers=\(peerCount) last_handshake_time_sec=\(handshakeValues) rx_bytes=\(rxValues) tx_bytes=\(txValues)")

@@ -62,6 +62,10 @@ cat ../../build/review/auto-controller-lifecycle-tests.txt
 swiftc VPN013/PrivateTunnelStore.swift VPN013/tests/PrivateStorageTests.swift -o ../../build/test-private-storage
 ../../build/test-private-storage > ../../build/review/private-storage-tests.txt
 cat ../../build/review/private-storage-tests.txt
+python3 ../../scripts/tests/make_runtime_config_summary_harness.py ../../build/test-runtime-config-summary.swift
+swiftc -parse-as-library ../../build/test-runtime-config-summary.swift -o ../../build/test-runtime-config-summary
+../../build/test-runtime-config-summary > ../../build/review/runtime-config-summary-tests.txt
+cat ../../build/review/runtime-config-summary-tests.txt
 swiftc VPN013/EndpointPing.swift VPN013/tests/EndpointPingTests.swift -o ../../build/test-endpoint-ping
 ../../build/test-endpoint-ping > ../../build/review/endpoint-ping-tests.txt
 cat ../../build/review/endpoint-ping-tests.txt
