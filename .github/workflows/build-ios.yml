@@ -22,6 +22,10 @@ jobs:
           export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
           cp scripts/precise-bridge-test.go.txt build/awg/Sources/WireGuardKitGo/r013_precise_bridge_test.go
           (cd build/awg/Sources/WireGuardKitGo && go test -tags vpn013_xray -run '^TestVPN013PreciseBridgeJSON$' -count=1 -v .)
+          (cd build/awg/Sources/WireGuardKitGo && go build -tags vpn013_xray -buildmode=c-archive -o "$GITHUB_WORKSPACE/build/precise-host.a" .)
+          python3 scripts/make-precise-swift-bridge-smoke.py
+          swiftc build/precise-swift-bridge-smoke.swift build/precise-host.a -framework Security -framework CoreFoundation -framework SystemConfiguration -lresolv -o build/precise-swift-bridge-smoke
+          build/precise-swift-bridge-smoke
           python3 - <<'PY'
           import hashlib,json,os
           from pathlib import Path
@@ -33,7 +37,7 @@ jobs:
           report={'sourceSha':os.environ['GITHUB_SHA'],'runId':os.environ['GITHUB_RUN_ID'],
                   'sourcePinnedFiles':len(manifest['files']),'deviceAppBuilt':app.is_dir(),
                   'extensionBuilt':(app/'PlugIns/WireGuardNetworkExtension.appex').is_dir(),
-                  'bridgeJSONHostTested':True,'physicalDeviceTested':False,'signedForDistribution':False,'routingIntegrated':False,
+                  'bridgeJSONHostTested':True,'swiftCGoHostTested':True,'physicalDeviceTested':False,'signedForDistribution':False,'routingIntegrated':False,
                   'scope':'Compile-only isolated diagnostic; no IPA retained, no device VPN proof, no release.'}
           Path('build/precise-native-compile.json').write_text(json.dumps(report,indent=2))
           print(json.dumps(report))
