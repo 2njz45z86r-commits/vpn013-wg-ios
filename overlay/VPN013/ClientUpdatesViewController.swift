@@ -31,7 +31,7 @@ final class ClientUpdatesViewController: UITableViewController {
     override func numberOfSections(in tableView: UITableView) -> Int { 3 }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         #if DEBUG && targetEnvironment(simulator)
-        if section == 2 && ProcessInfo.processInfo.arguments.contains("--vpn013-test-sync") { return 2 }
+        if section == 2 && (ProcessInfo.processInfo.arguments.contains("--vpn013-test-sync") || ProcessInfo.processInfo.arguments.contains("--vpn013-test-ownership-corrupt")) { return 2 }
         #endif
         switch section { case 0: return coordinator.release == nil ? 2 : 3; case 1: return max(1, coordinator.registry.bindings.count); default: return 1 }
     }

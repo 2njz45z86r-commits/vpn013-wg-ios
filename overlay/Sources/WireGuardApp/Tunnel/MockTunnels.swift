@@ -114,7 +114,7 @@ class MockTunnels {
         }
         if arguments.contains("--vpn013-test-ordering") { names = ["!Первый", "0 Server", "Дом"] }
         #endif
-        return names.map { tunnelName -> NETunnelProviderManager in
+        let managers = names.map { tunnelName -> NETunnelProviderManager in
 
             var interface = InterfaceConfiguration(privateKey: PrivateKey())
             interface.addresses = [IPAddressRange(from: String(format: address, Int.random(in: 1 ... 10), Int.random(in: 1 ... 254)))!]
@@ -133,6 +133,12 @@ class MockTunnels {
 
             return tunnelProviderManager
         }
+        #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-ownership-corrupt") {
+            ClientOwnershipFixture.seedCorruptRegistryOnce(managers)
+        }
+        #endif
+        return managers
     }
 }
 #endif

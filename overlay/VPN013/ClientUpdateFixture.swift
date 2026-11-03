@@ -1,9 +1,18 @@
 // SPDX-License-Identifier: MIT
 #if DEBUG && targetEnvironment(simulator)
 import Foundation
+import NetworkExtension
 
 enum ClientUpdateFixture {
     static func run(manager: TunnelsManager, completion: @escaping (String) -> Void) {
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-ownership-corrupt") {
+            ClientOwnershipFixture.runCorrupt(manager: manager, completion: completion)
+            return
+        }
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-ownership") {
+            ClientOwnershipFixture.runNormal(manager: manager, completion: completion)
+            return
+        }
         let coordinator = ClientUpdateCoordinator.shared
         let manual = manager.mapTunnels { $0 }.filter { !$0.isVPN013Automatic }
         guard manual.count == 2, let original = manual.first?.tunnelConfiguration,
@@ -134,6 +143,107 @@ enum ClientUpdateFixture {
                     }
                 }
             } catch { completion(error.localizedDescription) }
+        }
+    }
+}
+
+// Simulator-only regression harness. Uses synthetic mock configurations and an
+// isolated simulator; it never opens a real customer configuration.
+enum ClientOwnershipFixture {
+    private static var seeded = false
+    private static let order = "012345abcdef"
+    private static func document(_ servers: [ClientServer]) -> ClientAccessDocument {
+        let revision = ClientUpdateProtocol.digest(servers.map { $0.id + "\n" + $0.name + "\n" + $0.config + "\n" }.joined())
+        return .init(schema: 1, kind: "vpn013-access", capability: String(repeating: "A", count: 43),
+                     snapshot: .init(schema: 1, kind: "vpn013-awg", orderID: order,
+                                     expiry: 2_000_000_000_000, revision: revision, complete: true, servers: servers))
+    }
+    private static func inventory(_ manager: TunnelsManager) -> [String: String]? {
+        let all = manager.mapTunnels { $0 }.filter { !$0.isVPN013Automatic }
+        var result: [String: String] = [:]
+        for tunnel in all {
+            guard let id = tunnel.persistentProfileIdentifier, let config = tunnel.tunnelConfiguration,
+                  result[id] == nil else { return nil }
+            result[id] = ClientUpdateProtocol.digest(config.asWgQuickConfig())
+        }
+        return result
+    }
+    private static func preserves(_ original: [String: String], _ current: [String: String]?) -> Bool {
+        guard let current = current else { return false }
+        return original.allSatisfy { current[$0.key] == $0.value }
+    }
+    static func seedCorruptRegistryOnce(_ providers: [NETunnelProviderManager]) {
+        guard !seeded else { return }; seeded = true
+        precondition(providers.count >= 2, "Synthetic simulator profiles required")
+        let tunnel = TunnelContainer(tunnel: providers[0])
+        guard let id = tunnel.persistentProfileIdentifier, let config = tunnel.tunnelConfiguration else {
+            preconditionFailure("Synthetic simulator profile identity missing")
+        }
+        let raw = config.asWgQuickConfig()
+        let a = ClientServer(id: "a", name: "Synthetic A", config: raw)
+        let b = ClientServer(id: "b", name: "Synthetic B", config: raw)
+        var registry = ClientRegistry()
+        var binding = ClientBinding(document: document([a, b]))
+        // Corruption: two server entries own the same profile. Pending update
+        // removes 'a', which would delete the profile still referenced by 'b'.
+        binding.profileIDs = ["a": id, "b": id]
+        binding.baseline = ["a": ClientUpdateProtocol.digest(raw), "b": ClientUpdateProtocol.digest(raw)]
+        binding.pending = document([b]).snapshot
+        registry.bindings[order] = binding
+        do { try ClientRegistryStore().save(registry) }
+        catch { preconditionFailure("Could not seed synthetic registry: \(error)") }
+    }
+    static func runCorrupt(manager: TunnelsManager, completion: @escaping (String) -> Void) {
+        let coordinator = ClientUpdateCoordinator.shared
+        guard let before = inventory(manager), before.count >= 2,
+              let binding = coordinator.registry.bindings[order], binding.pending != nil,
+              binding.profileIDs["a"] == binding.profileIDs["b"],
+              let pending = binding.pending, pending.servers.map({ $0.id }) == ["b"] else {
+            completion("Ownership corrupt setup failed"); return
+        }
+        coordinator.applyPending(manager: manager) { applyError in
+            guard applyError != nil, inventory(manager) == before else {
+                completion("Ownership corrupt pending modified profiles"); return
+            }
+            let attempted = ClientAccessDocument(schema: 1, kind: "vpn013-access", capability: binding.document.capability, snapshot: pending)
+            coordinator.importDocument(attempted, manager: manager) { importError in
+                guard importError != nil, inventory(manager) == before,
+                      coordinator.registry.bindings[order]?.pending != nil else {
+                    completion("Ownership corrupt import modified profiles"); return
+                }
+                completion("OWNERSHIP_CORRUPT_REJECTED_PROFILES_PRESERVED")
+            }
+        }
+    }
+    static func runNormal(manager: TunnelsManager, completion: @escaping (String) -> Void) {
+        let coordinator = ClientUpdateCoordinator.shared
+        guard let first = manager.mapTunnels(transform: { $0 }).first,
+              let original = first.tunnelConfiguration, inventory(manager)?.count == 2 else {
+            completion("Ownership normal setup failed"); return
+        }
+        let duplicate = TunnelConfiguration(name: "Synthetic duplicate", interface: original.interface, peers: original.peers)
+        manager.add(tunnelConfiguration: duplicate) { addResult in
+            guard case .success = addResult, let before = inventory(manager), before.count == 3 else {
+                completion("Ownership duplicate setup failed"); return
+            }
+            let a = ClientServer(id: "a", name: "Synthetic A", config: original.asWgQuickConfig())
+            let b = ClientServer(id: "b", name: "Synthetic B", config: original.asWgQuickConfig())
+            coordinator.importDocument(document([a, b]), manager: manager) { error in
+                guard error == nil, let binding = coordinator.registry.bindings[order],
+                      let aid = binding.profileIDs["a"], let bid = binding.profileIDs["b"],
+                      aid != bid, before[aid] == nil, before[bid] == nil,
+                      preserves(before, inventory(manager)) else {
+                    completion("Ownership duplicate import modified existing profiles"); return
+                }
+                coordinator.importDocument(document([b]), manager: manager) { refreshError in
+                    guard refreshError == nil, let after = inventory(manager), preserves(before, after),
+                          after[aid] == nil, after[bid] != nil,
+                          coordinator.registry.bindings[order]?.profileIDs["b"] == bid else {
+                        completion("Ownership removal changed unrelated profile"); return
+                    }
+                    completion("OWNERSHIP_IMPORT_REMOVE_PROFILES_PRESERVED")
+                }
+            }
         }
     }
 }

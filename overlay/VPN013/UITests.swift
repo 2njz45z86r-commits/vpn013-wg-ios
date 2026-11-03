@@ -1194,6 +1194,30 @@ final class AutoTunnelUITests:XCTestCase {
         capture("cross-protocol-user-stopped-synthetic-no-vpn")
     }
 
+    func testSubscriptionDuplicateImportAndRemovalPreserveForeignProfiles() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync", "--vpn013-test-ownership"]
+        app.launch()
+        openUpdatesFromSettings(app)
+        let fixture = app.cells["vpn013.sync-fixture"]
+        for _ in 0..<5 { if fixture.isHittable { break }; app.tables.firstMatch.swipeUp() }
+        XCTAssertTrue(fixture.isHittable)
+        fixture.tap()
+        XCTAssertTrue(app.staticTexts["OWNERSHIP_IMPORT_REMOVE_PROFILES_PRESERVED"].waitForExistence(timeout: 30))
+    }
+
+    func testCorruptRegistryRejectsPendingRemovalAndImport() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-ownership-corrupt"]
+        app.launch()
+        openUpdatesFromSettings(app)
+        let fixture = app.cells["vpn013.sync-fixture"]
+        for _ in 0..<5 { if fixture.isHittable { break }; app.tables.firstMatch.swipeUp() }
+        XCTAssertTrue(fixture.isHittable)
+        fixture.tap()
+        XCTAssertTrue(app.staticTexts["OWNERSHIP_CORRUPT_REJECTED_PROFILES_PRESERVED"].waitForExistence(timeout: 30))
+    }
+
     func testUpdatesScreenAndOrderSynchronization() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "2", "--vpn013-test-sync"]
