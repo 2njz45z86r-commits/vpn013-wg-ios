@@ -5,6 +5,9 @@ final class AutoTunnelUITests:XCTestCase {
         super.tearDown()
     }
     func testServiceCatalogGroupsExclusiveModesAndRememberedSelection() {
+        // Stop after an actual assertion failure instead of repeating a failed
+        // text event across the three sections for several minutes.
+        continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
         app.launch()
@@ -14,6 +17,21 @@ final class AutoTunnelUITests:XCTestCase {
             app.buttons["vpn013.routing.select-all"].tap(); app.buttons["vpn013.routing.next"].tap()
             app.buttons["vpn013.services.open"].tap()
             XCTAssertTrue(app.switches["vpn013.services.only"].waitForExistence(timeout: 8))
+        }
+        func searchForFacebook() {
+            let search = app.searchFields.firstMatch
+            XCTAssertTrue(search.waitForExistence(timeout: 10), "The service search must exist")
+            let keyboard = app.keyboards.firstMatch
+            for _ in 0..<3 {
+                if !search.isHittable { app.tables.firstMatch.swipeDown() }
+                if search.isHittable {
+                    search.tap()
+                    if keyboard.waitForExistence(timeout: 5) { break }
+                }
+            }
+            XCTAssertTrue(search.isHittable, "The service search must be reachable")
+            XCTAssertTrue(keyboard.exists, "Tapping the service search must open the keyboard")
+            search.typeText("Facebook\n")
         }
         for kind in ["happ", "incy", "blacktemple"] {
             let tab = app.tabBars.buttons["vpn013.kind." + kind]
@@ -26,8 +44,7 @@ final class AutoTunnelUITests:XCTestCase {
             XCTAssertGreaterThan(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "vpn013.services.group.")).count, 0)
             capture("catalog-" + kind + "-groups-default-off")
             only.tap(); XCTAssertEqual(only.value as? String, "1"); XCTAssertEqual(bypass.value as? String, "0")
-            let search = app.searchFields.firstMatch
-            search.tap(); search.typeText("Facebook\n")
+            searchForFacebook()
             let service = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "vpn013.services.item.", "Facebook")).firstMatch
             XCTAssertTrue(service.waitForExistence(timeout: 5)); XCTAssertTrue(service.label.contains("Facebook"))
             XCTAssertTrue(service.isHittable, "Search results must remain reachable after dismissing the keyboard")
@@ -37,8 +54,7 @@ final class AutoTunnelUITests:XCTestCase {
             bypass.tap(); XCTAssertEqual(only.value as? String, "0"); XCTAssertEqual(bypass.value as? String, "0")
             app.buttons["vpn013.services.save"].tap()
             openCatalog(); only.tap()
-            let savedSearch = app.searchFields.firstMatch
-            savedSearch.tap(); savedSearch.typeText("Facebook\n")
+            searchForFacebook()
             let saved = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "vpn013.services.item.", "Facebook")).firstMatch
             XCTAssertTrue(saved.waitForExistence(timeout: 5))
             // Search filtering and UITableView reload can briefly expose a stale cell.
