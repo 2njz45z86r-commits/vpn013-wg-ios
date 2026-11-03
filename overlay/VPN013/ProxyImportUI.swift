@@ -3,6 +3,31 @@ import UIKit
 import UniformTypeIdentifiers
 import AVFoundation
 
+#if targetEnvironment(simulator) && DEBUG
+/// Synthetic ZIP-import transport. Never contacts a server.
+private final class VPN013ZipImportTestProtocol: URLProtocol {
+    static let observed = Notification.Name("VPN013ZipImportTestRequest")
+    static var count = 0
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        DispatchQueue.main.async {
+            Self.count += 1
+            NotificationCenter.default.post(name: Self.observed, object: nil)
+        }
+        guard let url = request.url, url.host == "127.0.0.1", url.port == 9443,
+              let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL)); return
+        }
+        let profile = "vless://00000000-0000-4000-8000-000000000001@server.example.invalid:443?type=tcp&security=tls#Example"
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(profile.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+#endif
+
 final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegate {
     private let kind: VPN013ConnectionKind
     private let input = UITextView()
@@ -11,7 +36,21 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
     private let file = UIButton(type: .system)
     private let qr = UIButton(type: .system)
     private let progress = UIActivityIndicatorView(style: .medium)
-    private let downloader = ProxySubscriptionDownload()
+    private lazy var downloader: ProxySubscriptionDownload = {
+        #if targetEnvironment(simulator) && DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-owner-proxy-zip-url") {
+            return ProxySubscriptionDownload(configuration: {
+                let config = URLSessionConfiguration.ephemeral
+                config.protocolClasses = [VPN013ZipImportTestProtocol.self]
+                return config
+            })
+        }
+        #endif
+        return ProxySubscriptionDownload()
+    }()
+    #if targetEnvironment(simulator) && DEBUG
+    private var zipTestObserver: NSObjectProtocol?
+    #endif
     private var initialText: String?
     private var isBusy = false
     private var previewGeneration = UUID()
@@ -19,7 +58,12 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
     private var pendingFileAction: (() -> Void)?
     init(kind: VPN013ConnectionKind, text: String? = nil) { self.kind = kind; initialText = text; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    deinit { downloader.cancel() }
+    deinit {
+        downloader.cancel()
+        #if targetEnvironment(simulator) && DEBUG
+        if let observer = zipTestObserver { NotificationCenter.default.removeObserver(observer) }
+        #endif
+    }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated); appeared = true; drainFileAction()
     }
@@ -67,6 +111,16 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
         let privacy = UILabel(); privacy.text = "При загрузке подписки сервис получает случайный идентификатор этой установки VPN013."
         privacy.numberOfLines = 0; privacy.font = .preferredFont(forTextStyle: .footnote); privacy.adjustsFontForContentSizeCategory = true; privacy.textColor = VPN013Theme.secondaryText
         let stack = UIStackView(arrangedSubviews: [explanation, actions, input, submit, progress, privacy]); stack.axis = .vertical; stack.spacing = 16
+        #if targetEnvironment(simulator) && DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-owner-proxy-zip-url") {
+            let marker = UILabel(); marker.accessibilityIdentifier = "vpn013.zip.fixture.request-count"
+            marker.text = "Запросов: \(VPN013ZipImportTestProtocol.count)"
+            stack.addArrangedSubview(marker)
+            zipTestObserver = NotificationCenter.default.addObserver(forName: VPN013ZipImportTestProtocol.observed, object: nil, queue: .main) { [weak marker] _ in
+                marker?.text = "Запросов: \(VPN013ZipImportTestProtocol.count)"
+            }
+        }
+        #endif
         let scroll = UIScrollView(); scroll.keyboardDismissMode = .interactive; scroll.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(scroll)
         stack.translatesAutoresizingMaskIntoConstraints = false; scroll.addSubview(stack)
         let keyboardBottom: NSLayoutYAxisAnchor
@@ -143,7 +197,7 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
                 input.text = text
                 // Incoming Open In may push this form before its navigation
                 // transition finishes. UIKit refuses an alert at that point.
-                pendingFileAction = { [weak self] in self?.validateInput() }
+                pendingFileAction = { [weak self] in self?.confirmZIPSourceOrValidate() }
                 drainFileAction(); return
             }
             let file = try FileHandle(forReadingFrom: url); defer { try? file.close() }
@@ -155,6 +209,22 @@ final class ProxyImportViewController: UIViewController, UIDocumentPickerDelegat
             }
             else { input.text = text }
         } catch { show(error is ProxyProfileError ? error : ProxyProfileError.invalid) }
+    }
+    private func confirmZIPSourceOrValidate() {
+        let original = input.text ?? ""
+        guard let text = try? VPN013SubscriptionRequest.importText(original),
+              let url = URL(string: text), VPN013SubscriptionRequest.isSecure(url),
+              let host = url.host else { validateInput(); return }
+        let displayedHost = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
+        let destination = displayedHost + (url.port.map { ":\($0)" } ?? "")
+        let alert = UIAlertController(title: "Загрузить подписку?", message: "Адрес источника: \(destination)", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Загрузить", style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            guard (self.input.text ?? "") == original else { self.show(ProxyProfileError.invalid); return }
+            self.validateInput()
+        })
+        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        present(alert, animated: true)
     }
     @objc private func validateInput() {
         guard !isBusy else { return }
