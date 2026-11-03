@@ -1,0 +1,44 @@
+// Synthetic platform-object test. Does not start a VPN or apply settings.
+import Foundation
+import NetworkExtension
+
+func check(_ value: @autoclosure () -> Bool, _ reason: String) {
+    if !value() { fatalError(reason) }
+}
+
+let original = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "192.0.2.2")
+original.mtu = 1280
+let ipv4 = NEIPv4Settings(addresses: ["10.0.0.2"], subnetMasks: ["255.255.255.255"])
+let route4 = NEIPv4Route(destinationAddress: "0.0.0.0", subnetMask: "0.0.0.0")
+route4.gatewayAddress = "10.0.0.2"
+ipv4.includedRoutes = [route4]
+ipv4.excludedRoutes = [NEIPv4Route(destinationAddress: "192.0.2.2", subnetMask: "255.255.255.255")]
+original.ipv4Settings = ipv4
+let ipv6 = NEIPv6Settings(addresses: ["fd13::2"], networkPrefixLengths: [128])
+let route6 = NEIPv6Route(destinationAddress: "::", networkPrefixLength: 0)
+route6.gatewayAddress = "fd13::2"
+ipv6.includedRoutes = [route6]
+ipv6.excludedRoutes = [NEIPv6Route(destinationAddress: "2001:db8::2", networkPrefixLength: 128)]
+original.ipv6Settings = ipv6
+let dns = NEDNSSettings(servers: ["192.0.2.53", "2001:db8::53"])
+dns.searchDomains = ["example.invalid"]
+dns.matchDomains = ["", "example.invalid"]
+dns.matchDomainsNoSearch = true
+original.dnsSettings = dns
+
+guard let snapshot = original.copy() as? NEPacketTunnelNetworkSettings else { fatalError("copy failed") }
+check(snapshot !== original, "copy was not independent")
+check(snapshot.tunnelRemoteAddress == "192.0.2.2" && snapshot.mtu?.intValue == 1280, "remote or MTU changed")
+check(snapshot.ipv4Settings?.addresses == ["10.0.0.2"] && snapshot.ipv4Settings?.includedRoutes?.first?.gatewayAddress == "10.0.0.2", "IPv4 configuration changed")
+check(snapshot.ipv4Settings?.excludedRoutes?.first?.destinationAddress == "192.0.2.2", "IPv4 exclusion changed")
+check(snapshot.ipv6Settings?.addresses == ["fd13::2"] && snapshot.ipv6Settings?.includedRoutes?.first?.gatewayAddress == "fd13::2", "IPv6 configuration changed")
+check(snapshot.ipv6Settings?.excludedRoutes?.first?.destinationAddress == "2001:db8::2", "IPv6 exclusion changed")
+check(snapshot.dnsSettings?.servers == ["192.0.2.53", "2001:db8::53"], "DNS servers changed")
+check(snapshot.dnsSettings?.searchDomains == ["example.invalid"] && snapshot.dnsSettings?.matchDomains == ["", "example.invalid"] && snapshot.dnsSettings?.matchDomainsNoSearch == true, "DNS matching changed")
+original.ipv4Settings?.includedRoutes?.first?.gatewayAddress = "10.0.0.3"
+original.ipv6Settings?.includedRoutes?.first?.gatewayAddress = "fd13::3"
+original.dnsSettings?.searchDomains = ["changed.invalid"]
+original.mtu = 1400
+check(snapshot.mtu?.intValue == 1280 && snapshot.ipv4Settings?.includedRoutes?.first?.gatewayAddress == "10.0.0.2", "IPv4 or MTU aliases original")
+check(snapshot.ipv6Settings?.includedRoutes?.first?.gatewayAddress == "fd13::2" && snapshot.dnsSettings?.searchDomains == ["example.invalid"], "IPv6 or DNS aliases original")
+print("NetworkExtension settings snapshot copied and isolated; synthetic values only")
