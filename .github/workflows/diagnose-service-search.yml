@@ -1,4 +1,4 @@
-name: Diagnose real service search on iPhone simulator
+name: Diagnose real service search on ARM iPhone simulator
 on:
   workflow_dispatch:
   push:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   focus:
-    runs-on: macos-26-intel
+    runs-on: macos-26
     timeout-minutes: 50
     env:
       PYTHONDONTWRITEBYTECODE: '1'
