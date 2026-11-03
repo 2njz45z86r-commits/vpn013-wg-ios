@@ -406,9 +406,21 @@ final class AutoTunnelUITests:XCTestCase {
             XCTAssertEqual(app.tables.cells.staticTexts.matching(identifier:name).count,1)
         }
         capture("04-shared-zip-26-files-13-imported")
+        func openAuthenticatedEditor() -> Bool {
+            let edit = app.buttons["vpn013.edit-profile"]
+            guard edit.waitForExistence(timeout: 5) else { XCTFail("Profile editor button is unavailable"); capture("zip-editor-button-unavailable"); return false }
+            edit.tap()
+            // Do not swipe the underlying profile while the system is still
+            // authenticating: wait for the actual editor before interacting.
+            guard app.buttons["vpn013.cancel-profile-edit"].waitForExistence(timeout: 30) else {
+                capture("zip-editor-authentication-did-not-open")
+                XCTFail("Authenticated profile editor did not open")
+                return false
+            }
+            return true
+        }
         app.tables.cells.staticTexts["Испания"].tap()
-        let edit = app.buttons["vpn013.edit-profile"]
-        XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        guard openAuthenticatedEditor() else { return }
         let version = app.textFields["vpn013.awg15.version"]
         for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }
         XCTAssertTrue(version.waitForExistence(timeout: 5))
@@ -419,11 +431,11 @@ final class AutoTunnelUITests:XCTestCase {
         // The I-only example is ambiguous. Choose 1.5 explicitly, save it and
         // reopen the editor to prove the user's choice is actually persisted.
         app.tables.cells.staticTexts["Беларусь"].tap()
-        XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        guard openAuthenticatedEditor() else { return }
         for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }
         XCTAssertTrue(version.waitForExistence(timeout: 5)); version.tap(); version.typeText("1.5")
         app.buttons["vpn013.save-profile-edit"].tap()
-        XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        guard openAuthenticatedEditor() else { return }
         for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }
         XCTAssertEqual(version.value as? String, "1.5")
         capture("04b-explicit-legacy-choice-saved")
