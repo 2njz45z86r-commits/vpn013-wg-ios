@@ -149,6 +149,11 @@ class TunnelsManager {
                         refs.insert(ref)
                         if let groupRef = proto.providerConfiguration?[AutoTunnelProfile.referenceKey] as? Data { refs.insert(groupRef) }
                     } else {
+                        #if os(iOS)
+                        // An inaccessible legacy reference or a failed migration
+                        // is not evidence the owner intends to delete the profile.
+                        wg_log(.info, staticMessage: "VPN profile retained; configuration unavailable")
+                        #else
                         wg_log(
                             .info,
                             message:
@@ -156,6 +161,7 @@ class TunnelsManager {
                         )
                         tunnelManager.removeFromPreferences { _ in }
                         tunnelManagers.remove(at: index)
+                        #endif
                     }
                 }
                 #if os(macOS)
