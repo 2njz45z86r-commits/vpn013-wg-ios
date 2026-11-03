@@ -23,11 +23,11 @@ jobs:
 
   native_tests:
     needs: security
-    uses: ./.github/workflows/native-unified-check.yml
+    uses: ./.github/workflows/validate-owner-native-intel.yml
 
   package:
     needs: [security, native_tests]
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
