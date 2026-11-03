@@ -43,11 +43,22 @@ struct ClientProfileOwnership {
     }
 
     /// Reserve a match immediately so another server cannot claim it.
-    mutating func claimUnique(_ candidateIDs: [String]) -> String? {
-        let matches = candidateIDs.filter { !$0.isEmpty && !claimed.contains($0) }
-        guard matches.count == 1, let id = matches.first else { return nil }
+    mutating func claimUnique(_ candidateIDs: [String?]) -> String? {
+        // An otherwise matching profile without an identifier is still a match.
+        // It must not disappear when deciding whether the match is unambiguous.
+        let matches = candidateIDs.filter { id in
+            guard let id = id, !id.isEmpty else { return true }
+            return !claimed.contains(id)
+        }
+        guard matches.count == 1, let id = matches[0], !id.isEmpty else { return nil }
         claimed.insert(id)
         return id
+    }
+
+    static func validateBaseline(currentDigest: String?, expectedDigest: String?, name: String) throws {
+        guard let current = currentDigest, let expected = expectedDigest, current == expected else {
+            throw ClientUpdateError.localChanges(name)
+        }
     }
 }
 
@@ -210,6 +221,18 @@ final class ClientUpdateCoordinator {
         let available = Set(manager.mapTunnels { $0.persistentProfileIdentifier }.compactMap { $0 })
         return ClientRosterPlan.mappingComplete(binding.profileIDs, snapshot: snapshot, availableProfileIDs: available)
     }
+    private func validateBaselines(_ bindings: [ClientBinding], manager: TunnelsManager) throws {
+        let all = manager.mapTunnels { $0 }
+        for binding in bindings {
+            for (serverID, id) in binding.profileIDs {
+                // An absent profile may be recreated or its stale binding removed;
+                // an existing profile without a readable configuration must stop.
+                guard let current = all.first(where: { $0.persistentProfileIdentifier == id }) else { continue }
+                let digest = current.tunnelConfiguration.map { ClientUpdateProtocol.digest($0.asWgQuickConfig()) }
+                try ClientProfileOwnership.validateBaseline(currentDigest: digest, expectedDigest: binding.baseline[serverID], name: current.name)
+            }
+        }
+    }
     private func configurations(_ snapshot: ClientSnapshot, binding: ClientBinding, manager: TunnelsManager, newChoices: [String: Bool] = [:]) throws -> [String: TunnelConfiguration] {
         try snapshot.validate()
         var result: [String: TunnelConfiguration] = [:]
@@ -241,6 +264,8 @@ final class ClientUpdateCoordinator {
             var ownership = try ClientProfileOwnership(profileMaps: registry.bindings.values.map { $0.profileIDs })
             let order = document.snapshot.orderID
             var binding = registry.bindings[order] ?? ClientBinding(document: document)
+            let otherPending = registry.bindings.filter { $0.key != order && $0.value.pending != nil }.map { $0.value }
+            try validateBaselines([binding] + otherPending, manager: manager)
             guard Set(awgVersionChoices.keys).isSubset(of: Set(document.snapshot.servers.map { $0.id })) else { throw ClientUpdateError.invalidDocument }
             let parsed = try configurations(document.snapshot, binding: binding, manager: manager, newChoices: awgVersionChoices)
             for server in document.snapshot.servers where binding.document.snapshot.servers.first(where: { $0.id == server.id })?.config != server.config {
@@ -253,7 +278,7 @@ final class ClientUpdateCoordinator {
             for server in document.snapshot.servers where binding.profileIDs[server.id] == nil {
                 guard let config = parsed[server.id] else { throw ClientUpdateError.invalidDocument }
                 let canonical = config.asWgQuickConfig()
-                let matches = all.filter { !$0.isVPN013Automatic && $0.tunnelConfiguration?.asWgQuickConfig() == canonical }.compactMap { $0.persistentProfileIdentifier }
+                let matches = all.filter { !$0.isVPN013Automatic && $0.tunnelConfiguration?.asWgQuickConfig() == canonical }.map { $0.persistentProfileIdentifier }
                 if let id = ownership.claimUnique(matches) {
                     binding.profileIDs[server.id] = id; binding.baseline[server.id] = ClientUpdateProtocol.digest(canonical)
                 }
@@ -285,7 +310,10 @@ final class ClientUpdateCoordinator {
         guard !busy else { completion(ClientUpdateError.busy); return }
         let orders = registry.bindings.keys.filter { registry.bindings[$0]?.pending != nil }.sorted()
         guard !orders.isEmpty else { completion(nil); return }
-        do { _ = try ClientProfileOwnership(profileMaps: registry.bindings.values.map { $0.profileIDs }) }
+        do {
+            _ = try ClientProfileOwnership(profileMaps: registry.bindings.values.map { $0.profileIDs })
+            try validateBaselines(orders.compactMap { registry.bindings[$0] }, manager: manager)
+        }
         catch { publish(error.localizedDescription); completion(error); return }
         guard !manager.mapTunnels(transform: { $0.status != .inactive || $0.isActivateOnDemandEnabled }).contains(true) else { completion(ClientUpdateError.activeVPN); return }
         busy = true; manager.beginManagedUpdate(); inferOldAuto(manager: manager)
@@ -308,10 +336,7 @@ final class ClientUpdateCoordinator {
             configs = try configurations(snapshot, binding: binding, manager: manager)
             plan = try ClientRosterPlan(previousIDs: Set(binding.profileIDs.keys), snapshot: snapshot)
             guard snapshot.expiry > Int64(Date().timeIntervalSince1970 * 1000) else { throw ClientUpdateError.accessEnded }
-            for (serverID, id) in binding.profileIDs {
-                guard let current = manager.mapTunnels(transform: { $0 }).first(where: { $0.persistentProfileIdentifier == id }), let config = current.tunnelConfiguration else { continue }
-                guard binding.baseline[serverID] == ClientUpdateProtocol.digest(config.asWgQuickConfig()) else { throw ClientUpdateError.localChanges(current.name) }
-            }
+            try validateBaselines([binding], manager: manager)
             for server in plan.retained {
                 guard let id = binding.profileIDs[server.id], let current = manager.mapTunnels(transform: { $0 }).first(where: { $0.persistentProfileIdentifier == id }), let config = current.tunnelConfiguration else { continue }
                 guard binding.baseline[server.id] == ClientUpdateProtocol.digest(config.asWgQuickConfig()),

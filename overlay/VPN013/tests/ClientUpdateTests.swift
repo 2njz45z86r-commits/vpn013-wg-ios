@@ -27,10 +27,21 @@ import Foundation
         try check(ownership.claimUnique(["other-profile"]) == nil)
         try check(ownership.claimUnique(["profile-b", "profile-c"]) == nil)
         try check(ownership.claimUnique(["profile-b"]) == "profile-b")
+        try check(ownership.claimUnique([nil]) == nil)
+        try check(ownership.claimUnique(["profile-c", nil]) == nil)
+        try check(ownership.claimUnique(["profile-c", ""]) == nil)
+        // Refusing the ambiguous choice must not reserve the valid candidate.
+        try check(ownership.claimUnique(["profile-c"]) == "profile-c")
         fails { _ = try ClientProfileOwnership(profileMaps: [["a": "same", "b": "same"]]) }
         fails { _ = try ClientProfileOwnership(profileMaps: [["a": "same"], ["b": "same"]]) }
         fails { _ = try ClientProfileOwnership(profileMaps: [["a": ""]]) }
         _ = try ClientProfileOwnership(profileMaps: [["a": "first"], ["b": "second"]]); count += 1
+        // A found profile without a readable configuration cannot pass the
+        // preflight for modification or removal, even if a baseline exists.
+        fails { try ClientProfileOwnership.validateBaseline(currentDigest: nil, expectedDigest: "old", name: "fixture") }
+        fails { try ClientProfileOwnership.validateBaseline(currentDigest: "old", expectedDigest: nil, name: "fixture") }
+        fails { try ClientProfileOwnership.validateBaseline(currentDigest: "new", expectedDigest: "old", name: "fixture") }
+        try ClientProfileOwnership.validateBaseline(currentDigest: "old", expectedDigest: "old", name: "fixture"); count += 1
         try check(ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: ["profile-a","profile-b","unrelated"]))
         try check(!ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: ["profile-b"]))
         try check(!ClientRosterPlan.mappingComplete(mapped, snapshot: valid, availableProfileIDs: []))
