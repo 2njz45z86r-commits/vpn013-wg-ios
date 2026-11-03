@@ -80,7 +80,9 @@ extension ZipArchive {
 
             var information = unz_file_info64()
             guard unzGetCurrentFileInfo64(zipFile, &information, fileNameBuffer, UInt(bufferSize), nil, 0, nil, 0) == UNZ_OK,
-                  Int(information.size_filename) < bufferSize else { throw ZipArchiveError.badArchive }
+                  Int(information.size_filename) < bufferSize,
+                  !UnsafeBufferPointer(start: fileNameBuffer, count: Int(information.size_filename)).contains(0)
+            else { throw ZipArchiveError.badArchive }
 
             let lastChar = String(cString: fileNameBuffer).suffix(1)
             if strictRoot {

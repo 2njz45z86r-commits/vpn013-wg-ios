@@ -26,8 +26,8 @@ func tr(_ input: String) -> String { input }
         reject("total-too-large.zip")
         reject("crc.zip")
         reject("truncated.zip")
-        let nul = accept("nul.zip")
-        precondition(nul.count == 1 && nul[0].fileBaseName == "one")
-        print("PASS diagnostic: 10 boundary observations; embedded-NUL name accepted in strictRoot")
+        reject("nul.zip")
+        reject("nul.zip", false)
+        print("PASS: 11 ZIP boundary checks including embedded NUL rejection and regular nested ZIP compatibility")
     }
 }
