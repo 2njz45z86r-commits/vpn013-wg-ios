@@ -6,6 +6,7 @@ windows/dependencies/go.sum text eol=lf
 windows/overlay/r013routing/networks.cidr text eol=lf
 .github/release-publication/** -text
 scripts/awg31-fixtures/** -text
+scripts/precise-routing-prototype/** -text
 
 # Native UI gate hashes the exact source bytes on both Windows and macOS.
 overlay/VPN013/UITests.swift text eol=lf

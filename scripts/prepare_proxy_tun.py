@@ -35,6 +35,10 @@ assert not local.exists(), 'Use a fresh isolated build directory'
 shutil.copytree(Path(replacement['Dir']), local, copy_function=shutil.copyfile)
 target = local / 'proxy/tun/tun_darwin.go'
 target.write_text(patched)
+# Diagnostic branch only: stage exact reviewed-prototype bytes before compiling.
+# This does not enable routing in the application or authorize a release.
+prototype = Path(__file__).parent / 'precise-routing-prototype' / 'apply-prototype.py'
+subprocess.run([sys.executable, str(prototype), str(local)], check=True)
 modfile = output / 'proxy-tun.mod'
 shutil.copyfile(root/'go.mod', modfile)
 shutil.copyfile(root/'go.sum', output/'proxy-tun.sum')
