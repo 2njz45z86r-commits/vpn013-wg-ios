@@ -249,6 +249,36 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(preview.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "INCY")).firstMatch.exists)
         preview.buttons["Добавить"].tap()
         XCTAssertTrue(app.tables.cells.staticTexts["Example"].waitForExistence(timeout: 20))
+
+        // A URL supplied inside a ZIP must not initiate a request before the
+        // owner confirms its destination. The test transport intercepts all
+        // requests; the address and token below are synthetic.
+        app.terminate()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-owner-proxy-zip-url"]
+        app.launch()
+        let firstConfirmation = app.alerts["Загрузить подписку?"]
+        XCTAssertTrue(firstConfirmation.waitForExistence(timeout: 20))
+        XCTAssertTrue(firstConfirmation.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "127.0.0.1:9443")).firstMatch.exists)
+        XCTAssertFalse(firstConfirmation.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "synthetic-token")).firstMatch.exists)
+        firstConfirmation.buttons["Отмена"].tap()
+        let firstCount = app.staticTexts["vpn013.zip.fixture.request-count"]
+        XCTAssertTrue(firstCount.waitForExistence(timeout: 5))
+        XCTAssertEqual(firstCount.label, "Запросов: 0")
+        let unexpectedRequest = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", "Запросов: 0"), object: firstCount)
+        unexpectedRequest.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [unexpectedRequest], timeout: 2), .completed)
+
+        app.terminate(); app.launch()
+        let confirmation = app.alerts["Загрузить подписку?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 20))
+        confirmation.buttons["Загрузить"].tap()
+        let urlPreview = app.alerts["Серверов: 1"]
+        XCTAssertTrue(urlPreview.waitForExistence(timeout: 20))
+        urlPreview.buttons["Отмена"].tap()
+        let count = app.staticTexts["vpn013.zip.fixture.request-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        let received = NSPredicate(format: "label == %@", "Запросов: 1")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: received, object: count)], timeout: 5), .completed)
     }
     func testInvitationReachableFromEveryProxySectionWithoutSharingProfiles() {
         let app = XCUIApplication()

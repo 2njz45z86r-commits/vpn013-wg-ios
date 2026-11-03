@@ -65,6 +65,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 DispatchQueue.main.async { _ = self.application(application, open: fixture) }
             } catch { wg_log(.error, message: "Unable to prepare local proxy ZIP fixture") }
         }
+        if ProcessInfo.processInfo.arguments.contains("--vpn013-test-owner-proxy-zip-url") {
+            do {
+                let fixture = FileManager.default.temporaryDirectory.appendingPathComponent("vpn013-proxy-url-fixture-" + UUID().uuidString + ".zip")
+                let subscription = Data("https://127.0.0.1:9443/synthetic?token=synthetic-token\n".utf8)
+                let entries: [(fileName: String, contents: Data)] = [
+                    ("iPhone/Подписка.txt", subscription), ("Android/Подписка.txt", subscription),
+                    ("iPhone/Инструкция.txt", Data("Тест · INCY · iPhone\n".utf8)),
+                    ("Android/Инструкция.txt", Data("Тест · INCY · Android\n".utf8))]
+                try ZipArchive.archive(inputs: entries, to: fixture)
+                DispatchQueue.main.async { _ = self.application(application, open: fixture) }
+            } catch { wg_log(.error, message: "Unable to prepare local synthetic subscription ZIP") }
+        }
         if ProcessInfo.processInfo.arguments.contains("--vpn013-test-import") {
             // Exercise the same incoming-file handler as iOS Open In / Share.
             do {
