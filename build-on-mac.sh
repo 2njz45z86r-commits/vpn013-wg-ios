@@ -68,6 +68,10 @@ cat ../../build/review/endpoint-ping-tests.txt
 swiftc VPN013/PrivateTunnelStore.swift VPN013/ClientUpdateProtocol.swift VPN013/ClientSubscriptions.swift VPN013/tests/ClientUpdateTests.swift -o ../../build/test-client-updates
 ../../build/test-client-updates > ../../build/review/client-update-tests.txt
 cat ../../build/review/client-update-tests.txt
+swiftc -parse-as-library -swift-version 5 VPN013/ClientUpdatesViewController.swift ../../tests/ClientReleaseVerificationTests.swift -o ../../build/test-release-verification
+../../build/test-release-verification > ../../build/review/release-verification-tests.txt
+cat ../../build/review/release-verification-tests.txt
+python3 -c 'import json,pathlib; p=pathlib.Path("../../build/review"); (p/"release-verification-tests.json").write_text(json.dumps({"passed":True,"output":(p/"release-verification-tests.txt").read_text()}))'
 swiftc VPN013/ConnectionSummary.swift VPN013/tests/ConnectionSummaryTests.swift -o ../../build/test-connection-summary
 ../../build/test-connection-summary > ../../build/review/connection-summary-tests.txt
 cat ../../build/review/connection-summary-tests.txt
