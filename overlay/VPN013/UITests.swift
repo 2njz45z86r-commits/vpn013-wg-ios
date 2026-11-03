@@ -51,7 +51,21 @@ final class AutoTunnelUITests:XCTestCase {
             service.tap(); XCTAssertEqual(service.value as? String, "Выбрано")
             bypass.tap(); XCTAssertEqual(only.value as? String, "0"); XCTAssertEqual(bypass.value as? String, "1")
             XCTAssertEqual(service.value as? String, "Не выбрано"); service.tap()
-            bypass.tap(); XCTAssertEqual(only.value as? String, "0"); XCTAssertEqual(bypass.value as? String, "0")
+            func captureSwitchDiagnostic(_ stage: String) {
+                let screenshot = XCTAttachment(screenshot: app.screenshot())
+                screenshot.name = "switch-" + kind + "-" + stage
+                screenshot.lifetime = .keepAlways
+                add(screenshot)
+                let hierarchy = XCTAttachment(string: app.debugDescription)
+                hierarchy.name = "hierarchy-" + kind + "-" + stage
+                hierarchy.lifetime = .keepAlways
+                add(hierarchy)
+            }
+            captureSwitchDiagnostic("before-disable")
+            bypass.tap()
+            captureSwitchDiagnostic("after-disable")
+            XCTAssertEqual(only.value as? String, "0", "Only mode must stay off after disabling bypass")
+            XCTAssertEqual(bypass.value as? String, "0", "Bypass mode must switch off on the second tap")
             app.buttons["vpn013.services.save"].tap()
             openCatalog(); only.tap()
             searchForFacebook()

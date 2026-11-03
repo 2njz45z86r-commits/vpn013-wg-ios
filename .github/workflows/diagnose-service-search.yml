@@ -42,6 +42,7 @@ jobs:
           grep -E 'Test Case .* (started|passed|failed)|error:|TEST (FAILED|SUCCEEDED)' build/search-focus.log || true
           if [ -d build/SearchFocus.xcresult ]; then
             xcrun xcresulttool get test-results summary --path build/SearchFocus.xcresult > build/review/search-focus-summary.json || true
+            ditto -c -k --keepParent build/SearchFocus.xcresult build/review/search-focus-result.zip
           fi
           test "$result" -eq 0
           python3 - <<'PY'
@@ -59,5 +60,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: vpn013-service-search-focus-${{ github.run_id }}
-          path: build/review/search-focus-summary.json
+          path: |
+            build/review/search-focus-summary.json
+            build/review/search-focus-result.zip
           if-no-files-found: warn
