@@ -39,6 +39,8 @@ original.ipv4Settings?.includedRoutes?.first?.gatewayAddress = "10.0.0.3"
 original.ipv6Settings?.includedRoutes?.first?.gatewayAddress = "fd13::3"
 original.dnsSettings?.searchDomains = ["changed.invalid"]
 original.mtu = 1400
-check(snapshot.mtu?.intValue == 1280 && snapshot.ipv4Settings?.includedRoutes?.first?.gatewayAddress == "10.0.0.2", "IPv4 or MTU aliases original")
-check(snapshot.ipv6Settings?.includedRoutes?.first?.gatewayAddress == "fd13::2" && snapshot.dnsSettings?.searchDomains == ["example.invalid"], "IPv6 or DNS aliases original")
+check(snapshot.mtu?.intValue == 1280, "MTU aliases original")
+check(snapshot.ipv4Settings?.includedRoutes?.first?.gatewayAddress == "10.0.0.2", "IPv4 gateway aliases original")
+check(snapshot.ipv6Settings?.includedRoutes?.first?.gatewayAddress == "fd13::2", "IPv6 gateway aliases original")
+check(snapshot.dnsSettings?.searchDomains == ["example.invalid"], "DNS aliases original")
 print("NetworkExtension settings snapshot copied and isolated; synthetic values only")
