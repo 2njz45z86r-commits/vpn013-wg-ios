@@ -496,7 +496,7 @@ extension TunnelDetailTableViewController {
                 guard let self = self else { return }
                 self.tunnelsManager.remove(tunnel: self.tunnel) { error in
                     if error != nil {
-                        print("Error removing tunnel: \(String(describing: error))")
+                        print("Error removing tunnel")
                         return
                     }
                 }
