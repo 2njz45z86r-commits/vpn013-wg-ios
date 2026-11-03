@@ -274,6 +274,20 @@ private final class ClientVerifiedDownload: NSObject, URLSessionDataDelegate {
         precondition(session == nil && task == nil)
         syntheticAfterFirstWrite = callback
     }
+    // Inject delegate events explicitly into a live task. This tests the real
+    // write/cancel/cleanup path, not URLSession's streaming delivery behavior.
+    func injectResponseAndDataForTest() {
+        guard let session = session, let task = task,
+              let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Length": "3"]) else {
+            preconditionFailure("Synthetic live task was not ready")
+        }
+        session.delegateQueue.addOperation { [self] in
+            self.urlSession(session, dataTask: task, didReceive: response) { disposition in
+                precondition(disposition == .allow)
+                self.urlSession(session, dataTask: task, didReceive: Data("a".utf8))
+            }
+        }
+    }
     #endif
 
     init(url: URL, expectedHash: String, completion: @escaping (Result<URL, Error>) -> Void) throws {
@@ -390,6 +404,7 @@ final class ClientVerifiedDownloadTestDriver {
     func start() { download.start() }
     func cancel() { download.cancel() }
     func observeFirstWrite(_ callback: @escaping () -> Void) { download.observeFirstWriteForTest(callback) }
+    func injectResponseAndData() { download.injectResponseAndDataForTest() }
 }
 #endif
 #endif
