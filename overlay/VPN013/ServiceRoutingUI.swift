@@ -3,7 +3,7 @@ import UIKit
 
 /// Catalog displays only friendly service metadata. No technical rule is ever
 /// rendered here. State stays local until the explicit Save operation.
-final class ServiceRoutingViewController: UITableViewController, UISearchResultsUpdating {
+final class ServiceRoutingViewController: UITableViewController, UISearchResultsUpdating, UISearchBarDelegate {
     private let saveSelection: (ServiceRoutingSelection, @escaping (Error?) -> Void) -> Void
     private let wireGuard: Bool
     private let catalog: ServiceRoutingCatalog
@@ -40,6 +40,7 @@ final class ServiceRoutingViewController: UITableViewController, UISearchResults
         only.addTarget(self, action: #selector(onlyChanged), for: .valueChanged)
         bypass.addTarget(self, action: #selector(bypassChanged), for: .valueChanged)
         search.obscuresBackgroundDuringPresentation = false; search.searchResultsUpdater = self
+        search.searchBar.delegate = self
         search.hidesNavigationBarDuringPresentation = false
         search.searchBar.placeholder = "Найти сервис"; navigationItem.searchController = search
         navigationItem.hidesSearchBarWhenScrolling = false; definesPresentationContext = true
@@ -53,6 +54,10 @@ final class ServiceRoutingViewController: UITableViewController, UISearchResults
         tableView.reloadData()
     }
     func updateSearchResults(for searchController: UISearchController) { refresh() }
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        // Keep the filter active while making room for the matching services.
+        searchBar.resignFirstResponder()
+    }
     override func numberOfSections(in tableView: UITableView) -> Int { groups.count + 1 }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         if section == 0 { return 2 }

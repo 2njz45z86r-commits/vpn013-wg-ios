@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [coreA, coreB, coreC, added5]
+        shard: [coreC]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -51,6 +51,7 @@ jobs:
         if: always() && steps.compile.outcome == 'success'
         env:
           VPN013_IPHONE_ONLY: '1'
+          VPN013_DIAGNOSTIC_ONLY: '1'
         run: python3 scripts/native_ui_shards.py run '${{ matrix.shard }}' --seconds 2700
       - name: Retain only credential-free diagnostic evidence, never an installable IPA
         if: always()

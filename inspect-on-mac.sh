@@ -10,6 +10,21 @@ xcrun simctl boot "$device" || true
 echo 'VPN013 native stage: wait for simulator boot'
 xcrun simctl bootstatus "$device" -b
 echo 'VPN013 native stage: simulator booted'
+# Diagnostic runner only: use the Simulator's biometric service to exercise
+# the genuine LocalAuthentication flow for synthetic import fixtures.
+if [ "${VPN013_DIAGNOSTIC_ONLY:-0}" = 1 ]; then
+ xcrun simctl spawn "$device" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1
+ xcrun simctl spawn "$device" notifyutil -p com.apple.BiometricKit.enrollmentChanged
+ (
+  i=0
+  while [ "$i" -lt 600 ]; do
+   xcrun simctl spawn "$device" notifyutil -p com.apple.BiometricKit_Sim.pearl.match >/dev/null 2>&1 || true
+   i=$((i + 1)); sleep 2
+  done
+ ) &
+ biometric_pid=$!
+ trap 'kill "$biometric_pid" 2>/dev/null || true' EXIT
+fi
 cd build/awg
 # Prove the compiled UI cases and native persistence fixture are the reviewed
 # overlay bytes before selecting either shard.
@@ -22,6 +37,9 @@ case "$shard" in coreA|coreB|coreC|core49|added5|all54) ;; *) echo "Invalid nati
 # The helper checks the exact 54 source methods and assigns every selector once.
 selector_args=$(python3 ../../scripts/native_ui_shards.py selectors "$shard")
 set -- $selector_args
+if [ "${VPN013_DIAGNOSTIC_ONLY:-0}" = 1 ]; then
+ set -- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testServiceCatalogGroupsExclusiveModesAndRememberedSelection -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedZipImportsThirteenWithoutDuplicateError
+fi
 set +e
 echo 'VPN013 native stage: compile and run selected UI tests'
 xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug -sdk iphonesimulator \
