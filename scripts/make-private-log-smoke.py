@@ -3,6 +3,10 @@ source=Path('overlay/Sources/WireGuardKit/WireGuardAdapter.swift').read_text(enc
 start=source.index('    /// Report resolution outcomes without retaining endpoint addresses or error text.')
 end=source.index('    /// Helper method used by network path monitor.',start)
 methods=source[start:end]
+backend_start=source.index('    // Backend messages can include peer identifiers')
+backend_end=source.index('    /// Setup WireGuard log handler.',backend_start)
+backend=source[backend_start:backend_end]
+assert 'WireGuardAdapter.safeBackendLog(swiftString, level: tunnelLogLevel)' in source
 assert methods.count('private func log') == 3
 prefix='''import Foundation
 struct Endpoint { let host: String }
@@ -18,6 +22,7 @@ struct NEPacketTunnelNetworkSettings {
     let mtu: NSNumber?
     let dnsSettings: FakeDNS?
 }
+enum WireGuardLogLevel { case verbose, error }
 enum Level { case verbose, error }
 final class Check {
     var messages: [String] = []
@@ -37,10 +42,15 @@ suffix='''
         precondition(messages.contains(where: { $0.contains("translated=true") }))
         precondition(messages.contains(where: { $0.contains("dnsCount=1") }))
         precondition(messages.contains(where: { $0.contains("count=2/3") }))
-        print("Synthetic endpoint and DNS values excluded from adapter diagnostic messages")
+        let raw = "Peer private-endpoint.example.invalid 198.51.100.29 Sending handshake initiation"
+        let safe = Self.safeBackendLog(raw, level: .verbose)
+        precondition(safe == "VPN handshake initiation sent" && !safe.contains("private-endpoint") && !safe.contains("198.51.100.29"))
+        precondition(Self.safeBackendLog("private-dns-error", level: .error) == "VPN backend error; details withheld")
+        precondition(Self.safeBackendLog("private-unknown", level: .verbose) == "VPN backend diagnostic event")
+        print("Synthetic endpoint, DNS and backend values excluded from adapter diagnostic messages")
     }
 }
 Check().run()
 '''
 Path('build').mkdir(exist_ok=True)
-Path('build/private-log-smoke.swift').write_text(prefix+methods+suffix,encoding='utf-8',newline='\n')
+Path('build/private-log-smoke.swift').write_text(prefix+backend+methods+suffix,encoding='utf-8',newline='\n')

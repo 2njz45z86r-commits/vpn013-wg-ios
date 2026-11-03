@@ -395,6 +395,18 @@ public class WireGuardAdapter {
 
     // MARK: - Private methods
 
+    // Backend messages can include peer identifiers, endpoint addresses and error values.
+    // Translate known events to static text; never forward arbitrary engine output.
+    private static func safeBackendLog(_ message: String, level: WireGuardLogLevel) -> String {
+        if level == .error { return "VPN backend error; details withheld" }
+        if message.contains("Sending handshake initiation") { return "VPN handshake initiation sent" }
+        if message.contains("Received handshake response") { return "VPN handshake response received" }
+        if message.contains("Handshake did not complete") { return "VPN handshake did not complete" }
+        if message.contains("Device started") { return "VPN backend started" }
+        if message.contains("Attaching to interface") { return "VPN backend attaching to interface" }
+        return "VPN backend diagnostic event"
+    }
+
     /// Setup WireGuard log handler.
     private func setupLogHandler() {
         let context = Unmanaged.passUnretained(self).toOpaque()
@@ -407,7 +419,7 @@ public class WireGuardAdapter {
             let swiftString = String(cString: message).trimmingCharacters(in: .newlines)
             let tunnelLogLevel = WireGuardLogLevel(rawValue: logLevel) ?? .verbose
 
-            unretainedSelf.logHandler(tunnelLogLevel, swiftString)
+            unretainedSelf.logHandler(tunnelLogLevel, WireGuardAdapter.safeBackendLog(swiftString, level: tunnelLogLevel))
         }
     }
 
