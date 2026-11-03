@@ -38,7 +38,7 @@ case "$shard" in coreA|coreB|coreC|core49|added5|all54) ;; *) echo "Invalid nati
 selector_args=$(python3 ../../scripts/native_ui_shards.py selectors "$shard")
 set -- $selector_args
 if [ "${VPN013_DIAGNOSTIC_ONLY:-0}" = 1 ]; then
- set -- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testServiceCatalogGroupsExclusiveModesAndRememberedSelection -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedZipImportsThirteenWithoutDuplicateError
+ set -- -only-testing:AutoTunnelUITests/AutoTunnelUITests/testSharedZipImportsThirteenWithoutDuplicateError
 fi
 set +e
 echo 'VPN013 native stage: compile and run selected UI tests'
