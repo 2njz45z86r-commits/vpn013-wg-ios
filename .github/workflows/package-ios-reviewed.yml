@@ -2,6 +2,9 @@ name: Package reviewed VPN013 iPhone client
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'security-review.json'
 
 permissions:
   contents: read
