@@ -1,0 +1,20 @@
+name: Private logging synthetic check (diagnostic only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Execute exact adapter diagnostic logging with synthetic values
+        run: |
+          set -eu
+          python3 scripts/make-private-log-smoke.py
+          swiftc build/private-log-smoke.swift -o build/private-log-smoke
+          build/private-log-smoke
+          echo 'Synthetic isolated logging smoke only; no device VPN test or release.'

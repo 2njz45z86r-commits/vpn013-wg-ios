@@ -515,19 +515,15 @@ public class WireGuardAdapter {
         )
     }
 
-    /// Log DNS resolution results.
-    /// - Parameter resolutionErrors: an array of type `[DNSResolutionError]`.
+    /// Report resolution outcomes without retaining endpoint addresses or error text.
     private func logEndpointResolutionResults(_ resolutionResults: [EndpointResolutionResult?]) {
         for case .some(let result) in resolutionResults {
             switch result {
             case .success((let sourceEndpoint, let resolvedEndpoint)):
-                if sourceEndpoint.host == resolvedEndpoint.host {
-                    self.logHandler(.verbose, "DNS64: mapped \(sourceEndpoint.host) to itself.")
-                } else {
-                    self.logHandler(.verbose, "DNS64: mapped \(sourceEndpoint.host) to \(resolvedEndpoint.host)")
-                }
-            case .failure(let resolutionError):
-                self.logHandler(.error, "Failed to resolve endpoint \(resolutionError.address): \(resolutionError.errorDescription ?? "(nil)")")
+                let translated = sourceEndpoint.host != resolvedEndpoint.host
+                self.logHandler(.verbose, "DNS64 resolution succeeded; translated=\(translated)")
+            case .failure:
+                self.logHandler(.error, "Endpoint DNS resolution failed")
             }
         }
     }
@@ -538,13 +534,13 @@ public class WireGuardAdapter {
         let ipv6Included = networkSettings.ipv6Settings?.includedRoutes?.count ?? 0
         let ipv6Excluded = networkSettings.ipv6Settings?.excludedRoutes?.count ?? 0
         let mtu = networkSettings.mtu?.stringValue ?? "nil"
-        let dnsServers = networkSettings.dnsSettings?.servers.joined(separator: ", ") ?? "nil"
-        self.logHandler(.verbose, "Network settings (\(context)): remote=\(networkSettings.tunnelRemoteAddress) mtu=\(mtu) dns=\(dnsServers) ipv4 inc/exc=\(ipv4Included)/\(ipv4Excluded) ipv6 inc/exc=\(ipv6Included)/\(ipv6Excluded)")
+        let dnsCount = networkSettings.dnsSettings?.servers.count ?? 0
+        self.logHandler(.verbose, "Network settings (\(context)): mtu=\(mtu) dnsCount=\(dnsCount) ipv4 inc/exc=\(ipv4Included)/\(ipv4Excluded) ipv6 inc/exc=\(ipv6Included)/\(ipv6Excluded)")
     }
 
     private func logResolvedEndpoints(_ endpoints: [Endpoint?], context: String) {
-        let endpointStrings = endpoints.map { $0?.stringRepresentation ?? "nil" }
-        self.logHandler(.verbose, "Resolved endpoints (\(context)): \(endpointStrings)")
+        let resolved = endpoints.compactMap { $0 }.count
+        self.logHandler(.verbose, "Resolved endpoints (\(context)): count=\(resolved)/\(endpoints.count)")
     }
 
     /// Helper method used by network path monitor.
