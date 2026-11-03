@@ -23,16 +23,18 @@ ADDED = frozenset({
     "testMoreThanThirteenPersonalServers",
     "testSinglePersonalServerExplainsNoReserve",
     "testCreateAutomaticFromThirteenImportedFixtures",
+    "testSubscriptionDuplicateImportAndRemovalPreserveForeignProfiles",
+    "testCorruptRegistryRejectsPendingRemovalAndImport",
 })
 PREFIX = "AutoTunnelUITests/AutoTunnelUITests/"
-SHARDS = ("coreA", "coreB", "coreC", "added5")
+SHARDS = ("coreA", "coreB", "coreC", "added7")
 # The bound includes simulator compilation and xcresult export. The coreC
 # run 41172679943 finished all 16 tests just before the old 40-minute limit,
 # then timed out before exporting evidence. Keep a finite 45-minute budget.
 MAX_WATCHDOG_SECONDS = 2700
-# The 54 UI method bodies and native WireGuard fixture assertions are bound
+# The 56 UI method bodies and native WireGuard fixture assertions are bound
 # to exact bytes. Any change requires a new source review before release.
-UI_TEST_SOURCE_SHA256 = "481525d14b6ce9eb18a625b3dc4f5dacd0166cd423bfacfd33559205bac9357b"
+UI_TEST_SOURCE_SHA256 = "7c9d2bd6ecc5a192dba23605f549b8843c5e98eab10411188a3ffb4ad592bad3"
 WG_FIXTURE_SHA256 = "042857ae089e4ec98d5b2d3da4e3079c1373656429800b4cda22ddf87f568be1"
 CASE = re.compile(r"Test Case '-\[AutoTunnelUITests\.AutoTunnelUITests (test[A-Za-z0-9_]+)\]' (started|passed|failed)")
 
@@ -53,7 +55,7 @@ def safe_review_member(name):
 def selectors():
     data = (ROOT / "overlay/VPN013/UITests.swift").read_bytes()
     if hashlib.sha256(data).hexdigest() != UI_TEST_SOURCE_SHA256:
-        raise ValueError("reviewed 54-test source changed; inspect its assertions and update the pinned hash")
+        raise ValueError("reviewed 56-test source changed; inspect its assertions and update the pinned hash")
     manager = (ROOT / "overlay/Sources/WireGuardApp/Tunnel/TunnelsManager.swift").read_text(encoding="utf-8")
     start = manager.index("    private func exerciseServiceRoutingFixture()")
     end = manager.index("\n    }\n", start) + 6
@@ -61,8 +63,8 @@ def selectors():
         raise ValueError("reviewed WireGuard persistence fixture changed; inspect its assertions and update the pinned hash")
     source = data.decode("utf-8")
     names = re.findall(r"^\s+func\s+(test[A-Za-z0-9_]+)\s*\(", source, re.M)
-    if len(names) != 54 or len(set(names)) != 54 or not ADDED.issubset(names):
-        raise ValueError("UI source must define exactly 54 unique expected tests, including the five new tests")
+    if len(names) != 56 or len(set(names)) != 56 or not ADDED.issubset(names):
+        raise ValueError("UI source must define exactly 56 unique expected tests, including the seven selected tests")
     return tuple(sorted(names))
 
 
@@ -73,9 +75,9 @@ def expected(shard):
         if len(core) != 49:
             raise ValueError("core shard is not 49 tests")
         return {"coreA": core[:17], "coreB": core[17:33], "coreC": core[33:], "core49": core}[shard]
-    if shard == "added5":
+    if shard == "added7":
         return tuple(name for name in all_names if name in ADDED)
-    if shard == "all54":
+    if shard == "all56":
         return all_names
     raise ValueError("unknown UI shard")
 
@@ -182,11 +184,11 @@ def aggregate(core_a_path, core_b_path, core_c_path, added_path, output, source_
     items = [(shard, from_artifact(path, shard, source_sha, run_id, attempt)) for shard, path in zip(
         SHARDS, (core_a_path, core_b_path, core_c_path, added_path))]
     all_names = [name for _shard, item in items for name in item[0]["passedSelectors"]]
-    if len(all_names) != 54 or set(all_names) != set(selectors()) or len(set(all_names)) != 54:
-        raise ValueError("combined shards do not cover each of the 54 selectors exactly once")
+    if len(all_names) != 56 or set(all_names) != set(selectors()) or len(set(all_names)) != 56:
+        raise ValueError("combined shards do not cover each of the 56 selectors exactly once")
     attachments = sum(len(item[3]) for _shard, item in items)
     merged = {
-        "result": "Passed", "passedTests": 54, "totalTestCount": 54,
+        "result": "Passed", "passedTests": 56, "totalTestCount": 56,
         "failedTests": 0, "skippedTests": 0, "expectedFailures": 0, "testFailures": [],
         "source": "four actual current-source xcresult summaries", "sourceSha": source_sha,
         "runId": run_id, "runAttempt": attempt, "shards": list(SHARDS),
@@ -197,7 +199,7 @@ def aggregate(core_a_path, core_b_path, core_c_path, added_path, output, source_
         ],
     }
     scope = {
-        "iPhoneNativeSuite": 54, "renderedEvidence": "actual XCUITest attachments from four current-source shards",
+        "iPhoneNativeSuite": 56, "renderedEvidence": "actual XCUITest attachments from four current-source shards",
         "attachmentImages": attachments, "physicalIPhoneTested": False,
         "iPadTested": False, "standaloneCapturesAccepted": False,
         "sourceSha": source_sha, "runId": run_id, "runAttempt": attempt,
@@ -214,7 +216,7 @@ def aggregate(core_a_path, core_b_path, core_c_path, added_path, output, source_
                 archive.writestr(f"review/simulator-test-{shard}.summary.json", diagnostic)
             for name, data in images.items():
                 archive.writestr(f"review/flow/{shard}/{Path(name).name}", data)
-    print(f"Native UI aggregate: 54/54 passed once; source={source_sha}; run={run_id}; attachments={attachments}", flush=True)
+    print(f"Native UI aggregate: 56/56 passed once; source={source_sha}; run={run_id}; attachments={attachments}", flush=True)
 
 
 def verify_combined(path, source_sha, run_id, attempt, review=None, require_current_git=True):
@@ -241,7 +243,7 @@ def verify_combined(path, source_sha, run_id, attempt, review=None, require_curr
         summary = json.loads(raw_summary)
         scope = json.loads(archive.read("review/iphone-only-scope.json"))
         if any(summary.get(key) != value for key, value in {
-            "result": "Passed", "passedTests": 54, "totalTestCount": 54,
+            "result": "Passed", "passedTests": 56, "totalTestCount": 56,
             "failedTests": 0, "skippedTests": 0, "expectedFailures": 0, "testFailures": [],
             "source": "four actual current-source xcresult summaries", "sourceSha": source_sha,
             "runId": run_id, "runAttempt": attempt, "shards": list(SHARDS),
@@ -251,7 +253,7 @@ def verify_combined(path, source_sha, run_id, attempt, review=None, require_curr
         if not isinstance(rows, list) or len(rows) != len(SHARDS):
             raise ValueError("combined simulator rows are incomplete")
         if any(scope.get(key) != value for key, value in {
-            "iPhoneNativeSuite": 54, "physicalIPhoneTested": False, "iPadTested": False,
+            "iPhoneNativeSuite": 56, "physicalIPhoneTested": False, "iPadTested": False,
             "standaloneCapturesAccepted": False, "sourceSha": source_sha,
             "runId": run_id, "runAttempt": attempt,
         }.items()):
@@ -285,7 +287,7 @@ def verify_combined(path, source_sha, run_id, attempt, review=None, require_curr
                 raise ValueError(f"{shard}: invalid XCUITest image")
             image_count += len(images)
             seen.extend(names)
-        if image_count != scope.get("attachmentImages") or len(seen) != 54 or len(set(seen)) != 54 or set(seen) != set(selectors()):
+        if image_count != scope.get("attachmentImages") or len(seen) != 56 or len(set(seen)) != 56 or set(seen) != set(selectors()):
             raise ValueError("combined attachments or selector coverage is incomplete")
         if review is not None:
             if review.is_symlink():
@@ -305,7 +307,7 @@ def verify_combined(path, source_sha, run_id, attempt, review=None, require_curr
                 if not target.resolve().is_relative_to(root):
                     raise ValueError("combined artifact target changed outside review directory")
                 target.write_bytes(archive.read(name))
-    print(f"Same-run native UI artifact verified: 54/54, source={source_sha}, run={run_id}, attempt={attempt}, images={image_count}", flush=True)
+    print(f"Same-run native UI artifact verified: 56/56, source={source_sha}, run={run_id}, attempt={attempt}, images={image_count}", flush=True)
     return raw_summary
 
 
@@ -437,9 +439,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     choose = sub.add_parser("selectors")
-    choose.add_argument("shard", choices=SHARDS + ("core49", "all54"))
+    choose.add_argument("shard", choices=SHARDS + ("core49", "all56"))
     verify_cmd = sub.add_parser("verify")
-    verify_cmd.add_argument("shard", choices=SHARDS + ("core49", "all54"))
+    verify_cmd.add_argument("shard", choices=SHARDS + ("core49", "all56"))
     verify_cmd.add_argument("--review", type=Path, default=ROOT / "build/review")
     verify_cmd.add_argument("--log", type=Path, default=ROOT / "build/simulator-test.log")
     combine = sub.add_parser("aggregate")

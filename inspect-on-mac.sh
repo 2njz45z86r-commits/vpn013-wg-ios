@@ -35,9 +35,9 @@ cmp -s VPN013/UITests.swift ../../overlay/VPN013/UITests.swift
 cmp -s Sources/WireGuardApp/Tunnel/TunnelsManager.swift ../../overlay/Sources/WireGuardApp/Tunnel/TunnelsManager.swift
 cmp -s Sources/WireGuardApp/Tunnel/MockTunnels.swift ../../overlay/Sources/WireGuardApp/Tunnel/MockTunnels.swift
 cmp -s Sources/WireGuardApp/ZipArchive/ZipImporter.swift ../../overlay/Sources/WireGuardApp/ZipArchive/ZipImporter.swift
-shard=${VPN013_UI_SHARD:-all54}
-case "$shard" in coreA|coreB|coreC|core49|added5|all54) ;; *) echo "Invalid native UI shard" >&2; exit 2 ;; esac
-# The helper checks the exact 54 source methods and assigns every selector once.
+shard=${VPN013_UI_SHARD:-all56}
+case "$shard" in coreA|coreB|coreC|core49|added7|all56) ;; *) echo "Invalid native UI shard" >&2; exit 2 ;; esac
+# The helper checks the exact 56 source methods and assigns every selector once.
 selector_args=$(python3 ../../scripts/native_ui_shards.py selectors "$shard")
 set -- $selector_args
 set +e
@@ -72,7 +72,7 @@ PY
 if [ "$result" -eq 0 ]; then
  python3 scripts/native_ui_shards.py verify "$shard"
 fi
-if [ "$result" -eq 0 ] && [ "$shard" = all54 ] && [ "${VPN013_IPHONE_ONLY:-0}" != 1 ]; then
+if [ "$result" -eq 0 ] && [ "$shard" = all56 ] && [ "${VPN013_IPHONE_ONLY:-0}" != 1 ]; then
  python3 capture-ios-simulators.py
 elif [ "$result" -eq 0 ]; then
  export VPN013_UI_SHARD="$shard"
@@ -82,7 +82,7 @@ from pathlib import Path
 flow=Path('build/review/flow')
 images=[p for p in flow.glob('*.png') if p.read_bytes()[:8]==b'\x89PNG\r\n\x1a\n']
 assert images, 'Real XCUITest attachments are required'
-Path('build/review/iphone-only-scope.json').write_text(json.dumps({'iPhoneNativeSuite':{'coreA':17,'coreB':16,'coreC':16,'core49':49,'added5':5,'all54':54}[__import__('os').environ['VPN013_UI_SHARD']],'renderedEvidence':'actual XCUITest attachments','attachmentImages':len(images),'physicalIPhoneTested':False,'iPadTested':False,'standaloneCapturesAccepted':False}))
+Path('build/review/iphone-only-scope.json').write_text(json.dumps({'iPhoneNativeSuite':{'coreA':17,'coreB':16,'coreC':16,'core49':49,'added7':7,'all56':56}[__import__('os').environ['VPN013_UI_SHARD']],'renderedEvidence':'actual XCUITest attachments','attachmentImages':len(images),'physicalIPhoneTested':False,'iPadTested':False,'standaloneCapturesAccepted':False}))
 PY
 fi
 test "$result" -eq 0

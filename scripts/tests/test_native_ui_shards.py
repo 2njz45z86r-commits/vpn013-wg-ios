@@ -62,22 +62,22 @@ class NativeUIShardsTests(unittest.TestCase):
 
     def test_real_source_pin_fails_closed_when_not_reviewed(self):
         raw = (gate.ROOT / "overlay/VPN013/UITests.swift").read_bytes()
-        if hashlib.sha256(raw).hexdigest() != gate.UI_TEST_SOURCE_SHA256:
-            with self.assertRaisesRegex(ValueError, "reviewed 54-test source changed"):
-                REAL_SELECTORS()
-        else:
-            self.assertEqual(len(REAL_SELECTORS()), 54)
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), gate.UI_TEST_SOURCE_SHA256)
+        actual = REAL_SELECTORS()
+        self.assertEqual(len(actual), 56)
+        self.assertIn("testSubscriptionDuplicateImportAndRemovalPreserveForeignProfiles", actual)
+        self.assertIn("testCorruptRegistryRejectsPendingRemovalAndImport", actual)
 
     def test_exact_partition_matches_current_source(self):
         parts = [gate.expected(shard) for shard in gate.SHARDS]
-        self.assertEqual([len(part) for part in parts], [17, 16, 16, 5])
+        self.assertEqual([len(part) for part in parts], [17, 16, 16, 7])
         combined = [name for part in parts for name in part]
         self.assertEqual(len(combined), len(set(combined)))
-        self.assertEqual(set(combined), set(gate.expected("all54")))
+        self.assertEqual(set(combined), set(gate.expected("all56")))
         self.assertEqual(tuple(name for part in parts[:3] for name in part), gate.expected("core49"))
 
     def test_log_rejects_missing_duplicate_and_failed_selectors(self):
-        names = gate.expected("added5")
+        names = gate.expected("added7")
         line = lambda name, outcome="passed": f"Test Case '-[AutoTunnelUITests.AutoTunnelUITests {name}]' {outcome} (1.0 seconds)."
         good = "\n".join(line(name) for name in names)
         gate.exact_log(good, names)
@@ -86,12 +86,14 @@ class NativeUIShardsTests(unittest.TestCase):
                 gate.exact_log(bad, names)
 
     def test_summary_rejects_skips_and_wrong_count(self):
-        gate.exact_summary(summary(5), 5)
-        for field, value in (("skippedTests", 1), ("totalTestCount", 4), ("result", "Failed")):
-            invalid = summary(5)
+        gate.exact_summary(summary(7), 7)
+        with self.assertRaises(ValueError):
+            gate.exact_summary(summary(54), 56)
+        for field, value in (("skippedTests", 1), ("totalTestCount", 6), ("result", "Failed")):
+            invalid = summary(7)
             invalid[field] = value
             with self.assertRaises(ValueError):
-                gate.exact_summary(invalid, 5)
+                gate.exact_summary(invalid, 7)
 
     def test_watchdog_bound_rejects_invalid_budget_before_starting_process(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -182,18 +184,18 @@ class NativeUIShardsTests(unittest.TestCase):
             root = Path(folder)
             core_a, core_b, core_c, added, output = (root / name for name in ("a.zip", "b.zip", "c.zip", "added.zip", "combined.zip"))
             for path, shard in zip((core_a, core_b, core_c), gate.SHARDS[:3]): artifact(path, shard)
-            artifact(added, "added5")
+            artifact(added, "added7")
             with contextlib.redirect_stdout(io.StringIO()):
                 gate.aggregate(core_a, core_b, core_c, added, output, SHA, RUN, ATTEMPT)
             with zipfile.ZipFile(output) as archive:
                 merged = json.loads(archive.read("review/test-summary.json"))
-                self.assertEqual(merged["passedTests"], 54)
-                self.assertEqual(merged["totalTestCount"], 54)
+                self.assertEqual(merged["passedTests"], 56)
+                self.assertEqual(merged["totalTestCount"], 56)
                 self.assertEqual(len([n for n in archive.namelist() if n.endswith(".png")]), 4)
             with contextlib.redirect_stdout(io.StringIO()):
                 verified = gate.verify_combined(output, SHA, RUN, ATTEMPT,
                     review=root / "review", require_current_git=False)
-            self.assertEqual(json.loads(verified)["passedTests"], 54)
+            self.assertEqual(json.loads(verified)["passedTests"], 56)
             self.assertEqual((root / "review/test-summary.json").read_bytes(), verified)
             self.assertEqual(len(list((root / "review/flow").rglob("*.png"))), 4)
             for bad_sha, bad_run, bad_attempt in (("b" * 40, RUN, ATTEMPT), (SHA, "999", ATTEMPT), (SHA, RUN, "2")):
@@ -201,13 +203,13 @@ class NativeUIShardsTests(unittest.TestCase):
                     gate.verify_combined(output, bad_sha, bad_run, bad_attempt, require_current_git=False)
             for source, names, attempt in (
                 ("b" * 40, None, ATTEMPT),
-                (SHA, list(gate.expected("added5"))[:-1] + [gate.expected("coreA")[0]], ATTEMPT),
+                (SHA, list(gate.expected("added7"))[:-1] + [gate.expected("coreA")[0]], ATTEMPT),
                 (SHA, None, "2"),
             ):
-                artifact(added, "added5", source=source, names=names, attempt=attempt)
+                artifact(added, "added7", source=source, names=names, attempt=attempt)
                 with self.assertRaises(ValueError):
                     gate.aggregate(core_a, core_b, core_c, added, output, SHA, RUN, ATTEMPT)
-            artifact(added, "added5")
+            artifact(added, "added7")
             with self.assertRaises((ValueError, FileNotFoundError)):
                 gate.aggregate(core_a, root / "missing.zip", core_c, added, output, SHA, RUN, ATTEMPT)
             with self.assertRaises(ValueError):
@@ -221,12 +223,12 @@ class NativeUIShardsTests(unittest.TestCase):
             root = Path(folder)
             core_a, core_b, core_c, added, combined = (root / name for name in ("a.zip", "b.zip", "c.zip", "added.zip", "combined.zip"))
             for path, shard in zip((core_a, core_b, core_c), gate.SHARDS[:3]): artifact(path, shard)
-            artifact(added, "added5")
+            artifact(added, "added7")
             with contextlib.redirect_stdout(io.StringIO()):
                 gate.aggregate(core_a, core_b, core_c, added, combined, SHA, RUN, ATTEMPT)
             with zipfile.ZipFile(combined) as archive:
                 values = {name: archive.read(name) for name in archive.namelist()}
-            for missing in ("review/shard-proof-coreA.json", "review/shard-proof-coreB.json", "review/shard-proof-coreC.json", "review/flow/added5/fixture.png"):
+            for missing in ("review/shard-proof-coreA.json", "review/shard-proof-coreB.json", "review/shard-proof-coreC.json", "review/flow/added7/fixture.png"):
                 path = root / "tampered.zip"
                 with zipfile.ZipFile(path, "w") as archive:
                     for name, data in values.items():
@@ -240,7 +242,7 @@ class NativeUIShardsTests(unittest.TestCase):
             root = Path(folder)
             core_a, core_b, core_c, added, combined = (root / name for name in ("a.zip", "b.zip", "c.zip", "added.zip", "combined.zip"))
             for path, shard in zip((core_a, core_b, core_c), gate.SHARDS[:3]): artifact(path, shard)
-            artifact(added, "added5")
+            artifact(added, "added7")
             with contextlib.redirect_stdout(io.StringIO()):
                 gate.aggregate(core_a, core_b, core_c, added, combined, SHA, RUN, ATTEMPT)
             with zipfile.ZipFile(combined) as archive:
@@ -297,7 +299,7 @@ class NativeUIShardsTests(unittest.TestCase):
             root = Path(folder)
             core_a, core_b, core_c, added, combined = (root / name for name in ("a.zip", "b.zip", "c.zip", "added.zip", "combined.zip"))
             for path, shard in zip((core_a, core_b, core_c), gate.SHARDS[:3]): artifact(path, shard)
-            artifact(added, "added5")
+            artifact(added, "added7")
             with contextlib.redirect_stdout(io.StringIO()):
                 gate.aggregate(core_a, core_b, core_c, added, combined, SHA, RUN, ATTEMPT)
             destination, outside = root / "review", root / "outside"

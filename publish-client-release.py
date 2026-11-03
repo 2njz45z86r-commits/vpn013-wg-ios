@@ -13,7 +13,7 @@ assert Path('build/review/test-summary.json').read_bytes() == combined_summary, 
 verification = json.loads(Path('build/review/bundle-verification.json').read_text())
 ipa = Path('build/VPN013AWG-unsigned.ipa')
 summary = json.loads(Path('build/review/test-summary.json').read_text())
-assert ipa.is_file() and summary.get('result') == 'Passed' and summary.get('failedTests') == 0 and summary.get('passedTests') == 54 and summary.get('totalTestCount') == 54 and summary.get('skippedTests', 0) == 0 and summary.get('testFailures') == [], 'Do not publish failed, incomplete or unverified native tests'
+assert ipa.is_file() and summary.get('result') == 'Passed' and summary.get('failedTests') == 0 and summary.get('passedTests') == 56 and summary.get('totalTestCount') == 56 and summary.get('skippedTests', 0) == 0 and summary.get('testFailures') == [], 'Do not publish failed, incomplete or unverified native tests'
 assert verification.get('appID') == 'com.vpn013.awg' and verification.get('extensionID') == 'com.vpn013.awg.network-extension'
 assert verification.get('adHocIntegrityChecked') is True and verification.get('customerKeysIncluded') is False
 with zipfile.ZipFile(ipa) as archive:
