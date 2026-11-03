@@ -139,13 +139,26 @@ struct ClientAppRelease: Codable {
     let downloadURL: String
     let sha256: String
     let notes: String
+    private static func validDownloadPath(_ url: URL) -> Bool {
+        let prefix = "/2njz45z86r-commits/vpn013-wg-ios/releases/download/"
+        guard url.path.hasPrefix(prefix),
+              URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath == url.path else { return false }
+        let parts = url.path.dropFirst(prefix.count).split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts.allSatisfy({ (1...128).contains($0.utf8.count) }) else { return false }
+        let asciiLettersAndDigits = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        let safeCharacters = asciiLettersAndDigits.union(CharacterSet(charactersIn: "._-"))
+        return parts.allSatisfy { part in
+            guard let first = part.unicodeScalars.first, asciiLettersAndDigits.contains(first) else { return false }
+            return part.unicodeScalars.allSatisfy { safeCharacters.contains($0) }
+        } && parts[1].hasSuffix(".ipa")
+    }
     func validate() throws {
         guard schema == 1, app == "vpn013-wg", platform == "ios", build > 0,
               version.range(of: "^[0-9]+[.][0-9]+[.][0-9]+$", options: .regularExpression) != nil,
               ClientUpdateProtocol.validHash(sha256), notes.count <= 2000,
               let url = URL(string: downloadURL), url.scheme == "https", url.host == "github.com", url.user == nil, url.password == nil,
               url.port == nil || url.port == 443, url.query == nil, url.fragment == nil,
-              url.path.hasPrefix("/2njz45z86r-commits/vpn013-wg-ios/releases/download/"), url.path.hasSuffix(".ipa") else { throw ClientUpdateError.invalidResponse }
+              Self.validDownloadPath(url) else { throw ClientUpdateError.invalidResponse }
     }
     func isNewer(version current: String, build currentBuild: Int) -> Bool {
         let comparison = version.compare(current, options: .numeric)

@@ -75,7 +75,11 @@ import Foundation
             release.downloadURL.replacingOccurrences(of:"github.com/",with:"user@github.com/"),
             release.downloadURL.replacingOccurrences(of:"github.com/",with:"github.com.example.com/"),
             release.downloadURL.replacingOccurrences(of:"https://",with:"http://"),
-            release.downloadURL.replacingOccurrences(of:"2njz45z86r-commits/vpn013-wg-ios",with:"other/project")
+            release.downloadURL.replacingOccurrences(of:"2njz45z86r-commits/vpn013-wg-ios",with:"other/project"),
+            "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/../../../../other/repo/example.ipa",
+            "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/%2e%2e/%2e%2e/other/repo/example.ipa",
+            "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/v1%2Fextra/example.ipa",
+            "https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/v1/example%2eipa"
         ] {
             fails { try ClientAppRelease(schema:1,app:"vpn013-wg",platform:"ios",version:release.version,build:release.build,downloadURL:address,sha256:release.sha256,notes:"Synthetic release").validate() }
         }
