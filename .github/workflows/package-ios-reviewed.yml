@@ -36,7 +36,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           python3 scripts/security_release_gate.py
-          python3 -m unittest scripts.tests.test_verify_owner_ipa scripts.tests.test_verify_owner_codesign -q
+          python3 -m unittest scripts.tests.test_verify_owner_ipa scripts.tests.test_verify_owner_codesign scripts.tests.test_verify_public_ipa -q
       - name: Build iPhone app and VPN extension for owner signing
         run: sh build-on-mac.sh
       - name: Verify package contents and record provenance
