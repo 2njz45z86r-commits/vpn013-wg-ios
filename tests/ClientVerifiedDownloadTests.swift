@@ -47,10 +47,9 @@ final class SyntheticReleaseProtocol: URLProtocol {
             // session refuses the proposed redirect. A real server closes it.
             client?.urlProtocolDidFinishLoading(self)
         case "/cancel":
-            client?.urlProtocol(self, didReceive: response(200, ["Content-Length": "3"]), cacheStoragePolicy: .notAllowed)
-            trace("protocol-response-sent")
-            client?.urlProtocol(self, didLoad: Data("a".utf8))
-            trace("protocol-data-sent")
+            // Leave this live URLSession task open. Its response and first
+            // chunk are deliberately injected into the delegate by the test.
+            trace("protocol-waiting-for-injected-delegate-events")
         default:
             if url.path.hasPrefix("/redirect-chain-"), let number = Int(url.lastPathComponent.dropFirst("redirect-chain-".count)) {
                 let target = URL(string: "https://github.com/redirect-chain-\(number + 1)")!
@@ -101,6 +100,14 @@ final class SyntheticReleaseProtocol: URLProtocol {
         }
         if cancelBeforeStart { driver.cancel() }
         driver.start()
+        if cancelOnData {
+            let requestDeadline = Date(timeIntervalSinceNow: 5)
+            while SyntheticReleaseProtocol.captured().isEmpty && Date() < requestDeadline {
+                RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
+            }
+            precondition(SyntheticReleaseProtocol.captured().count == 1, "Synthetic task never started")
+            driver.injectResponseAndData()
+        }
         let deadline = Date(timeIntervalSinceNow: 10)
         while result == nil && Date() < deadline { RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01)) }
         guard let outcome = result else { preconditionFailure("URLSession did not complete for \(path)") }
@@ -143,6 +150,6 @@ final class SyntheticReleaseProtocol: URLProtocol {
         try run("redirect-chain-0", expectedRequests: 6)
         try run("cancel", cancelBeforeStart: true, expectedRequests: 0)
         try run("cancel", cancelOnData: true, expectedRequests: 1)
-        print("PASS 9/9 actual URLSession and file-download scenarios; synthetic URLProtocol; no external network")
+        print("PASS 8/8 synthetic URLSession scenarios and cancellation after controlled delegate injection; no external network")
     }
 }

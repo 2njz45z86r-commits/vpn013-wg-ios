@@ -72,7 +72,7 @@ swiftc -parse-as-library -swift-version 5 VPN013/ClientUpdatesViewController.swi
 ../../build/test-release-verification > ../../build/review/release-verification-tests.txt
 swiftc -D VPN013_DOWNLOAD_TESTS -parse-as-library -swift-version 5 VPN013/ClientUpdatesViewController.swift ../../tests/ClientVerifiedDownloadTests.swift -o ../../build/test-verified-download
 ../../build/test-verified-download > ../../build/review/verified-download-tests.txt
-grep -Fx 'PASS 9/9 actual URLSession and file-download scenarios; synthetic URLProtocol; no external network' ../../build/review/verified-download-tests.txt
+grep -Fx 'PASS 8/8 synthetic URLSession scenarios and cancellation after controlled delegate injection; no external network' ../../build/review/verified-download-tests.txt
 cat ../../build/review/release-verification-tests.txt
 python3 -c 'import json,pathlib; p=pathlib.Path("../../build/review"); (p/"release-verification-tests.json").write_text(json.dumps({"passed":True,"output":(p/"release-verification-tests.txt").read_text()}))'
 swiftc VPN013/ConnectionSummary.swift VPN013/tests/ConnectionSummaryTests.swift -o ../../build/test-connection-summary

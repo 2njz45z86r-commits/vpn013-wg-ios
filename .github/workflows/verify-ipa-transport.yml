@@ -21,4 +21,4 @@ jobs:
           "$RUNNER_TEMP/release-verification"
           swiftc -D VPN013_DOWNLOAD_TESTS -parse-as-library -swift-version 5 overlay/VPN013/ClientUpdatesViewController.swift tests/ClientVerifiedDownloadTests.swift -o "$RUNNER_TEMP/verified-download"
           "$RUNNER_TEMP/verified-download" | tee "$RUNNER_TEMP/verified-download.log"
-          grep -Fx 'PASS 9/9 actual URLSession and file-download scenarios; synthetic URLProtocol; no external network' "$RUNNER_TEMP/verified-download.log"
+          grep -Fx 'PASS 8/8 synthetic URLSession scenarios and cancellation after controlled delegate injection; no external network' "$RUNNER_TEMP/verified-download.log"
