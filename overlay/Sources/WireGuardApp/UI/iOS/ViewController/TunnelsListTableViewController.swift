@@ -77,6 +77,14 @@ class TunnelsListTableViewController: UIViewController {
     private var currentRuntimeStatistics: VPN013ConnectionSnapshot.Statistics?
     private var currentPingGeneration = UUID()
     private var currentPingIsRunning = false
+    #if DEBUG && targetEnvironment(simulator)
+    private var currentPingTrace: [String] = []
+    private func traceCurrentPing(_ event: String) {
+        currentPingTrace.append(event)
+        currentPingTrace = Array(currentPingTrace.suffix(60))
+        currentPingLabel.accessibilityValue = currentPingTrace.joined(separator: ",")
+    }
+    #endif
     private let emptyStateLabel = TunnelsListTableViewController.makeLabel(style: .body, color: VPN013Theme.secondaryText)
     private let emptyStateStack = UIStackView()
     private let emptyStateContainer = UIView()
@@ -739,6 +747,9 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     private func clearCurrentConnectionInfo() {
+        #if DEBUG && targetEnvironment(simulator)
+        traceCurrentPing("clear")
+        #endif
         cancelCurrentPing()
         currentRuntimeStatistics = nil
         summaryTrafficSampler.reset()
@@ -758,6 +769,9 @@ class TunnelsListTableViewController: UIViewController {
             configuredHosts: configuration?.peers.compactMap { $0.endpoint.map { String(describing: $0.host) } } ?? [],
             runtime: runtime)
         if currentPingTarget?.targetIdentity != target?.targetIdentity {
+            #if DEBUG && targetEnvironment(simulator)
+            traceCurrentPing("target-change")
+            #endif
             cancelCurrentPing()
             currentPingLabel.text = "Пинг адреса · —"
         }
@@ -848,6 +862,9 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     private func cancelCurrentPing() {
+        #if DEBUG && targetEnvironment(simulator)
+        traceCurrentPing("cancel")
+        #endif
         currentPingGeneration = UUID()
         currentPingCoordinator.cancel()
         currentPingIsRunning = false
@@ -857,11 +874,22 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     @objc private func currentPingTapped() {
+        #if DEBUG && targetEnvironment(simulator)
+        traceCurrentPing("tap")
+        #endif
         if currentPingIsRunning {
             cancelCurrentPing(); currentPingLabel.text = "Пинг адреса · отменено"; return
         }
         guard let tunnel = automaticSummaryTunnel, tunnel.status == .active,
-              let snapshot = currentPingTarget, !snapshot.hosts.isEmpty else { return }
+              let snapshot = currentPingTarget, !snapshot.hosts.isEmpty else {
+            #if DEBUG && targetEnvironment(simulator)
+            traceCurrentPing("guard-failed")
+            #endif
+            return
+        }
+        #if DEBUG && targetEnvironment(simulator)
+        traceCurrentPing("start")
+        #endif
         let stamp = UUID(); currentPingGeneration = stamp
         let identity = snapshot.targetIdentity
         currentPingIsRunning = true
@@ -871,11 +899,17 @@ class TunnelsListTableViewController: UIViewController {
         currentPingButton.accessibilityLabel = "Остановить пинг текущего сервера"
         var results: [EndpointPingResult] = []
         currentPingCoordinator.start(hosts: snapshot.hosts, update: { [weak self] _, result in
+            #if DEBUG && targetEnvironment(simulator)
+            self?.traceCurrentPing("update")
+            #endif
             guard let self = self, self.currentPingGeneration == stamp,
                   self.currentPingTarget?.targetIdentity == identity, self.automaticSummaryTunnel === tunnel,
                   tunnel.status == .active else { return }
             results.append(result)
         }, completion: { [weak self] in
+            #if DEBUG && targetEnvironment(simulator)
+            self?.traceCurrentPing("complete")
+            #endif
             guard let self = self, self.currentPingGeneration == stamp,
                   self.currentPingTarget?.targetIdentity == identity, self.automaticSummaryTunnel === tunnel,
                   tunnel.status == .active else { return }

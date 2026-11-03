@@ -736,7 +736,7 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertGreaterThanOrEqual(ping.frame.height + 0.001, 44, "Allow only floating-point coordinate rounding; the 44-point target remains required")
         ping.tap()
         let result = app.staticTexts.matching(NSPredicate(format:"identifier == %@ AND label ENDSWITH %@", "vpn013.current-ping-result", "мс")).firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout:10), "Current-server button must show a real loopback echo result")
+        XCTAssertTrue(result.waitForExistence(timeout:10), "Current-server button must show a real loopback echo result; trace: \(String(describing: app.staticTexts["vpn013.current-ping-result"].value))")
         capture("20-auto-first-current-member-real-loopback-ping-synthetic-vpn")
         closeConnectionPopup(app)
         XCTAssertEqual(auto.switches.firstMatch.value as? String, "1", "Current-server Ping cannot switch off Auto")
