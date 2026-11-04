@@ -884,6 +884,14 @@ final class AutoTunnelUITests:XCTestCase {
         let readyToConnect = XCTNSPredicateExpectation(predicate: NSPredicate(format:"hittable == true AND enabled == true AND value == '0'"), object: manualSwitch)
         XCTAssertEqual(XCTWaiter.wait(for:[readyToConnect], timeout:20), .completed, "The synthetic switch must be ready and off before activation")
         manualSwitch.tap()
+        // A simulator system banner (for example an Apple Intelligence notice)
+        // can swallow the first tap. Retry only when the switch is still off and
+        // hittable; an app that fails to connect still fails the wait below.
+        let firstTap = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: manualSwitch)
+        if XCTWaiter.wait(for:[firstTap], timeout:8) != .completed,
+           (manualSwitch.value as? String) == "0", manualSwitch.isHittable {
+            manualSwitch.tap()
+        }
         let connected = XCTNSPredicateExpectation(predicate: NSPredicate(format:"value == '1'"), object: manualSwitch)
         let connectedResult = XCTWaiter.wait(for:[connected], timeout:20)
         XCTAssertEqual(connectedResult, .completed, "The synthetic connection must become active before the popup is opened")
