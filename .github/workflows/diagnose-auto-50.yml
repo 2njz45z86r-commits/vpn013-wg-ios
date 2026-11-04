@@ -1,0 +1,98 @@
+name: Diagnose fifty-server Auto on iPhone simulator
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/diagnose-auto-50.yml'
+permissions:
+  contents: read
+jobs:
+  focus:
+    runs-on: macos-26
+    timeout-minutes: 50
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build app and VPN extension without publishing
+        run: sh build-on-mac.sh
+      - name: Run actual 30 50 51 Auto XCTest on iPhone simulator
+        timeout-minutes: 25
+        run: |
+          set -eu
+          export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
+          if [ -d "$PWD/build/toolchain/go/bin" ]; then export PATH="$PWD/build/toolchain/go/bin:$PATH"; fi
+          python3 scripts/native_ui_shards.py selectors coreC > "$RUNNER_TEMP/coreC-selectors.txt"
+          grep -F 'testThirtyAndFiftyPersonalServers' "$RUNNER_TEMP/coreC-selectors.txt" > /dev/null
+          device=$(xcrun simctl list devices available -j | python3 scripts/select_iphone_simulator.py)
+          echo "Diagnostic: booting selected iPhone simulator"
+          xcrun simctl boot "$device" || true
+          xcrun simctl bootstatus "$device" -b
+          echo "Diagnostic: simulator booted"
+          # Same disposable simulator LocalAuthentication fixture as the full
+          # coreC suite. Never alter the application authentication code.
+          test "${GITHUB_ACTIONS:-}" = true
+          xcrun simctl spawn "$device" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1
+          xcrun simctl spawn "$device" notifyutil -p com.apple.BiometricKit.enrollmentChanged
+          (
+            i=0
+            while [ "$i" -lt 1350 ]; do
+              xcrun simctl spawn "$device" notifyutil -p com.apple.BiometricKit_Sim.pearl.match >/dev/null 2>&1 || true
+              i=$((i+1)); sleep 2
+            done
+          ) &
+          biometric_pid=$!
+          trap 'kill "$biometric_pid" 2>/dev/null || true' EXIT
+          cmp -s build/awg/VPN013/UITests.swift overlay/VPN013/UITests.swift
+          cd build/awg
+          echo "Diagnostic: invoking focused xcodebuild test"
+          set +e
+          xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
+            -only-testing:AutoTunnelUITests/AutoTunnelUITests/testThirtyAndFiftyPersonalServers \
+            -derivedDataPath ../Auto50FocusDerivedData -resultBundlePath ../Auto50Focus.xcresult \
+            CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= test > ../auto-50-focus.log 2>&1
+          result=$?
+          set -e
+          cd ../..
+          grep -E 'Test Case .* (started|passed|failed)|error:|TEST (FAILED|SUCCEEDED)' build/auto-50-focus.log || true
+          if [ -d build/Auto50Focus.xcresult ]; then
+            xcrun xcresulttool get test-results summary --path build/Auto50Focus.xcresult > build/review/auto-50-focus-summary.json || true
+            ditto -c -k --keepParent build/Auto50Focus.xcresult build/review/auto-50-focus-result.zip
+          fi
+          test "$result" -eq 0
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.native_ui_shards import exact_log, exact_summary
+          name='testThirtyAndFiftyPersonalServers'
+          summary=json.loads(Path('build/review/auto-50-focus-summary.json').read_text())
+          exact_summary(summary, 1)
+          exact_log(Path('build/auto-50-focus.log').read_text(errors='replace'), [name])
+          print('PASS: one actual 30 50 51 server Auto XCTest, zero failures and zero skips')
+          PY
+      - name: Save bounded test-log summary after success, failure, or step timeout
+        if: always()
+        run: |
+          mkdir -p build/review
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          source = Path('build/auto-50-focus.log')
+          if source.exists():
+              selected = [line for line in source.read_text(errors='replace').splitlines()
+                          if re.search(r'Test Case .* (started|passed|failed)|error:|TEST (FAILED|SUCCEEDED)', line)]
+              Path('build/review/auto-50-log-summary.txt').write_text('\n'.join(selected[-200:]) + '\n')
+          PY
+      - name: Retain focused result summary without an IPA
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vpn013-service-auto-50-focus-${{ github.run_id }}
+          path: |
+            build/review/auto-50-focus-summary.json
+            build/review/auto-50-focus-result.zip
+            build/review/auto-50-log-summary.txt
+          if-no-files-found: warn
