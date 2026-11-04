@@ -1,0 +1,18 @@
+{
+  "device.go": {
+    "beforeSHA256": "7a2c50490d6ab69e79f5dbff8a35332da4577c78ddb333abc6d12bec79c0913e",
+    "afterSHA256": "8b2a86be4f7c99003f1c425c07bd48c1f9fe7de386ee475e3d9cba834764f208"
+  },
+  "receive.go": {
+    "beforeSHA256": "50d2c659ade242dddb2c7cfc063774b95e6b9be12eaf39bc75af8b9afa00555d",
+    "afterSHA256": "ea79110c04cef0ad194cbd55d9853539b653a454df4e3ae59d279065fee40bef"
+  },
+  "vpn013_experimental_zero_s4.go": {
+    "beforeSHA256": null,
+    "afterSHA256": "8a5329cf24dec559b3a637c293e4d0e398d7429adb0a8749353249613a1c428c"
+  },
+  "vpn013_zero_s4_recovery_test.go": {
+    "beforeSHA256": null,
+    "afterSHA256": "7ddab9585df5f1a76605d6a13e2edd37dd0d370443713da0bc762e08a916bf27"
+  }
+}

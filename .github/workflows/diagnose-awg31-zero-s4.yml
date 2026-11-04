@@ -1,0 +1,36 @@
+name: Diagnose experimental AWG zero-S4 on macOS
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/ios-awg31-zero-s4-lab-20261104]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile iPhone app and extension with the lab-only AWG candidate
+        run: sh build-on-mac.sh
+      - name: Verify real execution of the new host tests
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('build/review/proxy-tun-provenance.json').read_text())
+          t=p['primaryAWG']['primaryHostTests']
+          wanted={'TestVPN013SyntheticZeroS4ProtectedHeaderFeasibility',
+                  'TestVPN013LabZeroS4AuthenticatedAndBounded','TestVPN013LabRecoveryRateGate'}
+          assert t['exit']==0 and not t['failedOrSkipped'] and wanted.issubset(set(t['passedTests']))
+          print('PASS: three lab AWG tests executed on macOS; iPhone runtime not tested')
+          PY
+      - name: Retain provenance only, never the experimental IPA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vpn013-awg31-zero-s4-diagnostic-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: build/review/proxy-tun-provenance.json

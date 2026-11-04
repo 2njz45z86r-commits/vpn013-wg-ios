@@ -60,6 +60,46 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
         staged_legacy[target] = raw
     for target, raw in staged_legacy.items():
         target.write_bytes(raw)
+    # Diagnostic-only candidate: verify the exact post-legacy source before
+    # staging the experimental AWG 3.1 zero-S4 fallback into this owned copy.
+    # This branch is not a release and does not modify the shared module cache.
+    lab_dir = Path(__file__).with_name('awg31-zero-s4-lab').resolve(strict=True)
+    lab_manifest = json.loads((lab_dir / 'manifest.json').read_text(encoding='utf-8'))
+    assert set(lab_manifest) == {'device.go', 'receive.go', 'vpn013_experimental_zero_s4.go', 'vpn013_zero_s4_recovery_test.go'}
+    staged_lab = {}
+    for name, digest in lab_manifest.items():
+        target = local / 'device' / name
+        assert not target.is_symlink()
+        original_bytes = target.read_bytes() if target.exists() else None
+        assert (hashlib.sha256(original_bytes).hexdigest() if original_bytes is not None else None) == digest['beforeSHA256']
+        if name in ('device.go', 'receive.go'):
+            raw = original_bytes
+            if name == 'device.go':
+                old = b"\tcookieChecker CookieChecker\n"
+                new = old + b"\t// Synthetic experiment only; bounds the expensive compatibility probe.\n\tvpn013LabNextRecovery atomic.Int64\n\tvpn013LabAttempts atomic.Uint64\n\tvpn013LabAuthenticated atomic.Uint64\n"
+            else:
+                old = b"\t\t\tpacket = packet[padding:]\n"
+                new = b"""\t\t\t// LAB ONLY: normal receive worker performs authentication and replay
+\t\t\t// checks after this preliminary authentication. Not production-ready.
+\t\t\tif msgType == MessageUnknownType && device.paddings.transport.Load() > 0 && device.vpn013LabAllowRecovery() {
+\t\t\t\tdevice.vpn013LabAttempts.Add(1)
+\t\t\t\tif device.vpn013LabRecoverZeroS4(packet) {
+\t\t\t\t\tdevice.vpn013LabAuthenticated.Add(1)
+\t\t\t\t\tmsgSize, msgType, padding = MessageTransportSize, MessageTransportType, 0
+\t\t\t\t\tcip = nil
+\t\t\t\t}
+\t\t\t}
+""" + old
+            assert raw.count(old) == 1
+            raw = raw.replace(old, new, 1)
+        else:
+            source_file = lab_dir / (name + '.txt')
+            assert source_file.is_file() and not source_file.is_symlink()
+            raw = source_file.read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == digest['afterSHA256']
+        staged_lab[target] = raw
+    for target, raw in staged_lab.items():
+        target.write_bytes(raw)
     after = {name: hashlib.sha256((local / 'device' / name).read_bytes()).hexdigest()
              for name in (*FILES, 'r013_resource_limits.go', 'r013_resource_limits_test.go', 'r013_s4_regression_test.go',
                           'r013_awg31_classifier.go', 'r013_awg31_testhelper_test.go',
@@ -67,7 +107,8 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                           'r013_vpn013_auth_live_test.go', 'r013_vpn013_auth_robustness_test.go',
                           'r013_vpn013_awg31_runtime_test.go', 'r013_vpn013_queued_classifier_test.go',
                           'peer.go', 'r013_legacy15.go', 'r013_legacy15_test.go', 'r013_legacy_uapi_test.go',
-                          'r013_legacy_fuzz_test.go', 'r013_stale_snapshot_test.go')}
+                          'r013_legacy_fuzz_test.go', 'r013_stale_snapshot_test.go',
+                          'vpn013_experimental_zero_s4.go', 'vpn013_zero_s4_recovery_test.go')}
     assert before == {name: hashlib.sha256((source / 'device' / name).read_bytes()).hexdigest() for name in FILES}
     # Execute the copied primary implementation on the build host. Cross-compiled
     # libraries still require their platform/native acceptance tests afterwards.
@@ -102,7 +143,8 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 'TestVPN013LegacyStaleSnapshotAfterModeSwitch', 'TestVPN013LegacyRejectPreparedPacketAfterModeSwitch',
                 'TestVPN013LegacySendCompletesBeforeModeCommit',
                 'TestVPN013LegacyEndpointRefreshKeepsRevision', 'TestVPN013LegacyMaskingChangesAdvanceRevision',
-                'FuzzVPN013LegacyParse'}
+                'FuzzVPN013LegacyParse', 'TestVPN013SyntheticZeroS4ProtectedHeaderFeasibility',
+                'TestVPN013LabZeroS4AuthenticatedAndBounded', 'TestVPN013LabRecoveryRateGate'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,
               'passedTests': passed, 'requiredTests': sorted(required),
