@@ -136,7 +136,8 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 'FuzzVPN013LegacyParse', 'TestVPN013SyntheticZeroS4ProtectedHeaderFeasibility',
                 'TestVPN013LabZeroS4AuthenticatedAndBounded', 'TestVPN013LabRecoveryRateGate',
                 'TestVPN013LabZeroS4WithoutHeaderProtectAuthenticates',
-                'TestVPN013LabZeroS4MisclassifiedAsControl'}
+                'TestVPN013LabZeroS4MisclassifiedAsControl',
+                'TestVPN013LabConcurrentRecoveryWhileConfigChanges'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,
               'passedTests': passed, 'requiredTests': sorted(required),

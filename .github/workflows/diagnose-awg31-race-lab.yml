@@ -1,0 +1,50 @@
+name: Diagnose experimental AWG recovery race on Linux
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/ios-awg31-race-lab-20261104]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Obtain pinned Go modules
+        working-directory: overlay/Sources/WireGuardKitGo
+        run: GOTOOLCHAIN=local go mod download
+      - name: Stage pinned experimental source and run host controls
+        run: |
+          set -euo pipefail
+          mkdir -p build/lab
+          cp overlay/Sources/WireGuardKitGo/go.mod build/lab/lab.mod
+          cp overlay/Sources/WireGuardKitGo/go.sum build/lab/lab.sum
+          GOTOOLCHAIN=local GOPROXY=off python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0,str(Path('scripts').resolve()))
+          from prepare_primary_awg import prepare_primary_awg
+          prepare_primary_awg(Path('overlay/Sources/WireGuardKitGo'),Path('build/lab'),Path('build/lab/lab.mod'))
+          PY
+      - name: Run actual concurrency test under the race detector
+        working-directory: build/lab/awg-core-owned
+        run: |
+          set -euo pipefail
+          GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=1 go test -race ./device -run '^TestVPN013LabConcurrentRecoveryWhileConfigChanges$' -count=1 -timeout=90s -v | tee "$GITHUB_WORKSPACE/build/lab/awg31-race.txt"
+          grep -F -- '--- PASS: TestVPN013LabConcurrentRecoveryWhileConfigChanges ' "$GITHUB_WORKSPACE/build/lab/awg31-race.txt"
+      - name: Retain sanitized test evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vpn013-awg31-race-lab-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            build/lab/primary-resource-host-tests.summary.json
+            build/lab/awg31-race.txt

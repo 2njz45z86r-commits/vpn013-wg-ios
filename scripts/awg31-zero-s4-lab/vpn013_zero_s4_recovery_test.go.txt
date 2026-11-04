@@ -310,3 +310,20 @@ func TestVPN013LabZeroS4MisclassifiedAsControl(t *testing.T) {
 	}
 	t.Fatal("synthetic control collision was not produced")
 }
+
+func TestVPN013LabConcurrentRecoveryWhileConfigChanges(t *testing.T) {
+	var d Device
+	d.indexTable.Init()
+	d.paddings.transport.Store(20)
+	var rng UintRange; rng.FromUint32(888886,888889); d.headers.transport.Store(rng)
+	var key [32]byte; for i:=range key { key[i]=byte(i+1); d.headerProtection.key[i]=byte(i+11) }
+	content,err:=chacha20poly1305.New(key[:]);if err!=nil { t.Fatal(err) }
+	kp:=&Keypair{receive:content,created:time.Now()}; peer:=&Peer{}
+	packet:=make([]byte,128); if _,err=rand.Read(packet);err!=nil { t.Fatal(err) }
+	var group sync.WaitGroup
+	group.Add(3)
+	go func(){ defer group.Done(); for i:=0;i<300;i++ { d.indexTable.Lock();d.indexTable.table[uint32(i%4)+1]=IndexTableEntry{peer:peer,keypair:kp};if i%2==0 { delete(d.indexTable.table,uint32((i+1)%4)+1) };d.indexTable.Unlock() } }()
+	go func(){ defer group.Done(); for i:=0;i<300;i++ { d.headerProtection.Lock();d.headerProtection.key[0]^=1;d.headerProtection.Unlock();d.paddings.transport.Store(uint32(20+i%2)) } }()
+	go func(){ defer group.Done(); for i:=0;i<300;i++ { frame:=append([]byte(nil),packet...); _=d.vpn013LabRecoverZeroS4(frame); _=d.vpn013LabAllowRecovery() } }()
+	group.Wait()
+}
