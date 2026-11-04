@@ -1,0 +1,38 @@
+package dual
+import (
+ "bytes"
+ "encoding/binary"
+ "fmt"
+ "net/netip"
+ "testing"
+ "time"
+ patchedconn "vpn013.local/official-awg31/conn"
+ patcheddevice "vpn013.local/official-awg31/device"
+ patchedtun "vpn013.local/official-awg31/tun/tuntest"
+ origconn "vpn013.local/official-awg31-original/conn"
+ origdevice "vpn013.local/official-awg31-original/device"
+ origtun "vpn013.local/official-awg31-original/tun/tuntest"
+)
+func TestLabPatchedServerWithOriginalClient(t *testing.T){
+ serverPriv,serverPub:=keypair(t);clientPriv,clientPub:=keypair(t);protect,_:=keypair(t)
+ serverT,clientT:=patchedtun.NewChannelTUN(),origtun.NewChannelTUN()
+ server:=patcheddevice.NewDevice(serverT.TUN(),patchedconn.NewDefaultBind(),patcheddevice.NewLogger(patcheddevice.LogLevelSilent,"lab-server"));t.Cleanup(server.Close)
+ client:=origdevice.NewDevice(clientT.TUN(),origconn.NewDefaultBind(),origdevice.NewLogger(origdevice.LogLevelSilent,"original-client"));t.Cleanup(client.Close)
+ common:=fmt.Sprintf("jc=2\njmin=40\njmax=70\ns1=16\ns2=16\ns3=12\ns4=20\nh1=0-4294967292\nh2=4294967293\nh3=4294967294\nh4=4294967295\nheader_protection_key=%s\ncontent_padding_addition=0\nrekey_after_time=120\nrekey_timeout=5\nreject_after_time=180\nkeepalive_timeout=10\nmax_handshake_attempts=20\nrandom_trailers=false\ndisable_cookies=true\n",protect)
+ sc:=fmt.Sprintf("%sprivate_key=%s\nlisten_port=0\nreplace_peers=true\npublic_key=%s\nprotocol_version=1\nreplace_allowed_ips=true\nallowed_ip=1.0.0.2/32\n",common,serverPriv,clientPub)
+ cc:=fmt.Sprintf("%sprivate_key=%s\nreplace_peers=true\npublic_key=%s\nprotocol_version=1\nreplace_allowed_ips=true\nallowed_ip=1.0.0.1/32\n",common,clientPriv,serverPub)
+ if e:=server.IpcSet(sc);e!=nil{t.Fatal(e)};if e:=client.IpcSet(cc);e!=nil{t.Fatal(e)};if e:=server.Up();e!=nil{t.Fatal(e)};if e:=client.Up();e!=nil{t.Fatal(e)}
+ ss,e:=server.IpcGet();if e!=nil{t.Fatal(e)};cs,e:=client.IpcGet();if e!=nil{t.Fatal(e)}
+ if e=server.IpcSet(fmt.Sprintf("public_key=%s\nendpoint=127.0.0.1:%d\n",clientPub,port(t,cs)));e!=nil{t.Fatal(e)}
+ if e=client.IpcSet(fmt.Sprintf("public_key=%s\nendpoint=127.0.0.1:%d\n",serverPub,port(t,ss)));e!=nil{t.Fatal(e)}
+ ip1,ip2:=netip.MustParseAddr("1.0.0.1"),netip.MustParseAddr("1.0.0.2");warm:=origtun.Ping(ip1,ip2)
+ // Original client itself can lose its first S4 frame; a second warmup is explicit.
+ clientT.Outbound<-warm;time.Sleep(500*time.Millisecond);clientT.Outbound<-warm
+ select{case got:=<-serverT.Inbound:if !bytes.Equal(got,warm){t.Fatal("warm data changed")};case <-time.After(5*time.Second):t.Fatal("original client warmup failed")}
+ payload:=origtun.Ping(ip1,ip2);payload=append(payload,make([]byte,168)...);binary.BigEndian.PutUint16(payload[2:4],uint16(len(payload)))
+ if e=server.IpcSet("random_trailers=true\n");e!=nil{t.Fatal(e)};clientT.Outbound<-payload
+ select{case got:=<-serverT.Inbound:if !bytes.Equal(got,payload){t.Fatal("long request changed")};case <-time.After(4*time.Second):t.Fatal("long request missing")}
+ // Switch server-side trailers off only inside disposable reference to test reply.
+ if e=server.IpcSet("random_trailers=false\n");e!=nil{t.Fatal(e)};reply:=patchedtun.Ping(ip2,ip1);serverT.Outbound<-reply
+ select{case got:=<-clientT.Inbound:if !bytes.Equal(got,reply){t.Fatal("reply changed")};case <-time.After(4*time.Second):t.Fatal("first server reply missing")}
+}

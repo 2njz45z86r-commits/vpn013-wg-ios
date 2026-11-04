@@ -1,0 +1,12 @@
+package device
+
+// LAB ONLY: preserve bytes if receive padding changes during TUN read.
+func vpn013LabMoveTUNPayload(buf []byte, size, oldOffset, newOffset int) bool {
+	if size < 0 || oldOffset < 0 || newOffset < 0 || oldOffset > len(buf) || newOffset > len(buf) || size > len(buf)-oldOffset || size > len(buf)-newOffset {
+		return false
+	}
+	if oldOffset != newOffset {
+		copy(buf[newOffset:newOffset+size], buf[oldOffset:oldOffset+size])
+	}
+	return true
+}
