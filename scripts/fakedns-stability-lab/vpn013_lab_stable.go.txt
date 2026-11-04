@@ -1,8 +1,12 @@
 package fakedns
 
-// LAB ONLY. This stores domain names in plaintext; it is not integrated into
-// the application and has no iOS data-protection or power-loss proof.
+// LAB ONLY. Test key is supplied through an environment variable; no iOS
+// key management, integration, power-loss or anti-rollback proof.
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	cryptorand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -29,6 +33,7 @@ type labSnapshot struct {
 type labStableStore struct {
 	path    string
 	anchor  string
+	aead    cipher.AEAD
 	pool    *stdnet.IPNet
 	limit   int
 	body    labSnapshotBody
@@ -58,8 +63,21 @@ func newLabStableStore(pool *stdnet.IPNet, limit int) (*labStableStore, error) {
 	if info, err := os.Stat(anchorDir); err != nil || !info.IsDir() {
 		return nil, errors.New("lab anchor directory unavailable")
 	}
+	key, err := hex.DecodeString(os.Getenv("VPN013_LAB_TEST_KEY"))
+	if err != nil || len(key) != 32 {
+		return nil, errors.New("synthetic test key required")
+	}
+	block, err := aes.NewCipher(key)
+	clear(key)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
 	sum := sha256.Sum256([]byte(pool.String()))
-	st := &labStableStore{path: filepath.Join(dir, fmt.Sprintf("pool-%x.json", sum[:8])), anchor: filepath.Join(anchorDir, fmt.Sprintf("pool-%x.anchor", sum[:8])), pool: pool, limit: limit}
+	st := &labStableStore{path: filepath.Join(dir, fmt.Sprintf("pool-%x.json", sum[:8])), anchor: filepath.Join(anchorDir, fmt.Sprintf("pool-%x.anchor", sum[:8])), pool: pool, limit: limit, aead: aead}
 	release, e := labFileLock(st.path + ".lock")
 	if e != nil {
 		return nil, e
@@ -99,8 +117,18 @@ func (st *labStableStore) reload() error {
 	if _, markerErr := os.Stat(st.path + ".seal"); markerErr != nil {
 		return errors.New("missing journal marker")
 	}
+	encrypted, e := io.ReadAll(io.LimitReader(f, (8<<20)+1))
+	if e != nil || len(encrypted) > 8<<20 || len(encrypted) < 5+st.aead.NonceSize()+st.aead.Overhead() || string(encrypted[:5]) != "V13E1" {
+		return errors.New("invalid encrypted lab journal")
+	}
+	nonce := encrypted[5 : 5+st.aead.NonceSize()]
+	plaintext, e := st.aead.Open(nil, nonce, encrypted[5+st.aead.NonceSize():], []byte("VPN013-LAB:"+st.pool.String()))
+	if e != nil {
+		return errors.New("lab journal authentication failed")
+	}
+	defer clear(plaintext)
 	var snap labSnapshot
-	dec := json.NewDecoder(io.LimitReader(f, 8<<20))
+	dec := json.NewDecoder(bytes.NewReader(plaintext))
 	dec.DisallowUnknownFields()
 	if e = dec.Decode(&snap); e != nil {
 		return e
@@ -113,7 +141,8 @@ func (st *labStableStore) reload() error {
 	if e != nil || dig != snap.Digest || snap.Body.Version != 1 || snap.Body.Pool != st.pool.String() || snap.Body.Assigned == nil || len(snap.Body.Assigned) > st.limit || snap.Body.Next != uint64(len(snap.Body.Assigned))+1 {
 		return errors.New("invalid lab journal")
 	}
-	expectedAnchor := fmt.Sprintf("%s:%d", dig, snap.Body.Next)
+	sealedHash := sha256.Sum256(encrypted)
+	expectedAnchor := fmt.Sprintf("%x:%d", sealedHash[:], snap.Body.Next)
 	if anchorErr != nil || string(anchor) != expectedAnchor {
 		return errors.New("journal and independent anchor differ")
 	}
@@ -179,13 +208,21 @@ func (st *labStableStore) allocate(domain string) (string, error) {
 	if e != nil {
 		return "", e
 	}
-	encoded, e := json.Marshal(labSnapshot{Body: body, Digest: digest})
+	plaintext, e := json.Marshal(labSnapshot{Body: body, Digest: digest})
 	if e != nil {
 		return "", e
 	}
+	defer clear(plaintext)
+	nonce := make([]byte, st.aead.NonceSize())
+	if _, e = io.ReadFull(cryptorand.Reader, nonce); e != nil {
+		return "", e
+	}
+	encoded := append([]byte("V13E1"), nonce...)
+	encoded = st.aead.Seal(encoded, nonce, plaintext, []byte("VPN013-LAB:"+st.pool.String()))
 	if len(encoded) > 8<<20 {
 		return "", errors.New("snapshot size limit")
 	}
+	sealedHash := sha256.Sum256(encoded)
 	marker, markerErr := os.OpenFile(st.path+".seal", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if markerErr == nil {
 		if _, e = marker.Write([]byte("VPN013-LAB-ONLY")); e != nil {
@@ -233,7 +270,7 @@ func (st *labStableStore) allocate(domain string) (string, error) {
 	}
 	anchorTemp := af.Name()
 	defer os.Remove(anchorTemp)
-	if _, e = af.WriteString(fmt.Sprintf("%s:%d", digest, body.Next)); e != nil {
+	if _, e = af.WriteString(fmt.Sprintf("%x:%d", sealedHash[:], body.Next)); e != nil {
 		af.Close()
 		return "", e
 	}

@@ -2,7 +2,6 @@ package fakedns
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -31,6 +30,7 @@ func TestVPN013LabStableRestartAndNoReuse(t *testing.T) {
 			dir := t.TempDir()
 			t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
 			t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+			t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
 			h := labHolder(t, pool, 2)
 			first := h.GetFakeIPForDomain("one.invalid")
 			second := h.GetFakeIPForDomain("two.invalid")
@@ -77,6 +77,7 @@ func TestVPN013LabConcurrentNoDuplicate(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
 	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
 	h := labHolder(t, "198.18.10.0/24", 64)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -113,6 +114,7 @@ func TestVPN013LabCorruptionNotReassigned(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
 	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
 	h := labHolder(t, "198.18.10.0/24", 10)
 	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
 		t.Fatal("setup failed")
@@ -125,12 +127,13 @@ func TestVPN013LabCorruptionNotReassigned(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	var s labSnapshot
-	if e = json.Unmarshal(b, &s); e != nil {
-		t.Fatal(e)
+	if bytes.Contains(b, []byte("one.invalid")) {
+		t.Fatal("synthetic name stored in plaintext")
 	}
-	s.Body.Assigned["one.invalid"] = "198.18.10.25"
-	b, _ = json.Marshal(s)
+	if len(b) < 32 {
+		t.Fatal("encrypted journal too short")
+	}
+	b[len(b)-1] ^= 1
 	if e = os.WriteFile(files[0], b, 0600); e != nil {
 		t.Fatal(e)
 	}
@@ -169,6 +172,7 @@ func TestVPN013LabConcurrentProcesses(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
 	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
 	binary, e := os.Executable()
 	if e != nil {
 		t.Fatal(e)
@@ -217,6 +221,7 @@ func TestVPN013LabPartialLossGuardAndTotalLossHazard(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
 	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
 	first := labHolder(t, "198.18.30.0/24", 10)
 	a := first.GetFakeIPForDomain("one.invalid")
 	if len(a) != 1 {
@@ -254,6 +259,7 @@ func TestVPN013LabSnapshotRollbackGuard(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
 	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
 	h := labHolder(t, "198.18.40.0/24", 10)
 	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
 		t.Fatal("initial allocation failed")
@@ -279,6 +285,7 @@ func TestVPN013LabInterruptedCommitGuard(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
 	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
 	h := labHolder(t, "198.18.50.0/24", 10)
 	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
 		t.Fatal("initial allocation failed")
@@ -301,6 +308,7 @@ func TestVPN013LabCombinedRollbackHazard(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
 	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
 	h := labHolder(t, "198.18.60.0/24", 10)
 	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
 		t.Fatal("initial allocation failed")
@@ -341,6 +349,7 @@ func TestVPN013LabRealProcessCrashGuard(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
 	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
 	h := labHolder(t, "198.18.70.0/24", 10)
 	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
 		t.Fatal("initial allocation failed")
@@ -358,5 +367,64 @@ func TestVPN013LabRealProcessCrashGuard(t *testing.T) {
 	}
 	if e = (&Holder{}).initialize("198.18.70.0/24", 10); e == nil {
 		t.Fatal("crash between journal and anchor went undetected")
+	}
+}
+func TestVPN013LabEncryptedJournalKeyAndNonce(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
+	h := labHolder(t, "198.18.80.0/24", 10)
+	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
+		t.Fatal("initial allocation failed")
+	}
+	first, e := os.ReadFile(h.labStore.path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if bytes.Contains(first, []byte("one.invalid")) || len(first) < 33 {
+		t.Fatal("journal did not hide synthetic domain")
+	}
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("02", 32))
+	if e = (&Holder{}).initialize("198.18.80.0/24", 10); e == nil {
+		t.Fatal("wrong key accepted")
+	}
+	t.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
+	if len(h.GetFakeIPForDomain("two.invalid")) != 1 {
+		t.Fatal("second allocation failed")
+	}
+	second, e := os.ReadFile(h.labStore.path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(second) < 33 || bytes.Equal(first[5:17], second[5:17]) || bytes.Contains(second, []byte("two.invalid")) {
+		t.Fatal("nonce or confidentiality check failed")
+	}
+}
+func BenchmarkVPN013LabEncryptedLookup128(b *testing.B) {
+	dir := b.TempDir()
+	b.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	b.Setenv("VPN013_LAB_ANCHOR_DIR", b.TempDir())
+	b.Setenv("VPN013_LAB_TEST_KEY", strings.Repeat("01", 32))
+	h := &Holder{}
+	if e := h.initialize("198.18.90.0/24", 200); e != nil {
+		b.Fatal(e)
+	}
+	var address net.Address
+	for i := 0; i < 128; i++ {
+		got := h.GetFakeIPForDomain(fmt.Sprintf("service%d.invalid", i))
+		if len(got) != 1 {
+			b.Fatal("setup failed")
+		}
+		if i == 0 {
+			address = got[0]
+		}
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if h.GetDomainFromFakeDNS(address) != "service0.invalid" {
+			b.Fatal("wrong mapping")
+		}
 	}
 }

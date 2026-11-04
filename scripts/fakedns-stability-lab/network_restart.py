@@ -17,7 +17,7 @@ def run():
   'outbounds':[{'tag':'dns-out','protocol':'dns'},{'tag':'route-a','protocol':'freedom','settings':{'redirect':f'127.0.0.1:{ap}'}},{'tag':'route-b','protocol':'freedom','settings':{'redirect':f'127.0.0.1:{bp}'}},{'tag':'blocked','protocol':'blackhole'}],
   'routing':{'rules':[{'type':'field','inboundTag':['dns-in'],'outboundTag':'dns-out'},{'type':'field','domain':['full:service-a.invalid'],'outboundTag':'route-a'},{'type':'field','domain':['full:service-b.invalid'],'outboundTag':'route-b'},{'type':'field','inboundTag':['socks-in'],'outboundTag':'blocked'}]}}
  with tempfile.TemporaryDirectory(prefix='vpn013-stable-dns-') as d, tempfile.TemporaryDirectory(prefix='vpn013-stable-anchor-') as anchor:
-  path=Path(d)/'config.json';path.write_text(json.dumps(cfg),encoding='utf8');env=os.environ.copy();env['VPN013_LAB_FAKEDNS_DIR']=d;env['VPN013_LAB_ANCHOR_DIR']=anchor
+  path=Path(d)/'config.json';path.write_text(json.dumps(cfg),encoding='utf8');env=os.environ.copy();env['VPN013_LAB_FAKEDNS_DIR']=d;env['VPN013_LAB_ANCHOR_DIR']=anchor;env['VPN013_LAB_TEST_KEY']='01'*32
   def start():
    proc=subprocess.Popen([str(XRAY),'run','-config',str(path)],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,env=env,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
    for _ in range(80):
