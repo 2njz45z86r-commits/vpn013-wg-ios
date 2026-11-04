@@ -1,0 +1,10 @@
+name: Diagnostic native check for 1.7.6 lists
+on:
+  push:
+    branches: ['codex/ios-176-native-check-20261105']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native:
+    uses: ./.github/workflows/native-unified-check.yml
