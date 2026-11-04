@@ -167,3 +167,29 @@ func TestVPN013AWGKeepaliveRangeValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestVPN013UAPILineInjectionRejected(t *testing.T) {
+	for _, value := range []string{"", "203.0.113.1:51820", "[2001:db8::1]:51820", "0.0.0.0/0", "25"} {
+		if !vpn013UAPIValue(value) {
+			t.Fatalf("ordinary value rejected: %q", value)
+		}
+	}
+	for _, value := range []string{"203.0.113.1:51820\nlisten_port=1", "a\rb", "a\x00b", "a=b", "a\x7fb"} {
+		if vpn013UAPIValue(value) {
+			t.Fatal("UAPI control value accepted")
+		}
+	}
+	fixture := tuntest.NewChannelTUN()
+	tunnel := &vpn013CountedTUN{Device: fixture.TUN(), events: make(chan tun.Event, 1)}
+	tunnel.events <- tun.EventUp
+	peer := &PeerConfig{PublicKey: strings.Repeat("ab", 32), Endpoint: "203.0.113.1:51820\nreplace_peers=true",
+		AllowedIps: []string{"0.0.0.0/0"}}
+	h := &Handler{tun: tunnel, conf: &DeviceConfig{SecretKey: strings.Repeat("cd", 32), Peers: []*PeerConfig{peer}}}
+	err := h.init(context.Background())
+	if err == nil || strings.Contains(err.Error(), "replace_peers") {
+		t.Fatal("must reject injected endpoint without echoing it")
+	}
+	if tunnel.closes.Load() != 1 || h.tun != nil || h.dev != nil {
+		t.Fatal("rejected configuration did not close and detach TUN exactly once")
+	}
+}

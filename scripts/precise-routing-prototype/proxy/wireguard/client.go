@@ -332,6 +332,22 @@ func (h *Handler) init(ctx context.Context) error {
 	for _, line := range awgLines {
 		cfg.WriteString(line)
 	}
+	// VPN013: profile values become UAPI "key=value" lines; reject anything that
+	// could start another directive before it reaches IpcSet.
+	if !vpn013UAPIValue(h.conf.SecretKey) {
+		return errors.New("invalid VPN013 WireGuard settings")
+	}
+	for _, peer := range h.conf.Peers {
+		if !vpn013UAPIValue(peer.PublicKey) || !vpn013UAPIValue(peer.PreSharedKey) ||
+			!vpn013UAPIValue(peer.Endpoint) || !vpn013UAPIValue(peer.KeepAlive) {
+			return errors.New("invalid VPN013 WireGuard settings")
+		}
+		for _, ip := range peer.AllowedIps {
+			if !vpn013UAPIValue(ip) {
+				return errors.New("invalid VPN013 WireGuard settings")
+			}
+		}
+	}
 	cfg.WriteString("private_key=" + h.conf.SecretKey + "\n")
 	for _, peer := range h.conf.Peers {
 		cfg.WriteString("public_key=" + peer.PublicKey + "\n")
@@ -358,6 +374,16 @@ func (h *Handler) init(ctx context.Context) error {
 	h.dev = dev
 	started = true
 	return nil
+}
+
+// vpn013UAPIValue reports whether a value is safe to embed in one UAPI line.
+func vpn013UAPIValue(value string) bool {
+	for i := 0; i < len(value); i++ {
+		if c := value[i]; c < 0x20 || c == 0x7f || c == '=' {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Handler) resolveLocal(host string) (net.IP, error) {

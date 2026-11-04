@@ -27,6 +27,10 @@ else:
  release=next(x for x in data if x['version']=='go1.26.10')
  arch='arm64' if platform.machine()=='arm64' else 'amd64'
  f=next(f for f in release['files'] if f['os']=='darwin' and f['arch']==arch and f['kind']=='archive')
+ # Pinned in the repository (go.dev metadata and dl.google.com .sha256 agreed on 2026-11-04),
+ # so the toolchain no longer depends only on the metadata endpoint it was downloaded from.
+ pinned={'amd64':'e820ab780c273ae4a340b79d0f3c4313b74ee029aa3874792145d44b9f4f91da','arm64':'0b5183492292ada170f9b561a834863808dd02edba599e4ad0e89899330020b3'}
+ assert f['sha256']==pinned[arch]
  path=Path('build/go.tgz');urllib.request.urlretrieve('https://go.dev/dl/'+f['filename'],path)
  assert hashlib.sha256(path.read_bytes()).hexdigest()==f['sha256']
  with tarfile.open(path) as t:t.extractall('build/toolchain',filter='data')
@@ -134,6 +138,11 @@ for root,meta in [(app,info),(ext,e)]:
  binary=(root/meta['CFBundleExecutable']).read_bytes();assert binary[:4]==bytes.fromhex('cffaedfe')
  assert b'VPN013SimulatorAutoJSON' not in binary and b'demo.wireguard.com' not in binary
  assert b'--vpn013-test-cross-runtime' not in binary and b'reserve.example.invalid' not in binary
+# Every simulator-only test switch shares this prefix; none may reach any device Mach-O.
+for item in app.rglob('*'):
+ if item.is_file() and not item.is_symlink():
+  data=item.read_bytes()
+  if data[:4] in (bytes.fromhex('cffaedfe'),bytes.fromhex('cafebabe')):assert b'--vpn013-test' not in data,'test switch in '+item.name
 Path('build/review/bundle-verification.json').write_text(json.dumps({'appID':info['CFBundleIdentifier'],'extensionID':e['CFBundleIdentifier'],'appleDistributionSigned':False,'adHocIntegrityChecked':True,'requiresOwnerResigning':True,'customerKeysIncluded':False,'physicalDeviceTested':False,'version':info['CFBundleShortVersionString']},indent=2))
 PY
 (cd build && zip -qr VPN013Admin-unsigned.ipa Payload)

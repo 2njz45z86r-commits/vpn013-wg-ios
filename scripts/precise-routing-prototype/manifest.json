@@ -4,7 +4,7 @@
   "files": {
     "proxy/wireguard/client.go": {
       "sourceSHA256": "2b0265f67d6456fb59f464254bd19e965bbb9a679b05b36538320ce614194d1a",
-      "prototypeSHA256": "2ed305a04a3849814ebeb6ed3574b2a32aad4d109718abf574ad6e79e841e1b7"
+      "prototypeSHA256": "498b41f8d7246a0d915341e56ff0de93ac6edd5599d4a7849b10c55117af7afb"
     },
     "proxy/wireguard/bind.go": {
       "sourceSHA256": "3ee350d635c9021710b8731efcec81a2bb241536454c1aef233244b372ac54b1",
@@ -32,7 +32,7 @@
     },
     "proxy/wireguard/vpn013_awg_test.go": {
       "sourceSHA256": null,
-      "prototypeSHA256": "47704709503d07f6d714153a560854ec64ba109201535c57b5419c8448baa854"
+      "prototypeSHA256": "30dce8b483e5b5626bac26de04e24062d07d885d6e831bb396bb9c07b5bde07f"
     },
     "proxy/wireguard/vpn013_listen_port_test.go": {
       "sourceSHA256": null,
