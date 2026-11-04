@@ -191,6 +191,11 @@ extension SettingsTableViewController {
         }
     }
 
+    override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        // The same gesture contract applies to all four connection lists.
+        section == 0 ? "Управление списком серверов: " + VPN013RowGestures.hint : nil
+    }
+
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let field = settingsFieldsBySection[indexPath.section][indexPath.row]
         if field == .iosAppVersion || field == .goBackendVersion {

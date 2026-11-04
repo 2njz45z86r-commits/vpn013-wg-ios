@@ -24,6 +24,13 @@ enum VPN013Theme {
     }
 }
 
+/// One gesture contract for every connection list: a tap switches the VPN,
+/// a hold of this length opens the configuration.
+enum VPN013RowGestures {
+    static let holdSeconds: TimeInterval = 2
+    static let hint = "Касание включает или выключает. Удерживайте 2 секунды, чтобы открыть настройки сервера."
+}
+
 class TunnelListCell: UITableViewCell {
     var tunnel: TunnelContainer? {
         didSet {
@@ -154,7 +161,7 @@ class TunnelListCell: UITableViewCell {
             rowStack.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
             contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
         ])
-        accessibilityHint = "Открыть параметры сервера"
+        accessibilityHint = VPN013RowGestures.hint
         statusSwitch.addTarget(self, action: #selector(switchToggled), for: .valueChanged)
     }
 
@@ -188,6 +195,13 @@ class TunnelListCell: UITableViewCell {
 
     @objc private func switchToggled() {
         onSwitchToggled?(statusSwitch.isOn)
+    }
+
+    /// A row tap acts exactly like the switch, and only while the switch accepts input.
+    func toggleFromRowTap() {
+        guard statusSwitch.isEnabled, statusSwitch.isUserInteractionEnabled else { return }
+        statusSwitch.setOn(!statusSwitch.isOn, animated: true)
+        switchToggled()
     }
 
     private func update(from tunnel: TunnelContainer?, animated: Bool) {

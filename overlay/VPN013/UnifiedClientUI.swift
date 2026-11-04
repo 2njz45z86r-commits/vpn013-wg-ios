@@ -284,27 +284,77 @@ final class ProxyRoutingProfilesViewController: UITableViewController {
     }
 }
 
+/// Same row layout as the AmneziaWG list: name and status, measured latency,
+/// power switch. A tap anywhere switches the VPN; a two-second hold opens details.
 private final class ProxyServerListCell: UITableViewCell {
-    var openConfiguration: (() -> Void)?
-    private let configuration = UIButton(type: .system)
+    var onSwitchToggled: ((Bool) -> Void)?
+    let nameLabel = proxyLabel("", style: .body)
+    let statusLabel = proxyLabel("", style: .footnote)
+    let statusSwitch = UISwitch()
+    private let latencyLabel = proxyLabel("—", style: .subheadline)
+    private let busyIndicator = UIActivityIndicatorView(style: .medium)
+    private let rowStack = UIStackView()
+    private var latencyWidthConstraint: NSLayoutConstraint?
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-        super.init(style: .subtitle, reuseIdentifier: reuseIdentifier)
-        configuration.setImage(UIImage(systemName: "chevron.right"), for: .normal)
-        configuration.tintColor = VPN013Theme.secondaryText
-        configuration.accessibilityIdentifier = "vpn013.proxy.configuration"
-        configuration.frame.size = CGSize(width: 64, height: 44)
-        configuration.addTarget(self, action: #selector(openTapped), for: .touchUpInside)
-        accessoryView = configuration
+        super.init(style: .default, reuseIdentifier: reuseIdentifier)
+        overrideUserInterfaceStyle = .dark; backgroundColor = VPN013Theme.background
+        contentView.layer.cornerRadius = 10; contentView.layer.cornerCurve = .continuous
+        let selectedBackground = UIView(); selectedBackground.backgroundColor = VPN013Theme.selected; selectedBackground.layer.cornerRadius = 10
+        selectedBackgroundView = selectedBackground
+        nameLabel.textColor = VPN013Theme.text; statusLabel.textColor = VPN013Theme.secondaryText
+        latencyLabel.textColor = VPN013Theme.secondaryText; latencyLabel.textAlignment = .right
+        latencyLabel.accessibilityIdentifier = "vpn013.proxy.latency"; latencyLabel.accessibilityLabel = "Задержка ещё не измерена"
+        busyIndicator.hidesWhenStopped = true; busyIndicator.color = VPN013Theme.accent
+        statusSwitch.onTintColor = VPN013Theme.accent; statusSwitch.accessibilityIdentifier = "vpn013.proxy.switch"
+        contentView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
+        let labels = UIStackView(arrangedSubviews: [nameLabel, statusLabel]); labels.axis = .vertical; labels.spacing = 4
+        let controls = UIStackView(arrangedSubviews: [latencyLabel, busyIndicator, statusSwitch])
+        controls.axis = .horizontal; controls.alignment = .center; controls.spacing = 10
+        rowStack.addArrangedSubview(labels); rowStack.addArrangedSubview(controls); rowStack.spacing = 12
+        rowStack.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(rowStack); updateRowLayout()
+        labels.setContentCompressionResistancePriority(.defaultLow, for: .horizontal); labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        controls.setContentHuggingPriority(.required, for: .horizontal)
+        statusSwitch.setContentHuggingPriority(.required, for: .horizontal); statusSwitch.setContentCompressionResistancePriority(.required, for: .horizontal)
+        latencyLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        latencyWidthConstraint = latencyLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: UIFontMetrics(forTextStyle: .subheadline).scaledValue(for: 56))
+        latencyWidthConstraint?.isActive = true
+        statusSwitch.widthAnchor.constraint(equalToConstant: statusSwitch.intrinsicContentSize.width).isActive = true
+        NSLayoutConstraint.activate([
+            rowStack.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor),
+            rowStack.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor),
+            rowStack.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+            rowStack.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+            contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
+        ])
+        accessibilityHint = VPN013RowGestures.hint
+        statusSwitch.addTarget(self, action: #selector(switchToggled), for: .valueChanged)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        // The entire right strip opens details, including above/below its
-        // chevron. The globe and central row remain the connect target.
-        configuration.frame = CGRect(x: bounds.width - 64, y: 0, width: 64, height: bounds.height)
+    override func prepareForReuse() { super.prepareForReuse(); onSwitchToggled = nil; latency(nil) }
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            latencyWidthConstraint?.constant = UIFontMetrics(forTextStyle: .subheadline).scaledValue(for: 56); updateRowLayout()
+        }
     }
-    func configure(name: String) { configuration.accessibilityLabel = "Открыть конфигурацию: " + name }
-    @objc private func openTapped() { openConfiguration?() }
+    private func updateRowLayout() {
+        let accessibilitySize = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        rowStack.axis = accessibilitySize ? .vertical : .horizontal; rowStack.alignment = accessibilitySize ? .leading : .center
+    }
+    /// Only a completed measurement is shown; nil means not measured.
+    func latency(_ text: String?) {
+        latencyLabel.text = text ?? "—"
+        latencyLabel.accessibilityLabel = text.map { "Задержка: " + $0 } ?? "Задержка ещё не измерена"
+    }
+    func configure(name: String, status: NEVPNStatus, on: Bool, busy: Bool, enabled: Bool) {
+        nameLabel.text = name; statusLabel.text = ProxyDetailViewController.statusText(status)
+        statusSwitch.setOn(on, animated: false); statusSwitch.accessibilityLabel = name
+        statusSwitch.thumbTintColor = on ? VPN013Theme.background : VPN013Theme.text
+        statusSwitch.isUserInteractionEnabled = enabled
+        contentView.backgroundColor = status == .connected ? VPN013Theme.selected : VPN013Theme.background
+        if busy { busyIndicator.startAnimating() } else { busyIndicator.stopAnimating() }
+    }
+    @objc private func switchToggled() { onSwitchToggled?(statusSwitch.isOn) }
 }
 
 /// Shared status sheet; opening or closing it never changes a VPN connection.
@@ -440,6 +490,9 @@ final class ProxyListViewController: UITableViewController {
     private var pingValues: [String: EndpointPingResult] = [:]
     private var pingBusy = false
     private var panelPingRequest = UUID()
+    private let checkPingButton = UIButton(type: .system)
+    private let pingExplanation = proxyLabel(ProxyListViewController.pingIdleText, style: .footnote)
+    private static let pingIdleText = "Пинг адресов по текущему сетевому маршруту. Без переключения VPN. Ответ не подтверждает работу VPN; сервер может блокировать пинг."
     private var rows: [ProxyProfilesManager.Entry] { manager.entries.filter { $0.value.profile.source == kind } }
     private var panelEntry: ProxyProfilesManager.Entry? {
         if let active = rows.first(where: { $0.inOperation }) { return active }
@@ -476,7 +529,31 @@ final class ProxyListViewController: UITableViewController {
         connectionPanel.pingAction = { [weak self] in self?.checkPanelPing() }
         observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in self?.tableView.reloadData(); self?.refreshPanel() }
         refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refreshProfiles), for: .valueChanged)
+        // Same check-all control as the AmneziaWG list, above the servers.
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "Проверить пинг"; configuration.image = UIImage(systemName: "waveform.path.ecg")
+        configuration.imagePadding = 8; configuration.cornerStyle = .medium
+        configuration.baseBackgroundColor = VPN013Theme.accent; configuration.baseForegroundColor = VPN013Theme.background
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 16, bottom: 13, trailing: 16)
+        checkPingButton.configuration = configuration
+        checkPingButton.titleLabel?.adjustsFontForContentSizeCategory = true; checkPingButton.titleLabel?.numberOfLines = 0
+        checkPingButton.accessibilityIdentifier = "vpn013.proxy.check-ping"
+        checkPingButton.accessibilityHint = "Измерить пинг адресов серверов без переключения VPN"
+        checkPingButton.addTarget(self, action: #selector(checkPingTapped), for: .touchUpInside)
+        checkPingButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+        pingExplanation.textColor = VPN013Theme.secondaryText; pingExplanation.accessibilityIdentifier = "vpn013.proxy.ping-explanation"
+        let pingStack = UIStackView(arrangedSubviews: [checkPingButton, pingExplanation]); pingStack.axis = .vertical; pingStack.spacing = 8
+        let header = UIView(); pingStack.translatesAutoresizingMaskIntoConstraints = false; header.addSubview(pingStack)
+        NSLayoutConstraint.activate([pingStack.leadingAnchor.constraint(equalTo: header.layoutMarginsGuide.leadingAnchor), pingStack.trailingAnchor.constraint(equalTo: header.layoutMarginsGuide.trailingAnchor), pingStack.topAnchor.constraint(equalTo: header.topAnchor, constant: 8), pingStack.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -4)])
+        tableView.tableHeaderView = header
+        let hold = UILongPressGestureRecognizer(target: self, action: #selector(rowHeld(_:)))
+        hold.minimumPressDuration = VPN013RowGestures.holdSeconds; tableView.addGestureRecognizer(hold)
         renderPanel()
+    }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews(); guard let header = tableView.tableHeaderView else { return }
+        let height = header.systemLayoutSizeFitting(CGSize(width: tableView.bounds.width, height: UIView.layoutFittingCompressedSize.height), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
+        if abs(header.frame.height - height) > 0.5 { header.frame.size = CGSize(width: tableView.bounds.width, height: height); tableView.tableHeaderView = header }
     }
     deinit { if let token = observer { NotificationCenter.default.removeObserver(token) }; panelTimer?.invalidate(); panelPing.cancel() }
     override func viewWillAppear(_ animated: Bool) {
@@ -490,7 +567,7 @@ final class ProxyListViewController: UITableViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated); panelTimer?.invalidate(); panelTimer = nil
         panelRequest = UUID(); panelInFlight = false; panelTraffic = nil; panelRates.reset(); panelRate = nil
-        panelPingRequest = UUID(); panelPing.cancel(); pingBusy = false
+        if pingBusy { stopPing("Проверка остановлена. Полученные ответы сохранены. VPN не переключался.") }
     }
     private func renderPanel() {
         let entry = panelEntry, running = entry?.status == .connected
@@ -505,6 +582,9 @@ final class ProxyListViewController: UITableViewController {
         connectionPanel.update(.init(name: title, status: state, detail: detail, routing: policy, statistics: traffic,
             on: entry?.inOperation == true, powerEnabled: entry != nil && (entry?.inOperation == true || !manager.working),
             pingEnabled: pingBusy || !rows.isEmpty, checkingPing: pingBusy))
+        checkPingButton.isEnabled = pingBusy || !rows.isEmpty
+        checkPingButton.configuration?.title = pingBusy ? "Остановить проверку" : "Проверить пинг"
+        checkPingButton.configuration?.showsActivityIndicator = pingBusy
         tableView.setNeedsLayout()
     }
     private func refreshPanel() {
@@ -529,14 +609,27 @@ final class ProxyListViewController: UITableViewController {
             self.panelRequest = UUID(); self.panelInFlight = false; self.panelTraffic = nil; self.panelRates.reset(); self.panelRate = nil; self.renderPanel()
         }
     }
+    @objc private func checkPingTapped() { checkPanelPing() }
+    private func stopPing(_ text: String) {
+        panelPingRequest = UUID(); panelPing.cancel(); pingBusy = false
+        pingExplanation.text = text; renderPanel(); tableView.reloadData()
+    }
     private func checkPanelPing() {
-        if pingBusy { panelPingRequest = UUID(); panelPing.cancel(); pingBusy = false; renderPanel(); return }
+        if pingBusy { stopPing("Проверка остановлена. Полученные ответы сохранены. VPN не переключался."); return }
         let hosts = rows.map { $0.value.profile.host }; guard !hosts.isEmpty else { return }
-        let request = UUID(); panelPingRequest = request; pingBusy = true; pingValues = [:]; renderPanel()
+        let uniqueCount = Set(hosts).count
+        let request = UUID(); panelPingRequest = request; pingBusy = true; pingValues = [:]
+        pingExplanation.text = "Проверяем пинг адресов: 0 из \(uniqueCount). Текущий VPN не переключается."
+        renderPanel(); tableView.reloadData()
         panelPing.start(hosts: hosts, update: { [weak self] host, result in
-            guard let self = self, self.panelPingRequest == request else { return }; self.pingValues[host] = result; self.renderPanel(); self.tableView.reloadData()
+            guard let self = self, self.panelPingRequest == request else { return }; self.pingValues[host] = result
+            self.pingExplanation.text = "Проверяем пинг адресов: \(self.pingValues.count) из \(uniqueCount). Текущий VPN не переключается."
+            self.renderPanel(); self.tableView.reloadData()
         }, completion: { [weak self] in
-            guard let self = self, self.panelPingRequest == request else { return }; self.pingBusy = false; self.renderPanel()
+            guard let self = self, self.panelPingRequest == request else { return }; self.pingBusy = false
+            let answered = self.pingValues.values.filter { if case .milliseconds = $0 { return true }; return false }.count
+            self.pingExplanation.text = "Ответили \(answered) из \(uniqueCount) адресов · \(DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .short)). Это пинг по текущему маршруту, не проверка VPN. «Нет ответа» может означать блокировку пинга."
+            self.renderPanel(); self.tableView.reloadData()
         })
     }
     @objc private func openConnectionPopup() {
@@ -598,9 +691,30 @@ final class ProxyListViewController: UITableViewController {
     #endif
     override func numberOfSections(in tableView: UITableView) -> Int { 1 }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { max(1, rows.count) }
-    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { kind.title + " · ваши подключения" }
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { rows.isEmpty ? kind.title + " · ваши подключения" : nil }
+    override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        guard !rows.isEmpty else { return nil }
+        let header = UITableViewHeaderFooterView(reuseIdentifier: nil)
+        let title = proxyLabel(kind.title + " · \(rows.count)", style: .subheadline)
+        title.font = UIFont(descriptor: title.font.fontDescriptor.withSymbolicTraits(.traitBold) ?? title.font.fontDescriptor, size: title.font.pointSize)
+        title.accessibilityIdentifier = "vpn013.proxy.profile-count"
+        let latency = proxyLabel("Задержка", style: .caption1); latency.textColor = VPN013Theme.secondaryText; latency.textAlignment = .right
+        let row = UIStackView(arrangedSubviews: [title, latency])
+        let accessibilitySize = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        let switchColumn = accessibilitySize ? 0 : UISwitch().intrinsicContentSize.width + 10
+        row.axis = accessibilitySize ? .vertical : .horizontal; row.alignment = accessibilitySize ? .leading : .center; row.spacing = 12
+        row.translatesAutoresizingMaskIntoConstraints = false; header.contentView.addSubview(row)
+        title.setContentHuggingPriority(.defaultLow, for: .horizontal); latency.setContentHuggingPriority(.required, for: .horizontal)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: header.contentView.layoutMarginsGuide.leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: header.contentView.layoutMarginsGuide.trailingAnchor, constant: -switchColumn),
+            row.topAnchor.constraint(equalTo: header.contentView.topAnchor, constant: 10),
+            row.bottomAnchor.constraint(equalTo: header.contentView.bottomAnchor, constant: -10)
+        ])
+        return header
+    }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        rows.isEmpty ? "Добавьте свою ссылку VLESS, файл JSON Xray или совместимую подписку. Потяните список вниз, чтобы восстановить серверы сохранённых подписок." : "Нажмите сервер, чтобы подключиться и настроить маршрутизацию. Потяните список вниз для обновления сохранённых подписок. Личные конфигурации остаются отдельно."
+        rows.isEmpty ? "Добавьте свою ссылку VLESS, файл JSON Xray или совместимую подписку. Потяните список вниз, чтобы восстановить серверы сохранённых подписок." : "Касание строки включает или выключает сервер. Удерживайте строку 2 секунды, чтобы открыть конфигурацию и маршрутизацию. Потяните список вниз для обновления сохранённых подписок. Личные конфигурации остаются отдельно."
     }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = rows.isEmpty ? UITableViewCell(style: .subtitle, reuseIdentifier: nil) : tableView.dequeueReusableCell(withIdentifier: "vpn013.proxy.server-cell", for: indexPath)
@@ -609,19 +723,22 @@ final class ProxyListViewController: UITableViewController {
         cell.textLabel?.numberOfLines = 0; cell.detailTextLabel?.numberOfLines = 0
         if rows.isEmpty { cell.textLabel?.text = "Добавить конфигурацию"; cell.detailTextLabel?.text = "Из буфера, файла или ссылки подписки"; cell.imageView?.image = UIImage(systemName: "plus.circle") }
         else {
-            let entry = rows[indexPath.row]; cell.textLabel?.text = entry.value.profile.name
-            cell.detailTextLabel?.text = entry.value.profile.endpoint + "\n" + ProxyDetailViewController.statusText(entry.status)
-            if let result = pingValues[entry.value.profile.host] { cell.detailTextLabel?.text?.append("\nПинг адреса: " + result.text) }
-            cell.imageView?.image = UIImage(systemName: "globe", withConfiguration: UIImage.SymbolConfiguration(pointSize: 28, weight: .regular))
+            let entry = rows[indexPath.row]
             if let serverCell = cell as? ProxyServerListCell {
-                serverCell.configure(name: entry.value.profile.name)
-                serverCell.openConfiguration = { [weak self] in
-                    guard let self = self, let current = self.rows.first(where: { $0.value.profile.id == entry.value.profile.id }) else { return }
-                    UserDefaults.standard.set(current.value.profile.id.uuidString, forKey: "vpn013.panel.profile." + self.kind.rawValue)
-                    self.refreshPanel(); self.navigationController?.pushViewController(ProxyDetailViewController(id: current.value.profile.id), animated: true)
+                let busy = [NEVPNStatus.connecting, .disconnecting, .reasserting].contains(entry.status)
+                serverCell.configure(name: entry.value.profile.name, status: entry.status, on: entry.inOperation, busy: busy,
+                                     enabled: entry.inOperation || !manager.working)
+                // Only a finished echo is shown; "…" marks a host still being measured.
+                let host = entry.value.profile.host
+                serverCell.latency(pingValues[host]?.text ?? (pingBusy ? "…" : nil))
+                let id = entry.value.profile.id
+                serverCell.onSwitchToggled = { [weak self] isOn in
+                    guard let self = self, let current = self.rows.first(where: { $0.value.profile.id == id }) else { return }
+                    UserDefaults.standard.set(id.uuidString, forKey: "vpn013.panel.profile." + self.kind.rawValue)
+                    if isOn != current.inOperation { self.manager.toggle(current) }
+                    self.refreshPanel(); self.tableView.reloadData()
                 }
             }
-            cell.accessibilityHint = "Нажмите строку для подключения. Кнопка справа открывает конфигурацию."
         }
         cell.imageView?.tintColor = VPN013Theme.accent; cell.accessoryType = rows.isEmpty ? .disclosureIndicator : .none
         return cell
@@ -633,8 +750,17 @@ final class ProxyListViewController: UITableViewController {
             guard rows.indices.contains(indexPath.row) else { return }
             let entry = rows[indexPath.row]
             UserDefaults.standard.set(entry.value.profile.id.uuidString, forKey: "vpn013.panel.profile." + kind.rawValue)
-            refreshPanel(); manager.toggle(entry)
+            refreshPanel(); manager.toggle(entry); tableView.reloadData()
         }
+    }
+    /// Holding a row for two seconds opens its configuration; a tap only switches it.
+    @objc private func rowHeld(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, !rows.isEmpty, let path = tableView.indexPathForRow(at: gesture.location(in: tableView)),
+              rows.indices.contains(path.row) else { return }
+        let entry = rows[path.row]
+        UserDefaults.standard.set(entry.value.profile.id.uuidString, forKey: "vpn013.panel.profile." + kind.rawValue)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        refreshPanel(); navigationController?.pushViewController(ProxyDetailViewController(id: entry.value.profile.id), animated: true)
     }
     override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard !rows.isEmpty else { return nil }; let entry = rows[indexPath.row]

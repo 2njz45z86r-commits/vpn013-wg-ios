@@ -122,9 +122,9 @@ final class AutoTunnelUITests:XCTestCase {
         }
         capture("wg-services-unselected-unchanged-no-vpn-started")
     }
-    func testProxyRowConnectsAndOnlyRightStripOpensConfiguration() {
+    func testProxyRowsMatchAmneziaWGLayoutTapSwitchesHoldOpensConfiguration() {
         let app = XCUIApplication()
-        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified", "--vpn013-test-hold-ping-for-cancellation"]
         app.launch()
         for kind in ["happ", "incy", "blacktemple"] {
             let tab = app.tabBars.buttons["vpn013.kind." + kind]
@@ -132,16 +132,34 @@ final class AutoTunnelUITests:XCTestCase {
             app.buttons["vpn013.proxy.add"].tap(); app.buttons["vpn013.proxy.import.check"].tap()
             XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5)); app.alerts.buttons["Добавить"].tap()
             let row = app.tables.cells.containing(.staticText, identifier: "Demo server").firstMatch
-            XCTAssertTrue(row.waitForExistence(timeout: 8)); row.staticTexts["Demo server"].tap()
+            XCTAssertTrue(row.waitForExistence(timeout: 8))
+            // The same check-all control and latency column as AmneziaWG.
+            let check = app.buttons["vpn013.proxy.check-ping"]
+            XCTAssertTrue(check.isHittable); XCTAssertTrue(check.isEnabled)
+            let latency = row.staticTexts["vpn013.proxy.latency"]
+            XCTAssertTrue(latency.exists); XCTAssertEqual(latency.label, "Задержка ещё не измерена")
+            XCTAssertTrue(app.staticTexts["vpn013.proxy.profile-count"].exists)
+            check.tap()
+            XCTAssertTrue(app.buttons["Остановить проверку"].waitForExistence(timeout: 3))
+            XCTAssertTrue(app.staticTexts["vpn013.proxy.ping-explanation"].label.hasPrefix("Проверяем пинг адресов"))
+            check.tap()
+            XCTAssertTrue(app.staticTexts["vpn013.proxy.ping-explanation"].label.hasPrefix("Проверка остановлена"))
+            XCTAssertNotEqual(row.staticTexts["vpn013.proxy.latency"].label, "Задержка: …", "A cancelled check keeps no placeholder value")
             // The simulator refuses a real VPN start. Its controlled start
-            // error distinguishes the connect action from opening details.
+            // error distinguishes the switch action from opening details.
+            let power = row.switches["vpn013.proxy.switch"]
+            XCTAssertTrue(power.exists); XCTAssertEqual(power.value as? String, "0")
+            power.tap()
             XCTAssertTrue(app.alerts["Действие не завершено"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.cells["vpn013.proxy.power"].exists); app.alerts.buttons["Понятно"].tap()
-            let arrow = row.buttons["vpn013.proxy.configuration"]
-            XCTAssertGreaterThanOrEqual(arrow.frame.width, 44); XCTAssertGreaterThanOrEqual(arrow.frame.height, 44)
-            arrow.tap(); XCTAssertTrue(app.cells["vpn013.proxy.power"].waitForExistence(timeout: 5))
+            XCTAssertEqual(row.switches["vpn013.proxy.switch"].value as? String, "0", "A refused start must not leave the switch on")
+            // A short tap anywhere on the row is the same switch action.
+            row.staticTexts["Demo server"].tap()
+            XCTAssertTrue(app.alerts["Действие не завершено"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.cells["vpn013.proxy.power"].exists); app.alerts.buttons["Понятно"].tap()
+            row.staticTexts["Demo server"].press(forDuration: 2.5); XCTAssertTrue(app.cells["vpn013.proxy.power"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.alerts["Действие не завершено"].exists)
-            capture("row-" + kind + "-right-strip-opens-configuration")
+            capture("row-" + kind + "-hold-opens-configuration")
             app.navigationBars.buttons.element(boundBy: 0).tap()
         }
     }
@@ -479,7 +497,7 @@ final class AutoTunnelUITests:XCTestCase {
             }
             return true
         }
-        app.tables.cells.staticTexts["Испания"].tap()
+        app.tables.cells.staticTexts["Испания"].press(forDuration: 2.5)
         guard openAuthenticatedEditor() else { return }
         let version = app.textFields["vpn013.awg15.version"]
         for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }
@@ -490,7 +508,7 @@ final class AutoTunnelUITests:XCTestCase {
         app.navigationBars["Испания"].buttons.element(boundBy: 0).tap()
         // The I-only example is ambiguous. Choose 1.5 explicitly, save it and
         // reopen the editor to prove the user's choice is actually persisted.
-        app.tables.cells.staticTexts["Беларусь"].tap()
+        app.tables.cells.staticTexts["Беларусь"].press(forDuration: 2.5)
         guard openAuthenticatedEditor() else { return }
         for _ in 0..<8 where !version.isHittable { app.tables.firstMatch.swipeUp() }
         XCTAssertTrue(version.waitForExistence(timeout: 5))
@@ -630,7 +648,11 @@ final class AutoTunnelUITests:XCTestCase {
         XCTAssertTrue(app.buttons["Настройки"].isHittable)
         XCTAssertTrue(app.buttons["vpn013.add-profile"].isHittable)
         capture("07-dark-native-list-two-personal-servers")
+        // A short tap acts like the switch and never opens details.
         profile.staticTexts["Личный сервер 1"].tap()
+        XCTAssertFalse(app.navigationBars["Личный сервер 1"].waitForExistence(timeout:2), "Only a two-second hold opens details")
+        if app.alerts.firstMatch.waitForExistence(timeout:1) { app.alerts.firstMatch.buttons.firstMatch.tap() }
+        profile.staticTexts["Личный сервер 1"].press(forDuration: 2.5)
         XCTAssertTrue(app.navigationBars["Личный сервер 1"].waitForExistence(timeout:5))
         capture("08-dark-list-opens-profile-detail")
     }
@@ -1174,7 +1196,7 @@ final class AutoTunnelUITests:XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-unified"]
         app.launch(); app.tabBars.buttons["vpn013.kind.incy"].tap(); app.buttons["vpn013.proxy.add"].tap()
         app.buttons["vpn013.proxy.import.check"].tap(); app.alerts.buttons["Добавить"].tap()
-        let row = app.tables.cells.containing(.staticText, identifier: "Demo server").firstMatch; XCTAssertTrue(row.waitForExistence(timeout: 8)); row.buttons["vpn013.proxy.configuration"].tap()
+        let row = app.tables.cells.containing(.staticText, identifier: "Demo server").firstMatch; XCTAssertTrue(row.waitForExistence(timeout: 8)); row.staticTexts["Demo server"].press(forDuration: 2.5)
         XCTAssertTrue(app.tables.cells.staticTexts["Маршрутизация"].waitForExistence(timeout: 5)); app.tables.cells.staticTexts["Маршрутизация"].tap()
         app.buttons["vpn013.proxy.routing.mode"].tap()
         app.buttons["Выбранное — напрямую"].tap()
@@ -1249,7 +1271,7 @@ final class AutoTunnelUITests:XCTestCase {
         app.launch(); app.tabBars.buttons["vpn013.kind.happ"].tap(); app.buttons["vpn013.proxy.add"].tap()
         app.buttons["vpn013.proxy.import.check"].tap(); app.alerts.buttons["Добавить"].tap()
         let row = app.tables.cells.containing(.staticText, identifier: "Demo server").firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.buttons["vpn013.proxy.configuration"].tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.staticTexts["Demo server"].press(forDuration: 2.5)
         let endpoint = app.cells["vpn013.proxy.current-endpoint"]
         XCTAssertTrue(endpoint.waitForExistence(timeout: 8))
         let explanation = endpoint.staticTexts["VPN-расширение пока не вернуло текущий сервер"]

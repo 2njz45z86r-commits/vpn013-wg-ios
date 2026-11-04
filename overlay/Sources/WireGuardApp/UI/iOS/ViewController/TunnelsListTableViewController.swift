@@ -140,6 +140,9 @@ class TunnelsListTableViewController: UIViewController {
 
         tableView.dataSource = self
         tableView.delegate = self
+        let hold = UILongPressGestureRecognizer(target: self, action: #selector(rowHeld(_:)))
+        hold.minimumPressDuration = VPN013RowGestures.holdSeconds
+        tableView.addGestureRecognizer(hold)
 
         view.addSubview(tableView)
         tableView.translatesAutoresizingMaskIntoConstraints = false
@@ -1239,9 +1242,17 @@ extension TunnelsListTableViewController: UITableViewDelegate {
             tableState = .multiSelect(selectionCount: tableView.indexPathsForSelectedRows?.count ?? 0)
             return
         }
-        guard let tunnelsManager = tunnelsManager else { return }
-        let tunnel = tunnelsManager.tunnel(at: indexPath.row)
-        showTunnelDetail(for: tunnel, animated: true)
+        tableView.deselectRow(at: indexPath, animated: true)
+        (tableView.cellForRow(at: indexPath) as? TunnelListCell)?.toggleFromRowTap()
+    }
+
+    /// Holding a row for two seconds opens its configuration; a tap only switches it.
+    @objc private func rowHeld(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, !tableView.isEditing, let tunnelsManager = tunnelsManager,
+              let indexPath = tableView.indexPathForRow(at: gesture.location(in: tableView)),
+              indexPath.row < tunnelsManager.numberOfTunnels() else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        showTunnelDetail(for: tunnelsManager.tunnel(at: indexPath.row), animated: true)
     }
 
     func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
