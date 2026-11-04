@@ -28,6 +28,20 @@ jobs:
           device=$(xcrun simctl list devices available -j | python3 scripts/select_iphone_simulator.py)
           xcrun simctl boot "$device" || true
           xcrun simctl bootstatus "$device" -b
+          # Same disposable simulator LocalAuthentication fixture as the full
+          # coreC suite. Never alter the application authentication code.
+          test "${GITHUB_ACTIONS:-}" = true
+          xcrun simctl spawn "$device" notifyutil -s com.apple.BiometricKit.enrollmentChanged 1
+          xcrun simctl spawn "$device" notifyutil -p com.apple.BiometricKit.enrollmentChanged
+          (
+            i=0
+            while [ "$i" -lt 1350 ]; do
+              xcrun simctl spawn "$device" notifyutil -p com.apple.BiometricKit_Sim.pearl.match >/dev/null 2>&1 || true
+              i=$((i+1)); sleep 2
+            done
+          ) &
+          biometric_pid=$!
+          trap 'kill "$biometric_pid" 2>/dev/null || true' EXIT
           cmp -s build/awg/VPN013/UITests.swift overlay/VPN013/UITests.swift
           cd build/awg
           set +e
