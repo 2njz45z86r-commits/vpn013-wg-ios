@@ -1,0 +1,239 @@
+package fakedns
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/xtls/xray-core/common/net"
+)
+
+// These tests exercise only the patched isolated Xray copy, never iOS or a real service.
+func labHolder(t *testing.T, pool string, cap int) *Holder {
+	t.Helper()
+	h := &Holder{}
+	if e := h.initialize(pool, cap); e != nil {
+		t.Fatal(e)
+	}
+	return h
+}
+func TestVPN013LabStableRestartAndNoReuse(t *testing.T) {
+	for _, pool := range []string{"198.18.0.0/30", "fd12:3456::/126"} {
+		t.Run(pool, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+			h := labHolder(t, pool, 2)
+			first := h.GetFakeIPForDomain("one.invalid")
+			second := h.GetFakeIPForDomain("two.invalid")
+			if len(first) != 1 || len(second) != 1 || first[0].String() == second[0].String() {
+				t.Fatal("allocation collision")
+			}
+			if len(h.GetFakeIPForDomain("three.invalid")) != 0 {
+				t.Fatal("capacity overrun")
+			}
+			if h.GetDomainFromFakeDNS(first[0]) != "one.invalid" {
+				t.Fatal("original reverse mapping changed")
+			}
+			binary, e := os.Executable()
+			if e != nil {
+				t.Fatal(e)
+			}
+			cmd := exec.Command(binary, "-test.run=^TestVPN013LabRestartChild$", "-test.v")
+			cmd.Env = append(os.Environ(), "VPN013_LAB_CHILD=1", "VPN013_LAB_POOL="+pool, "VPN013_LAB_FIRST="+first[0].String(), "VPN013_LAB_SECOND="+second[0].String())
+			out, e := cmd.CombinedOutput()
+			if e != nil || !strings.Contains(string(out), "--- PASS: TestVPN013LabRestartChild") {
+				t.Fatalf("new process did not execute stable-map check: %v %s", e, out)
+			}
+		})
+	}
+}
+func TestVPN013LabRestartChild(t *testing.T) {
+	if os.Getenv("VPN013_LAB_CHILD") != "1" {
+		t.Skip("child only")
+	}
+	h := labHolder(t, os.Getenv("VPN013_LAB_POOL"), 2)
+	first := net.ParseAddress(os.Getenv("VPN013_LAB_FIRST"))
+	second := net.ParseAddress(os.Getenv("VPN013_LAB_SECOND"))
+	if h.GetDomainFromFakeDNS(first) != "one.invalid" || h.GetDomainFromFakeDNS(second) != "two.invalid" {
+		t.Fatal("restart changed mapping")
+	}
+	if len(h.GetFakeIPForDomain("three.invalid")) != 0 {
+		t.Fatal("restart reused allocated address")
+	}
+	if got := h.GetFakeIPForDomain("ONE.INVALID."); len(got) != 1 || got[0].String() != first.String() {
+		t.Fatal("canonical name mismatch")
+	}
+}
+func TestVPN013LabConcurrentNoDuplicate(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	h := labHolder(t, "198.18.10.0/24", 64)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	ips := map[string]bool{}
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			got := h.GetFakeIPForDomain(fmt.Sprintf("name%d.invalid", i))
+			if len(got) != 1 {
+				t.Error("allocation failed")
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if ips[got[0].String()] {
+				t.Error("duplicate address")
+			}
+			ips[got[0].String()] = true
+		}(i)
+	}
+	wg.Wait()
+	if len(ips) != 32 {
+		t.Fatal("missing allocation")
+	}
+	after := labHolder(t, "198.18.10.0/24", 64)
+	for ip := range ips {
+		if !strings.HasSuffix(after.GetDomainFromFakeDNS(net.ParseAddress(ip)), ".invalid") {
+			t.Fatal("restart lost mapping")
+		}
+	}
+}
+func TestVPN013LabCorruptionNotReassigned(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	h := labHolder(t, "198.18.10.0/24", 10)
+	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
+		t.Fatal("setup failed")
+	}
+	files, e := filepath.Glob(filepath.Join(dir, "pool-*.json"))
+	if e != nil || len(files) != 1 {
+		t.Fatal("missing snapshot")
+	}
+	b, e := os.ReadFile(files[0])
+	if e != nil {
+		t.Fatal(e)
+	}
+	var s labSnapshot
+	if e = json.Unmarshal(b, &s); e != nil {
+		t.Fatal(e)
+	}
+	s.Body.Assigned["one.invalid"] = "198.18.10.25"
+	b, _ = json.Marshal(s)
+	if e = os.WriteFile(files[0], b, 0600); e != nil {
+		t.Fatal(e)
+	}
+	broken := &Holder{}
+	if e = broken.initialize("198.18.10.0/24", 10); e == nil {
+		t.Fatal("corruption silently accepted")
+	}
+}
+
+func TestVPN013LabMultiProcessChild(t *testing.T) {
+	if os.Getenv("VPN013_LAB_MULTI_CHILD") != "1" {
+		t.Skip("child only")
+	}
+	dir := os.Getenv("VPN013_LAB_FAKEDNS_DIR")
+	name := os.Getenv("VPN013_LAB_NAME")
+	h := labHolder(t, "198.18.20.0/24", 64)
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		if _, e := os.Stat(filepath.Join(dir, "start")); e == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("barrier timed out")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	got := h.GetFakeIPForDomain(name + ".invalid")
+	if len(got) != 1 {
+		t.Fatal("child allocation failed")
+	}
+	if e := os.WriteFile(filepath.Join(dir, name+".result"), []byte(got[0].IP().String()), 0600); e != nil {
+		t.Fatal(e)
+	}
+}
+func TestVPN013LabConcurrentProcesses(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	binary, e := os.Executable()
+	if e != nil {
+		t.Fatal(e)
+	}
+	const count = 8
+	cmds := make([]*exec.Cmd, count)
+	var outputs [count]bytes.Buffer
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("child%d", i)
+		cmd := exec.Command(binary, "-test.run=^TestVPN013LabMultiProcessChild$", "-test.v")
+		cmd.Env = append(os.Environ(), "VPN013_LAB_MULTI_CHILD=1", "VPN013_LAB_NAME="+name)
+		cmd.Stdout = &outputs[i]
+		cmd.Stderr = &outputs[i]
+		if e = cmd.Start(); e != nil {
+			t.Fatal(e)
+		}
+		cmds[i] = cmd
+	}
+	if e = os.WriteFile(filepath.Join(dir, "start"), []byte("test only"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	for i, cmd := range cmds {
+		if e = cmd.Wait(); e != nil || !strings.Contains(outputs[i].String(), "--- PASS: TestVPN013LabMultiProcessChild") {
+			t.Fatalf("child %d failed: %v %s", i, e, outputs[i].String())
+		}
+	}
+	h := labHolder(t, "198.18.20.0/24", 64)
+	seen := map[string]bool{}
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("child%d", i)
+		raw, e := os.ReadFile(filepath.Join(dir, name+".result"))
+		if e != nil {
+			t.Fatal(e)
+		}
+		ip := string(raw)
+		if seen[ip] {
+			t.Fatal("cross-process address reused")
+		}
+		seen[ip] = true
+		if h.GetDomainFromFakeDNS(net.ParseAddress(ip)) != name+".invalid" {
+			t.Fatal("cross-process mapping lost")
+		}
+	}
+}
+func TestVPN013LabPartialLossGuardAndTotalLossHazard(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	first := labHolder(t, "198.18.30.0/24", 10)
+	a := first.GetFakeIPForDomain("one.invalid")
+	if len(a) != 1 {
+		t.Fatal("initial allocation failed")
+	}
+	// Controlled deletion of this test's own journal models state loss. No user file is touched.
+	if e := os.Remove(first.labStore.path); e != nil {
+		t.Fatal(e)
+	}
+	guarded := &Holder{}
+	if e := guarded.initialize("198.18.30.0/24", 10); e == nil {
+		t.Fatal("missing journal was silently reinitialized")
+	}
+	// If both local files are lost, this prototype has no independent anchor.
+	if e := os.Remove(first.labStore.path + ".seal"); e != nil {
+		t.Fatal(e)
+	}
+	after := labHolder(t, "198.18.30.0/24", 10)
+	b := after.GetFakeIPForDomain("two.invalid")
+	if len(b) != 1 {
+		t.Fatal("second allocation failed")
+	}
+	if a[0].IP().String() != b[0].IP().String() || after.GetDomainFromFakeDNS(a[0]) != "two.invalid" {
+		t.Fatal("state-loss hazard not reproduced")
+	}
+}

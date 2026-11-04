@@ -1,0 +1,47 @@
+name: FakeDNS mapping stability diagnostic
+on:
+  push:
+    branches: [codex/ios-fakedns-stable-lab-20261104]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Prepare checksum-bound isolated Xray copy
+        run: |
+          set -euo pipefail
+          (cd overlay/Sources/WireGuardKitGo && GOTOOLCHAIN=local go mod download && GOTOOLCHAIN=local go mod verify)
+          python3 scripts/fakedns-stability-lab/prepare.py
+      - name: Execute stability tests on Mac with race detector
+        working-directory: build/fakedns-stability-owned
+        run: |
+          set -euo pipefail
+          GOTOOLCHAIN=local CGO_ENABLED=1 go test -race ./app/dns/fakedns -run '^TestVPN013Lab(StableRestartAndNoReuse|ConcurrentNoDuplicate|CorruptionNotReassigned|ConcurrentProcesses|PartialLossGuardAndTotalLossHazard)$' -count=1 -timeout=120s -v | tee "$GITHUB_WORKSPACE/scripts/fakedns-stability-lab/tests.txt"
+          for name in StableRestartAndNoReuse ConcurrentNoDuplicate CorruptionNotReassigned ConcurrentProcesses PartialLossGuardAndTotalLossHazard; do grep -F -- "--- PASS: TestVPN013Lab${name} " "$GITHUB_WORKSPACE/scripts/fakedns-stability-lab/tests.txt"; done
+      - name: Cross compile iOS package
+        working-directory: build/fakedns-stability-owned
+        run: GOOS=ios GOARCH=arm64 CGO_ENABLED=0 GOTOOLCHAIN=local go build ./app/dns/fakedns
+      - name: Run local Xray restart and retained-address check
+        run: |
+          set -euo pipefail
+          (cd build/fakedns-stability-owned && GOTOOLCHAIN=local go build -o "$GITHUB_WORKSPACE/scripts/fakedns-stability-lab/xray-fakedns-lab.exe" ./main)
+          python3 scripts/fakedns-stability-lab/network_restart.py
+      - name: Retain only synthetic evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vpn013-fakedns-stable-lab-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            scripts/fakedns-stability-lab/tests.txt
+            scripts/fakedns-stability-lab/network-restart-result.json
+            scripts/fakedns-stability-lab/manifest.json

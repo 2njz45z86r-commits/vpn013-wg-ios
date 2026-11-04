@@ -1,0 +1,206 @@
+package fakedns
+
+// LAB ONLY. This stores domain names in plaintext; it is not integrated into
+// the application and has no iOS data-protection or power-loss proof.
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math/big"
+	stdnet "net"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type labSnapshotBody struct {
+	Version  int               `json:"version"`
+	Pool     string            `json:"pool"`
+	Next     uint64            `json:"next"`
+	Assigned map[string]string `json:"assigned"`
+}
+type labSnapshot struct {
+	Body   labSnapshotBody `json:"body"`
+	Digest string          `json:"digest"`
+}
+type labStableStore struct {
+	path    string
+	pool    *stdnet.IPNet
+	limit   int
+	body    labSnapshotBody
+	reverse map[string]string
+}
+
+func labDigest(body labSnapshotBody) (string, error) {
+	b, e := json.Marshal(body)
+	if e != nil {
+		return "", e
+	}
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:]), nil
+}
+func newLabStableStore(pool *stdnet.IPNet, limit int) (*labStableStore, error) {
+	dir := os.Getenv("VPN013_LAB_FAKEDNS_DIR")
+	if dir == "" {
+		return nil, errors.New("lab fake DNS directory required")
+	}
+	if s, e := os.Stat(dir); e != nil || !s.IsDir() {
+		return nil, errors.New("lab fake DNS directory unavailable")
+	}
+	sum := sha256.Sum256([]byte(pool.String()))
+	st := &labStableStore{path: filepath.Join(dir, fmt.Sprintf("pool-%x.json", sum[:8])), pool: pool, limit: limit}
+	release, e := labFileLock(st.path + ".lock")
+	if e != nil {
+		return nil, e
+	}
+	defer release()
+	if e = st.reload(); e != nil {
+		return nil, e
+	}
+	return st, nil
+}
+func (st *labStableStore) reload() error {
+	f, e := os.Open(st.path)
+	if os.IsNotExist(e) {
+		if _, markerErr := os.Stat(st.path + ".seal"); markerErr == nil {
+			return errors.New("missing journal with existing marker")
+		} else if !os.IsNotExist(markerErr) {
+			return markerErr
+		}
+		st.body = labSnapshotBody{Version: 1, Pool: st.pool.String(), Next: 1, Assigned: map[string]string{}}
+		st.reverse = map[string]string{}
+		return nil
+	}
+	if e != nil {
+		return e
+	}
+	defer f.Close()
+	if _, markerErr := os.Stat(st.path + ".seal"); markerErr != nil {
+		return errors.New("missing journal marker")
+	}
+	var snap labSnapshot
+	dec := json.NewDecoder(io.LimitReader(f, 8<<20))
+	dec.DisallowUnknownFields()
+	if e = dec.Decode(&snap); e != nil {
+		return e
+	}
+	var extra any
+	if e = dec.Decode(&extra); e != io.EOF {
+		return errors.New("trailing or oversized journal")
+	}
+	dig, e := labDigest(snap.Body)
+	if e != nil || dig != snap.Digest || snap.Body.Version != 1 || snap.Body.Pool != st.pool.String() || snap.Body.Assigned == nil || len(snap.Body.Assigned) > st.limit || snap.Body.Next != uint64(len(snap.Body.Assigned))+1 {
+		return errors.New("invalid lab journal")
+	}
+	reverse := map[string]string{}
+	for name, v := range snap.Body.Assigned {
+		ip := stdnet.ParseIP(v)
+		if name == "" || len(name) > 253 || ip == nil || !st.pool.Contains(ip) || reverse[v] != "" {
+			return errors.New("invalid allocation")
+		}
+		reverse[v] = name
+	}
+	st.body = snap.Body
+	st.reverse = reverse
+	return nil
+}
+func (st *labStableStore) lookup(ip string) (string, error) {
+	release, e := labFileLock(st.path + ".lock")
+	if e != nil {
+		return "", e
+	}
+	defer release()
+	if e = st.reload(); e != nil {
+		return "", e
+	}
+	return st.reverse[ip], nil
+}
+func (st *labStableStore) allocate(domain string) (string, error) {
+	release, e := labFileLock(st.path + ".lock")
+	if e != nil {
+		return "", e
+	}
+	defer release()
+	if e = st.reload(); e != nil {
+		return "", e
+	}
+	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
+	if domain == "" || len(domain) > 253 {
+		return "", errors.New("invalid domain")
+	}
+	if ip := st.body.Assigned[domain]; ip != "" {
+		return ip, nil
+	}
+	if len(st.body.Assigned) >= st.limit {
+		return "", errors.New("pool exhausted")
+	}
+	ones, bits := st.pool.Mask.Size()
+	addr := new(big.Int).SetBytes(st.pool.IP)
+	addr.Add(addr, new(big.Int).SetUint64(st.body.Next))
+	raw := addr.FillBytes(make([]byte, bits/8))
+	if !st.pool.Contains(raw) || bits-ones < 1 {
+		return "", errors.New("pool exhausted")
+	}
+	ip := stdnet.IP(raw).String()
+	if st.reverse[ip] != "" {
+		return "", errors.New("duplicate address")
+	}
+	body := labSnapshotBody{Version: 1, Pool: st.body.Pool, Next: st.body.Next + 1, Assigned: make(map[string]string, len(st.body.Assigned)+1)}
+	for k, v := range st.body.Assigned {
+		body.Assigned[k] = v
+	}
+	body.Assigned[domain] = ip
+	digest, e := labDigest(body)
+	if e != nil {
+		return "", e
+	}
+	encoded, e := json.Marshal(labSnapshot{Body: body, Digest: digest})
+	if e != nil {
+		return "", e
+	}
+	if len(encoded) > 8<<20 {
+		return "", errors.New("snapshot size limit")
+	}
+	marker, markerErr := os.OpenFile(st.path+".seal", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if markerErr == nil {
+		if _, e = marker.Write([]byte("VPN013-LAB-ONLY")); e != nil {
+			marker.Close()
+			return "", e
+		}
+		if e = marker.Sync(); e != nil {
+			marker.Close()
+			return "", e
+		}
+		if e = marker.Close(); e != nil {
+			return "", e
+		}
+	} else if !os.IsExist(markerErr) {
+		return "", markerErr
+	}
+	f, e := os.CreateTemp(filepath.Dir(st.path), ".vpn013-lab-*")
+	if e != nil {
+		return "", e
+	}
+	temp := f.Name()
+	defer os.Remove(temp)
+	if _, e = f.Write(encoded); e != nil {
+		f.Close()
+		return "", e
+	}
+	if e = f.Sync(); e != nil {
+		f.Close()
+		return "", e
+	}
+	if e = f.Close(); e != nil {
+		return "", e
+	}
+	if e = os.Rename(temp, st.path); e != nil {
+		return "", e
+	}
+	st.body = body
+	st.reverse[ip] = domain
+	return ip, nil
+}
