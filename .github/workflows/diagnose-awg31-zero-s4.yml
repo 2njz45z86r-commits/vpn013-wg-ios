@@ -2,7 +2,7 @@ name: Diagnose experimental AWG zero-S4 on macOS
 on:
   workflow_dispatch:
   push:
-    branches: [codex/ios-awg31-zero-s4-lab-20261104]
+    branches: [codex/ios-awg31-burst72-mac-20261104]
 permissions:
   contents: read
 jobs:
@@ -25,9 +25,10 @@ jobs:
           wanted={'TestVPN013SyntheticZeroS4ProtectedHeaderFeasibility',
                   'TestVPN013LabZeroS4AuthenticatedAndBounded','TestVPN013LabRecoveryRateGate',
                   'TestVPN013LabZeroS4WithoutHeaderProtectAuthenticates',
-                  'TestVPN013LabZeroS4MisclassifiedAsControl'}
+                  'TestVPN013LabZeroS4MisclassifiedAsControl',
+                  'TestVPN013LabConcurrentRecoveryWhileConfigChanges'}
           assert t['exit']==0 and not t['failedOrSkipped'] and wanted.issubset(set(t['passedTests']))
-          print('PASS: five lab AWG tests executed on macOS; iPhone runtime not tested')
+          print('PASS: six lab AWG tests executed on macOS; iPhone runtime not tested')
           PY
       - name: Retain provenance only, never the experimental IPA
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
