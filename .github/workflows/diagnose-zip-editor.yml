@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   focus:
-    runs-on: macos-26-intel
+    runs-on: macos-26
     timeout-minutes: 50
     env:
       PYTHONDONTWRITEBYTECODE: '1'
@@ -19,6 +19,7 @@ jobs:
       - name: Build app and VPN extension without publishing
         run: sh build-on-mac.sh
       - name: Run actual ZIP profile editor XCTest on iPhone simulator
+        timeout-minutes: 25
         run: |
           set -eu
           export GOFLAGS="-mod=readonly -modfile=$PWD/build/proxy-fd/proxy-tun.mod"
@@ -26,8 +27,10 @@ jobs:
           python3 scripts/native_ui_shards.py selectors coreC > "$RUNNER_TEMP/coreC-selectors.txt"
           grep -F 'testSharedZipImportsThirteenWithoutDuplicateError' "$RUNNER_TEMP/coreC-selectors.txt" > /dev/null
           device=$(xcrun simctl list devices available -j | python3 scripts/select_iphone_simulator.py)
+          echo "Diagnostic: booting selected iPhone simulator"
           xcrun simctl boot "$device" || true
           xcrun simctl bootstatus "$device" -b
+          echo "Diagnostic: simulator booted"
           # Same disposable simulator LocalAuthentication fixture as the full
           # coreC suite. Never alter the application authentication code.
           test "${GITHUB_ACTIONS:-}" = true
@@ -44,6 +47,7 @@ jobs:
           trap 'kill "$biometric_pid" 2>/dev/null || true' EXIT
           cmp -s build/awg/VPN013/UITests.swift overlay/VPN013/UITests.swift
           cd build/awg
+          echo "Diagnostic: invoking focused xcodebuild test"
           set +e
           xcodebuild -project WireGuard.xcodeproj -scheme VPN013Auto -configuration Debug -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
@@ -69,6 +73,19 @@ jobs:
           exact_log(Path('build/zip-editor-focus.log').read_text(errors='replace'), [name])
           print('PASS: one actual ZIP profile editor XCTest, zero failures and zero skips')
           PY
+      - name: Save bounded test-log summary after success, failure, or step timeout
+        if: always()
+        run: |
+          mkdir -p build/review
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          source = Path('build/zip-editor-focus.log')
+          if source.exists():
+              selected = [line for line in source.read_text(errors='replace').splitlines()
+                          if re.search(r'Test Case .* (started|passed|failed)|error:|TEST (FAILED|SUCCEEDED)', line)]
+              Path('build/review/zip-editor-log-summary.txt').write_text('\n'.join(selected[-200:]) + '\n')
+          PY
       - name: Retain focused result summary without an IPA
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -77,4 +94,5 @@ jobs:
           path: |
             build/review/zip-editor-focus-summary.json
             build/review/zip-editor-focus-result.zip
+            build/review/zip-editor-log-summary.txt
           if-no-files-found: warn
