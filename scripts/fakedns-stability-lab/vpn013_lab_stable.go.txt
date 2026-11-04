@@ -222,6 +222,10 @@ func (st *labStableStore) allocate(domain string) (string, error) {
 	if e = os.Rename(temp, st.path); e != nil {
 		return "", e
 	}
+	// Test-only process kill; this code is isolated from the app and must never ship.
+	if os.Getenv("VPN013_LAB_EXIT_AFTER_JOURNAL") == "1" {
+		os.Exit(86)
+	}
 	// Write anchor second; crash in between fails closed on the next load.
 	af, e := os.CreateTemp(filepath.Dir(st.anchor), ".vpn013-lab-anchor-*")
 	if e != nil {

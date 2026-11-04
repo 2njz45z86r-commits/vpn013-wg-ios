@@ -3,6 +3,7 @@ package fakedns
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -326,5 +327,36 @@ func TestVPN013LabCombinedRollbackHazard(t *testing.T) {
 	c := after.GetFakeIPForDomain("three.invalid")
 	if len(c) != 1 || c[0].IP().String() != b[0].IP().String() {
 		t.Fatal("expected joint rollback hazard not reproduced")
+	}
+}
+func TestVPN013LabCrashChild(t *testing.T) {
+	if os.Getenv("VPN013_LAB_CRASH_CHILD") != "1" {
+		t.Skip("child only")
+	}
+	h := labHolder(t, "198.18.70.0/24", 10)
+	_ = h.GetFakeIPForDomain("two.invalid")
+	t.Fatal("test process was expected to exit after journal write")
+}
+func TestVPN013LabRealProcessCrashGuard(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	h := labHolder(t, "198.18.70.0/24", 10)
+	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
+		t.Fatal("initial allocation failed")
+	}
+	bin, e := os.Executable()
+	if e != nil {
+		t.Fatal(e)
+	}
+	cmd := exec.Command(bin, "-test.run=^TestVPN013LabCrashChild$", "-test.v")
+	cmd.Env = append(os.Environ(), "VPN013_LAB_CRASH_CHILD=1", "VPN013_LAB_EXIT_AFTER_JOURNAL=1")
+	out, e := cmd.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(e, &exit) || exit.ExitCode() != 86 || !strings.Contains(string(out), "=== RUN   TestVPN013LabCrashChild") {
+		t.Fatalf("child did not exit at failpoint: %v %s", e, out)
+	}
+	if e = (&Holder{}).initialize("198.18.70.0/24", 10); e == nil {
+		t.Fatal("crash between journal and anchor went undetected")
 	}
 }
