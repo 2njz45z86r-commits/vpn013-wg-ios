@@ -15,7 +15,7 @@ struct AutoTunnelProfile: Codable {
     let candidates: [Candidate]
     init(configurations: [TunnelConfiguration]) throws { candidates = configurations.map { Candidate(name: $0.name ?? "Fixture", config: $0.body) } }
     func validatedConfigurations() throws -> [TunnelConfiguration] {
-        guard (1...30).contains(candidates.count) else { throw FixtureError.injected }
+        guard (1...50).contains(candidates.count) else { throw FixtureError.injected }
         return try candidates.map { try TunnelConfiguration(fromWgQuickConfig: $0.config, called: $0.name) }
     }
 }
@@ -81,6 +81,18 @@ final class NETunnelProviderManager {
             let manager = NETunnelProviderManager(); manager.protocolConfiguration = value; manager.localizedDescription = "Fixture"; return manager
         }
         let happ = try profile(.happ), incy = try profile(.incy), black = try profile(.blacktemple)
+        var fifty = [happ]
+        for index in 1..<50 { var item = happ; item.id = UUID(); item.name = "Fixture \(index)"; fifty.append(item) }
+        var fiftyPayload = ProxyTunnelPayload(profile: happ); fiftyPayload.automaticCandidates = fifty
+        let fiftyGroup = CrossProtocolPlan.Group(kind: .happ, name: "Fixture", proxy: fiftyPayload)
+        try fiftyGroup.validate()
+        expect(fiftyGroup.count == 50, "fifty proxy servers remain in cross-protocol group")
+        var fiftyOne = happ; fiftyOne.id = UUID(); fiftyOne.name = "Fixture 51"
+        fiftyPayload.automaticCandidates?.append(fiftyOne)
+        let rejectedGroup = CrossProtocolPlan.Group(kind: .happ, name: "Fixture", proxy: fiftyPayload)
+        var denied51 = false
+        do { try rejectedGroup.validate() } catch { denied51 = true }
+        expect(denied51, "51 servers rejected in cross-protocol group")
         let primary = try manager(PrivateTunnelPayload(proxy: JSONEncoder().encode(ProxyTunnelPayload(profile: happ))))
         let duplicate = try manager(PrivateTunnelPayload(proxy: JSONEncoder().encode(ProxyTunnelPayload(profile: happ))))
         let extra = try manager(PrivateTunnelPayload(proxy: JSONEncoder().encode(ProxyTunnelPayload(profile: profile(.happ)))))

@@ -8,13 +8,13 @@ struct AutoTunnelProfile: Codable {
     let version: Int
     let candidates: [Candidate]
     init(configurations: [TunnelConfiguration]) throws {
-        guard (1...30).contains(configurations.count) else { throw AutoTunnelError.invalidGroup }
+        guard (1...50).contains(configurations.count) else { throw AutoTunnelError.invalidGroup }
         candidates = configurations.map { Candidate(name: $0.name ?? "", config: $0.asWgQuickConfig()) }
         version = 1
         _ = try validatedConfigurations()
     }
     func validatedConfigurations() throws -> [TunnelConfiguration] {
-        guard version == 1, (1...30).contains(candidates.count),
+        guard version == 1, (1...50).contains(candidates.count),
               Set(candidates.map { $0.name }).count == candidates.count else { throw AutoTunnelError.invalidGroup }
         return try candidates.map { item in
             guard !item.name.isEmpty, item.name.count <= 128, item.config.utf8.count <= 65536 else { throw AutoTunnelError.invalidGroup }
@@ -55,7 +55,7 @@ enum AutoTunnelError: LocalizedError {
     case incompatible(String)
     var errorDescription: String? {
         switch self {
-        case .invalidGroup: return "Сначала добавьте хотя бы одну конфигурацию AmneziaWG или WireGuard. Для Авто нужны разные имена серверов и доступные конфигурации."
+        case .invalidGroup: return "Для Авто нужно от 1 до 50 доступных конфигураций AmneziaWG или WireGuard с разными именами серверов."
         case .incompatible(let name): return "«\(name)» не подходит для Авто: нужен один сервер с адресом подключения и полным IPv4-туннелем (AllowedIPs = 0.0.0.0/0). Исходная конфигурация не изменена."
         case .keychain: return "Не удалось сохранить защищённую конфигурацию. Проверьте доступное место и повторите импорт. Для VPN-расширения нужна подпись с правом Network Extension."
         case .active: return "Сначала выключите VPN, затем создайте автоматическое подключение."

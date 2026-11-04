@@ -11,7 +11,7 @@ enum ProxyOperationError: LocalizedError {
         case .unreadable: return "Не удалось прочитать защищённый профиль. Исходные профили сохранены."
         case .switching: return "Предыдущее подключение не отключилось. Проверьте раздел VPN в настройках iPhone."
         case .system: return "iOS не завершила действие с VPN. Повторите попытку и разрешите добавление VPN в системном окне."
-        case .automaticLimit: return "Для Авто доступно до 30 серверов в одном разделе. Выключите Авто для ручного подключения при большем списке."
+        case .automaticLimit: return "Для Авто доступно до 50 серверов в одном разделе. Выключите Авто для ручного подключения при большем списке."
         case .routingPartial: return "Не все изменения маршрутизации удалось отменить. Проверьте настройки выбранных серверов и повторите сохранение."
         }
     }
@@ -334,8 +334,8 @@ final class ProxyProfilesManager {
         do {
             var value = entry.value
             let sources = CrossProtocolPlan.matchingProxyCandidates(primary: entry.value, others: entries.map { $0.value })
-            if VPN013AutomaticMode.enabled(), sources.count > 30 { throw ProxyOperationError.automaticLimit }
-            value.automaticCandidates = sources.count <= 30 ? sources : [entry.value.profile]
+            if VPN013AutomaticMode.enabled(), sources.count > 50 { throw ProxyOperationError.automaticLimit }
+            value.automaticCandidates = sources.count <= 50 ? sources : [entry.value.profile]
             value.automaticEnabled = VPN013AutomaticMode.enabled()
             let previous = entry.manager.protocolConfiguration as? NETunnelProviderProtocol
             entry.manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: previous)

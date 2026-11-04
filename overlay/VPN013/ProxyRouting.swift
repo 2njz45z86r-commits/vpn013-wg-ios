@@ -71,7 +71,7 @@ struct ProxyTunnelPayload: Codable, Equatable {
     var candidates: [ProxyProfile] { automaticCandidates ?? [profile] }
     func validate() throws {
         try profile.validate(); try routing.validate()
-        guard (1...30).contains(candidates.count), Set(candidates.map { $0.id }).count == candidates.count,
+        guard (1...50).contains(candidates.count), Set(candidates.map { $0.id }).count == candidates.count,
               candidates.contains(where: { $0.id == profile.id }), candidates.allSatisfy({ $0.source == profile.source }) else { throw ProxyProfileError.invalid }
         for candidate in candidates { try candidate.validate() }
     }

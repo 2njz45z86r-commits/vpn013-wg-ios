@@ -3,7 +3,7 @@ var checks = 0
 func check(_ value: @autoclosure () -> Bool, _ label: String) {
     precondition(value(), label); checks += 1
 }
-for count in 1...40 {
+for count in 1...50 {
 for start in 0..<count {
     var policy=AutoFailoverPolicy(count:count,initialIndex:start)
     var seen:Set<Int>=[start]
@@ -24,9 +24,9 @@ for start in 0..<count {
     for _ in 0..<10 { check(policy.record(healthy:false,networkAvailable:true) == .stopped,"manual stop persists") }
 }
 }
-print("AutoFailoverPolicy: \(checks) assertions passed; counts 1...40, every initial server, recovery, offline, exhaustion, stop")
+print("AutoFailoverPolicy: \(checks) assertions passed; counts 1...50, every initial server, recovery, offline, exhaustion, stop")
 
-for count in 1...30 {
+for count in 1...50 {
     var policy=AutoFailoverPolicy(count:count)
     check(policy.record(healthy:true,networkAvailable:true,latencyMilliseconds:1200) == .stay,"1200ms is allowed")
     let decision=policy.record(healthy:true,networkAvailable:true,latencyMilliseconds:1201)
@@ -41,7 +41,7 @@ for count in 1...30 {
 }
 print("AutoFailoverPolicy latency checks passed: 1200ms boundary, slow fallback, recovery, actual failure counting, offline and manual stop; total \(checks)")
 
-for count in 1...30 {
+for count in 1...50 {
     var policy = AutoFailoverPolicy(count: count)
     _ = policy.record(healthy: false, networkAvailable: true)
     policy.selectMeasuredCandidate(count - 1)

@@ -392,7 +392,7 @@ final class ClientUpdateCoordinator {
                 for id in newMembers where !sourceIDs.contains(id) { sourceIDs.append(id) }
                 let members = sourceIDs.compactMap { id in all.first { $0.persistentProfileIdentifier == id }?.tunnelConfiguration }
                 do {
-                    guard members.count == sourceIDs.count, (1...30).contains(members.count), let first = members.first else { throw ClientUpdateError.invalidResponse }
+                    guard members.count == sourceIDs.count, (1...50).contains(members.count), let first = members.first else { throw ClientUpdateError.invalidResponse }
                     let profile = try AutoTunnelProfile(configurations: members)
                     let config = TunnelConfiguration(name: "Авто · " + AutoTunnelProfile.serverCountLabel(members.count), interface: first.interface, peers: first.peers)
                     manager.modify(tunnel: tunnel, tunnelConfiguration: config, onDemandOption: tunnel.onDemandOption, automaticProfile: profile) { error in

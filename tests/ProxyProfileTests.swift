@@ -29,6 +29,18 @@ import Foundation
             check(restored == profiles[0], "lossless typed private persistence input")
         }
         let original = try ProxyImport.profiles(Data(uri.utf8), source: .blacktemple)
+        // Fifty explicitly distinct entries must survive group validation;
+        // the 51st must be refused rather than silently dropped.
+        var fiftyCandidates = [original[0]]
+        for index in 1..<50 {
+            var candidate = original[0]; candidate.id = UUID(); candidate.name = "Fixture \(index)"
+            fiftyCandidates.append(candidate)
+        }
+        var automatic = ProxyTunnelPayload(profile: original[0]); automatic.automaticCandidates = fiftyCandidates
+        try automatic.validate(); check(automatic.candidates.count == 50, "fifty proxy candidates retained")
+        var candidate51 = original[0]; candidate51.id = UUID(); candidate51.name = "Fixture 51"
+        automatic.automaticCandidates?.append(candidate51)
+        rejects("51 automatic candidates") { try automatic.validate() }
         let subscription = Data((uri + "\n" + uri.replacingOccurrences(of: "#Germany", with: "#Finland")).utf8).base64EncodedData()
         let decoded = try ProxyImport.profiles(subscription, source: .blacktemple)
         check(decoded.count == 2 && decoded[1].name == "Finland", "standard BlackTemple subscription")

@@ -32,7 +32,7 @@ private final class MessageClock {
         }
         let ordinary: [Row] = [("!First", false), ("0 Server", false), ("Авто · обычный профиль", false),
                                ("Дом", false), ("Finland10", false), ("Finland2", false)]
-        for count in 1...30 {
+        for count in 1...50 {
             var rows = ordinary + (0..<count).map { ("Server \($0)", false) }
             rows.append(("ZZZ renamed Auto", true))
             for _ in 0..<100 {

@@ -54,7 +54,7 @@ func validateInput(in ScanInput) error {
 	}
 	resolver, err := netip.ParseAddrPort(in.Resolver)
 	if err != nil || !resolver.Addr().Is4() || resolver.Addr().IsUnspecified() || resolver.Port() == 0 ||
-		len(in.Candidates) < 1 || len(in.Candidates) > 30 || in.StartIndex < 0 || in.StartIndex >= len(in.Candidates) {
+		len(in.Candidates) < 1 || len(in.Candidates) > 50 || in.StartIndex < 0 || in.StartIndex >= len(in.Candidates) {
 		return ErrInvalidScan
 	}
 	ids := make(map[string]bool)

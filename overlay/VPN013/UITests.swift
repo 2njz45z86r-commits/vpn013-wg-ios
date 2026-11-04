@@ -533,7 +533,23 @@ final class AutoTunnelUITests:XCTestCase {
     func testTwoPersonalServers() { createFromPersonalServers(count:2, label:"2 сервера") }
     func testSinglePersonalServerExplainsNoReserve() { createFromPersonalServers(count:1, label:"1 сервер") }
     func testMoreThanThirteenPersonalServers() { createFromPersonalServers(count:26, label:"26 серверов") }
-    func testThirtyPersonalServers() { createFromPersonalServers(count:30, label:"30 серверов") }
+    func testThirtyAndFiftyPersonalServers() {
+        createFromPersonalServers(count:30, label:"30 серверов")
+        XCUIApplication().terminate()
+        createFromPersonalServers(count:50, label:"50 серверов")
+        XCUIApplication().terminate()
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "--vpn013-test-count", "51"]
+        app.launch()
+        XCTAssertTrue(app.tables.cells.staticTexts["Личный сервер 1"].waitForExistence(timeout:20))
+        app.buttons["vpn013.add-profile"].tap()
+        app.buttons["Создать режим Авто"].tap()
+        let error = app.alerts["Авто не создано"]
+        XCTAssertTrue(error.waitForExistence(timeout:5))
+        error.buttons["Понятно"].tap()
+        assertProfileCount(app, 51)
+        capture("dynamic-51-servers-rejected-with-profiles-preserved")
+    }
     func testFourteenPersonalServers() { createFromPersonalServers(count:14, label:"14 серверов") }
     func testEmptyListDisablesAutomaticCreation() {
         let app = XCUIApplication()

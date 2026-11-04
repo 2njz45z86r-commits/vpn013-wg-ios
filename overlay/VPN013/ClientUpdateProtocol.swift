@@ -57,7 +57,7 @@ struct ClientSnapshot: Codable {
     let servers: [ClientServer]
     func validate(orderID expected: String? = nil) throws {
         guard schema == 1, kind == "vpn013-awg", ClientUpdateProtocol.validID(orderID), expected == nil || expected == orderID,
-              complete, (1...30).contains(servers.count), ClientUpdateProtocol.validHash(revision), expiry > 0,
+              complete, (1...50).contains(servers.count), ClientUpdateProtocol.validHash(revision), expiry > 0,
               Set(servers.map { $0.id }).count == servers.count, Set(servers.map { $0.name }).count == servers.count else { throw ClientUpdateError.invalidDocument }
         try servers.forEach { try $0.validate() }
         // The digest binds the authoritative roster, names and exact configuration bytes.

@@ -80,9 +80,9 @@ import Foundation
         fails { try snapshot([ClientServer(id:"../admin",name:"A",config:"x")]).validate() }
         fails { try snapshot([ClientServer(id:"a",name:"bad\nname",config:"x")]).validate() }
         fails { try snapshot([ClientServer(id:"a",name:"A",config:String(repeating:"x",count:65_537))]).validate() }
-        let thirty = (0..<30).map { ClientServer(id:"node\($0)",name:"Server \($0)",config:"synthetic \($0)") }
-        try snapshot(thirty).validate(); count += 1
-        fails { try snapshot(thirty + [ClientServer(id:"extra",name:"Extra",config:"synthetic")]).validate() }
+        let fifty = (0..<50).map { ClientServer(id:"node\($0)",name:"Server \($0)",config:"synthetic \($0)") }
+        for n in [30, 31, 50] { try snapshot(Array(fifty.prefix(n))).validate(); count += 1 }
+        fails { try snapshot(fifty + [ClientServer(id:"extra",name:"Extra",config:"synthetic")]).validate() }
         fails { try ClientSnapshot(schema:1,kind:"vpn013-awg",orderID:valid.orderID,expiry:valid.expiry,revision:String(repeating:"0",count:64),complete:true,servers:valid.servers).validate() }
         let plan = try ClientRosterPlan(previousIDs:["germany","retired"],snapshot:valid)
         try check(plan.added.map { $0.id } == ["finland"])

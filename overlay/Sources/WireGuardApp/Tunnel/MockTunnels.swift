@@ -109,7 +109,7 @@ class MockTunnels {
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         if let index = arguments.firstIndex(of: "--vpn013-test-count"), arguments.indices.contains(index + 1),
-           let count = Int(arguments[index + 1]), (0...40).contains(count) {
+           let count = Int(arguments[index + 1]), (0...51).contains(count) {
             names = (0..<count).map { "Личный сервер \($0 + 1)" }
         }
         if arguments.contains("--vpn013-test-ordering") { names = ["!Первый", "0 Server", "Дом"] }

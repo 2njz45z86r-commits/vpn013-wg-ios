@@ -99,7 +99,7 @@ struct CrossProtocolPlan: Codable {
         var proxy: ProxyTunnelPayload?
         var count: Int { awg?.candidates.count ?? proxy?.candidates.count ?? 0 }
         func validate() throws {
-            guard !name.isEmpty, name.utf8.count <= 256, (1...30).contains(count) else { throw CrossProtocolError.invalid }
+            guard !name.isEmpty, name.utf8.count <= 256, (1...50).contains(count) else { throw CrossProtocolError.invalid }
             if kind == .amneziawg {
                 guard proxy == nil, let awg = awg else { throw CrossProtocolError.invalid }
                 _ = try awg.validatedConfigurations()

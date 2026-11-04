@@ -165,7 +165,7 @@ final class R013ProbeCoordinator {
         requireMain()
         due = .now() + 3600
         guard autoActive, !stopped, operation == 0, let input = currentInput?(), input.auto_active,
-              !input.candidates.isEmpty, input.candidates.count <= 30 else { scheduleHour(); return }
+              !input.candidates.isEmpty, input.candidates.count <= 50 else { scheduleHour(); return }
         let rotated = R013ProbeInput(auto_active: true, resolver: input.resolver,
                                     start_index: nextIndex % input.candidates.count, candidates: input.candidates)
         guard let data = try? JSONEncoder().encode(rotated), data.count <= 4 * 1024 * 1024 else { scheduleHour(); return }

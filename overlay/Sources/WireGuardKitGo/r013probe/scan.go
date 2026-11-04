@@ -10,7 +10,7 @@ import (
 )
 
 var ErrAutoInactive = errors.New("automatic selection is not active")
-var ErrInvalidScan = errors.New("scan requires one through-tunnel resolver and 1-30 immutable candidate snapshots")
+var ErrInvalidScan = errors.New("scan requires one through-tunnel resolver and 1-50 immutable candidate snapshots")
 var ErrCandidateChanged = errors.New("selected candidate changed after measurement")
 
 type ScanCandidate struct {
@@ -61,7 +61,7 @@ func (c *Choice) BeginSwitch(ctx context.Context, fresh ScanCandidate) (*ActiveT
 // Scan measures serially with one bounded candidate engine. The current VPN is
 // never stopped here. It reserves time for a fresh current-path baseline AFTER
 // testing candidates and only chooses a result faster than BOTH baselines.
-// Total deadline90s, candidate deadline6s, at most30 candidates. If the budget
+// Total deadline90s, candidate deadline6s, at most50 candidates. If the budget
 // ends early, NextIndex lets the platform rotate its next hourly starting point;
 // missing measurements are not labeled dead servers. No timer or OS integration
 // is claimed by this pure policy; the platform still owns an actual hourly run.
@@ -70,7 +70,7 @@ func Scan(parent context.Context, r ScanRequest) (ScanResult, error) {
 	if !r.AutoActive {
 		return out, ErrAutoInactive
 	}
-	if len(r.Candidates) < 1 || len(r.Candidates) > 30 || r.StartIndex < 0 || r.StartIndex >= len(r.Candidates) || r.Current.Guard == nil {
+	if len(r.Candidates) < 1 || len(r.Candidates) > 50 || r.StartIndex < 0 || r.StartIndex >= len(r.Candidates) || r.Current.Guard == nil {
 		return out, ErrInvalidScan
 	}
 	seenIDs := make(map[string]bool)

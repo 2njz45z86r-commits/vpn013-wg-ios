@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/netip"
 	"strings"
 	"testing"
@@ -197,7 +198,7 @@ func TestControllerInputBoundsAndUnknownMembershipFailClosed(t *testing.T) {
 	}
 	for name, change := range map[string]func(*ScanInput){
 		"manual":              func(s *ScanInput) { s.AutoActive = false },
-		"over30":              func(s *ScanInput) { s.Candidates = make([]Snapshot, 31) },
+		"over50":              func(s *ScanInput) { s.Candidates = make([]Snapshot, 51) },
 		"oversize_config":     func(s *ScanInput) { s.Candidates[0].Config = strings.Repeat("x", 65537) },
 		"unresolved_endpoint": func(s *ScanInput) { s.Candidates[0].Config += "endpoint=example.invalid:53\n" },
 		"duplicate_id":        func(s *ScanInput) { s.Candidates = append(s.Candidates, s.Candidates[0]) },
@@ -213,6 +214,33 @@ func TestControllerInputBoundsAndUnknownMembershipFailClosed(t *testing.T) {
 	}
 	if f.opens.Load() != 0 {
 		t.Fatal("invalid scan opened UDP")
+	}
+}
+
+// Boundary test: the controller must accept 50 distinct synthetically
+// configured servers without opening a socket and reject the 51st.
+func TestControllerAcceptsFiftyCandidatesAndRejectsFiftyOne(t *testing.T) {
+	r, _ := fixture(t)
+	in := ScanInput{AutoActive: true, Resolver: "1.1.1.1:53"}
+	for i := 0; i < 50; i++ {
+		in.Candidates = append(in.Candidates, Snapshot{ID: fmt.Sprintf("server-%d", i), Config: r.Config, Source: r.Source.String()})
+	}
+	in.StartIndex = 49
+	wire, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := DecodeScanInput(wire)
+	if err != nil || len(got.Candidates) != 50 || got.StartIndex != 49 {
+		t.Fatalf("50 candidates rejected: %v", err)
+	}
+	in.Candidates = append(in.Candidates, Snapshot{ID: "server-50", Config: r.Config, Source: r.Source.String()})
+	wire, err = json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecodeScanInput(wire); err == nil {
+		t.Fatal("51 candidates accepted")
 	}
 }
 

@@ -4,6 +4,7 @@ package awgprobe
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"strings"
 	"testing"
@@ -84,6 +85,30 @@ func TestScanPreservesDifferentSettingsOfInactiveIdentity(t *testing.T) {
 	}
 }
 
+// Fifty candidates must be traversed from the requested start index, without
+// opening duplicate peer snapshots or changing the active tunnel.
+func TestScanRotatesThroughFiftyCandidates(t *testing.T) {
+	active, _ := fixture(t)
+	guard := guardForTest(t, ActiveState{Known: true, Configuration: active.Config})
+	candidate := scanCandidateForTest(t, "seed", guard, time.Millisecond)
+	candidates := make([]ScanCandidate, 50)
+	for i := range candidates {
+		candidates[i] = candidate
+		candidates[i].ID = fmt.Sprintf("server-%d", i)
+	}
+	factory := &fakeTunnelFactory{delay: 20 * time.Millisecond}
+	out, err := Scan(context.Background(), ScanRequest{AutoActive: true, Current: CurrentDNSRequest{Target: netip.AddrPortFrom(candidate.Target, 53), Factory: factory, Guard: guard}, Candidates: candidates, StartIndex: 49})
+	if err != nil || len(out.Measurements) != 50 || out.Incomplete || out.NextIndex != 49 {
+		t.Fatalf("50-candidate scan incomplete: count=%d next=%d err=%v", len(out.Measurements), out.NextIndex, err)
+	}
+	if out.Measurements[0].ID != "server-49" || out.Measurements[49].ID != "server-48" {
+		t.Fatal("scan did not preserve wrap-around order")
+	}
+	if factory.opens.Load() != 2 || factory.closed.Load() != 2 {
+		t.Fatal("current baselines not closed")
+	}
+}
+
 func TestScanNeverMeasuresManualModeOrInvalidCandidateSets(t *testing.T) {
 	r, _ := fixture(t)
 	guard := guardForTest(t, ActiveState{Known: true, Configuration: r.Config})
@@ -96,7 +121,7 @@ func TestScanNeverMeasuresManualModeOrInvalidCandidateSets(t *testing.T) {
 	}
 	for name, change := range map[string]func(*ScanRequest){
 		"none":               func(x *ScanRequest) { x.Candidates = nil },
-		"over30":             func(x *ScanRequest) { x.Candidates = make([]ScanCandidate, 31) },
+		"over50":             func(x *ScanRequest) { x.Candidates = make([]ScanCandidate, 51) },
 		"repeated_id":        func(x *ScanRequest) { x.Candidates = []ScanCandidate{c, c} },
 		"foreign_guard":      func(x *ScanRequest) { x.Candidates[0].Guard = guardForTest(t, ActiveState{Known: true}) },
 		"different_resolver": func(x *ScanRequest) { x.Candidates[0].Port = 54 },
