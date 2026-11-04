@@ -16,8 +16,8 @@ def run():
   'inbounds':[{'tag':'dns-in','listen':'127.0.0.1','port':dp,'protocol':'dokodemo-door','settings':{'address':'127.0.0.1','port':53,'network':'udp'}},{'tag':'socks-in','listen':'127.0.0.1','port':sp,'protocol':'socks','settings':{'udp':False},'sniffing':{'enabled':True,'destOverride':['fakedns'],'metadataOnly':True}}],
   'outbounds':[{'tag':'dns-out','protocol':'dns'},{'tag':'route-a','protocol':'freedom','settings':{'redirect':f'127.0.0.1:{ap}'}},{'tag':'route-b','protocol':'freedom','settings':{'redirect':f'127.0.0.1:{bp}'}},{'tag':'blocked','protocol':'blackhole'}],
   'routing':{'rules':[{'type':'field','inboundTag':['dns-in'],'outboundTag':'dns-out'},{'type':'field','domain':['full:service-a.invalid'],'outboundTag':'route-a'},{'type':'field','domain':['full:service-b.invalid'],'outboundTag':'route-b'},{'type':'field','inboundTag':['socks-in'],'outboundTag':'blocked'}]}}
- with tempfile.TemporaryDirectory(prefix='vpn013-stable-dns-') as d:
-  path=Path(d)/'config.json';path.write_text(json.dumps(cfg),encoding='utf8');env=os.environ.copy();env['VPN013_LAB_FAKEDNS_DIR']=d
+ with tempfile.TemporaryDirectory(prefix='vpn013-stable-dns-') as d, tempfile.TemporaryDirectory(prefix='vpn013-stable-anchor-') as anchor:
+  path=Path(d)/'config.json';path.write_text(json.dumps(cfg),encoding='utf8');env=os.environ.copy();env['VPN013_LAB_FAKEDNS_DIR']=d;env['VPN013_LAB_ANCHOR_DIR']=anchor
   def start():
    proc=subprocess.Popen([str(XRAY),'run','-config',str(path)],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,env=env,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
    for _ in range(80):

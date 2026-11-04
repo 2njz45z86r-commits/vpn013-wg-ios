@@ -2,9 +2,9 @@
   "expectedOriginalSHA256": "119de272612b738189047f536755cd1908a2b879d63684adefa74b50328cdddb",
   "experimentalFiles": {
     "fake.go": "86d98e315dd43114e194699e52ecfac6ebf45d82fbe4d7ea25e1ce0856a5daa0",
-    "vpn013_lab_stable.go": "d2d08bd06740202d088a2ac840f04d29b71240a55b286e63e2447e04427bc246",
+    "vpn013_lab_stable.go": "69535e7ced12a57ae81903f2d358dd9983d86223b50d64185922a91d0e3b43a8",
     "vpn013_lab_lock_unix.go": "1ba2676c4ea85e9e4ca0de2ec5382f1d760f8e6f2c3f6c87cdc201a53d2c07a3",
     "vpn013_lab_lock_windows.go": "8c26c59914e09a7a4f9837170ee33c04e02e8b2ee8ff5889b4d907f17cf058f5",
-    "vpn013_lab_stable_test.go": "65a515d35d31a8eb36a90dc1fe54625e7cb4e10267a20f5e87fade264ac080a2"
+    "vpn013_lab_stable_test.go": "d92597003b062a404279db3d22528e0ef07d3b55e068098b5ea18bbd1d8ed2f6"
   }
 }

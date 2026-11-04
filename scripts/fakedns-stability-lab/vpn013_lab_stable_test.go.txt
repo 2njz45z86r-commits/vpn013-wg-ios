@@ -29,6 +29,7 @@ func TestVPN013LabStableRestartAndNoReuse(t *testing.T) {
 		t.Run(pool, func(t *testing.T) {
 			dir := t.TempDir()
 			t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+			t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
 			h := labHolder(t, pool, 2)
 			first := h.GetFakeIPForDomain("one.invalid")
 			second := h.GetFakeIPForDomain("two.invalid")
@@ -74,6 +75,7 @@ func TestVPN013LabRestartChild(t *testing.T) {
 func TestVPN013LabConcurrentNoDuplicate(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
 	h := labHolder(t, "198.18.10.0/24", 64)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -109,6 +111,7 @@ func TestVPN013LabConcurrentNoDuplicate(t *testing.T) {
 func TestVPN013LabCorruptionNotReassigned(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
 	h := labHolder(t, "198.18.10.0/24", 10)
 	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
 		t.Fatal("setup failed")
@@ -164,6 +167,7 @@ func TestVPN013LabMultiProcessChild(t *testing.T) {
 func TestVPN013LabConcurrentProcesses(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
 	binary, e := os.Executable()
 	if e != nil {
 		t.Fatal(e)
@@ -211,6 +215,7 @@ func TestVPN013LabConcurrentProcesses(t *testing.T) {
 func TestVPN013LabPartialLossGuardAndTotalLossHazard(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
 	first := labHolder(t, "198.18.30.0/24", 10)
 	a := first.GetFakeIPForDomain("one.invalid")
 	if len(a) != 1 {
@@ -228,6 +233,13 @@ func TestVPN013LabPartialLossGuardAndTotalLossHazard(t *testing.T) {
 	if e := os.Remove(first.labStore.path + ".seal"); e != nil {
 		t.Fatal(e)
 	}
+	if e := (&Holder{}).initialize("198.18.30.0/24", 10); e == nil {
+		t.Fatal("independent anchor failed to detect lost journal")
+	}
+	// Total loss of the independent anchor too is not protected by this model.
+	if e := os.Remove(first.labStore.anchor); e != nil {
+		t.Fatal(e)
+	}
 	after := labHolder(t, "198.18.30.0/24", 10)
 	b := after.GetFakeIPForDomain("two.invalid")
 	if len(b) != 1 {
@@ -235,5 +247,84 @@ func TestVPN013LabPartialLossGuardAndTotalLossHazard(t *testing.T) {
 	}
 	if a[0].IP().String() != b[0].IP().String() || after.GetDomainFromFakeDNS(a[0]) != "two.invalid" {
 		t.Fatal("state-loss hazard not reproduced")
+	}
+}
+func TestVPN013LabSnapshotRollbackGuard(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	h := labHolder(t, "198.18.40.0/24", 10)
+	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
+		t.Fatal("initial allocation failed")
+	}
+	old, e := os.ReadFile(h.labStore.path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	b := h.GetFakeIPForDomain("two.invalid")
+	if len(b) != 1 {
+		t.Fatal("second allocation failed")
+	}
+	// Controlled rollback of this temporary test journal models stale restore.
+	if e = os.WriteFile(h.labStore.path, old, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := (&Holder{}).initialize("198.18.40.0/24", 10); e == nil {
+		t.Fatal("rollback was not detected by the independent anchor")
+	}
+	_ = b
+}
+func TestVPN013LabInterruptedCommitGuard(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	h := labHolder(t, "198.18.50.0/24", 10)
+	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
+		t.Fatal("initial allocation failed")
+	}
+	oldAnchor, e := os.ReadFile(h.labStore.anchor)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(h.GetFakeIPForDomain("two.invalid")) != 1 {
+		t.Fatal("second allocation failed")
+	}
+	if e = os.WriteFile(h.labStore.anchor, oldAnchor, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = (&Holder{}).initialize("198.18.50.0/24", 10); e == nil {
+		t.Fatal("incomplete two-file commit went undetected")
+	}
+}
+func TestVPN013LabCombinedRollbackHazard(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("VPN013_LAB_FAKEDNS_DIR", dir)
+	t.Setenv("VPN013_LAB_ANCHOR_DIR", t.TempDir())
+	h := labHolder(t, "198.18.60.0/24", 10)
+	if len(h.GetFakeIPForDomain("one.invalid")) != 1 {
+		t.Fatal("initial allocation failed")
+	}
+	oldJournal, e := os.ReadFile(h.labStore.path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	oldAnchor, e := os.ReadFile(h.labStore.anchor)
+	if e != nil {
+		t.Fatal(e)
+	}
+	b := h.GetFakeIPForDomain("two.invalid")
+	if len(b) != 1 {
+		t.Fatal("second allocation failed")
+	}
+	if e = os.WriteFile(h.labStore.path, oldJournal, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(h.labStore.anchor, oldAnchor, 0600); e != nil {
+		t.Fatal(e)
+	}
+	after := labHolder(t, "198.18.60.0/24", 10)
+	c := after.GetFakeIPForDomain("three.invalid")
+	if len(c) != 1 || c[0].IP().String() != b[0].IP().String() {
+		t.Fatal("expected joint rollback hazard not reproduced")
 	}
 }

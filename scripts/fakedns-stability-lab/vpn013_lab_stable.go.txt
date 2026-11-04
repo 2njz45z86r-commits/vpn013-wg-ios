@@ -28,6 +28,7 @@ type labSnapshot struct {
 }
 type labStableStore struct {
 	path    string
+	anchor  string
 	pool    *stdnet.IPNet
 	limit   int
 	body    labSnapshotBody
@@ -50,8 +51,15 @@ func newLabStableStore(pool *stdnet.IPNet, limit int) (*labStableStore, error) {
 	if s, e := os.Stat(dir); e != nil || !s.IsDir() {
 		return nil, errors.New("lab fake DNS directory unavailable")
 	}
+	anchorDir := os.Getenv("VPN013_LAB_ANCHOR_DIR")
+	if anchorDir == "" || anchorDir == dir {
+		return nil, errors.New("independent lab anchor directory required")
+	}
+	if info, err := os.Stat(anchorDir); err != nil || !info.IsDir() {
+		return nil, errors.New("lab anchor directory unavailable")
+	}
 	sum := sha256.Sum256([]byte(pool.String()))
-	st := &labStableStore{path: filepath.Join(dir, fmt.Sprintf("pool-%x.json", sum[:8])), pool: pool, limit: limit}
+	st := &labStableStore{path: filepath.Join(dir, fmt.Sprintf("pool-%x.json", sum[:8])), anchor: filepath.Join(anchorDir, fmt.Sprintf("pool-%x.anchor", sum[:8])), pool: pool, limit: limit}
 	release, e := labFileLock(st.path + ".lock")
 	if e != nil {
 		return nil, e
@@ -63,8 +71,18 @@ func newLabStableStore(pool *stdnet.IPNet, limit int) (*labStableStore, error) {
 	return st, nil
 }
 func (st *labStableStore) reload() error {
+	anchor, anchorErr := os.ReadFile(st.anchor)
+	if anchorErr != nil && !os.IsNotExist(anchorErr) {
+		return anchorErr
+	}
+	if len(anchor) > 4096 {
+		return errors.New("oversized lab anchor")
+	}
 	f, e := os.Open(st.path)
 	if os.IsNotExist(e) {
+		if anchorErr == nil {
+			return errors.New("missing journal with existing anchor")
+		}
 		if _, markerErr := os.Stat(st.path + ".seal"); markerErr == nil {
 			return errors.New("missing journal with existing marker")
 		} else if !os.IsNotExist(markerErr) {
@@ -94,6 +112,10 @@ func (st *labStableStore) reload() error {
 	dig, e := labDigest(snap.Body)
 	if e != nil || dig != snap.Digest || snap.Body.Version != 1 || snap.Body.Pool != st.pool.String() || snap.Body.Assigned == nil || len(snap.Body.Assigned) > st.limit || snap.Body.Next != uint64(len(snap.Body.Assigned))+1 {
 		return errors.New("invalid lab journal")
+	}
+	expectedAnchor := fmt.Sprintf("%s:%d", dig, snap.Body.Next)
+	if anchorErr != nil || string(anchor) != expectedAnchor {
+		return errors.New("journal and independent anchor differ")
 	}
 	reverse := map[string]string{}
 	for name, v := range snap.Body.Assigned {
@@ -198,6 +220,27 @@ func (st *labStableStore) allocate(domain string) (string, error) {
 		return "", e
 	}
 	if e = os.Rename(temp, st.path); e != nil {
+		return "", e
+	}
+	// Write anchor second; crash in between fails closed on the next load.
+	af, e := os.CreateTemp(filepath.Dir(st.anchor), ".vpn013-lab-anchor-*")
+	if e != nil {
+		return "", e
+	}
+	anchorTemp := af.Name()
+	defer os.Remove(anchorTemp)
+	if _, e = af.WriteString(fmt.Sprintf("%s:%d", digest, body.Next)); e != nil {
+		af.Close()
+		return "", e
+	}
+	if e = af.Sync(); e != nil {
+		af.Close()
+		return "", e
+	}
+	if e = af.Close(); e != nil {
+		return "", e
+	}
+	if e = os.Rename(anchorTemp, st.anchor); e != nil {
 		return "", e
 	}
 	st.body = body
