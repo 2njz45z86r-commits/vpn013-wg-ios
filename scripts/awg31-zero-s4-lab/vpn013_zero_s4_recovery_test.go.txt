@@ -218,29 +218,16 @@ func BenchmarkVPN013LabZeroS4InvalidFourKeysFourHeaders(b *testing.B) {
 }
 
 func TestVPN013LabRecoveryRateGate(t *testing.T) {
-	var next atomic.Int64
-	if !vpn013LabClaim(&next, 0) || vpn013LabClaim(&next, 1) || vpn013LabClaim(&next, vpn013LabSpacing-1) || !vpn013LabClaim(&next, vpn013LabSpacing) {
-		t.Fatal("incorrect monotonic spacing")
-	}
-	if vpn013LabClaim(&next, -1) || vpn013LabClaim(&next, int64(^uint64(0)>>1)) {
-		t.Fatal("invalid time accepted")
-	}
-	next.Store(0)
-	var accepted atomic.Int32
-	var group sync.WaitGroup
-	for i := 0; i < 64; i++ {
-		group.Add(1)
-		go func() {
-			defer group.Done()
-			if vpn013LabClaim(&next, 1) {
-				accepted.Add(1)
-			}
-		}()
-	}
-	group.Wait()
-	if accepted.Load() != 1 {
-		t.Fatal("rate gate allowed competing simultaneous attempts")
-	}
+ var next atomic.Int64
+ for i := 0; i < 72; i++ { if !vpn013LabClaim(&next, 0) { t.Fatal("burst rejected", i) } }
+ if vpn013LabClaim(&next, 1) || !vpn013LabClaim(&next, vpn013LabSpacing) || vpn013LabClaim(&next, vpn013LabSpacing) { t.Fatal("refill boundary incorrect") }
+ if vpn013LabClaim(&next, -1) || vpn013LabClaim(&next, int64(^uint64(0)>>1)) { t.Fatal("invalid time accepted") }
+ next.Store(0)
+ var accepted atomic.Int32
+ var group sync.WaitGroup
+ for i := 0; i < 128; i++ { group.Add(1); go func(){ defer group.Done(); if vpn013LabClaim(&next, 1) { accepted.Add(1) } }() }
+ group.Wait()
+ if accepted.Load() != 72 { t.Fatalf("burst accepted %d, expected 72", accepted.Load()) }
 }
 
 func TestVPN013LabZeroS4WithoutHeaderProtectAuthenticates(t *testing.T) {

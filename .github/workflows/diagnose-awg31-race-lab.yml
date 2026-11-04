@@ -2,7 +2,7 @@ name: Diagnose experimental AWG recovery race on Linux
 on:
   workflow_dispatch:
   push:
-    branches: [codex/ios-awg31-race-lab-20261104]
+    branches: [codex/ios-awg31-burst72-race-20261104]
 permissions:
   contents: read
 jobs:

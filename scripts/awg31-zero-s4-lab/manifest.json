@@ -9,10 +9,10 @@
   },
   "vpn013_experimental_zero_s4.go": {
     "beforeSHA256": null,
-    "afterSHA256": "0e8274f21193d00d61897a6b5a1c05bf1ff08d425088c97e179a1f3371c55f5f"
+    "afterSHA256": "c94fbf21a973df0a21a9a5f8af461ce48fe146239a03c2410dc0c457c0b55146"
   },
   "vpn013_zero_s4_recovery_test.go": {
     "beforeSHA256": null,
-    "afterSHA256": "7890b2bcaea7803b7212a163cf3cc55fdcc60e23bd6ae533f5fb361ef7b590c9"
+    "afterSHA256": "84dd9fa145a7ecbb2d08a22151dfa48cb233e28c1b07ca2c4a788094fb227153"
   }
 }

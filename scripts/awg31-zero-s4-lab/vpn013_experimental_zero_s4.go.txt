@@ -13,18 +13,18 @@ var vpn013LabClockOrigin = time.Now()
 const vpn013LabSpacing = int64(200 * time.Millisecond)
 
 func vpn013LabClaim(deadline *atomic.Int64, now int64) bool {
-	if now < 0 || now > int64(^uint64(0)>>1)-vpn013LabSpacing {
-		return false
-	}
-	for {
-		next := deadline.Load()
-		if now < next {
-			return false
-		}
-		if deadline.CompareAndSwap(next, now+vpn013LabSpacing) {
-			return true
-		}
-	}
+    const burst int64 = 72
+    const maxInt64 = int64(^uint64(0) >> 1)
+    if now < 0 || now > maxInt64-burst*vpn013LabSpacing { return false }
+    for {
+        next := deadline.Load()
+        if next < 0 { return false }
+        if next > now+(burst-1)*vpn013LabSpacing { return false }
+        base := next
+        if base < now { base = now }
+        if base > maxInt64-vpn013LabSpacing { return false }
+        if deadline.CompareAndSwap(next, base+vpn013LabSpacing) { return true }
+    }
 }
 
 func (device *Device) vpn013LabAllowRecovery() bool {
