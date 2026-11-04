@@ -43,7 +43,7 @@ def run():
     second4=[lib.socks(ip,sp) for ip in ips4];second6=[lib.socks(ip,sp) for ip in ips6];assert second4==second6==['A','B']
     assert [lib.dns(n,dp,1) for n in names]==ips4 and [lib.dns(n,dp,28) for n in names]==ips6
    finally:stop(p2)
-   result={'status':'PASS','initial_v4':first4,'initial_v6':first6,'after_restart_without_dns_v4':second4,'after_restart_without_dns_v6':second6,'no_reuse_unit_tests':'separate Go tests','scope':'Windows local Xray DNS and SOCKS, synthetic names and redirection; no iPhone, real service, VPN, DNS bypass, crash or power-loss proof','binary_sha256':hashlib.sha256(XRAY.read_bytes()).hexdigest()}
+   result={'status':'PASS','initial_v4':first4,'initial_v6':first6,'after_restart_without_dns_v4':second4,'after_restart_without_dns_v6':second6,'no_reuse_unit_tests':'separate Go tests','scope':'macOS local Xray DNS and SOCKS, synthetic names and redirection; no iPhone, real service, VPN, DNS bypass, crash or power-loss proof','binary_sha256':hashlib.sha256(XRAY.read_bytes()).hexdigest()}
    (root/'network-restart-result.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf8');print(json.dumps(result))
   finally:a.close();b.close()
 if __name__=='__main__':run()
