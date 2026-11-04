@@ -1,6 +1,6 @@
 """Diagnostic only: copy pinned Xray to owned temp and apply hashed lab files."""
 from pathlib import Path
-import hashlib,json,shutil,subprocess
+import hashlib,json,shutil,subprocess,stat
 lab=Path(__file__).resolve().parent
 root=Path('overlay/Sources/WireGuardKitGo').resolve()
 info=json.loads(subprocess.check_output(['go','list','-m','-json','github.com/xtls/xray-core'],cwd=root))
@@ -9,6 +9,8 @@ source=Path(r['Dir']);out=Path('build/fakedns-stability-owned').resolve();assert
 man=json.loads((lab/'manifest.json').read_text());src=source/'app/dns/fakedns/fake.go'
 assert hashlib.sha256(src.read_bytes()).hexdigest()==man['expectedOriginalSHA256']
 shutil.copytree(source,out,copy_function=shutil.copyfile)
+owned_dir=out/"app/dns/fakedns"
+owned_dir.chmod(owned_dir.stat().st_mode | stat.S_IWUSR)
 for name,digest in man['experimentalFiles'].items():
  data=(lab/(name+'.txt')).read_bytes();assert hashlib.sha256(data).hexdigest()==digest
  (out/'app/dns/fakedns'/name).write_bytes(data)
