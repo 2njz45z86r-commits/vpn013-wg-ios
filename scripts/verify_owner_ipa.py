@@ -41,7 +41,9 @@ def validate(ipa, build_report):
             components = name.rstrip("/").split("/")
             archive_type = stat.S_IFMT(entry.external_attr >> 16)
             expected_type = stat.S_IFDIR if entry.is_dir() else stat.S_IFREG
-            if (not parts or len(components) > 64 or len(name.encode("utf-8")) > 4096
+            # zipfile normalizes embedded NULs (and platform separators) in
+            # filename; inspect the unmodified central-directory name too.
+            if (entry.orig_filename != name or not parts or len(components) > 64 or len(name.encode("utf-8")) > 4096
                     or name.startswith("/") or "\\" in name or any(p in ("", ".", "..") for p in components)
                     or not (name == "Payload/" or name == APP + "/" or name.startswith(APP + "/"))
                     or name in names or archive_type not in (0, expected_type)):

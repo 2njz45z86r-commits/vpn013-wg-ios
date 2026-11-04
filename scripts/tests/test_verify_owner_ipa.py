@@ -76,6 +76,30 @@ class OwnerPackageValidation(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     module.validate(self.path, REPORT)
 
+    def test_rejects_embedded_nul_in_original_zip_name(self):
+        # zipfile's writer sanitizes NULs, so replace one byte in both local
+        # and central headers to create the malformed archive deliberately.
+        name = module.APP + "/harmlessXtail"
+        create_ipa(self.path, extra=[(name, b"synthetic")])
+        data = self.path.read_bytes()
+        encoded = name.encode("utf-8")
+        self.assertEqual(data.count(encoded), 2)
+        self.path.write_bytes(data.replace(encoded, encoded.replace(b"X", b"\x00")))
+        with zipfile.ZipFile(self.path) as archive:
+            self.assertTrue(any("\x00" in entry.orig_filename for entry in archive.infolist()))
+        with self.assertRaises(ValueError):
+            module.validate(self.path, REPORT)
+
+    def test_rejects_original_backslash_even_if_platform_normalizes_it(self):
+        name = module.APP + "/harmlessXtail"
+        create_ipa(self.path, extra=[(name, b"synthetic")])
+        data = self.path.read_bytes()
+        encoded = name.encode("utf-8")
+        self.assertEqual(data.count(encoded), 2)
+        self.path.write_bytes(data.replace(encoded, encoded.replace(b"X", b"\\")))
+        with self.assertRaises(ValueError):
+            module.validate(self.path, REPORT)
+
     def test_rejects_case_unicode_and_file_directory_collisions(self):
         cases = [
             [(module.APP + "/info.plist", b"case collision")],
