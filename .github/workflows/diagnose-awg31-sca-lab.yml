@@ -1,12 +1,12 @@
-name: AWG lab device symbol vulnerability check
+name: AWG lab iOS device symbol vulnerability check
 on:
   push:
-    branches: [codex/ios-awg31-burst72-symbol-20261104]
+    branches: [codex/ios-awg31-burst72-iossca-20261104]
 permissions:
   contents: read
 jobs:
   sca:
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -37,6 +37,11 @@ jobs:
         working-directory: build/lab/awg-core-owned
         run: |
           set -uo pipefail
+          sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+          export CC="$(xcrun --sdk iphoneos -f clang)"
+          export CGO_CFLAGS="-isysroot $sdk -arch arm64 -miphoneos-version-min=15.0"
+          export CGO_LDFLAGS="-isysroot $sdk -arch arm64 -miphoneos-version-min=15.0"
+          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1
           "$HOME/go/bin/govulncheck" -scan=symbol -format=json ./device > "$GITHUB_WORKSPACE/build/lab/sca.jsonl" 2> "$GITHUB_WORKSPACE/build/lab/sca-error.txt"
           result=$?
           printf '%s\n' "$result" > "$GITHUB_WORKSPACE/build/lab/sca-exit.txt"
@@ -45,7 +50,7 @@ jobs:
         if: always() && steps.scan.outcome != 'skipped'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: vpn013-awg31-burst72-symbol-${{ github.run_id }}
+          name: vpn013-awg31-burst72-iossymbol-${{ github.run_id }}
           retention-days: 7
           if-no-files-found: error
           path: |
