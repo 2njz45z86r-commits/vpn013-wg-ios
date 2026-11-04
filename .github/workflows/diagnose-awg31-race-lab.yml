@@ -37,8 +37,9 @@ jobs:
         working-directory: build/lab/awg-core-owned
         run: |
           set -euo pipefail
-          GOTOOLCHAIN=local CGO_ENABLED=1 go test -race ./device -run '^TestVPN013LabConcurrentRecoveryWhileConfigChanges$' -count=1 -timeout=90s -v | tee "$GITHUB_WORKSPACE/build/lab/awg31-race.txt"
+          GOTOOLCHAIN=local CGO_ENABLED=1 go test -race ./device -run '^TestVPN013Lab(ConcurrentRecoveryWhileConfigChanges|RecoveryRateGate)$' -count=1 -timeout=90s -v | tee "$GITHUB_WORKSPACE/build/lab/awg31-race.txt"
           grep -F -- '--- PASS: TestVPN013LabConcurrentRecoveryWhileConfigChanges ' "$GITHUB_WORKSPACE/build/lab/awg31-race.txt"
+          grep -F -- '--- PASS: TestVPN013LabRecoveryRateGate ' "$GITHUB_WORKSPACE/build/lab/awg31-race.txt"
       - name: Retain sanitized test evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
