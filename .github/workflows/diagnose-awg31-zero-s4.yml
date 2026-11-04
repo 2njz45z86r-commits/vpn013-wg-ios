@@ -23,9 +23,11 @@ jobs:
           p=json.loads(Path('build/review/proxy-tun-provenance.json').read_text())
           t=p['primaryAWG']['primaryHostTests']
           wanted={'TestVPN013SyntheticZeroS4ProtectedHeaderFeasibility',
-                  'TestVPN013LabZeroS4AuthenticatedAndBounded','TestVPN013LabRecoveryRateGate'}
+                  'TestVPN013LabZeroS4AuthenticatedAndBounded','TestVPN013LabRecoveryRateGate',
+                  'TestVPN013LabZeroS4WithoutHeaderProtectAuthenticates',
+                  'TestVPN013LabZeroS4MisclassifiedAsControl'}
           assert t['exit']==0 and not t['failedOrSkipped'] and wanted.issubset(set(t['passedTests']))
-          print('PASS: three lab AWG tests executed on macOS; iPhone runtime not tested')
+          print('PASS: five lab AWG tests executed on macOS; iPhone runtime not tested')
           PY
       - name: Retain provenance only, never the experimental IPA
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

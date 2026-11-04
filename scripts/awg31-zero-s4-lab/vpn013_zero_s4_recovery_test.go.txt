@@ -3,127 +3,310 @@ package device
 // Cryptographic feasibility experiment only. This code is test-only, is not
 // used by the application, and does not implement replay/rate limiting.
 import (
-    "bytes"
-    "crypto/cipher"
-    "crypto/rand"
-    "encoding/binary"
-    "sync"
-    "sync/atomic"
-    "testing"
-    "time"
+	"bytes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/binary"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
 
-    "golang.org/x/crypto/chacha20poly1305"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 func labZeroS4Packet(t *testing.T, headerDevice *Device, content cipher.AEAD, typ, receiver uint32, counter uint64) []byte {
-    t.Helper()
-    header := make([]byte, MessageTransportHeaderSize)
-    binary.LittleEndian.PutUint32(header[0:4], typ)
-    binary.LittleEndian.PutUint32(header[4:8], receiver)
-    binary.LittleEndian.PutUint64(header[8:16], counter)
-    var nonce [12]byte
-    binary.LittleEndian.PutUint64(nonce[4:], counter)
-    body := content.Seal(nil, nonce[:], []byte("synthetic-private-test-packet"), nil)
-    stream, err := headerDevice.HeaderProtectionCipher(header[:HeaderCipherNonceSize])
-    if err != nil || stream == nil { t.Fatal("synthetic cipher unavailable") }
-    stream.XORKeyStream(header, header)
-    return append(header, body...)
+	t.Helper()
+	header := make([]byte, MessageTransportHeaderSize)
+	binary.LittleEndian.PutUint32(header[0:4], typ)
+	binary.LittleEndian.PutUint32(header[4:8], receiver)
+	binary.LittleEndian.PutUint64(header[8:16], counter)
+	var nonce [12]byte
+	binary.LittleEndian.PutUint64(nonce[4:], counter)
+	body := content.Seal(nil, nonce[:], []byte("synthetic-private-test-packet"), nil)
+	stream, err := headerDevice.HeaderProtectionCipher(header[:HeaderCipherNonceSize])
+	if err != nil || stream == nil {
+		t.Fatal("synthetic cipher unavailable")
+	}
+	stream.XORKeyStream(header, header)
+	return append(header, body...)
 }
 
 func labRecoverZeroS4(headerDevice *Device, content cipher.AEAD, frame []byte, typ, receiver uint32, maxGuesses uint32) ([]byte, bool) {
-    if len(frame) < MessageTransportHeaderSize+content.Overhead() || maxGuesses > 32 { return nil, false }
-    for guess := uint32(0); guess < maxGuesses; guess++ {
-        var salt [12]byte
-        binary.LittleEndian.PutUint32(salt[0:4], typ)
-        binary.LittleEndian.PutUint32(salt[4:8], receiver)
-        binary.LittleEndian.PutUint32(salt[8:12], guess)
-        stream, err := headerDevice.HeaderProtectionCipher(salt[:])
-        if err != nil || stream == nil { return nil, false }
-        header := append([]byte(nil),frame[:MessageTransportHeaderSize]...)
-        stream.XORKeyStream(header,header)
-        if binary.LittleEndian.Uint32(header[0:4]) != typ || binary.LittleEndian.Uint32(header[4:8]) != receiver || binary.LittleEndian.Uint32(header[8:12]) != guess { continue }
-        var nonce [12]byte
-        copy(nonce[4:],header[8:16])
-        plain, err := content.Open(nil,nonce[:],frame[MessageTransportHeaderSize:],nil)
-        if err == nil { return plain,true }
-    }
-    return nil,false
+	if len(frame) < MessageTransportHeaderSize+content.Overhead() || maxGuesses > 32 {
+		return nil, false
+	}
+	for guess := uint32(0); guess < maxGuesses; guess++ {
+		var salt [12]byte
+		binary.LittleEndian.PutUint32(salt[0:4], typ)
+		binary.LittleEndian.PutUint32(salt[4:8], receiver)
+		binary.LittleEndian.PutUint32(salt[8:12], guess)
+		stream, err := headerDevice.HeaderProtectionCipher(salt[:])
+		if err != nil || stream == nil {
+			return nil, false
+		}
+		header := append([]byte(nil), frame[:MessageTransportHeaderSize]...)
+		stream.XORKeyStream(header, header)
+		if binary.LittleEndian.Uint32(header[0:4]) != typ || binary.LittleEndian.Uint32(header[4:8]) != receiver || binary.LittleEndian.Uint32(header[8:12]) != guess {
+			continue
+		}
+		var nonce [12]byte
+		copy(nonce[4:], header[8:16])
+		plain, err := content.Open(nil, nonce[:], frame[MessageTransportHeaderSize:], nil)
+		if err == nil {
+			return plain, true
+		}
+	}
+	return nil, false
 }
 
 func TestVPN013SyntheticZeroS4ProtectedHeaderFeasibility(t *testing.T) {
-    var device Device
-    if _,err := rand.Read(device.headerProtection.key[:]); err != nil { t.Fatal(err) }
-    var contentKey [32]byte
-    if _,err := rand.Read(contentKey[:]); err != nil { t.Fatal(err) }
-    content, err := chacha20poly1305.New(contentKey[:]); if err != nil { t.Fatal(err) }
-    typ, receiver := uint32(0x12345678),uint32(0x87654321)
-    for _,counter := range []uint64{0,1,7,31} {
-        frame := labZeroS4Packet(t,&device,content,typ,receiver,counter)
-        plain, ok := labRecoverZeroS4(&device,content,frame,typ,receiver,32)
-        if !ok || !bytes.Equal(plain,[]byte("synthetic-private-test-packet")) { t.Fatal("synthetic valid frame not authenticated") }
-        bad := append([]byte(nil),frame...); bad[len(bad)-1] ^= 1
-        if _,ok = labRecoverZeroS4(&device,content,bad,typ,receiver,32); ok { t.Fatal("modified ciphertext authenticated") }
-        if _,ok = labRecoverZeroS4(&device,content,frame,typ,receiver+1,32); ok { t.Fatal("wrong receiver authenticated") }
-        if _,ok = labRecoverZeroS4(&device,content,frame,typ+1,receiver,32); ok { t.Fatal("wrong type authenticated") }
-    }
-    frame := labZeroS4Packet(t,&device,content,typ,receiver,32)
-    if _,ok := labRecoverZeroS4(&device,content,frame,typ,receiver,32); ok { t.Fatal("outside bounded guess window accepted") }
-    if _,ok := labRecoverZeroS4(&device,content,frame,typ,receiver,33); ok { t.Fatal("unbounded request accepted") }
+	var device Device
+	if _, err := rand.Read(device.headerProtection.key[:]); err != nil {
+		t.Fatal(err)
+	}
+	var contentKey [32]byte
+	if _, err := rand.Read(contentKey[:]); err != nil {
+		t.Fatal(err)
+	}
+	content, err := chacha20poly1305.New(contentKey[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ, receiver := uint32(0x12345678), uint32(0x87654321)
+	for _, counter := range []uint64{0, 1, 7, 31} {
+		frame := labZeroS4Packet(t, &device, content, typ, receiver, counter)
+		plain, ok := labRecoverZeroS4(&device, content, frame, typ, receiver, 32)
+		if !ok || !bytes.Equal(plain, []byte("synthetic-private-test-packet")) {
+			t.Fatal("synthetic valid frame not authenticated")
+		}
+		bad := append([]byte(nil), frame...)
+		bad[len(bad)-1] ^= 1
+		if _, ok = labRecoverZeroS4(&device, content, bad, typ, receiver, 32); ok {
+			t.Fatal("modified ciphertext authenticated")
+		}
+		if _, ok = labRecoverZeroS4(&device, content, frame, typ, receiver+1, 32); ok {
+			t.Fatal("wrong receiver authenticated")
+		}
+		if _, ok = labRecoverZeroS4(&device, content, frame, typ+1, receiver, 32); ok {
+			t.Fatal("wrong type authenticated")
+		}
+	}
+	frame := labZeroS4Packet(t, &device, content, typ, receiver, 32)
+	if _, ok := labRecoverZeroS4(&device, content, frame, typ, receiver, 32); ok {
+		t.Fatal("outside bounded guess window accepted")
+	}
+	if _, ok := labRecoverZeroS4(&device, content, frame, typ, receiver, 33); ok {
+		t.Fatal("unbounded request accepted")
+	}
 }
 
 func TestVPN013LabZeroS4AuthenticatedAndBounded(t *testing.T) {
-    var d Device
-    d.indexTable.Init()
-    d.paddings.transport.Store(20)
-    var rng UintRange; rng.FromUint32(0x12345678,0x12345678); d.headers.transport.Store(rng)
-    if _,err := rand.Read(d.headerProtection.key[:]); err != nil { t.Fatal(err) }
-    var key [32]byte; if _,err := rand.Read(key[:]); err != nil { t.Fatal(err) }
-    content,err := chacha20poly1305.New(key[:]); if err != nil { t.Fatal(err) }
-    const receiver uint32 = 0x87654321
-    kp := &Keypair{receive:content,created:time.Now()}
-    d.indexTable.table[receiver] = IndexTableEntry{peer:&Peer{},keypair:kp}
+	var d Device
+	d.indexTable.Init()
+	d.cookieChecker.Init(NoisePublicKey{})
+	d.paddings.transport.Store(20)
+	var rng UintRange
+	rng.FromUint32(0x12345678, 0x12345678)
+	d.headers.transport.Store(rng)
+	if _, err := rand.Read(d.headerProtection.key[:]); err != nil {
+		t.Fatal(err)
+	}
+	var key [32]byte
+	if _, err := rand.Read(key[:]); err != nil {
+		t.Fatal(err)
+	}
+	content, err := chacha20poly1305.New(key[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	const receiver uint32 = 0x87654321
+	kp := &Keypair{receive: content, created: time.Now()}
+	d.indexTable.table[receiver] = IndexTableEntry{peer: &Peer{}, keypair: kp}
 
-    frame := labZeroS4Packet(t,&d,content,0x12345678,receiver,31)
-    damaged := append([]byte(nil),frame...); damaged[len(damaged)-1] ^= 1
-    original := append([]byte(nil),damaged...)
-    if d.vpn013LabRecoverZeroS4(damaged) || !bytes.Equal(damaged,original) { t.Fatal("damaged frame accepted or mutated") }
-    original = append([]byte(nil),frame...)
-    if !d.vpn013LabRecoverZeroS4(frame) { t.Fatal("valid bounded frame rejected") }
-    if binary.LittleEndian.Uint32(frame[:4]) != 0x12345678 || bytes.Equal(frame[:16],original[:16]) { t.Fatal("header not recovered") }
-    tooFar := labZeroS4Packet(t,&d,content,0x12345678,receiver,32)
-    if d.vpn013LabRecoverZeroS4(tooFar) { t.Fatal("counter outside experimental bound accepted") }
-    rng.FromUint32(0x12345678,0x12345679); d.headers.transport.Store(rng)
-    if d.vpn013LabRecoverZeroS4(original) { t.Fatal("unsupported header range accepted") }
-    rng.FromUint32(0x12345678,0x12345678); d.headers.transport.Store(rng)
-    for i:=uint32(1); i<=4; i++ { d.indexTable.table[i] = IndexTableEntry{peer:&Peer{},keypair:kp} }
-    if d.vpn013LabRecoverZeroS4(original) { t.Fatal("too many keys accepted") }
+	frame := labZeroS4Packet(t, &d, content, 0x12345678, receiver, 31)
+	damaged := append([]byte(nil), frame...)
+	damaged[len(damaged)-1] ^= 1
+	original := append([]byte(nil), damaged...)
+	if d.vpn013LabRecoverZeroS4(damaged) || !bytes.Equal(damaged, original) {
+		t.Fatal("damaged frame accepted or mutated")
+	}
+	original = append([]byte(nil), frame...)
+	if !d.vpn013LabRecoverZeroS4(frame) {
+		t.Fatal("valid bounded frame rejected")
+	}
+	if binary.LittleEndian.Uint32(frame[:4]) != 0x12345678 || bytes.Equal(frame[:16], original[:16]) {
+		t.Fatal("header not recovered")
+	}
+	tooFar := labZeroS4Packet(t, &d, content, 0x12345678, receiver, 32)
+	if d.vpn013LabRecoverZeroS4(tooFar) {
+		t.Fatal("counter outside experimental bound accepted")
+	}
+	rng.FromUint32(0x12345678, 0x12345679)
+	d.headers.transport.Store(rng)
+	supported := append([]byte(nil), original...)
+	if !d.vpn013LabRecoverZeroS4(supported) {
+		t.Fatal("small header range rejected")
+	}
+	upper := labZeroS4Packet(t, &d, content, 0x12345679, receiver, 7)
+	if !d.vpn013LabRecoverZeroS4(upper) {
+		t.Fatal("upper value in small header range rejected")
+	}
+	rng.FromUint32(0x12345678, 0x1234567c)
+	d.headers.transport.Store(rng)
+	if d.vpn013LabRecoverZeroS4(original) {
+		t.Fatal("wide header range accepted")
+	}
+	rng.FromUint32(0x12345678, 0x12345678)
+	d.headers.transport.Store(rng)
+	for i := uint32(1); i <= 4; i++ {
+		d.indexTable.table[i] = IndexTableEntry{peer: &Peer{}, keypair: kp}
+	}
+	if d.vpn013LabRecoverZeroS4(original) {
+		t.Fatal("too many keys accepted")
+	}
 }
 
 func BenchmarkVPN013LabZeroS4InvalidFourKeys(b *testing.B) {
-    var d Device; d.indexTable.Init(); d.paddings.transport.Store(20)
-    var rng UintRange; rng.FromUint32(888888,888888); d.headers.transport.Store(rng)
-    if _,err := rand.Read(d.headerProtection.key[:]); err != nil { b.Fatal(err) }
-    var key [32]byte; if _,err := rand.Read(key[:]); err != nil { b.Fatal(err) }
-    content,err := chacha20poly1305.New(key[:]); if err != nil { b.Fatal(err) }
-    for i:=uint32(1);i<=4;i++ { d.indexTable.table[i] = IndexTableEntry{peer:&Peer{},keypair:&Keypair{receive:content,created:time.Now()}} }
-    frame := make([]byte,128); if _,err := rand.Read(frame); err != nil { b.Fatal(err) }
-    b.ResetTimer()
-    for i:=0;i<b.N;i++ { if d.vpn013LabRecoverZeroS4(frame) { b.Fatal("invalid accepted") } }
+	var d Device
+	d.indexTable.Init()
+	d.paddings.transport.Store(20)
+	var rng UintRange
+	rng.FromUint32(888888, 888888)
+	d.headers.transport.Store(rng)
+	if _, err := rand.Read(d.headerProtection.key[:]); err != nil {
+		b.Fatal(err)
+	}
+	var key [32]byte
+	if _, err := rand.Read(key[:]); err != nil {
+		b.Fatal(err)
+	}
+	content, err := chacha20poly1305.New(key[:])
+	if err != nil {
+		b.Fatal(err)
+	}
+	for i := uint32(1); i <= 4; i++ {
+		d.indexTable.table[i] = IndexTableEntry{peer: &Peer{}, keypair: &Keypair{receive: content, created: time.Now()}}
+	}
+	frame := make([]byte, 128)
+	if _, err := rand.Read(frame); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if d.vpn013LabRecoverZeroS4(frame) {
+			b.Fatal("invalid accepted")
+		}
+	}
+}
+
+func BenchmarkVPN013LabZeroS4InvalidFourKeysFourHeaders(b *testing.B) {
+	var d Device
+	d.indexTable.Init()
+	d.paddings.transport.Store(20)
+	var rng UintRange
+	rng.FromUint32(888888, 888891)
+	d.headers.transport.Store(rng)
+	if _, err := rand.Read(d.headerProtection.key[:]); err != nil { b.Fatal(err) }
+	var key [32]byte
+	if _, err := rand.Read(key[:]); err != nil { b.Fatal(err) }
+	content, err := chacha20poly1305.New(key[:]); if err != nil { b.Fatal(err) }
+	for i := uint32(1); i <= 4; i++ { d.indexTable.table[i] = IndexTableEntry{peer:&Peer{},keypair:&Keypair{receive:content,created:time.Now()}} }
+	frame := make([]byte,128); if _,err := rand.Read(frame);err != nil { b.Fatal(err) }
+	b.ResetTimer()
+	for i:=0;i<b.N;i++ { if d.vpn013LabRecoverZeroS4(frame) { b.Fatal("invalid accepted") } }
 }
 
 func TestVPN013LabRecoveryRateGate(t *testing.T) {
-    var next atomic.Int64
-    if !vpn013LabClaim(&next,0) || vpn013LabClaim(&next,1) || vpn013LabClaim(&next,vpn013LabSpacing-1) || !vpn013LabClaim(&next,vpn013LabSpacing) {
-        t.Fatal("incorrect monotonic spacing")
-    }
-    if vpn013LabClaim(&next,-1) || vpn013LabClaim(&next,int64(^uint64(0)>>1)) { t.Fatal("invalid time accepted") }
-    next.Store(0)
-    var accepted atomic.Int32
-    var group sync.WaitGroup
-    for i:=0;i<64;i++ {
-        group.Add(1)
-        go func(){ defer group.Done(); if vpn013LabClaim(&next,1) { accepted.Add(1) } }()
-    }
-    group.Wait()
-    if accepted.Load()!=1 { t.Fatal("rate gate allowed competing simultaneous attempts") }
+	var next atomic.Int64
+	if !vpn013LabClaim(&next, 0) || vpn013LabClaim(&next, 1) || vpn013LabClaim(&next, vpn013LabSpacing-1) || !vpn013LabClaim(&next, vpn013LabSpacing) {
+		t.Fatal("incorrect monotonic spacing")
+	}
+	if vpn013LabClaim(&next, -1) || vpn013LabClaim(&next, int64(^uint64(0)>>1)) {
+		t.Fatal("invalid time accepted")
+	}
+	next.Store(0)
+	var accepted atomic.Int32
+	var group sync.WaitGroup
+	for i := 0; i < 64; i++ {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			if vpn013LabClaim(&next, 1) {
+				accepted.Add(1)
+			}
+		}()
+	}
+	group.Wait()
+	if accepted.Load() != 1 {
+		t.Fatal("rate gate allowed competing simultaneous attempts")
+	}
+}
+
+func TestVPN013LabZeroS4WithoutHeaderProtectAuthenticates(t *testing.T) {
+	var d Device
+	d.indexTable.Init()
+	d.paddings.transport.Store(20)
+	var rng UintRange
+	rng.FromUint32(100, 200)
+	d.headers.transport.Store(rng)
+	var key [32]byte
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	content, err := chacha20poly1305.New(key[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	const receiver uint32 = 42
+	d.indexTable.table[receiver] = IndexTableEntry{peer: &Peer{}, keypair: &Keypair{receive: content, created: time.Now()}}
+	frame := make([]byte, 16)
+	binary.LittleEndian.PutUint32(frame[:4], 150)
+	binary.LittleEndian.PutUint32(frame[4:8], receiver)
+	binary.LittleEndian.PutUint64(frame[8:16], 9)
+	var nonce [12]byte
+	binary.LittleEndian.PutUint64(nonce[4:], 9)
+	frame = append(frame, content.Seal(nil, nonce[:], []byte("synthetic"), nil)...)
+	for _, pos := range []int{4, 8, len(frame) - 1} {
+		forged := append([]byte(nil), frame...)
+		forged[pos] ^= 1
+		before := append([]byte(nil), forged...)
+		if d.vpn013LabRecoverZeroS4(forged) || !bytes.Equal(forged, before) {
+			t.Fatal("forgery accepted or mutated")
+		}
+	}
+	if !d.vpn013LabRecoverZeroS4(frame) {
+		t.Fatal("valid ranged header not accepted")
+	}
+}
+
+func TestVPN013LabZeroS4MisclassifiedAsControl(t *testing.T) {
+	var d Device
+	d.indexTable.Init()
+	d.cookieChecker.Init(NoisePublicKey{})
+	d.paddings.init.Store(16); d.paddings.response.Store(16); d.paddings.cookie.Store(12); d.paddings.transport.Store(20)
+	d.randomTrailers.Store(true)
+	var h1, h2, h3, h4 UintRange
+	h1.FromUint32(0, 4294967292); h2.FromUint32(4294967293,4294967293); h3.FromUint32(4294967294,4294967294); h4.FromUint32(4294967295,4294967295)
+	d.headers.init.Store(h1); d.headers.response.Store(h2); d.headers.cookie.Store(h3); d.headers.transport.Store(h4)
+	if _,err:=rand.Read(d.headerProtection.key[:]);err!=nil { t.Fatal(err) }
+	var key [32]byte; if _,err:=rand.Read(key[:]);err!=nil { t.Fatal(err) }
+	content,err:=chacha20poly1305.New(key[:]); if err!=nil { t.Fatal(err) }
+	const receiver uint32=0x87654321
+	d.indexTable.table[receiver]=IndexTableEntry{peer:&Peer{},keypair:&Keypair{receive:content,created:time.Now()}}
+	for counter:=uint64(0);counter<32;counter++ {
+		header:=make([]byte,16);binary.LittleEndian.PutUint32(header[:4],4294967295);binary.LittleEndian.PutUint32(header[4:8],receiver);binary.LittleEndian.PutUint64(header[8:16],counter)
+		var nonce [12]byte;binary.LittleEndian.PutUint64(nonce[4:],counter)
+		body:=content.Seal(nil,nonce[:],make([]byte,512),nil)
+		stream,err:=d.HeaderProtectionCipher(header[:12]);if err!=nil || stream==nil { t.Fatal("cipher") };stream.XORKeyStream(header,header)
+		packet:=append(header,body...)
+		stream,err=d.HeaderProtectionCipher(packet[:12]);if err!=nil || stream==nil { t.Fatal("cipher") };var hash [4]byte;stream.XORKeyStream(hash[:],hash[:])
+		_,kind,_:=d.DeterminePacketTypeAndPadding(packet,hash[:])
+		if kind==MessageInitiationType {
+			if _,_,_,valid := d.vpn013AuthenticatedControl(packet,hash[:],true); valid { t.Fatal("forged control accepted") }
+			if !d.vpn013LabRecoverZeroS4(packet) { t.Fatal("authenticated old-format packet not recovered") }
+			return
+		}
+	}
+	t.Fatal("synthetic control collision was not produced")
 }

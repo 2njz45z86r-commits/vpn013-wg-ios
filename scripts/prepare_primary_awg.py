@@ -78,18 +78,8 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 old = b"\tcookieChecker CookieChecker\n"
                 new = old + b"\t// Synthetic experiment only; bounds the expensive compatibility probe.\n\tvpn013LabNextRecovery atomic.Int64\n\tvpn013LabAttempts atomic.Uint64\n\tvpn013LabAuthenticated atomic.Uint64\n"
             else:
-                old = b"\t\t\tpacket = packet[padding:]\n"
-                new = b"""\t\t\t// LAB ONLY: normal receive worker performs authentication and replay
-\t\t\t// checks after this preliminary authentication. Not production-ready.
-\t\t\tif msgType == MessageUnknownType && device.paddings.transport.Load() > 0 && device.vpn013LabAllowRecovery() {
-\t\t\t\tdevice.vpn013LabAttempts.Add(1)
-\t\t\t\tif device.vpn013LabRecoverZeroS4(packet) {
-\t\t\t\t\tdevice.vpn013LabAuthenticated.Add(1)
-\t\t\t\t\tmsgSize, msgType, padding = MessageTransportSize, MessageTransportType, 0
-\t\t\t\t\tcip = nil
-\t\t\t\t}
-\t\t\t}
-""" + old
+                old = b'\t\t\tpacket = packet[padding:]\n'
+                new = b'\t\t\t// LAB ONLY: normal receive worker performs authentication and replay\n\t\t\t// checks after this preliminary authentication. Not production-ready.\n\t\t\tlabRecoverCandidate := msgType == MessageUnknownType\n\t\t\tif msgType == MessageInitiationType || msgType == MessageResponseType || msgType == MessageCookieReplyType {\n\t\t\t\t_, _, _, validControl := device.vpn013AuthenticatedControl(packet, typeHash, true)\n\t\t\t\tlabRecoverCandidate = !validControl\n\t\t\t}\n\t\t\tif labRecoverCandidate && device.paddings.transport.Load() > 0 && device.vpn013LabAllowRecovery() {\n\t\t\t\tdevice.vpn013LabAttempts.Add(1)\n\t\t\t\tif device.vpn013LabRecoverZeroS4(packet) {\n\t\t\t\t\tdevice.vpn013LabAuthenticated.Add(1)\n\t\t\t\t\tmsgSize, msgType, padding = MessageTransportSize, MessageTransportType, 0\n\t\t\t\t\tcip = nil\n\t\t\t\t}\n\t\t\t}\n' + old
             assert raw.count(old) == 1
             raw = raw.replace(old, new, 1)
         else:
@@ -144,7 +134,9 @@ def prepare_primary_awg(root: Path, output: Path, modfile: Path) -> dict:
                 'TestVPN013LegacySendCompletesBeforeModeCommit',
                 'TestVPN013LegacyEndpointRefreshKeepsRevision', 'TestVPN013LegacyMaskingChangesAdvanceRevision',
                 'FuzzVPN013LegacyParse', 'TestVPN013SyntheticZeroS4ProtectedHeaderFeasibility',
-                'TestVPN013LabZeroS4AuthenticatedAndBounded', 'TestVPN013LabRecoveryRateGate'}
+                'TestVPN013LabZeroS4AuthenticatedAndBounded', 'TestVPN013LabRecoveryRateGate',
+                'TestVPN013LabZeroS4WithoutHeaderProtectAuthenticates',
+                'TestVPN013LabZeroS4MisclassifiedAsControl'}
     report = {'scope': 'build-host ChannelTUN and loopback UDP; not native OS VPN',
               'hostOS': host_os, 'hostArch': host_arch, 'exit': tested.returncode,
               'passedTests': passed, 'requiredTests': sorted(required),

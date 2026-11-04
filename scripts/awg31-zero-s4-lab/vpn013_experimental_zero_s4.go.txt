@@ -1,79 +1,115 @@
 package device
 
 // LAB ONLY: not enabled in shipped code. No independent security review;
-// bounded first counters/single header values only. Floods may starve recovery.
+// bounded first counters/small header ranges only. Floods may starve recovery.
 import (
-    "encoding/binary"
-    "sync/atomic"
-    "time"
+	"encoding/binary"
+	"sync/atomic"
+	"time"
 )
 
 var vpn013LabClockOrigin = time.Now()
+
 const vpn013LabSpacing = int64(200 * time.Millisecond)
 
 func vpn013LabClaim(deadline *atomic.Int64, now int64) bool {
-    if now < 0 || now > int64(^uint64(0)>>1)-vpn013LabSpacing { return false }
-    for {
-        next := deadline.Load()
-        if now < next { return false }
-        if deadline.CompareAndSwap(next,now+vpn013LabSpacing) { return true }
-    }
+	if now < 0 || now > int64(^uint64(0)>>1)-vpn013LabSpacing {
+		return false
+	}
+	for {
+		next := deadline.Load()
+		if now < next {
+			return false
+		}
+		if deadline.CompareAndSwap(next, now+vpn013LabSpacing) {
+			return true
+		}
+	}
 }
 
 func (device *Device) vpn013LabAllowRecovery() bool {
-    return vpn013LabClaim(&device.vpn013LabNextRecovery,time.Since(vpn013LabClockOrigin).Nanoseconds())
+	return vpn013LabClaim(&device.vpn013LabNextRecovery, time.Since(vpn013LabClockOrigin).Nanoseconds())
 }
 
 // Exposed only in this unshipped lab copy to verify replay test coverage.
 func (device *Device) VPN013LabRecoveryStats() (uint64, uint64) {
-    return device.vpn013LabAttempts.Load(),device.vpn013LabAuthenticated.Load()
+	return device.vpn013LabAttempts.Load(), device.vpn013LabAuthenticated.Load()
 }
 
 func (device *Device) vpn013LabRecoverZeroS4(packet []byte) bool {
-    if len(packet) < MessageTransportSize || device.paddings.transport.Load() == 0 { return false }
-    spec := device.headers.transport.Load()
-    device.headerProtection.RLock()
-    protected := !device.headerProtection.key.IsZero()
-    device.headerProtection.RUnlock()
-    if !protected {
-        if !spec.Contains(binary.LittleEndian.Uint32(packet[0:4])) { return false }
-        entry := device.indexTable.Lookup(binary.LittleEndian.Uint32(packet[4:8]))
-        if entry.peer == nil || entry.keypair == nil || entry.keypair.receive == nil || entry.keypair.created.Add(device.keychainExpireTime()).Before(time.Now()) { return false }
-        var nonce [12]byte; copy(nonce[4:],packet[8:16])
-        plain,err := entry.keypair.receive.Open(nil,nonce[:],packet[MessageTransportHeaderSize:],nil)
-        clear(plain)
-        return err == nil
-    }
-    if spec.Lo() != spec.Hi() { return false }
-    type candidate struct { id uint32; kp *Keypair }
-    var candidates []candidate
-    device.indexTable.RLock()
-    for id, entry := range device.indexTable.table {
-        if entry.peer != nil && entry.keypair != nil && entry.keypair.receive != nil {
-            candidates = append(candidates,candidate{id,entry.keypair})
-            if len(candidates)>4 { break }
-        }
-    }
-    device.indexTable.RUnlock()
-    if len(candidates)>4 { return false }
-    for _, candidate := range candidates {
-        if candidate.kp.created.Add(device.keychainExpireTime()).Before(time.Now()) { continue }
-        for guess := uint32(0); guess < 32; guess++ {
-            var salt [12]byte
-            binary.LittleEndian.PutUint32(salt[0:4],spec.Lo())
-            binary.LittleEndian.PutUint32(salt[4:8],candidate.id)
-            binary.LittleEndian.PutUint32(salt[8:12],guess)
-            stream,err := device.HeaderProtectionCipher(salt[:]); if err != nil || stream == nil { return false }
-            var header [MessageTransportHeaderSize]byte
-            copy(header[:],packet[:MessageTransportHeaderSize]); stream.XORKeyStream(header[:],header[:])
-            if binary.LittleEndian.Uint32(header[0:4]) != spec.Lo() || binary.LittleEndian.Uint32(header[4:8]) != candidate.id || binary.LittleEndian.Uint32(header[8:12]) != guess { continue }
-            var nonce [12]byte; copy(nonce[4:],header[8:16])
-            plain,err := candidate.kp.receive.Open(nil,nonce[:],packet[MessageTransportHeaderSize:],nil)
-            clear(plain)
-            if err != nil { continue }
-            copy(packet[:MessageTransportHeaderSize],header[:])
-            return true
-        }
-    }
-    return false
+	if len(packet) < MessageTransportSize || device.paddings.transport.Load() == 0 {
+		return false
+	}
+	spec := device.headers.transport.Load()
+	device.headerProtection.RLock()
+	protected := !device.headerProtection.key.IsZero()
+	device.headerProtection.RUnlock()
+	if !protected {
+		if !spec.Contains(binary.LittleEndian.Uint32(packet[0:4])) {
+			return false
+		}
+		entry := device.indexTable.Lookup(binary.LittleEndian.Uint32(packet[4:8]))
+		if entry.peer == nil || entry.keypair == nil || entry.keypair.receive == nil || entry.keypair.created.Add(device.keychainExpireTime()).Before(time.Now()) {
+			return false
+		}
+		var nonce [12]byte
+		copy(nonce[4:], packet[8:16])
+		plain, err := entry.keypair.receive.Open(nil, nonce[:], packet[MessageTransportHeaderSize:], nil)
+		clear(plain)
+		return err == nil
+	}
+	if uint64(spec.Hi())-uint64(spec.Lo())+1 > 4 {
+		return false
+	}
+	type candidate struct {
+		id uint32
+		kp *Keypair
+	}
+	var candidates []candidate
+	device.indexTable.RLock()
+	for id, entry := range device.indexTable.table {
+		if entry.peer != nil && entry.keypair != nil && entry.keypair.receive != nil {
+			candidates = append(candidates, candidate{id, entry.keypair})
+			if len(candidates) > 4 {
+				break
+			}
+		}
+	}
+	device.indexTable.RUnlock()
+	if len(candidates) > 4 {
+		return false
+	}
+	for _, candidate := range candidates {
+		if candidate.kp.created.Add(device.keychainExpireTime()).Before(time.Now()) {
+			continue
+		}
+		for headerType := uint64(spec.Lo()); headerType <= uint64(spec.Hi()); headerType++ {
+			for guess := uint32(0); guess < 32; guess++ {
+				var salt [12]byte
+				binary.LittleEndian.PutUint32(salt[0:4], uint32(headerType))
+				binary.LittleEndian.PutUint32(salt[4:8], candidate.id)
+				binary.LittleEndian.PutUint32(salt[8:12], guess)
+				stream, err := device.HeaderProtectionCipher(salt[:])
+				if err != nil || stream == nil {
+					return false
+				}
+				var header [MessageTransportHeaderSize]byte
+				copy(header[:], packet[:MessageTransportHeaderSize])
+				stream.XORKeyStream(header[:], header[:])
+				if binary.LittleEndian.Uint32(header[0:4]) != uint32(headerType) || binary.LittleEndian.Uint32(header[4:8]) != candidate.id || binary.LittleEndian.Uint32(header[8:12]) != guess {
+					continue
+				}
+				var nonce [12]byte
+				copy(nonce[4:], header[8:16])
+				plain, err := candidate.kp.receive.Open(nil, nonce[:], packet[MessageTransportHeaderSize:], nil)
+				clear(plain)
+				if err != nil {
+					continue
+				}
+				copy(packet[:MessageTransportHeaderSize], header[:])
+				return true
+			}
+		}
+	}
+	return false
 }

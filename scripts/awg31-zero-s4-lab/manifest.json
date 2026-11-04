@@ -5,14 +5,14 @@
   },
   "receive.go": {
     "beforeSHA256": "50d2c659ade242dddb2c7cfc063774b95e6b9be12eaf39bc75af8b9afa00555d",
-    "afterSHA256": "ea79110c04cef0ad194cbd55d9853539b653a454df4e3ae59d279065fee40bef"
+    "afterSHA256": "6ebe5d90a74d76c966f7b44a9ef7bfd804e99a0102e48c5d2cd51cf5225fcc36"
   },
   "vpn013_experimental_zero_s4.go": {
     "beforeSHA256": null,
-    "afterSHA256": "8a5329cf24dec559b3a637c293e4d0e398d7429adb0a8749353249613a1c428c"
+    "afterSHA256": "0e8274f21193d00d61897a6b5a1c05bf1ff08d425088c97e179a1f3371c55f5f"
   },
   "vpn013_zero_s4_recovery_test.go": {
     "beforeSHA256": null,
-    "afterSHA256": "7ddab9585df5f1a76605d6a13e2edd37dd0d370443713da0bc762e08a916bf27"
+    "afterSHA256": "4f75eb8439d79d0eca1ab8f48ed42d6b44dcc54f4ec87194156c42e227f9de25"
   }
 }
