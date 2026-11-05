@@ -814,8 +814,10 @@ class R013HomeActivity : AppCompatActivity() {
      * it, fetch the exit address and 1 MB through it, stop it. Nothing is
      * created or edited; the report is shared only on an explicit tap.
      */
-    private fun sweepAll() {
-        if (Application.getBackend().runningTunnelNames.isNotEmpty() || ProxyVpnService.activeId != null || ProxyVpnService.requestedId != null) {
+    private fun sweepAll() { lifecycleScope.launch { sweepAllChecked() } }
+    private suspend fun sweepAllChecked() {
+        val running = withContext(Dispatchers.IO) { Application.getBackend().runningTunnelNames.isNotEmpty() }
+        if (running || ProxyVpnService.activeId != null || ProxyVpnService.requestedId != null) {
             MaterialAlertDialogBuilder(this).setTitle("Сначала выключите VPN").setMessage("Проверка включает конфигурации по очереди и не может начаться, пока работает подключение.").setPositiveButton("Понятно", null).show(); return
         }
         if (android.net.VpnService.prepare(this) != null) { feedback("Сначала подключите любую конфигурацию один раз и разрешите VPN, затем повторите проверку."); return }
