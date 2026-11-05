@@ -230,6 +230,8 @@ final class AutoTunnelUITests:XCTestCase {
             XCTAssertTrue(ping.exists); XCTAssertFalse(ping.isEnabled)
             closeConnectionPopup(app)
             app.buttons["vpn013.proxy.add"].tap()
+            // The sheet's dismissal can swallow the first tap; retry once.
+            if !app.buttons["vpn013.proxy.import.check"].waitForExistence(timeout: 5) { app.buttons["vpn013.proxy.add"].tap() }
             app.buttons["vpn013.proxy.import.check"].tap()
             XCTAssertTrue(app.alerts["Серверов: 1"].waitForExistence(timeout: 5))
             app.alerts.buttons["Добавить"].tap()
@@ -394,6 +396,8 @@ final class AutoTunnelUITests:XCTestCase {
     }
     private func startNativeTrial(_ app: XCUIApplication) {
         app.buttons["vpn013.add-profile"].tap()
+        // A tap during the previous alert's dismissal can be swallowed; retry once.
+        if !app.buttons["Три дня теста бесплатно"].waitForExistence(timeout:5) { app.buttons["vpn013.add-profile"].tap() }
         XCTAssertTrue(app.buttons["Три дня теста бесплатно"].waitForExistence(timeout:5))
         XCTAssertFalse(app.buttons["1 час бесплатно"].exists)
         app.buttons["Три дня теста бесплатно"].tap()
