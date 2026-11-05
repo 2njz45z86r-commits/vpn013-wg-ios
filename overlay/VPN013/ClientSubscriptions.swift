@@ -158,14 +158,38 @@ final class ClientUpdateCoordinator {
               attemptedAt == nil || now.timeIntervalSince(attemptedAt!) > 900 else { return }
         check(manager: manager, manual: false)
     }
-    func check(manager: TunnelsManager, manual: Bool) {
+    /// The application release and the AmneziaWG subscriptions are separate
+    /// actions in Settings; the daily automatic check still covers both.
+    enum CheckScope { case all, application, configurations }
+    func check(manager: TunnelsManager, manual: Bool, scope: CheckScope = .all, resultPresenter: UIViewController? = nil, completion: (() -> Void)? = nil) {
         // UI fixtures supply their own release/registry. Opening the screen
         // must not replace synthetic data with a live public catalog response.
         // Physical builds always return false from quietForTests().
-        guard manual || !quietForTests() else { return }
-        guard !busy else { return }
-        guard loadingError == nil else { publish("Защищённое хранилище недоступно. Прежние профили сохранены."); return }
-        busy = true; attemptedAt = Date(); subscriptionMessages = []; publish("Проверяем обновления…")
+        guard manual || !quietForTests() else { completion?(); return }
+        guard !busy else { completion?(); return }
+        guard loadingError == nil else { publish("Защищённое хранилище недоступно. Прежние профили сохранены."); completion?(); return }
+        busy = true; attemptedAt = Date(); subscriptionMessages = []
+        publish(scope == .configurations ? "Обновляем конфигурации…" : "Проверяем обновления…")
+        let finish: (String?) -> Void = { [weak self] appMessage in
+            guard let self = self else { return }
+            let orders = scope == .application ? [] : Array(self.registry.bindings.keys).sorted()
+            self.fetch(orders: orders, index: 0, errors: [], manager: manager) { errors in
+                self.busy = false
+                var parts = [appMessage].compactMap { $0 } + self.subscriptionMessages + errors
+                if scope == .configurations && orders.isEmpty { parts.append("Нет конфигураций AmneziaWG с привязкой к боту. Импортируйте ZIP из бота, чтобы их можно было обновлять.") }
+                self.publish(parts.joined(separator: "\n\n"))
+                guard scope != .application else {
+                    if manual || self.release != nil { self.showResult(on: resultPresenter) }
+                    completion?(); return
+                }
+                self.applyPending(manager: manager) { applyError in
+                    if let applyError = applyError { self.publish(self.status + "\n\n" + applyError.localizedDescription) }
+                    if manual || self.release != nil { self.showResult(on: resultPresenter) }
+                    completion?()
+                }
+            }
+        }
+        guard scope != .configurations else { finish(nil); return }
         ClientHTTPTask.request(path: "/client/releases/vpn013-wg/ios") { [weak self] result in
             guard let self = self else { return }
             var appMessage: String
@@ -181,15 +205,7 @@ final class ClientUpdateCoordinator {
                 } catch { appMessage = ClientUpdateError.invalidResponse.localizedDescription }
             case .failure: appMessage = ClientUpdateError.network.localizedDescription
             }
-            let orders = Array(self.registry.bindings.keys).sorted()
-            self.fetch(orders: orders, index: 0, errors: [], manager: manager) { errors in
-                self.busy = false
-                self.publish(([appMessage] + self.subscriptionMessages + errors).joined(separator: "\n\n"))
-                self.applyPending(manager: manager) { applyError in
-                    if let applyError = applyError { self.publish(self.status + "\n\n" + applyError.localizedDescription) }
-                    if manual || self.release != nil { self.showResult() }
-                }
-            }
+            finish(appMessage)
         }
     }
     private func fetch(orders: [String], index: Int, errors: [String], manager: TunnelsManager, completion: @escaping ([String]) -> Void) {
@@ -467,8 +483,12 @@ final class ClientUpdateCoordinator {
             self.applyPending(manager: manager) { _ in completion() }
         }
     }
-    private func showResult() {
-        guard let presenter = presenter, presenter.presentedViewController == nil else { return }
+    private func showResult(on explicit: UIViewController? = nil) {
+        // The periodic tick re-points `presenter` at the main list; a result
+        // requested from Settings must still appear above the visible screen.
+        var top = explicit ?? presenter
+        while let next = top?.presentedViewController, !(next is UIAlertController) { top = next }
+        guard let presenter = top, presenter.presentedViewController == nil else { return }
         let alert = UIAlertController(title: release == nil ? "Обновления" : "Доступно обновление", message: status, preferredStyle: .alert)
         if let release = release { alert.addAction(UIAlertAction(title: "Скачать IPA", style: .default) { [weak presenter] _ in
             guard let presenter = presenter else { return }
