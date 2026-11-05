@@ -67,11 +67,14 @@ struct CrossProtocolPlan: Codable {
                     else { completion(.success(permit)) }
                 }
                 guard error == nil else { finish(CrossProtocolError.invalid); return }
+                // A running tunnel keeps its own fallback snapshot; only idle
+                // profiles drop theirs. Adding or editing other configurations no
+                // longer requires turning the current VPN off.
                 var pending = (managers ?? []).filter { item in
                     guard let proto = item.protocolConfiguration as? NETunnelProviderProtocol else { return false }
                     return proto.providerBundleIdentifier == appID + ".network-extension" && (try? proto.privatePayload()?.crossProtocol) != nil
+                        && [.disconnected, .invalid].contains(item.connection.status)
                 }
-                guard !pending.contains(where: { [.connected, .connecting, .reasserting, .disconnecting].contains($0.connection.status) }) else { finish(CrossProtocolError.stopFirst); return }
                 func next() {
                     guard !pending.isEmpty else { finish(nil); return }
                     let manager = pending.removeFirst()
