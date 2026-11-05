@@ -228,7 +228,7 @@ final class ClientHTTPTask: NSObject, URLSessionDataDelegate {
         DispatchQueue.main.async { self.completion(result) }
     }
     func cancel() { session?.invalidateAndCancel() }
-    static func request(path: String, capability: String? = nil, originIndex: Int = 0, completion: @escaping (Result<Data, Error>) -> Void) {
+    static func request(path: String, capability: String? = nil, body: Data? = nil, originIndex: Int = 0, completion: @escaping (Result<Data, Error>) -> Void) {
         guard ClientUpdateProtocol.origins.indices.contains(originIndex), path.hasPrefix("/client/") else { completion(.failure(ClientUpdateError.network)); return }
         var request = URLRequest(url: URL(string: ClientUpdateProtocol.origins[originIndex] + path)!, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -236,11 +236,12 @@ final class ClientHTTPTask: NSObject, URLSessionDataDelegate {
             guard ClientUpdateProtocol.validToken(capability) else { completion(.failure(ClientUpdateError.invalidDocument)); return }
             request.httpMethod = "POST"
             request.setValue("Bearer " + capability, forHTTPHeaderField: "Authorization")
-            request.httpBody = Data()
+            request.httpBody = body ?? Data()
+            if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         }
         _ = ClientHTTPTask(request: request) { result in
             if case .failure(let error) = result, !(error is ClientUpdateError), originIndex + 1 < ClientUpdateProtocol.origins.count {
-                Self.request(path: path, capability: capability, originIndex: originIndex + 1, completion: completion)
+                Self.request(path: path, capability: capability, body: body, originIndex: originIndex + 1, completion: completion)
             } else { completion(result) }
         }
     }

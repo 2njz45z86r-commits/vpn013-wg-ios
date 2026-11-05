@@ -8,8 +8,21 @@ struct ConfigurationSweepResult {
     enum Outcome { case pending, running, traffic, connectedNoTraffic, notConnected, skipped }
     let section: String
     let name: String
+    let kind: String
     var outcome: Outcome = .pending
     var detail = ""
+    var milliseconds: Int?
+    var ip: String?
+    var mbps: Double?
+    var error: String?
+    var payload: [String: Any] {
+        var item: [String: Any] = ["name": section + " · " + name, "kind": kind, "ok": outcome == .traffic]
+        if let value = milliseconds { item["ms"] = value }
+        if let value = ip { item["ip"] = value }
+        if let value = mbps { item["mbps"] = (value * 10).rounded() / 10 }
+        if outcome != .traffic { item["error"] = String((error ?? text).prefix(150)) }
+        return item
+    }
     var text: String {
         switch outcome {
         case .pending: return "ожидает"
@@ -78,7 +91,7 @@ final class ConfigurationSweepViewController: UITableViewController {
         for index in 0..<tunnels.numberOfTunnels() {
             let tunnel = tunnels.tunnel(at: index)
             guard !tunnel.isVPN013Automatic else { continue }
-            results.append(ConfigurationSweepResult(section: "AmneziaWG", name: tunnel.name))
+            results.append(ConfigurationSweepResult(section: "AmneziaWG", name: tunnel.name, kind: "awg"))
             jobs.append { [weak self] in Job(
                 start: { self?.tunnels.startActivation(of: tunnel) },
                 stop: { self?.tunnels.startDeactivation(of: tunnel) },
@@ -88,7 +101,7 @@ final class ConfigurationSweepViewController: UITableViewController {
         for kind in VPN013ConnectionKind.allCases where kind != .amneziawg {
             for entry in proxies.entries where entry.value.profile.source == kind {
                 let id = entry.value.profile.id
-                results.append(ConfigurationSweepResult(section: kind.title, name: entry.value.profile.name))
+                results.append(ConfigurationSweepResult(section: kind.title, name: entry.value.profile.name, kind: "proxy"))
                 jobs.append { [weak self] in
                     func current() -> ProxyProfilesManager.Entry? { self?.proxies.entries.first { $0.value.profile.id == id } }
                     return Job(
@@ -128,25 +141,50 @@ final class ConfigurationSweepViewController: UITableViewController {
         tableView.reloadData(); viewDidLayoutSubviews()
     }
 
+    /// No VPN of this app is starting, running or stopping.
+    private var idle: Bool { tunnels.tunnelInOperation() == nil && !proxies.entries.contains { $0.inOperation } && !proxies.working }
+
     private func run(_ index: Int) {
         guard index < jobs.count, !cancelled else { finish(); return }
-        let job = jobs[index]()
-        results[index].outcome = .running; lastProxyError = nil
+        results[index].outcome = .running
         status.text = "Проверяем \(index + 1) из \(jobs.count): \(results[index].section) · \(results[index].name)"
         reload(index)
+        // iOS refuses a new VPN while the previous one is still tearing down.
+        wait(until: { [weak self] in self?.idle ?? true }, seconds: 20) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self?.attempt(index, retry: true) }
+        }
+    }
+    private func attempt(_ index: Int, retry: Bool) {
+        guard !cancelled else { finish(); return }
+        let job = jobs[index]()
+        lastProxyError = nil
         job.start()
-        wait(until: job.connected, seconds: 25) { [weak self] connected in
+        wait(until: job.connected, seconds: 30) { [weak self] connected in
             guard let self = self else { return }
             guard connected else {
+                let reason = self.lastProxyError.map { "система не запустила VPN: " + $0.localizedDescription } ?? "нет подключения за 30 с"
+                if retry, !self.cancelled {
+                    // One more try after a clean stop: the first start often races the previous tunnel.
+                    job.stop()
+                    self.wait(until: { [weak self] in self?.idle ?? true }, seconds: 20) { [weak self] _ in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self?.attempt(index, retry: false) }
+                    }
+                    return
+                }
                 self.results[index].outcome = .notConnected
-                self.results[index].detail = self.lastProxyError.map { _ in "система не запустила VPN" } ?? "нет подключения за 25 с"
+                self.results[index].detail = reason; self.results[index].error = reason
                 self.stopThenNext(job, index); return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                Self.measure { result in
+            // Give the handshake and DNS a moment before the first request.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                Self.measure(attempts: 2) { result in
                     switch result {
-                    case .success(let value): self.results[index].outcome = .traffic; self.results[index].detail = value
-                    case .failure: self.results[index].outcome = .connectedNoTraffic
+                    case .success(let value):
+                        self.results[index].outcome = .traffic; self.results[index].detail = value.text
+                        self.results[index].milliseconds = value.milliseconds; self.results[index].ip = value.ip; self.results[index].mbps = value.mbps
+                    case .failure(let error):
+                        self.results[index].outcome = .connectedNoTraffic
+                        self.results[index].detail = error.localizedDescription; self.results[index].error = "подключено, трафика нет: " + error.localizedDescription
                     }
                     self.stopThenNext(job, index)
                 }
@@ -155,7 +193,7 @@ final class ConfigurationSweepViewController: UITableViewController {
     }
     private func stopThenNext(_ job: Job, _ index: Int) {
         reload(index); job.stop()
-        wait(until: job.stopped, seconds: 15) { [weak self] _ in
+        wait(until: job.stopped, seconds: 20) { [weak self] _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self?.run(index + 1) }
         }
     }
@@ -169,31 +207,53 @@ final class ConfigurationSweepViewController: UITableViewController {
         poll()
     }
 
+    struct Measurement { let text: String; let milliseconds: Int; let ip: String; let mbps: Double? }
+
     /// Exit address and 1 MB through the active tunnel; no cookies or cache.
-    private static func measure(completion: @escaping (Result<String, Error>) -> Void) {
+    /// Two independent address services, several attempts: one slow first
+    /// request right after connecting must not mark a working server as dead.
+    private static func measure(attempts: Int, completion: @escaping (Result<Measurement, Error>) -> Void) {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 12; configuration.timeoutIntervalForResource = 20
+        configuration.timeoutIntervalForRequest = 10; configuration.timeoutIntervalForResource = 15
         configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        configuration.waitsForConnectivity = false
         let session = URLSession(configuration: configuration)
-        let started = Date()
-        session.dataTask(with: URL(string: "https://api.ipify.org")!) { data, response, error in
-            let ip = data.flatMap { String(data: $0, encoding: .utf8) }?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard error == nil, (response as? HTTPURLResponse)?.statusCode == 200,
-                  ip.range(of: "^[0-9a-fA-F:.]{3,45}$", options: .regularExpression) != nil else {
-                session.invalidateAndCancel(); DispatchQueue.main.async { completion(.failure(URLError(.cannotLoadFromNetwork))) }; return
-            }
-            let latency = Int(Date().timeIntervalSince(started) * 1000)
+        let services = [URL(string: "https://api.ipify.org")!, URL(string: "https://www.cloudflare.com/cdn-cgi/trace")!]
+        func address(from data: Data?) -> String? {
+            guard let text = data.flatMap({ String(data: $0, encoding: .utf8) }) else { return nil }
+            let candidate = text.split(separator: "\n").first { $0.hasPrefix("ip=") }.map { String($0.dropFirst(3)) } ?? text
+            let ip = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            return ip.range(of: "^[0-9a-fA-F:.]{3,45}$", options: .regularExpression) != nil ? ip : nil
+        }
+        func download(ip: String, latency: Int) {
             let downloadStart = Date()
             session.dataTask(with: URL(string: "https://speed.cloudflare.com/__down?bytes=1000000")!) { body, reply, failure in
                 session.finishTasksAndInvalidate()
                 var text = "IP \(ip) · ответ \(latency) мс"
+                var mbps: Double?
                 if failure == nil, (reply as? HTTPURLResponse)?.statusCode == 200, let body = body, body.count >= 900_000 {
                     let seconds = max(0.001, Date().timeIntervalSince(downloadStart))
-                    text += String(format: " · %.1f Мбит/с", Double(body.count) * 8 / seconds / 1_000_000)
+                    mbps = Double(body.count) * 8 / seconds / 1_000_000
+                    text += String(format: " · %.1f Мбит/с", mbps!)
                 } else { text += " · загрузка 1 МБ не прошла" }
-                DispatchQueue.main.async { completion(.success(text)) }
+                DispatchQueue.main.async { completion(.success(Measurement(text: text, milliseconds: latency, ip: ip, mbps: mbps))) }
             }.resume()
-        }.resume()
+        }
+        func tryAddress(_ attempt: Int, lastError: Error?) {
+            guard attempt < attempts * services.count else {
+                session.invalidateAndCancel()
+                DispatchQueue.main.async { completion(.failure(lastError ?? URLError(.cannotLoadFromNetwork))) }; return
+            }
+            let started = Date()
+            session.dataTask(with: services[attempt % services.count]) { data, response, error in
+                guard error == nil, (response as? HTTPURLResponse)?.statusCode == 200, let ip = address(from: data) else {
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 1) { tryAddress(attempt + 1, lastError: error ?? URLError(.badServerResponse)) }
+                    return
+                }
+                download(ip: ip, latency: Int(Date().timeIntervalSince(started) * 1000))
+            }.resume()
+        }
+        tryAddress(0, lastError: nil)
     }
 
     private func reload(_ index: Int) {
@@ -204,13 +264,45 @@ final class ConfigurationSweepViewController: UITableViewController {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Понятно", style: .default)); present(alert, animated: true)
     }
+    private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "" }
+
     @objc private func shareReport() {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let sheet = UIAlertController(title: "Отчёт проверки", message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "Отправить в бот VPN013", style: .default) { [weak self] _ in self?.sendToBot() })
+        sheet.addAction(UIAlertAction(title: "Поделиться текстом", style: .default) { [weak self] _ in self?.shareText() })
+        sheet.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        sheet.popoverPresentationController?.barButtonItem = navigationItem.leftBarButtonItem
+        present(sheet, animated: true)
+    }
+    private func shareText() {
         let lines = results.map { "\($0.section) · \($0.name): \($0.text)" }
         let report = (["Проверка конфигураций VPN013 \(version) · " + DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short)] + lines).joined(separator: "\n")
         let share = UIActivityViewController(activityItems: [report], applicationActivities: nil)
         share.popoverPresentationController?.barButtonItem = navigationItem.leftBarButtonItem
         present(share, animated: true)
+    }
+    /// Names, outcome, latency, exit IP and speed only — never keys, links or
+    /// configurations. Authenticated by the existing subscription of this phone.
+    private func sendToBot() {
+        let bindings = ClientUpdateCoordinator.shared.registry.bindings
+        guard let order = bindings.keys.sorted().first, let capability = bindings[order]?.document.capability else {
+            alert("Нет подписки из бота", "Отчёт отправляется через подписку AmneziaWG, выданную ботом. Её нет на этом телефоне — отправьте отчёт текстом."); return
+        }
+        let checked = results.filter { $0.outcome != .pending && $0.outcome != .running }.prefix(80)
+        guard !checked.isEmpty, let body = try? JSONSerialization.data(withJSONObject: ["app_version": version, "results": checked.map { $0.payload }]) else {
+            alert("Нечего отправлять", "Сначала запустите проверку."); return
+        }
+        navigationItem.leftBarButtonItem?.isEnabled = false
+        ClientHTTPTask.request(path: "/client/diagnostics/" + order, capability: capability, body: body) { [weak self] result in
+            guard let self = self else { return }
+            self.navigationItem.leftBarButtonItem?.isEnabled = true
+            switch result {
+            case .success: self.alert("Отчёт отправлен", "Разработчик получил результаты проверки.")
+            case .failure(let error):
+                let text = (error as? URLError)?.code == .notConnectedToInternet ? "Нет интернета." : "Бот не принял отчёт. Попробуйте позже или отправьте текстом."
+                self.alert("Не отправлено", text)
+            }
+        }
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { max(1, results.count) }

@@ -373,7 +373,11 @@ final class VPN013ConnectionPopup: UIViewController {
     private let content: UIView
     var onShown: (() -> Void)?
 
-    init(sectionTitle: String, content: UIView) {
+    /// Opened automatically after a connection starts, so it rises from the
+    /// bottom at half height; the info button keeps the full-height sheet.
+    static var automaticAllowed: Bool { !ProcessInfo.processInfo.arguments.contains { $0.hasPrefix("--vpn013-test") } }
+
+    init(sectionTitle: String, content: UIView, compact: Bool = false) {
         self.sectionTitle = sectionTitle
         self.content = content
         super.init(nibName: nil, bundle: nil)
@@ -382,7 +386,7 @@ final class VPN013ConnectionPopup: UIViewController {
             sheetPresentationController?.detents = [.medium(), .large()]
             // Open with enough room for the connection controls; the user can
             // still drag the sheet down to its medium size.
-            sheetPresentationController?.selectedDetentIdentifier = .large
+            sheetPresentationController?.selectedDetentIdentifier = compact ? .medium : .large
             sheetPresentationController?.prefersGrabberVisible = true
         }
     }
@@ -537,7 +541,7 @@ final class ProxyListViewController: UITableViewController {
         #endif
         connectionPanel.powerAction = { [weak self] in guard let self = self, let entry = self.panelEntry else { return }; self.manager.toggle(entry) }
         connectionPanel.pingAction = { [weak self] in self?.checkPanelPing() }
-        observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in self?.tableView.reloadData(); self?.refreshPanel() }
+        observer = NotificationCenter.default.addObserver(forName: .vpn013ProxyChanged, object: nil, queue: .main) { [weak self] _ in self?.tableView.reloadData(); self?.refreshPanel(); self?.popupIfConnected() }
         refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refreshProfiles), for: .valueChanged)
         // Same check-all control as the AmneziaWG list, above the servers.
         var configuration = UIButton.Configuration.filled()
@@ -642,8 +646,22 @@ final class ProxyListViewController: UITableViewController {
             self.renderPanel(); self.tableView.reloadData()
         })
     }
-    @objc private func openConnectionPopup() {
-        let popup = VPN013ConnectionPopup(sectionTitle: kind.title, content: connectionPanel)
+    /// A switch turned on by the person; the panel rises once that VPN is connected.
+    private var awaitingPopup: (id: UUID, since: Date)?
+    private func expectPopup(for id: UUID) {
+        if VPN013ConnectionPopup.automaticAllowed { awaitingPopup = (id, Date()) }
+    }
+    private func popupIfConnected() {
+        guard let awaiting = awaitingPopup else { return }
+        guard Date().timeIntervalSince(awaiting.since) < 40 else { awaitingPopup = nil; return }
+        guard manager.entries.first(where: { $0.value.profile.id == awaiting.id })?.status == .connected else { return }
+        awaitingPopup = nil
+        guard view.window != nil, presentedViewController == nil else { return }
+        openConnectionPopup(compact: true)
+    }
+    @objc private func openConnectionPopup() { openConnectionPopup(compact: false) }
+    private func openConnectionPopup(compact: Bool) {
+        let popup = VPN013ConnectionPopup(sectionTitle: kind.title, content: connectionPanel, compact: compact)
         popup.onShown = { [weak self] in self?.startPanelUpdates() }
         present(popup, animated: true)
     }
@@ -745,7 +763,7 @@ final class ProxyListViewController: UITableViewController {
                 serverCell.onSwitchToggled = { [weak self] isOn in
                     guard let self = self, let current = self.rows.first(where: { $0.value.profile.id == id }) else { return }
                     UserDefaults.standard.set(id.uuidString, forKey: "vpn013.panel.profile." + self.kind.rawValue)
-                    if isOn != current.inOperation { self.manager.toggle(current) }
+                    if isOn != current.inOperation { if isOn { self.expectPopup(for: id) }; self.manager.toggle(current) }
                     self.refreshPanel(); self.tableView.reloadData()
                 }
             }
@@ -760,6 +778,7 @@ final class ProxyListViewController: UITableViewController {
             guard rows.indices.contains(indexPath.row) else { return }
             let entry = rows[indexPath.row]
             UserDefaults.standard.set(entry.value.profile.id.uuidString, forKey: "vpn013.panel.profile." + kind.rawValue)
+            if !entry.inOperation { expectPopup(for: entry.value.profile.id) }
             refreshPanel(); manager.toggle(entry); tableView.reloadData()
         }
     }

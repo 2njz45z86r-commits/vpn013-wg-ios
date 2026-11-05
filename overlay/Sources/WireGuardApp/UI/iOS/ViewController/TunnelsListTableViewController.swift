@@ -466,9 +466,22 @@ class TunnelsListTableViewController: UIViewController {
         tableView.tableHeaderView = summaryHeader
     }
 
-    @objc private func openConnectionPopup() {
+    /// A tunnel switched on by the person; the panel rises once it is active.
+    private var awaitingPopup: (tunnel: TunnelContainer, since: Date)?
+    private func popupIfConnected() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let awaiting = self.awaitingPopup else { return }
+            guard Date().timeIntervalSince(awaiting.since) < 40 else { self.awaitingPopup = nil; return }
+            guard awaiting.tunnel.status == .active else { return }
+            self.awaitingPopup = nil
+            guard self.view.window != nil, self.presentedViewController == nil else { return }
+            self.openConnectionPopup(compact: true)
+        }
+    }
+    @objc private func openConnectionPopup() { openConnectionPopup(compact: false) }
+    private func openConnectionPopup(compact: Bool) {
         updateConnectionSummary()
-        let popup = VPN013ConnectionPopup(sectionTitle: "AmneziaWG", content: summaryContent)
+        let popup = VPN013ConnectionPopup(sectionTitle: "AmneziaWG", content: summaryContent, compact: compact)
         popup.onShown = { [weak self] in self?.startAutomaticSummaryUpdates() }
         present(popup, animated: true)
     }
@@ -554,7 +567,7 @@ class TunnelsListTableViewController: UIViewController {
     private func observeConnectionSummary() {
         summaryObservations.removeAll()
         for tunnel in tunnelsManager?.mapTunnels(transform: { $0 }) ?? [] {
-            summaryObservations.append(tunnel.observe(\.status) { [weak self] _, _ in self?.updateConnectionSummary() })
+            summaryObservations.append(tunnel.observe(\.status) { [weak self] _, _ in self?.updateConnectionSummary(); self?.popupIfConnected() })
             summaryObservations.append(tunnel.observe(\.name) { [weak self] _, _ in self?.updateConnectionSummary() })
             summaryObservations.append(tunnel.observe(\.handshakeState) { [weak self] _, _ in self?.updateConnectionSummary() })
         }
@@ -1182,6 +1195,7 @@ extension TunnelsListTableViewController: UITableViewDataSource {
             cell.connectionTestText = connectionTestResults[ObjectIdentifier(tunnel)]
             cell.onSwitchToggled = { [weak self] isOn in
                 guard let self = self, let tunnelsManager = self.tunnelsManager else { return }
+                if isOn, VPN013ConnectionPopup.automaticAllowed { self.awaitingPopup = (tunnel, Date()) }
                 // A newer manual row action takes precedence over a pending
                 // card action; never stop a newly chosen connection afterwards.
                 self.cancelPendingPowerOperation()
