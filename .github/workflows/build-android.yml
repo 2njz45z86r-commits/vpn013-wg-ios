@@ -48,7 +48,7 @@ jobs:
         id: emulator
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 reuse-android171-passed-native.py
+        run: python3 reuse-android177-passed-native.py
       - name: Pure policy and archive tests
         run: |
           set -euo pipefail
