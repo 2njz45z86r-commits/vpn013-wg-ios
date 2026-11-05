@@ -56,6 +56,7 @@ import java.util.Date
 
 /** Native Material surface for the owner-approved R013 list and current server. */
 class R013HomeActivity : AppCompatActivity() {
+    private companion object { const val HOLD_MILLIS = 2000L }
     private val registry by lazy { ProfileRegistry.get(this) }
     private lateinit var root: FrameLayout
     private lateinit var content: LinearLayout
@@ -386,7 +387,8 @@ class R013HomeActivity : AppCompatActivity() {
             labels.addView(text(tunnel.name, 18, true))
             if (registry.isAuto(tunnel.name)) labels.addView(text("Автоматический выбор", 12).apply { setTextColor(color(R.color.r013_secondary)) })
             else if (tunnel.state == Tunnel.State.UP) labels.addView(text(if (tunnel.connectionStatus == ObservableTunnel.ConnectionStatus.CONNECTED) "Рукопожатие подтверждено" else "Проверяется соединение", 12).apply { setTextColor(color(R.color.r013_secondary)) })
-            labels.setOnClickListener { details(tunnel) }; labels.setOnLongClickListener { profileMenu(tunnel); true }; labels.contentDescription = "${tunnel.name}, сведения и настройки"
+            // Same contract as the iPhone client: tap switches, a 2 s hold opens settings.
+            tapOrHold(row, "${tunnel.name}", { if (!connecting && !applyingAutomatic) connect(tunnel, tunnel.state != Tunnel.State.UP) }) { profileMenu(tunnel) }
             row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
             val config = tunnel.getConfigAsync(); val fingerprint = ProfileRegistry.digest(config.toAwgQuickString())
             val measured = if (registry.isAuto(tunnel.name)) {
@@ -415,7 +417,9 @@ class R013HomeActivity : AppCompatActivity() {
         } else startActivity(Intent(this, MainActivity::class.java).putExtra("selected_tunnel", tunnel.name).putExtra("r013_detail_only", true))
     }
     private fun profileMenu(tunnel: ObservableTunnel) {
-        MaterialAlertDialogBuilder(this).setTitle(tunnel.name).setItems(arrayOf("Переименовать", "Удалить")) { _, index ->
+        MaterialAlertDialogBuilder(this).setTitle(tunnel.name).setItems(arrayOf("Сведения и настройки", "Переименовать", "Удалить")) { _, choice ->
+            if (choice == 0) { details(tunnel); return@setItems }
+            val index = choice - 1
             if (index == 0) askName("Переименовать профиль", tunnel.name) { name -> lifecycleScope.launch { try { tunnel.setNameAsync(name); listSignature = ""; renderRows() } catch (e: Exception) { feedback(e.message ?: "Не удалось переименовать") } } }
             else MaterialAlertDialogBuilder(this).setTitle("Удалить «${tunnel.name}»?").setMessage("Удаляется только профиль на этом устройстве. Доступ на сервере и срок не меняются.")
                 .setPositiveButton("Удалить") { _, _ -> lifecycleScope.launch { try { tunnel.deleteAsync(); listSignature = ""; renderRows() } catch (e: Exception) { feedback(e.message ?: "Не удалось удалить") } } }.setNegativeButton("Отмена", null).show()
@@ -626,26 +630,33 @@ class R013HomeActivity : AppCompatActivity() {
         listSignature = signature; rows.removeAllViews(); countLabel.text = "${UnifiedAutoCoordinator.label(selectedSection)} · ${records.size}"
         if (records.isEmpty()) rows.addView(button("Добавить свою конфигурацию") { proxyAddMenu() })
         for (record in records) {
-            val row = horizontal().apply { minimumHeight = dp(76); gravity = Gravity.CENTER_VERTICAL }
             val active = ProxyVpnService.activeId == record.id || ProxyVpnService.requestedId == record.id
-            val action = if (active) "Отключить" else "Подключить"
-            row.addView(iconButton(R.drawable.ic_r013_globe, "$action ${record.profile.name}") { toggleProxy(record.id, section) }.apply {
-                tag = "vpn013.proxy.globe.${record.id}"; iconSize = dp(30); isEnabled = !UnifiedAutoCoordinator.busy || active
-            }, LinearLayout.LayoutParams(dp(52), dp(64)))
-            val labels = vertical().apply {
-                tag = "vpn013.proxy.body.${record.id}"; minimumHeight = dp(76); gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(8), dp(8), dp(8), dp(8)); isEnabled = !UnifiedAutoCoordinator.busy || active
-                contentDescription = "$action ${record.profile.name}"; setOnClickListener { toggleProxy(record.id, section) }
-                addView(text(record.profile.name, 18, true))
-                addView(text("${record.profile.host}:${record.profile.port}", 12).apply { setTextColor(color(R.color.r013_secondary)) })
-                val status = if (ProxyVpnService.activeId == record.id) "VPN запущен" else if (ProxyVpnService.requestedId == record.id) "Подключение…" else "VPN выключен"
-                val measured = pings["proxy:${record.id}"]?.takeIf { it.first == record.profile.host }
-                addView(text(status + (measured?.let { it.second?.let { ms -> " · $ms мс" } ?: " · ICMP недоступен" } ?: ""), 12).apply { setTextColor(color(R.color.r013_secondary)) })
+            val enabled = !UnifiedAutoCoordinator.busy || active
+            val row = horizontal().apply {
+                tag = "vpn013.proxy.body.${record.id}"; minimumHeight = dp(76); setPadding(dp(12), dp(10), dp(6), dp(10)); isEnabled = enabled
+                if (ProxyVpnService.activeId == record.id) setBackgroundColor(color(R.color.r013_selected))
             }
+            val labels = vertical().apply { minimumHeight = dp(48); gravity = Gravity.CENTER_VERTICAL }
+            labels.addView(text(record.profile.name, 18, true))
+            val status = if (ProxyVpnService.activeId == record.id) "VPN запущен" else if (ProxyVpnService.requestedId == record.id) "Подключение…" else "VPN выключен"
+            labels.addView(text(status, 12).apply { setTextColor(color(R.color.r013_secondary)) })
             row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-            row.addView(iconButton(R.drawable.ic_r013_chevron, "Конфигурация ${record.profile.name}") { proxyDetails(record) }.apply {
-                tag = "vpn013.proxy.details.${record.id}"
-            }, LinearLayout.LayoutParams(dp(64), dp(76)))
+            val measured = pings["proxy:${record.id}"]?.takeIf { it.first == record.profile.host }
+            row.addView(text(measured?.let { it.second?.let { ms -> "$ms мс" } ?: "н/д" } ?: "—", 14).apply {
+                gravity = Gravity.CENTER; minWidth = dp(56); setTextColor(color(R.color.r013_secondary))
+                contentDescription = measured?.let { "Задержка: " + (it.second?.let { ms -> "$ms мс" } ?: "нет ответа") } ?: "Задержка ещё не измерена"
+            }, LinearLayout.LayoutParams(-2, dp(48)).apply { marginStart = dp(8); marginEnd = dp(8) })
+            val toggle = MaterialSwitch(this).apply {
+                tag = "vpn013.proxy.globe.${record.id}"; isChecked = active; isEnabled = enabled; minimumWidth = dp(48); minimumHeight = dp(48)
+                val states = arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf(android.R.attr.state_checked), intArrayOf())
+                thumbTintList = ColorStateList(states, intArrayOf(color(R.color.r013_switch_disabled), color(R.color.r013_background), color(R.color.r013_text)))
+                trackTintList = ColorStateList(states, intArrayOf(color(R.color.r013_separator), color(R.color.r013_accent), color(R.color.r013_selected)))
+                trackDecorationTintList = ColorStateList(states, intArrayOf(color(R.color.r013_separator), color(R.color.r013_accent), color(R.color.r013_secondary)))
+                contentDescription = "VPN ${record.profile.name}"
+                setOnClickListener { isChecked = active; toggleProxy(record.id, section) }
+            }
+            row.addView(toggle, LinearLayout.LayoutParams(-2, dp(48)))
+            tapOrHold(row, record.profile.name, { if (row.isEnabled) toggleProxy(record.id, section) }) { proxyDetails(record) }
             rows.addView(row)
             rows.addView(View(this).apply { setBackgroundColor(color(R.color.r013_separator)) }, LinearLayout.LayoutParams(-1, dp(1)))
         }
@@ -785,6 +796,25 @@ class R013HomeActivity : AppCompatActivity() {
     private fun horizontal() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private fun text(value: String, size: Int, bold: Boolean = false) = TextView(this).apply { text = value; textSize = size.toFloat(); setTextColor(color(R.color.r013_text)); if (bold) setTypeface(typeface, Typeface.BOLD) }
     private fun button(label: String, action: () -> Unit) = MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle).apply { text = label; isAllCaps = false; minHeight = dp(48); setOnClickListener { action() } }
+    /** A tap runs [onTap]; a still hold of [HOLD_MILLIS] runs [onHold]. TalkBack gets the same as a named action. */
+    private fun tapOrHold(view: View, name: String, onTap: () -> Unit, onHold: () -> Unit) {
+        val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
+        var startX = 0f; var startY = 0f; var held = false; var moved = false
+        val hold = Runnable { held = true; view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); onHold() }
+        view.isClickable = true
+        view.setOnClickListener { onTap() }
+        view.contentDescription = "$name. Касание включает или выключает. Удерживайте 2 секунды, чтобы открыть настройки."
+        ViewCompat.addAccessibilityAction(view, "Настройки сервера") { _, _ -> onHold(); true }
+        view.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> { startX = event.x; startY = event.y; held = false; moved = false; v.isPressed = true; v.postDelayed(hold, HOLD_MILLIS) }
+                android.view.MotionEvent.ACTION_MOVE -> if (!moved && (kotlin.math.abs(event.x - startX) > slop || kotlin.math.abs(event.y - startY) > slop)) { moved = true; v.isPressed = false; v.removeCallbacks(hold) }
+                android.view.MotionEvent.ACTION_UP -> { v.removeCallbacks(hold); v.isPressed = false; if (!held && !moved && v.isEnabled) v.performClick() }
+                android.view.MotionEvent.ACTION_CANCEL -> { v.removeCallbacks(hold); v.isPressed = false }
+            }
+            true
+        }
+    }
     private fun iconButton(resource: Int, description: String, action: () -> Unit) = button("") { action() }.apply { icon = getDrawable(resource); iconSize = dp(24); iconPadding = 0; insetTop = 0; insetBottom = 0; setPadding(dp(12), dp(12), dp(12), dp(12)); contentDescription = description; minimumWidth = dp(48) }
     private fun feedback(message: String) { Snackbar.make(root, message, Snackbar.LENGTH_LONG).setTextMaxLines(6).show() }
     private fun open(url: String) { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { feedback("Не удалось открыть ссылку. Установите браузер или Telegram.") } }

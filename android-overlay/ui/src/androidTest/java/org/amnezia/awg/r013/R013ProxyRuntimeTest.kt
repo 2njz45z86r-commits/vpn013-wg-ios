@@ -246,7 +246,12 @@ class R013ProxyRuntimeTest {
                 popupNodes().any { it.contentDescription?.toString() == "Отключить VPN" } }
             assertEquals("Opening connection status restarted the real tunnel", revision, ProxyVpnService.trafficRevision())
             closeConnectionPopup()
-            instrumentation.runOnMainSync { check(views().single { it.tag == "vpn013.proxy.details.$id" }.performClick()) }
+            // Settings open by a 2 s hold; TalkBack exposes the same as a named action.
+            instrumentation.runOnMainSync {
+                val body = views().single { it.tag == "vpn013.proxy.body.$id" }
+                val action = body.createAccessibilityNodeInfo().actionList.single { it.label?.toString() == "Настройки сервера" }
+                check(body.performAccessibilityAction(action.id, null))
+            }
             await { instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("Закрыть")?.any { it.isClickable } == true }
             check(requireNotNull(instrumentation.uiAutomation.rootInActiveWindow).findAccessibilityNodeInfosByText("Закрыть").first { it.isClickable }
                 .performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
