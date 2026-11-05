@@ -15,6 +15,7 @@ class SettingsTableViewController: UITableViewController {
         case routing
         case refreshConfigurations
         case updateApplication
+        case checkConfigurations
 
         var localizedUIString: String {
             switch self {
@@ -26,13 +27,14 @@ class SettingsTableViewController: UITableViewController {
             case .routing: return "Маршрутизация"
             case .refreshConfigurations: return "Обновить конфигурации"
             case .updateApplication: return "Проверить обновление приложения"
+            case .checkConfigurations: return "Проверить все конфигурации"
             }
         }
     }
 
     let settingsFieldsBySection: [[SettingsFields]] = [
         [.iosAppVersion, .goBackendVersion, .updateApplication],
-        [.routing, .refreshConfigurations],
+        [.routing, .refreshConfigurations, .checkConfigurations],
         [.exportZipArchive],
         [.viewLog],
         [.inviteFriend]
@@ -236,6 +238,15 @@ extension SettingsTableViewController {
                     }
                 } else if field == .refreshConfigurations { self.refreshConfigurations() }
                 else { self.checkApplicationUpdate() }
+            }
+            return cell
+        } else if field == .checkConfigurations {
+            // Real start/stop of each saved configuration, one at a time.
+            let cell: ButtonCell = tableView.dequeueReusableCell(for: indexPath)
+            cell.buttonText = field.localizedUIString; cell.button.accessibilityIdentifier = "vpn013.settings.sweep"
+            cell.onTapped = { [weak self] in
+                guard let self = self, let manager = self.tunnelsManager else { return }
+                self.navigationController?.pushViewController(ConfigurationSweepViewController(tunnels: manager), animated: true)
             }
             return cell
         } else if field == .exportZipArchive {
