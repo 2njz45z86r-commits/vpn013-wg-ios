@@ -657,10 +657,10 @@ final class ProxyListViewController: UITableViewController {
         guard manager.entries.first(where: { $0.value.profile.id == awaiting.id })?.status == .connected else { return }
         awaitingPopup = nil
         guard view.window != nil, presentedViewController == nil else { return }
-        openConnectionPopup(compact: true)
+        presentConnectionPopup(compact: true)
     }
-    @objc private func openConnectionPopup() { openConnectionPopup(compact: false) }
-    private func openConnectionPopup(compact: Bool) {
+    @objc private func openConnectionPopup() { presentConnectionPopup(compact: false) }
+    private func presentConnectionPopup(compact: Bool) {
         let popup = VPN013ConnectionPopup(sectionTitle: kind.title, content: connectionPanel, compact: compact)
         popup.onShown = { [weak self] in self?.startPanelUpdates() }
         present(popup, animated: true)

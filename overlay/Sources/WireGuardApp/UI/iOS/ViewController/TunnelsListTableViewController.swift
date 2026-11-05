@@ -475,11 +475,11 @@ class TunnelsListTableViewController: UIViewController {
             guard awaiting.tunnel.status == .active else { return }
             self.awaitingPopup = nil
             guard self.view.window != nil, self.presentedViewController == nil else { return }
-            self.openConnectionPopup(compact: true)
+            self.presentConnectionPopup(compact: true)
         }
     }
-    @objc private func openConnectionPopup() { openConnectionPopup(compact: false) }
-    private func openConnectionPopup(compact: Bool) {
+    @objc private func openConnectionPopup() { presentConnectionPopup(compact: false) }
+    private func presentConnectionPopup(compact: Bool) {
         updateConnectionSummary()
         let popup = VPN013ConnectionPopup(sectionTitle: "AmneziaWG", content: summaryContent, compact: compact)
         popup.onShown = { [weak self] in self?.startAutomaticSummaryUpdates() }
