@@ -54,6 +54,7 @@ import java.util.Date
 
 /** Native Material surface for the owner-approved R013 list and current server. */
 class R013HomeActivity : AppCompatActivity() {
+    private companion object { const val HOLD_MILLIS = 2000L }
     private val registry by lazy { ProfileRegistry.get(this) }
     private lateinit var root: FrameLayout
     private lateinit var content: LinearLayout
@@ -143,6 +144,7 @@ class R013HomeActivity : AppCompatActivity() {
         content.addView(heading)
         content.addView(text("Пинг адреса сервера · по текущему маршруту", 12).apply { setTextColor(color(R.color.r013_secondary)); setPadding(0, 0, 0, dp(12)) })
         rows = vertical(); content.addView(rows)
+        content.addView(text("Касание строки включает или выключает сервер. Удерживайте 2 секунды, чтобы открыть настройки.", 12).apply { setTextColor(color(R.color.r013_secondary)); setPadding(0, dp(12), 0, 0) })
         val footer = button("Разработчик · @R013_Support") { open("https://t.me/R013_Support") }.apply {
             textSize = 12f; icon = getDrawable(R.drawable.ic_r013_telegram); iconSize = dp(14); setTextColor(color(R.color.r013_secondary))
         }
@@ -230,7 +232,10 @@ class R013HomeActivity : AppCompatActivity() {
             labels.addView(text(tunnel.name, 18, true))
             if (registry.isAuto(tunnel.name)) labels.addView(text("Автоматический выбор", 12).apply { setTextColor(color(R.color.r013_secondary)) })
             else if (tunnel.state == Tunnel.State.UP) labels.addView(text(if (tunnel.connectionStatus == ObservableTunnel.ConnectionStatus.CONNECTED) "Рукопожатие подтверждено" else "Проверяется соединение", 12).apply { setTextColor(color(R.color.r013_secondary)) })
-            labels.setOnClickListener { details(tunnel) }; labels.setOnLongClickListener { profileMenu(tunnel); true }; labels.contentDescription = "${tunnel.name}, сведения и настройки"
+            // Same gesture contract as the iPhone client: a tap anywhere on the row
+            // switches the VPN, a two-second hold opens the profile settings.
+            tapOrHold(row, { if (!connecting) connect(tunnel, tunnel.state != Tunnel.State.UP) }) { profileMenu(tunnel) }
+            row.contentDescription = "${tunnel.name}. Касание включает или выключает. Удерживайте 2 секунды, чтобы открыть настройки."
             row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
             val config = tunnel.getConfigAsync(); val fingerprint = ProfileRegistry.digest(config.toAwgQuickString())
             val measured = if (registry.isAuto(tunnel.name)) {
@@ -259,7 +264,9 @@ class R013HomeActivity : AppCompatActivity() {
         } else startActivity(Intent(this, MainActivity::class.java).putExtra("selected_tunnel", tunnel.name).putExtra("r013_detail_only", true))
     }
     private fun profileMenu(tunnel: ObservableTunnel) {
-        MaterialAlertDialogBuilder(this).setTitle(tunnel.name).setItems(arrayOf("Переименовать", "Удалить")) { _, index ->
+        MaterialAlertDialogBuilder(this).setTitle(tunnel.name).setItems(arrayOf("Сведения и настройки", "Переименовать", "Удалить")) { _, choice ->
+            if (choice == 0) { details(tunnel); return@setItems }
+            val index = choice - 1
             if (index == 0) askName("Переименовать профиль", tunnel.name) { name -> lifecycleScope.launch { try { tunnel.setNameAsync(name); listSignature = ""; renderRows() } catch (e: Exception) { feedback(e.message ?: "Не удалось переименовать") } } }
             else MaterialAlertDialogBuilder(this).setTitle("Удалить «${tunnel.name}»?").setMessage("Удаляется только профиль на этом устройстве. Доступ на сервере и срок не меняются.")
                 .setPositiveButton("Удалить") { _, _ -> lifecycleScope.launch { try { tunnel.deleteAsync(); listSignature = ""; renderRows() } catch (e: Exception) { feedback(e.message ?: "Не удалось удалить") } } }.setNegativeButton("Отмена", null).show()
@@ -331,6 +338,22 @@ class R013HomeActivity : AppCompatActivity() {
                 if (registry.names().contains(tunnel.name) && ProfileRegistry.digest(registry.config(tunnel.name).toAwgQuickString()) == fingerprint) pings[tunnel.name] = fingerprint to result
             } }.awaitAll(); renderRows(true)
             } finally { allPing.text = "Проверить пинг"; allPing.isEnabled = true }
+        }
+    }
+    /** A tap runs [onTap]; holding for [HOLD_MILLIS] without moving runs [onHold] instead. */
+    private fun tapOrHold(view: View, onTap: () -> Unit, onHold: () -> Unit) {
+        val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
+        var startX = 0f; var startY = 0f; var held = false; var moved = false
+        val hold = Runnable { held = true; view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); onHold() }
+        view.isClickable = true
+        view.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> { startX = event.x; startY = event.y; held = false; moved = false; v.isPressed = true; v.postDelayed(hold, HOLD_MILLIS) }
+                android.view.MotionEvent.ACTION_MOVE -> if (!moved && (kotlin.math.abs(event.x - startX) > slop || kotlin.math.abs(event.y - startY) > slop)) { moved = true; v.isPressed = false; v.removeCallbacks(hold) }
+                android.view.MotionEvent.ACTION_UP -> { v.removeCallbacks(hold); v.isPressed = false; if (!held && !moved) { v.performClick(); onTap() } }
+                android.view.MotionEvent.ACTION_CANCEL -> { v.removeCallbacks(hold); v.isPressed = false }
+            }
+            true
         }
     }
     private fun bytes(n: Long): String = if (n < 1024) "$n Б" else if (n < 1_048_576) "${n / 1024} КБ" else "${n / 1_048_576} МБ"
