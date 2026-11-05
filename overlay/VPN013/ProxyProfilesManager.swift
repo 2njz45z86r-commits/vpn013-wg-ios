@@ -201,7 +201,8 @@ final class ProxyProfilesManager {
                 DispatchQueue.main.async {
                     guard error == nil else { finish(ProxyOperationError.system); return }
                     (entry.manager.protocolConfiguration as? NETunnelProviderProtocol)?.destroyConfigurationReference()
-                    self.entries.removeAll { $0.value.subscriptionID == desired.id && $0.value.profile.id == entry.value.profile.id }; retireNext()
+                    self.entries.removeAll { $0.value.subscriptionID == desired.id && $0.value.profile.id == entry.value.profile.id }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + (self.simulator ? 0 : 0.25)) { retireNext() }
                 }
             }
             if self.simulator { done(nil) } else { entry.manager.removeFromPreferences(completionHandler: done) }
@@ -214,6 +215,9 @@ final class ProxyProfilesManager {
             let old = manager.protocolConfiguration as? NETunnelProviderProtocol
             var value = ProxyTunnelPayload(profile: profile, routing: existing?.value.routing ?? ProxyRoutingPolicy())
             value.subscriptionID = desired.id
+            // An unchanged member is not saved again: rewriting every system VPN
+            // profile on each refresh overloads iOS (black screen, device lock).
+            if let existing = existing, existing.value.profile == value.profile, existing.value.subscriptionID == desired.id { saveNext(); return }
             do { manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old) }
             catch { finish(ProxyOperationError.unreadable); return }
             manager.localizedDescription = profile.source.title + " · " + profile.name; manager.isEnabled = true
@@ -221,7 +225,8 @@ final class ProxyProfilesManager {
                 if error != nil { manager.protocolConfiguration = old; finish(ProxyOperationError.system); return }
                 if let index = self.entries.firstIndex(where: { $0.value.subscriptionID == desired.id && $0.value.profile.id == profile.id }) { self.entries[index].value = value }
                 else { self.entries.append(Entry(manager: manager, value: value)) }
-                saveNext()
+                // Pace real system saves so a large changed roster stays gentle on iOS.
+                DispatchQueue.main.asyncAfter(deadline: .now() + (self.simulator ? 0 : 0.25)) { saveNext() }
             }
         }
         saveNext()
