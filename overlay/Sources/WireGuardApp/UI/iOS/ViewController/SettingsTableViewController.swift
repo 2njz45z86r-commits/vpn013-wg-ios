@@ -150,7 +150,7 @@ class SettingsTableViewController: UITableViewController {
             ProxyProfilesManager.shared.refreshSubscriptions(kind) { [weak self] error in
                 guard let self = self else { return }
                 self.refreshingConfigurations = false; self.tableView.reloadData()
-                let known = error is ProxyProfileError || error is ProxyOperationError || error is ProxySubscriptionError || error is CrossProtocolError
+                let known = error is ProxyProfileError || error is ProxyOperationError || error is ProxySubscriptionError || error is CrossProtocolError || error is ProxyRefreshPartialError
                 self.showUpdateMessage(error.map { known ? $0.localizedDescription : ProxyOperationError.system.localizedDescription } ??
                     "Проверка подписок завершена. Отдельные ключи и файлы без ссылки на обновление сохранены; для них нужен свежий исходный файл.")
             }

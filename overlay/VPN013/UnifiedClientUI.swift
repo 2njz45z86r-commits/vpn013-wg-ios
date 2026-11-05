@@ -9,7 +9,7 @@ private func proxyLabel(_ text: String, style: UIFont.TextStyle = .body) -> UILa
     label.textColor = VPN013Theme.text; return label
 }
 private func proxyError(_ error: Error, from controller: UIViewController) {
-    let known = error is ProxyProfileError || error is ProxyOperationError || error is ProxySubscriptionError || error is CrossProtocolError
+    let known = error is ProxyProfileError || error is ProxyOperationError || error is ProxySubscriptionError || error is CrossProtocolError || error is ProxyRefreshPartialError
     let alert = UIAlertController(title: "Действие не завершено", message: known ? error.localizedDescription : ProxyOperationError.system.localizedDescription, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "Понятно", style: .default)); controller.present(alert, animated: true)
 }
@@ -140,6 +140,16 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             navigation.pushViewController(ProxyImportViewController(kind: kind, text: text), animated: true)
         }
     }
+    /// A WireGuard/AmneziaWG text file saved without the .conf extension
+    /// (Telegram, Files) is recognised by its [Interface] section.
+    private static func looksLikeWireGuard(_ url: URL) -> Bool {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let head = try? handle.read(upToCount: 4096), let text = String(data: head, encoding: .utf8) else { return false }
+        return text.range(of: "[Interface]", options: .caseInsensitive) != nil && text.range(of: "PrivateKey", options: .caseInsensitive) != nil
+    }
     func importFile(_ url: URL) {
         if url.pathExtension.lowercased() == "zip" {
             let scoped = url.startAccessingSecurityScopedResource()
@@ -182,7 +192,7 @@ final class VPN013UnifiedViewController: UITabBarController, UITabBarControllerD
             }
             selectedIndex = 2; awg.importFromDisposableFile(url: url); return
         }
-        if url.pathExtension.lowercased() == "conf" {
+        if url.pathExtension.lowercased() == "conf" || Self.looksLikeWireGuard(url) {
             selectedIndex = 2; awg.importFromDisposableFile(url: url); return
         }
         guard kinds[selectedIndex] != .amneziawg,
@@ -808,7 +818,7 @@ final class ProxyDetailViewController: UITableViewController {
         super.viewWillAppear(animated); title = entry?.value.profile.name ?? "Подключение"
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.readTraffic() }; readTraffic()
     }
-    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); timer?.invalidate(); timer = nil; invalidateTraffic() }
+    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); timer?.invalidate(); timer = nil; invalidateTraffic(); ping.cancel() }
     private func invalidateTraffic() { trafficRequest = UUID(); trafficInFlight = false; traffic = nil; trafficSampler.reset(); trafficRate = nil }
     private func readTraffic() {
         guard viewIfLoaded?.window != nil, !trafficInFlight, let entry = entry, entry.status == .connected else { return }
@@ -827,7 +837,15 @@ final class ProxyDetailViewController: UITableViewController {
             self.invalidateTraffic(); self.tableView.reloadData()
         }
     }
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 5 }
+    private let ping = EndpointPingCoordinator()
+    private var pingText: String?
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 9 }
+    /// Human-readable protocol stack of a saved profile; no keys or identifiers.
+    static func protocolText(_ profile: ProxyProfile) -> String {
+        var parts = ["VLESS", profile.transport.rawValue.uppercased(), profile.security == .reality ? "Reality" : "TLS"]
+        if profile.flow == "xtls-rprx-vision" { parts.append("Vision") }
+        return parts.joined(separator: " · ")
+    }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         "Статус iOS означает запуск VPN. Полученный трафик проверяйте по счётчикам и открытию сайта. Для VLESS не показывается рукопожатие WireGuard."
     }
@@ -854,14 +872,60 @@ final class ProxyDetailViewController: UITableViewController {
                 cell.detailTextLabel?.text = "Скорость: ↓ " + VPN013TrafficDisplay.speed(trafficRate?.received) + " · ↑ " + VPN013TrafficDisplay.speed(trafficRate?.sent) +
                     "\nВсего: ↓ " + VPN013TrafficDisplay.amount(value.rx >= 0 ? UInt64(value.rx) : nil) + " · ↑ " + VPN013TrafficDisplay.amount(value.tx >= 0 ? UInt64(value.tx) : nil)
             } else { cell.detailTextLabel?.text = entry.status == .connected ? "Статистика пока недоступна" : "Появится после подключения" }
-        default: cell.textLabel?.text = "Маршрутизация"; cell.detailTextLabel?.text = entry.value.routing.displayTitle; cell.accessoryType = .disclosureIndicator
+        case 4: cell.textLabel?.text = "Маршрутизация"; cell.detailTextLabel?.text = entry.value.routing.displayTitle; cell.accessoryType = .disclosureIndicator
+        case 5:
+            cell.textLabel?.text = "Протокол"; cell.accessibilityIdentifier = "vpn013.proxy.protocol"
+            cell.detailTextLabel?.text = Self.protocolText(entry.value.profile) + "\nМаскировка: " + (entry.value.profile.serverName.isEmpty ? "—" : entry.value.profile.serverName)
+                + (entry.value.subscriptionID == nil ? "\nДобавлена вручную" : "\nИз подписки")
+        case 6:
+            cell.textLabel?.text = "Проверить пинг адреса"; cell.textLabel?.textColor = VPN013Theme.accent
+            cell.detailTextLabel?.text = pingText ?? "Пинг по текущему сетевому маршруту, VPN не переключается"
+            cell.accessibilityIdentifier = "vpn013.proxy.detail-ping"
+        case 7:
+            let manual = entry.value.subscriptionID == nil
+            cell.textLabel?.text = "Переименовать"; cell.textLabel?.textColor = manual ? VPN013Theme.accent : VPN013Theme.secondaryText
+            cell.detailTextLabel?.text = manual ? nil : "Имя берётся из подписки"
+            cell.accessibilityIdentifier = "vpn013.proxy.rename"
+        default:
+            cell.textLabel?.text = "Удалить конфигурацию"; cell.textLabel?.textColor = .systemRed
+            cell.accessibilityIdentifier = "vpn013.proxy.delete"
         }
         return cell
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true); guard let entry = entry else { return }
-        if indexPath.row == 1 { manager.toggle(entry) }
-        if indexPath.row == 4 { navigationController?.pushViewController(ProxyRoutingViewController(entry: entry), animated: true) }
+        switch indexPath.row {
+        case 1: manager.toggle(entry)
+        case 4: navigationController?.pushViewController(ProxyRoutingViewController(entry: entry), animated: true)
+        case 6:
+            pingText = "Проверяем…"; tableView.reloadData()
+            ping.start(hosts: [entry.value.profile.host], update: { [weak self] _, result in
+                self?.pingText = "Пинг адреса: " + result.text; self?.tableView.reloadData()
+            }, completion: {})
+        case 7:
+            guard entry.value.subscriptionID == nil else { return }
+            let alert = UIAlertController(title: "Переименовать", message: nil, preferredStyle: .alert)
+            alert.addTextField { $0.text = entry.value.profile.name; $0.clearButtonMode = .whileEditing }
+            alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Сохранить", style: .default) { [weak self] _ in
+                guard let self = self, let name = alert.textFields?.first?.text else { return }
+                self.manager.rename(entry, to: name) { error in
+                    if let error = error { proxyError(error, from: self) } else { self.title = name; self.tableView.reloadData() }
+                }
+            })
+            present(alert, animated: true)
+        case 8:
+            let alert = UIAlertController(title: "Удалить «\(entry.value.profile.name)»?", message: "Удаляется только конфигурация на этом устройстве. Доступ на сервере не меняется.", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Удалить", style: .destructive) { [weak self] _ in
+                guard let self = self else { return }
+                self.manager.remove(entry) { error in
+                    if let error = error { proxyError(error, from: self) } else { self.navigationController?.popViewController(animated: true) }
+                }
+            })
+            present(alert, animated: true)
+        default: break
+        }
     }
 }
 

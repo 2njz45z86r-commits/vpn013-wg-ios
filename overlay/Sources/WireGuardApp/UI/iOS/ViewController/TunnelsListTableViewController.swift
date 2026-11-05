@@ -1050,7 +1050,9 @@ class TunnelsListTableViewController: UIViewController {
     }
 
     func presentViewControllerForFileImport() {
-        let documentTypes = ["com.wireguard.config.quick", String(kUTTypeText), String(kUTTypeZipArchive)]
+        // A .conf saved from Telegram or another VPN app may carry another app's
+        // type or plain data; the importer validates the content itself.
+        let documentTypes = ["com.wireguard.config.quick", String(kUTTypeText), String(kUTTypeZipArchive), String(kUTTypeData)]
         let filePicker = UIDocumentPickerViewController(documentTypes: documentTypes, in: .import)
         filePicker.delegate = self
         present(filePicker, animated: true)

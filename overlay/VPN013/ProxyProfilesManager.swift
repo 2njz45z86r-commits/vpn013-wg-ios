@@ -17,6 +17,15 @@ enum ProxyOperationError: LocalizedError {
     }
 }
 
+/// Some saved subscriptions refreshed, others did not; names the failed sources.
+struct ProxyRefreshPartialError: LocalizedError {
+    let failed: [String]
+    let updated: Int
+    var errorDescription: String? {
+        "Обновлено подписок: \(updated). Не обновились: " + failed.joined(separator: ", ") + ". Остальные серверы сохранены; повторите позже."
+    }
+}
+
 final class ProxyProfilesManager {
     struct Entry {
         let manager: NETunnelProviderManager
@@ -142,31 +151,37 @@ final class ProxyProfilesManager {
     func refreshSubscriptions(_ kind: VPN013ConnectionKind, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
         if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.refreshSubscriptions(kind, sourcePrepared: true, completion: $0) }; return }
         guard !working else { completion(ProxyOperationError.busy); return }
-        guard !entries.contains(where: { $0.inOperation }) else { completion(ProxyOperationError.stopFirst); return }
+        // A running connection is kept as is; only its idle siblings are refreshed.
         let records: [ProxySubscriptionRecord]
         do { records = try subscriptions.load().filter { $0.kind == kind } }
         catch { completion(ProxyOperationError.unreadable); return }
         guard !records.isEmpty else { reload(); completion(nil); return }
         working = true; changed?()
         var remaining = records
+        var failed: [String] = []
         func finish(_ error: Error?) { self.subscriptionDownload = nil; self.working = false; self.changed?(); completion(error) }
+        // One unavailable source never stops the others; failures are named at the end.
+        func failedRecord(_ record: ProxySubscriptionRecord, _ error: Error) {
+            if records.count == 1 { finish(error); return }
+            failed.append(record.url.host ?? "подписка"); next()
+        }
         func next() {
-            guard !remaining.isEmpty else { finish(nil); return }
+            guard !remaining.isEmpty else { finish(failed.isEmpty ? nil : ProxyRefreshPartialError(failed: failed, updated: records.count - failed.count)); return }
             let record = remaining.removeFirst()
             let identifier: String
             do { identifier = try VPN013SubscriptionIdentity.identifier(for: record.url.host!, directory: PrivateTunnelStore.defaultDirectory) }
-            catch { finish(ProxySubscriptionError.identity); return }
+            catch { failedRecord(record, ProxySubscriptionError.identity); return }
             let download = ProxySubscriptionDownload(); self.subscriptionDownload = download
             download.start(record.url, kind: kind, identifier: identifier) { result in
                 switch result {
-                case .failure(let error): finish(error)
+                case .failure(let error): failedRecord(record, error)
                 case .success(let data):
                     DispatchQueue.global(qos: .userInitiated).async {
                         let parsed = Result { try record.replacing(with: ProxyImport.profiles(data, source: kind)) }
                         DispatchQueue.main.async {
                             switch parsed {
-                            case .failure(let error): finish(error is ProxyProfileError ? error : ProxyOperationError.unreadable)
-                            case .success(let desired): self.synchronize(desired) { error in if let error = error { finish(error) } else { next() } }
+                            case .failure(let error): failedRecord(record, error is ProxyProfileError ? error : ProxyOperationError.unreadable)
+                            case .success(let desired): self.synchronize(desired) { error in if let error = error { failedRecord(record, error) } else { next() } }
                             }
                         }
                     }
@@ -181,7 +196,6 @@ final class ProxyProfilesManager {
     /// Unrelated/manual profiles never match solely by a display name.
     private func synchronize(_ desired: ProxySubscriptionRecord, completion: @escaping (Error?) -> Void) {
         do {
-            guard !entries.contains(where: { $0.inOperation }) else { throw ProxyOperationError.stopFirst }
             var records = try subscriptions.load()
             records.removeAll { $0.id == desired.id }; records.append(desired)
             try subscriptions.save(records)
@@ -190,7 +204,8 @@ final class ProxyProfilesManager {
         func finish(_ error: Error?) { self.changed?(); completion(error) }
         func retireNext() {
             let ids = Set(desired.members.map { $0.id })
-            guard let entry = self.entries.first(where: { $0.value.subscriptionID == desired.id && !ids.contains($0.value.profile.id) }) else {
+            // A retired member that is connected right now stays until the next refresh.
+            guard let entry = self.entries.first(where: { $0.value.subscriptionID == desired.id && !ids.contains($0.value.profile.id) && !$0.inOperation }) else {
                 do {
                     var records = try self.subscriptions.load()
                     if let index = records.firstIndex(where: { $0.id == desired.id }) { records[index].checkedAt = Date() }
@@ -218,6 +233,8 @@ final class ProxyProfilesManager {
             // An unchanged member is not saved again: rewriting every system VPN
             // profile on each refresh overloads iOS (black screen, device lock).
             if let existing = existing, existing.value.profile == value.profile, existing.value.subscriptionID == desired.id { saveNext(); return }
+            // Never rewrite the configuration of a running tunnel; it updates on the next refresh.
+            if existing?.inOperation == true { saveNext(); return }
             do { manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old) }
             catch { finish(ProxyOperationError.unreadable); return }
             manager.localizedDescription = profile.source.title + " · " + profile.name; manager.isEnabled = true
@@ -309,6 +326,26 @@ final class ProxyProfilesManager {
             self.persist(entry.manager) { error in if let error = error { rollback(error) } else { saveNext() } }
         }
         saveNext()
+    }
+    /// Only manually added, idle profiles: subscription members take their names from the source.
+    func rename(_ entry: Entry, to name: String, completion: @escaping (Error?) -> Void) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !working else { completion(ProxyOperationError.busy); return }
+        guard entry.value.subscriptionID == nil else { completion(ProxyProfileError.invalid); return }
+        guard !entry.inOperation else { completion(ProxyOperationError.stopFirst); return }
+        var value = entry.value; value.profile.name = trimmed
+        do { try value.validate() } catch { completion(ProxyProfileError.invalid); return }
+        guard !trimmed.isEmpty, trimmed.count <= 64, let old = entry.manager.protocolConfiguration as? NETunnelProviderProtocol else { completion(ProxyProfileError.invalid); return }
+        do { entry.manager.protocolConfiguration = try NETunnelProviderProtocol.proxyProtocol(value, previous: old) }
+        catch { completion(ProxyOperationError.unreadable); return }
+        entry.manager.localizedDescription = value.profile.source.title + " · " + trimmed
+        working = true
+        persist(entry.manager) { error in
+            self.working = false
+            if error != nil { entry.manager.protocolConfiguration = old; self.changed?(); completion(ProxyOperationError.system); return }
+            if let index = self.entries.firstIndex(where: { $0.value.profile.id == entry.value.profile.id }) { self.entries[index].value = value }
+            self.changed?(); completion(nil)
+        }
     }
     func remove(_ entry: Entry, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
         if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.remove(entry, sourcePrepared: true, completion: $0) }; return }
