@@ -151,7 +151,9 @@ final class ProxyProfilesManager {
     func refreshSubscriptions(_ kind: VPN013ConnectionKind, sourcePrepared: Bool = false, completion: @escaping (Error?) -> Void) {
         if !simulator && !sourcePrepared { prepareSources(completion: completion) { self.refreshSubscriptions(kind, sourcePrepared: true, completion: $0) }; return }
         guard !working else { completion(ProxyOperationError.busy); return }
-        // A running connection is kept as is; only its idle siblings are refreshed.
+        // Refresh only with every VPN of this app off: rewriting system VPN profiles
+        // while one of them runs overloads iOS (device restart seen on 1.7.7/1.7.8).
+        guard !entries.contains(where: { $0.inOperation }) else { completion(ProxyOperationError.stopFirst); return }
         let records: [ProxySubscriptionRecord]
         do { records = try subscriptions.load().filter { $0.kind == kind } }
         catch { completion(ProxyOperationError.unreadable); return }
@@ -196,6 +198,7 @@ final class ProxyProfilesManager {
     /// Unrelated/manual profiles never match solely by a display name.
     private func synchronize(_ desired: ProxySubscriptionRecord, completion: @escaping (Error?) -> Void) {
         do {
+            guard !entries.contains(where: { $0.inOperation }) else { throw ProxyOperationError.stopFirst }
             var records = try subscriptions.load()
             records.removeAll { $0.id == desired.id }; records.append(desired)
             try subscriptions.save(records)

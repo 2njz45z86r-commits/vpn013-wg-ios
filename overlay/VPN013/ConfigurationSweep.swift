@@ -40,7 +40,7 @@ struct ConfigurationSweepResult {
 /// The screen stays awake; iOS suspends apps in the background, so the
 /// sweep pauses there and the person is told to keep the app open.
 final class ConfigurationSweepViewController: UITableViewController {
-    private let tunnels: TunnelsManager
+    private let tunnels: TunnelsManager?
     private let proxies = ProxyProfilesManager.shared
     private var results: [ConfigurationSweepResult] = []
     private var jobs: [() -> Job] = []
@@ -58,7 +58,7 @@ final class ConfigurationSweepViewController: UITableViewController {
         let stopped: () -> Bool
     }
 
-    init(tunnels: TunnelsManager) { self.tunnels = tunnels; super.init(style: .insetGrouped) }
+    init(tunnels: TunnelsManager?) { self.tunnels = tunnels; super.init(style: .insetGrouped) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func viewDidLoad() {
@@ -88,13 +88,13 @@ final class ConfigurationSweepViewController: UITableViewController {
     /// Snapshot the configurations now; later list changes do not alter a running sweep.
     private func build() {
         results = []; jobs = []
-        for index in 0..<tunnels.numberOfTunnels() {
-            let tunnel = tunnels.tunnel(at: index)
+        for index in 0..<(tunnels?.numberOfTunnels() ?? 0) {
+            guard let tunnel = tunnels?.tunnel(at: index) else { continue }
             guard !tunnel.isVPN013Automatic else { continue }
             results.append(ConfigurationSweepResult(section: "AmneziaWG", name: tunnel.name, kind: "awg"))
             jobs.append { [weak self] in Job(
-                start: { self?.tunnels.startActivation(of: tunnel) },
-                stop: { self?.tunnels.startDeactivation(of: tunnel) },
+                start: { self?.tunnels?.startActivation(of: tunnel) },
+                stop: { self?.tunnels?.startDeactivation(of: tunnel) },
                 connected: { tunnel.status == .active },
                 stopped: { tunnel.status == .inactive }) }
         }
@@ -117,7 +117,7 @@ final class ConfigurationSweepViewController: UITableViewController {
 
     @objc private func startTapped() {
         if running { cancelled = true; status.text = "Останавливаем после текущей конфигурации…"; return }
-        guard tunnels.tunnelInOperation() == nil, !proxies.entries.contains(where: { $0.inOperation }) else {
+        guard tunnels?.tunnelInOperation() == nil, !proxies.entries.contains(where: { $0.inOperation }) else {
             alert("Сначала выключите VPN", "Проверка включает конфигурации по очереди и не может начаться, пока работает подключение."); return
         }
         guard !jobs.isEmpty else { alert("Нет конфигураций", "Добавьте конфигурации, чтобы их проверить."); return }
@@ -142,7 +142,7 @@ final class ConfigurationSweepViewController: UITableViewController {
     }
 
     /// No VPN of this app is starting, running or stopping.
-    private var idle: Bool { tunnels.tunnelInOperation() == nil && !proxies.entries.contains { $0.inOperation } && !proxies.working }
+    private var idle: Bool { tunnels?.tunnelInOperation() == nil && !proxies.entries.contains { $0.inOperation } && !proxies.working }
 
     private func run(_ index: Int) {
         guard index < jobs.count, !cancelled else { finish(); return }

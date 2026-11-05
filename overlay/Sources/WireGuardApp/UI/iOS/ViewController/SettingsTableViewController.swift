@@ -244,9 +244,12 @@ extension SettingsTableViewController {
             // Real start/stop of each saved configuration, one at a time.
             let cell: ButtonCell = tableView.dequeueReusableCell(for: indexPath)
             cell.buttonText = field.localizedUIString; cell.button.accessibilityIdentifier = "vpn013.settings.sweep"
+            cell.button.isEnabled = true
+            // Settings opened from a proxy tab may not have the AmneziaWG list loaded yet;
+            // the sweep then checks the proxy configurations only.
             cell.onTapped = { [weak self] in
-                guard let self = self, let manager = self.tunnelsManager else { return }
-                self.navigationController?.pushViewController(ConfigurationSweepViewController(tunnels: manager), animated: true)
+                guard let self = self else { return }
+                self.navigationController?.pushViewController(ConfigurationSweepViewController(tunnels: self.tunnelsManager), animated: true)
             }
             return cell
         } else if field == .exportZipArchive {
