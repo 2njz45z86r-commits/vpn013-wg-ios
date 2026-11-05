@@ -58,7 +58,10 @@ class ProxyRegistry(private val vault: PrivateVault) {
         }
     }
     /** The provider's new complete roster replaces only this source's managed members. */
-    fun reconcile(source: Source, body: String): Int {
+    /** Same as [reconcile] but never retires [keepId]: a running profile stays until the next refresh. */
+    fun reconcileKeeping(source: Source, body: String, keepId: String?): Int = reconcile(source, body, keepId)
+
+    fun reconcile(source: Source, body: String, keepId: String? = null): Int {
         val profiles = ProxyImport.parse(body, source.section)
         return vault.edit { document ->
             val sources = document.getJSONObject("proxySources")
@@ -73,7 +76,7 @@ class ProxyRegistry(private val vault: PrivateVault) {
                 val id = previous.optString(identity).takeIf { it.isNotEmpty() } ?: UUID.randomUUID().toString()
                 next.put(identity, id); additions[id] = encode(id, profile).put("source", source.id)
             }
-            val retired = records.keys().asSequence().filter { records.getJSONObject(it).optString("source") == source.id }.toList()
+            val retired = records.keys().asSequence().filter { records.getJSONObject(it).optString("source") == source.id && (it != keepId || additions.containsKey(it)) }.toList()
             check(records.length() - retired.size + additions.size <= 300) { "Достигнут предел: 300 профилей" }
             retired.forEach { records.remove(it) }; additions.forEach { (id, profile) -> records.put(id, profile) }
             owned.put("members", next).put("updatedAt", System.currentTimeMillis()); additions.size

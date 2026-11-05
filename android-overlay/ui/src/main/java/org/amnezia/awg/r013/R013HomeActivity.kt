@@ -344,16 +344,25 @@ class R013HomeActivity : AppCompatActivity() {
         dialog.setContentView(ScrollView(this).apply { addView(box) }); dialog.show()
     }
     private fun settings() {
-        MaterialAlertDialogBuilder(this).setTitle("VPN013").setItems(arrayOf("Маршрутизация", "Обновить конфигурации", "Проверить обновление приложения", "Настройки и журнал", "Купить конфигурацию")) { _, index ->
+        MaterialAlertDialogBuilder(this).setTitle("VPN013").setItems(arrayOf("Маршрутизация", "Обновить конфигурации", "Проверить обновление приложения", "Настройки и журнал", "Купить конфигурацию", "Проверить все конфигурации")) { _, index ->
             when (index) {
+                5 -> sweepAll()
                 0 -> routingServers()
-                1 -> lifecycleScope.launch { try {
+                1 -> lifecycleScope.launch {
                     feedback("Проверяем обновления конфигураций…")
-                    val ordinary = ClientUpdates.refreshOrders()
-                    val count = OfflineChanges.apply { var count = 0
-                        for (source in proxyStore.sources()) count += proxyStore.reconcile(source, ProxySubscription.fetch(source)); count }
-                    feedback("$ordinary · Профилей подписок: $count"); listSignature = ""
-                } catch (_: Exception) { feedback("Обновление не выполнено. Отключите VPN и проверьте доступность подписки. Прежние профили сохранены.") } }
+                    val ordinary = try { ClientUpdates.refreshOrders() } catch (e: Exception) { e.message ?: "AmneziaWG: обновление не выполнено" }
+                    // Each subscription separately: one unavailable source does not stop
+                    // the others, and a running VPN is kept (its profile is never retired).
+                    var count = 0; val failed = mutableListOf<String>()
+                    for (source in withContext(Dispatchers.IO) { proxyStore.sources() }) {
+                        try {
+                            val body = withContext(Dispatchers.IO) { ProxySubscription.fetch(source) }
+                            count += OfflineChanges.lock.withLock { withContext(Dispatchers.IO) { proxyStore.reconcileKeeping(source, body, ProxyVpnService.activeId ?: ProxyVpnService.requestedId) } }
+                        } catch (_: Exception) { failed += (runCatching { java.net.URI(source.url).host }.getOrNull() ?: "подписка") }
+                    }
+                    feedback("$ordinary · Профилей подписок: $count" + if (failed.isEmpty()) "" else " · Не обновились: " + failed.joinToString(", ") + ". Прежние профили сохранены.")
+                    listSignature = ""
+                }
                 2 -> ClientUpdates.offerUpdate(this)
                 3 -> startActivity(Intent(this, SettingsActivity::class.java))
                 4 -> open(ClientProtocol.BOT)
@@ -663,7 +672,10 @@ class R013HomeActivity : AppCompatActivity() {
     }
     private fun proxyDetails(record: ProxyRegistry.Record) {
         MaterialAlertDialogBuilder(this).setTitle(record.profile.name)
-            .setMessage("${UnifiedAutoCoordinator.label(record.profile.section.name)}\n${record.profile.host}:${record.profile.port}")
+            .setMessage("${UnifiedAutoCoordinator.label(record.profile.section.name)}\n${record.profile.host}:${record.profile.port}\n" +
+                "Протокол: VLESS · ${record.profile.transport.uppercase()} · ${if (record.profile.security == "reality") "Reality" else record.profile.security.uppercase()}" +
+                (if (record.profile.options["flow"] == "xtls-rprx-vision") " · Vision" else "") +
+                "\nМаскировка: ${record.profile.serverName.ifEmpty { "—" }}")
             .setPositiveButton("Маршрутизация") { _, _ -> proxyApplications(record.id) }
             .setNeutralButton("Удалить") { _, _ -> launchOffline { proxyStore.delete(record.id); "Профиль удалён" } }
             .setNegativeButton("Закрыть", null).create().apply {
@@ -796,6 +808,100 @@ class R013HomeActivity : AppCompatActivity() {
     private fun horizontal() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private fun text(value: String, size: Int, bold: Boolean = false) = TextView(this).apply { text = value; textSize = size.toFloat(); setTextColor(color(R.color.r013_text)); if (bold) setTypeface(typeface, Typeface.BOLD) }
     private fun button(label: String, action: () -> Unit) = MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle).apply { text = label; isAllCaps = false; minHeight = dp(48); setOnClickListener { action() } }
+    private var sweepJob: Job? = null
+    /**
+     * Real end-to-end check of every saved configuration, one at a time: start
+     * it, fetch the exit address and 1 MB through it, stop it. Nothing is
+     * created or edited; the report is shared only on an explicit tap.
+     */
+    private fun sweepAll() {
+        if (Application.getBackend().runningTunnelNames.isNotEmpty() || ProxyVpnService.activeId != null || ProxyVpnService.requestedId != null) {
+            MaterialAlertDialogBuilder(this).setTitle("Сначала выключите VPN").setMessage("Проверка включает конфигурации по очереди и не может начаться, пока работает подключение.").setPositiveButton("Понятно", null).show(); return
+        }
+        if (android.net.VpnService.prepare(this) != null) { feedback("Сначала подключите любую конфигурацию один раз и разрешите VPN, затем повторите проверку."); return }
+        val log = text("Подготовка…", 14).apply { setPadding(dp(20), dp(12), dp(20), dp(12)) }
+        val lines = mutableListOf<String>()
+        val dialog = MaterialAlertDialogBuilder(this).setTitle("Проверка конфигураций").setView(ScrollView(this).apply { addView(log) })
+            .setNegativeButton("Остановить", null).setPositiveButton("Отправить отчёт", null).setCancelable(false).create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).apply { isEnabled = false; setOnClickListener {
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "Проверка конфигураций VPN013\n" + lines.joinToString("\n")), "Отправить отчёт"))
+            } }
+            dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).setOnClickListener {
+                if (sweepJob?.isActive == true) { sweepJob?.cancel(); log.append("\nОстанавливаем…") } else dialog.dismiss()
+            }
+        }
+        dialog.show(); window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        sweepJob = lifecycleScope.launch {
+            try {
+                val tunnels = Application.getTunnelManager().getTunnels().toList().filter { !registry.isAuto(it.name) }
+                val proxies = withContext(Dispatchers.IO) { ProxyProfile.Section.values().flatMap { section -> proxyStore.list(section).map { section to it } } }
+                val total = tunnels.size + proxies.size; var done = 0
+                suspend fun record(label: String, started: Boolean) {
+                    done++
+                    val result = if (!started) "не подключилось" else withContext(Dispatchers.IO) { measureThroughTunnel() }
+                    lines += "$label: $result"; log.text = "Проверено $done из $total\n\n" + lines.joinToString("\n")
+                }
+                for (tunnel in tunnels) {
+                    log.text = "Проверяем ${done + 1} из $total: AmneziaWG · ${tunnel.name}\n\n" + lines.joinToString("\n")
+                    val started = try { tunnel.setStateAsync(Tunnel.State.UP); waitFor(25_000) { tunnel.state == Tunnel.State.UP } } catch (_: Exception) { false }
+                    if (started) delay(1500)
+                    record("AmneziaWG · ${tunnel.name}", started)
+                    try { tunnel.setStateAsync(Tunnel.State.DOWN) } catch (_: Exception) { }
+                    waitFor(15_000) { tunnel.state != Tunnel.State.UP }; delay(800)
+                }
+                for ((section, proxy) in proxies) {
+                    val label = UnifiedAutoCoordinator.label(section.name) + " · " + proxy.profile.name
+                    log.text = "Проверяем ${done + 1} из $total: $label\n\n" + lines.joinToString("\n")
+                    UnifiedAutoCoordinator.connect(this@R013HomeActivity, UnifiedAutoCoordinator.Candidate(section.name, proxy.id))
+                    val started = waitFor(25_000) { ProxyVpnService.activeId == proxy.id }
+                    if (started) delay(1500)
+                    record(label, started)
+                    try { UnifiedAutoCoordinator.stop() } catch (_: Exception) { }
+                    waitFor(15_000) { ProxyVpnService.activeId == null && ProxyVpnService.requestedId == null }; delay(800)
+                }
+                val ok = lines.count { it.contains("трафик есть") }
+                log.text = "Проверка завершена. Трафик есть: $ok из $total\n\n" + lines.joinToString("\n")
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                log.text = "Проверка остановлена\n\n" + lines.joinToString("\n")
+                withContext(kotlinx.coroutines.NonCancellable) { try { UnifiedAutoCoordinator.stop() } catch (_: Exception) { } }
+            } finally {
+                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                if (dialog.isShowing) { dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).isEnabled = lines.isNotEmpty(); dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).text = "Закрыть" }
+                listSignature = ""; renderRows(true)
+            }
+        }
+    }
+    private suspend fun waitFor(millis: Long, condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + millis
+        while (System.currentTimeMillis() < deadline) { if (condition()) return true; delay(500) }
+        return condition()
+    }
+    /** Exit address and 1 MB over HTTPS through the active tunnel; no cookies or stored data. */
+    private fun measureThroughTunnel(): String {
+        fun get(url: String, limit: Int): Pair<Int, ByteArray> {
+            val connection = java.net.URL(url).openConnection() as javax.net.ssl.HttpsURLConnection
+            connection.connectTimeout = 10_000; connection.readTimeout = 15_000; connection.useCaches = false
+            return try {
+                val code = connection.responseCode
+                val out = java.io.ByteArrayOutputStream(); val buffer = ByteArray(16_384)
+                connection.inputStream.use { input -> while (out.size() < limit) { val n = input.read(buffer, 0, minOf(buffer.size, limit - out.size())); if (n < 0) break; out.write(buffer, 0, n) } }
+                code to out.toByteArray()
+            } finally { connection.disconnect() }
+        }
+        return try {
+            val started = System.currentTimeMillis()
+            val (code, body) = get("https://api.ipify.org", 64)
+            val ip = String(body).trim()
+            if (code != 200 || !ip.matches(Regex("^[0-9a-fA-F:.]{3,45}$"))) return "подключено, трафика нет"
+            val latency = System.currentTimeMillis() - started
+            val downloadStart = System.currentTimeMillis()
+            val speed = try { val (status, data) = get("https://speed.cloudflare.com/__down?bytes=1000000", 1_100_000)
+                if (status == 200 && data.size >= 900_000) String.format(java.util.Locale.ROOT, "%.1f Мбит/с", data.size * 8.0 / ((System.currentTimeMillis() - downloadStart).coerceAtLeast(1)) / 1000.0) else "загрузка 1 МБ не прошла"
+            } catch (_: Exception) { "загрузка 1 МБ не прошла" }
+            "трафик есть · IP $ip · ответ $latency мс · $speed"
+        } catch (_: Exception) { "подключено, трафика нет" }
+    }
     /** A tap runs [onTap]; a still hold of [HOLD_MILLIS] runs [onHold]. TalkBack gets the same as a named action. */
     private fun tapOrHold(view: View, name: String, onTap: () -> Unit, onHold: () -> Unit) {
         val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
