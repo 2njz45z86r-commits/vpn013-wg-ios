@@ -145,6 +145,23 @@ class SettingsTableViewController: UITableViewController {
     private func refreshConfigurations() {
         guard !refreshingConfigurations else { return }
         guard !ClientUpdateCoordinator.shared.busy, !ProxyProfilesManager.shared.working else { showUpdateMessage("Дождитесь завершения текущего обновления."); return }
+        // Profiles are only rewritten with every VPN off, so the button turns
+        // off whatever is running first and then refreshes.
+        let awgRunning = tunnelsManager?.mapTunnels { $0 }.filter { $0.status != .inactive || $0.isActivateOnDemandEnabled } ?? []
+        let proxyRunning = ProxyProfilesManager.shared.entries.filter { $0.inOperation }
+        if !awgRunning.isEmpty || !proxyRunning.isEmpty {
+            refreshingConfigurations = true; tableView.reloadData()
+            stopAllVPN(awg: awgRunning, proxies: proxyRunning) { [weak self] stopped in
+                guard let self = self else { return }
+                self.refreshingConfigurations = false
+                guard stopped else {
+                    self.tableView.reloadData()
+                    self.showUpdateMessage("VPN не выключился за 20 секунд. Выключите его вручную и повторите обновление."); return
+                }
+                self.refreshConfigurations()
+            }
+            return
+        }
         if let kind = connectionKind, kind != .amneziawg {
             refreshingConfigurations = true; tableView.reloadData()
             ProxyProfilesManager.shared.refreshSubscriptions(kind) { [weak self] error in
@@ -162,6 +179,26 @@ class SettingsTableViewController: UITableViewController {
                 self?.refreshingConfigurations = false; self?.tableView.reloadData()
             }
         } else { showUpdateMessage("Менеджер конфигураций ещё загружается. Повторите после его загрузки.") }
+    }
+
+    private func stopAllVPN(awg: [TunnelContainer], proxies: [ProxyProfilesManager.Entry], completion: @escaping (Bool) -> Void) {
+        let manager = tunnelsManager
+        for tunnel in awg {
+            if tunnel.isActivateOnDemandEnabled, let manager = manager {
+                // On-demand would start the tunnel again right after it stops.
+                manager.setOnDemandEnabled(false, on: tunnel) { _ in if tunnel.status != .inactive { manager.startDeactivation(of: tunnel) } }
+            } else if tunnel.status != .inactive { manager?.startDeactivation(of: tunnel) }
+        }
+        for entry in proxies { ProxyProfilesManager.shared.toggle(entry) }
+        let deadline = Date().addingTimeInterval(20)
+        func poll() {
+            let proxies = ProxyProfilesManager.shared
+            let idle = manager?.tunnelInOperation() == nil && !proxies.entries.contains { $0.inOperation } && !proxies.working
+            if idle { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { completion(true) }; return }
+            if Date() >= deadline { completion(false); return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: poll)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: poll)
     }
 
     private func checkApplicationUpdate() {
