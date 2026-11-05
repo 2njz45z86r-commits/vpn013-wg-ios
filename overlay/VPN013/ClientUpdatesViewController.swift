@@ -100,7 +100,7 @@ final class ClientUpdatesViewController: UITableViewController {
                 cell.textLabel?.text = coordinator.status
                 cell.accessibilityIdentifier = "vpn013.update-status"
             } else if path.row == 1 {
-                cell.textLabel?.text = coordinator.busy ? "Проверяем…" : "Обновить"
+                cell.textLabel?.text = coordinator.busy ? "Проверяем…" : "Проверить версию"
                 cell.imageView?.image = UIImage(systemName: "arrow.clockwise")
                 cell.textLabel?.textColor = VPN013Theme.accent
                 cell.accessibilityIdentifier = "vpn013.update-check"
@@ -153,7 +153,7 @@ final class ClientUpdatesViewController: UITableViewController {
         #endif
         guard path.section == 0 else { return }
         coordinator.presenter = self
-        if path.row == 1 { coordinator.check(manager: manager, manual: true) }
+        if path.row == 1 { coordinator.check(manager: manager, manual: true, scope: .application, resultPresenter: self) }
         if path.row == 2, let release = coordinator.release { ClientReleaseDownload.open(release, from: self) }
     }
     @objc private func unbind(_ recognizer: UILongPressGestureRecognizer) {

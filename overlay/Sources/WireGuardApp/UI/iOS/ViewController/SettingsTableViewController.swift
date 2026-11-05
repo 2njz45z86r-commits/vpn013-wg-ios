@@ -141,7 +141,8 @@ class SettingsTableViewController: UITableViewController {
     }
 
     private func refreshConfigurations() {
-        guard !refreshingConfigurations, !ClientUpdateCoordinator.shared.busy, !ProxyProfilesManager.shared.working else { return }
+        guard !refreshingConfigurations else { return }
+        guard !ClientUpdateCoordinator.shared.busy, !ProxyProfilesManager.shared.working else { showUpdateMessage("Дождитесь завершения текущего обновления."); return }
         if let kind = connectionKind, kind != .amneziawg {
             refreshingConfigurations = true; tableView.reloadData()
             ProxyProfilesManager.shared.refreshSubscriptions(kind) { [weak self] error in
@@ -152,8 +153,12 @@ class SettingsTableViewController: UITableViewController {
                     "Проверка подписок завершена. Отдельные ключи и файлы без ссылки на обновление сохранены; для них нужен свежий исходный файл.")
             }
         } else if let manager = tunnelsManager {
-            ClientUpdateCoordinator.shared.presenter = self
-            ClientUpdateCoordinator.shared.check(manager: manager, manual: true)
+            // AmneziaWG: only the bound subscriptions, with the same busy label
+            // as the proxy tabs; the result alert appears above Settings.
+            refreshingConfigurations = true; tableView.reloadData()
+            ClientUpdateCoordinator.shared.check(manager: manager, manual: true, scope: .configurations, resultPresenter: self) { [weak self] in
+                self?.refreshingConfigurations = false; self?.tableView.reloadData()
+            }
         } else { showUpdateMessage("Менеджер конфигураций ещё загружается. Повторите после его загрузки.") }
     }
 
@@ -163,7 +168,7 @@ class SettingsTableViewController: UITableViewController {
         let controller = ClientUpdatesViewController(manager: manager)
         navigationController?.pushViewController(controller, animated: true)
         ClientUpdateCoordinator.shared.presenter = controller
-        ClientUpdateCoordinator.shared.check(manager: manager, manual: false)
+        ClientUpdateCoordinator.shared.check(manager: manager, manual: false, scope: .application)
     }
 }
 
