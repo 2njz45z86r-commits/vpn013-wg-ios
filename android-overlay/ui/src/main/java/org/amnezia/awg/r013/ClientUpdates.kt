@@ -8,10 +8,12 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.FrameLayout
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -152,12 +154,28 @@ object ClientUpdates {
     }
     private fun download(activity: AppCompatActivity, release: JSONObject) {
         if (downloading) return; downloading = true
+        // A large APK takes minutes on mobile data: show progress so the owner does not leave the screen and cancel it.
+        val bar = LinearProgressIndicator(activity).apply { isIndeterminate = true; max = 100 }
+        val pad = (24 * activity.resources.displayMetrics.density).toInt()
+        val box = FrameLayout(activity).apply { setPadding(pad, pad / 2, pad, 0); addView(bar) }
+        val progress = MaterialAlertDialogBuilder(activity).setTitle("Скачивание обновления ${release.getString("version")}")
+            .setMessage("Не закрывайте приложение до окончания загрузки.").setView(box).setCancelable(false).show()
+        var shown = -1
         activity.lifecycleScope.launch {
             try {
-                val file = withContext(Dispatchers.IO) { downloadChecked(activity, release) }
+                val file = withContext(Dispatchers.IO) {
+                    downloadChecked(activity, release) { done, total ->
+                        val percent = if (total > 0) (done * 100 / total).toInt() else -1
+                        if (percent != shown) { shown = percent; activity.runOnUiThread {
+                            if (percent >= 0) { bar.isIndeterminate = false; bar.setProgressCompat(percent, true) }
+                            progress.setMessage("Скачано ${done / 1_048_576} из ${if (total > 0) total / 1_048_576 else "?"} МБ. Не закрывайте приложение.")
+                        } }
+                    }
+                }
+                progress.dismiss()
                 installChecked(activity, file, release)
             } catch (e: Exception) { message(activity, "Обновление не установлено", e.message ?: "Не удалось скачать и проверить APK. Прежняя версия сохранена.") }
-            finally { downloading = false; resumePendingInstall(activity) }
+            finally { if (progress.isShowing && !activity.isDestroyed) progress.dismiss(); downloading = false; resumePendingInstall(activity) }
         }
     }
     private fun installChecked(activity: AppCompatActivity, file: File, release: JSONObject) {
@@ -226,7 +244,7 @@ object ClientUpdates {
             versionCode(incoming) == release.getInt("build").toLong() && versionCode(incoming) > versionCode(installed) &&
             signers(incoming).isNotEmpty() && signers(incoming) == signers(installed)) { "APK относится к другому приложению, версии или подписи" }
     }
-    private fun downloadChecked(activity: Activity, release: JSONObject): File {
+    private fun downloadChecked(activity: Activity, release: JSONObject, onProgress: ((Long, Long) -> Unit)? = null): File {
         validateRelease(release)
         val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
         val pending = File(dir, "release.part"); val result = File(dir, "VPN013WG.apk")
@@ -241,10 +259,11 @@ object ClientUpdates {
                     val code = connection.responseCode
                     if (code in listOf(301,302,303,307,308)) { url = URL(url, connection.getHeaderField("Location") ?: error("Нет адреса файла")); continue }
                     require(code == 200 && connection.contentLengthLong <= 268_435_456L) { "Файл обновления недоступен или слишком велик" }
-                    var total = 0L
+                    var total = 0L; val expected = connection.contentLengthLong
                     connection.inputStream.use { input -> pending.outputStream().use { out -> val buffer = ByteArray(32768)
                         while (true) { val n = input.read(buffer); if (n < 0) break; total += n
-                            require(total <= 268_435_456L) { "Файл обновления слишком велик" }; digest.update(buffer, 0, n); out.write(buffer, 0, n) }
+                            require(total <= 268_435_456L) { "Файл обновления слишком велик" }; digest.update(buffer, 0, n); out.write(buffer, 0, n)
+                            onProgress?.invoke(total, expected) }
                         out.fd.sync()
                     } }
                     finished = true; break

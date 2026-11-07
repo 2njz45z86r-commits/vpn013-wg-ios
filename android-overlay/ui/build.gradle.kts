@@ -33,6 +33,8 @@ android {
     }
     buildTypes {
         release {
+            // Phones only: emulator ABIs (x86, x86_64) doubled the APK to 140 MiB. Debug keeps all ABIs for emulator tests.
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles("proguard-android-optimize.txt")
