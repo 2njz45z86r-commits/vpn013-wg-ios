@@ -103,7 +103,7 @@ class R013UpdateInstallTest {
     }
     private fun futureFile(): File = File(context.getExternalFilesDir(null),"update-fixture.apk").copyTo(File(directory,"VPN013WG.apk"),overwrite=true)
     private fun release(file: File) = JSONObject().put("schema",1).put("app","vpn013-wg").put("platform","android")
-        .put("version","1.7.8").put("build",20).put("notes","")
+        .put("version","1.7.9").put("build",21).put("notes","")
         .put("downloadURL","https://github.com/2njz45z86r-commits/vpn013-wg-ios/releases/download/ci-never-published/fixture.apk")
         .put("sha256",MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) })
     private fun startHome() {

@@ -18,5 +18,5 @@ p=Path('ui/build.gradle.kts');s=p.read_text()
 assert s.count('versionNameSuffix = "-debug"')==1
 p.write_text(s.replace('versionNameSuffix = "-debug"','versionNameSuffix = ""'))
 PY
-./gradlew --no-daemon --console=plain -PamneziawgVersionCode=20 -PamneziawgVersionName=1.7.8 :ui:assembleDebug
+./gradlew --no-daemon --console=plain -PamneziawgVersionCode=21 -PamneziawgVersionName=1.7.9 :ui:assembleDebug
 cp ui/build/outputs/apk/debug/ui-debug.apk "$RUNNER_TEMP/VPN013WG-future-debug.apk"
