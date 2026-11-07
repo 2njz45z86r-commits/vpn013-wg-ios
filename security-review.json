@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "reviewed_at": "2026-11-07T12:52:34.950759+00:00",
-  "source_sha256": "ea7345df37f1369aeff2ed3026a79884bc4e1f16a5485ee316b49111e058b7fd",
-  "source_commit_reviewed": "16734dae9b7bc7a02c36320e8c931c5dda6673ad",
+  "reviewed_at": "2026-11-07T13:19:12.528013+00:00",
+  "source_sha256": "a36d26f9f3bcf900ba5f9456966e132cc1c306c6aab81d14f7aa70edb21033ee",
+  "source_commit_reviewed": "9461bddf63cedbd5c4354c8e4628a6c729eb6d9f",
   "scope_complete": true,
   "private_report_ref": "private:infra/security-reviews/VPN013-Android-178-20261107.md",
   "baseline_only": false,
